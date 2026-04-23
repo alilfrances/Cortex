@@ -1,0 +1,47 @@
+# tests/test_community.py
+from __future__ import annotations
+from cortex.models import GraphEdge, GraphNode
+from cortex.community import detect_communities
+
+
+def _node(nid: str) -> GraphNode:
+    return GraphNode(node_id=nid, kind='file', label=nid, source_ref=nid)
+
+
+def _edge(src: str, tgt: str) -> GraphEdge:
+    return GraphEdge(edge_id=f'{src}:{tgt}', source=src, target=tgt, relation='imports')
+
+
+def test_isolated_nodes_each_get_own_community():
+    nodes = [_node('a'), _node('b'), _node('c')]
+    edges = []
+    communities = detect_communities(nodes, edges)
+    assert len(communities) == 3
+
+
+def test_connected_cluster_merges_into_one_community():
+    nodes = [_node('a'), _node('b'), _node('c')]
+    edges = [_edge('a', 'b'), _edge('b', 'c'), _edge('a', 'c')]
+    communities = detect_communities(nodes, edges)
+    assert len(communities) == 1
+    assert len(communities[0].node_ids) == 3
+
+
+def test_two_disconnected_clusters():
+    nodes = [_node('a'), _node('b'), _node('c'), _node('x'), _node('y')]
+    edges = [_edge('a', 'b'), _edge('b', 'c'), _edge('x', 'y')]
+    communities = detect_communities(nodes, edges)
+    sizes = sorted(len(c.node_ids) for c in communities)
+    assert sizes == [2, 3]
+
+
+def test_empty_input_returns_empty():
+    assert detect_communities([], []) == []
+
+
+def test_community_ids_are_unique():
+    nodes = [_node(str(i)) for i in range(10)]
+    edges = [_edge(str(i), str(i + 1)) for i in range(5)]
+    communities = detect_communities(nodes, edges)
+    ids = [c.community_id for c in communities]
+    assert len(ids) == len(set(ids))
