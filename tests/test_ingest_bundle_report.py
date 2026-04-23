@@ -78,7 +78,7 @@ class IngestBundleReportTests(unittest.TestCase):
         report = generate_report(FIXTURE_REPO, db_path=self.db_path)
 
         self.assertIn("# Cortex Report: sample_repo", report)
-        self.assertIn("## Central Nodes", report)
+        self.assertIn("## God Nodes", report)
 
     def test_default_db_path_uses_local_cortex_directory(self) -> None:
         path = default_db_path(FIXTURE_REPO)
