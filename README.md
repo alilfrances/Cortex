@@ -26,11 +26,87 @@ python -m cortex install codex
 python -m cortex install claude
 ```
 
+## Recommended Clean First-Time Setup
+
+Use this flow when setting Cortex up for a repo from scratch.
+
+### 1. Install Cortex
+
+Requires Python 3.11+.
+
+From the Cortex repo:
+
+```bash
+cd /path/to/Cortex
+python3 -m pip install -e .
+```
+
+### 2. Create the repo-local Cortex artifacts
+
+From the target project repo:
+
+```bash
+cd /path/to/your-project
+cortex ingest . --commits 50
+cortex report .
+```
+
+This creates:
+
+- `.cortex/cortex.db`
+- `.cortex/cortex_report.md`
+
+### 3. Install project-local assistant guidance
+
+For Codex:
+
+```bash
+cortex codex install .
+```
+
+For Claude:
+
+```bash
+cortex claude install .
+```
+
+These commands append a `## cortex` section to the project-local agent file and add a `PreToolUse` hook in the assistant's project settings.
+
+### 4. Optionally install repo-local git hooks
+
+If you want Cortex to refresh automatically after commits and checkout events:
+
+```bash
+cortex hook install .
+```
+
+This installs repo-local git hook blocks that run:
+
+```bash
+cortex refresh . --commits 50
+```
+
+### 5. Use Cortex during work
+
+```bash
+cortex bundle . --task "Summarize the architecture" --budget 4000
+cortex refresh .
+```
+
+Recommended minimum setup for a Codex-managed repo:
+
+```bash
+cortex ingest . --commits 50
+cortex report .
+cortex codex install .
+cortex hook install .
+```
+
 ## Agent Workflow
 
 - `refresh` ingests the repo and writes `.cortex/cortex_report.md`
 - `benchmark` compares Cortex bundle size with full-corpus token cost
-- local `codex` / `claude` installers append Cortex guidance without removing existing Graphify content
+- local `codex` / `claude` installers append Cortex guidance without removing existing agent guidance
 - `hook install` adds repo-local git hooks that run `cortex refresh .`
 - global `install codex|claude` writes Cortex skill files under your home directory
 
@@ -39,5 +115,5 @@ python -m cortex install claude
 - Graph construction is deterministic and local.
 - Token accounting is byte-safe and deterministic, with optional enrichment kept
   off the critical path.
-- Graphify and IntelligentConceptStudio are source research inputs, not runtime
+- Prior graph-retrieval experiments and IntelligentConceptStudio are source research inputs, not runtime
   dependencies.
