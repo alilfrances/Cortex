@@ -11,6 +11,7 @@ class SourceRecord:
     kind: str
     size_bytes: int
     modified_at: float
+    content_hash: str = ''
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -46,8 +47,20 @@ class GraphEdge:
     source: str
     target: str
     relation: str
+    layer: str = 'HEADING'
+    confidence: str = 'EXTRACTED'
     weight: float = 1.0
     metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class Community:
+    community_id: int
+    node_ids: list[str]
+    label: str = ''
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -81,5 +94,5 @@ class RetrievalBundle:
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
-        payload["items"] = [item.to_dict() for item in self.items]
+        payload['items'] = [item.to_dict() for item in self.items]
         return payload
