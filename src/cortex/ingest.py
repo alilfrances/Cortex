@@ -76,21 +76,66 @@ def ingest_repository(
     commit_limit: int = 50,
     db_path: Path | None = None,
     enrich: bool = False,
+    incremental: bool = False,
 ) -> dict[str, int | bool | str]:
     repo_root = discover_repo_root(repo_path)
     store = CortexStore(db_path or default_db_path(repo_root))
-    sources = _scan_sources(repo_root)
+    all_sources = _scan_sources(repo_root)
     commits = collect_recent_commits(repo_root, commit_limit)
-    nodes, edges = build_graph(sources, commits)
+
+    if incremental:
+        existing = {s.path: s.content_hash for s in store.fetch_sources(repo_root)}
+        new_sources = [s for s in all_sources if s.path not in existing]
+        changed_sources = [
+            s for s in all_sources
+            if s.path in existing and s.content_hash != existing[s.path]
+        ]
+        unchanged_count = len(all_sources) - len(new_sources) - len(changed_sources)
+
+        sources_to_process = new_sources + changed_sources
+
+        if sources_to_process:
+            existing_nodes, existing_edges = store.fetch_graph(repo_root)
+
+            stale_paths = {s.path for s in changed_sources}
+            filtered_nodes = [n for n in existing_nodes if n.source_ref not in stale_paths]
+            filtered_edges = [
+                e for e in existing_edges
+                if e.metadata.get("source_file") not in stale_paths
+            ]
+
+            new_nodes, new_edges = build_graph(sources_to_process, commits)
+
+            merged_nodes = filtered_nodes + new_nodes
+            merged_edges = filtered_edges + new_edges
+
+            store.save_sources(repo_root, sources_to_process)
+            store.save_commits(repo_root, commits)
+            store.save_graph(repo_root, merged_nodes, merged_edges)
+
+        return {
+            "repo_path": str(repo_root),
+            "source_count": len(all_sources),
+            "new_files": len(new_sources),
+            "updated_files": len(changed_sources),
+            "unchanged_files": unchanged_count,
+            "commit_count": len(commits),
+            "enrichment_enabled": enrich,
+        }
+
+    nodes, edges = build_graph(all_sources, commits)
 
     store.reset_repo(repo_root)
-    store.save_sources(repo_root, sources)
+    store.save_sources(repo_root, all_sources)
     store.save_commits(repo_root, commits)
     store.save_graph(repo_root, nodes, edges)
 
     return {
         "repo_path": str(repo_root),
-        "source_count": len(sources),
+        "source_count": len(all_sources),
+        "new_files": len(all_sources),
+        "updated_files": 0,
+        "unchanged_files": 0,
         "commit_count": len(commits),
         "node_count": len(nodes),
         "edge_count": len(edges),
