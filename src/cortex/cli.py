@@ -31,6 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
     ingest_parser.add_argument("--commits", type=int, default=50)
     ingest_parser.add_argument("--db", type=Path, default=None)
     ingest_parser.add_argument("--enrich", action="store_true")
+    ingest_parser.add_argument("--update", action="store_true", help="Incremental: only re-scan changed files")
 
     bundle_parser = subparsers.add_parser("bundle", help="Generate a token-budgeted retrieval bundle")
     bundle_parser.add_argument("repo_path", type=Path)
@@ -55,6 +56,12 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark_parser.add_argument("--budget", type=int, default=4000)
     benchmark_parser.add_argument("--db", type=Path, default=None)
     benchmark_parser.add_argument("--format", choices=("text", "json"), default="text")
+
+    enrich_parser = subparsers.add_parser("enrich", help="Run LLM semantic enrichment (requires cortex-engine[llm])")
+    enrich_parser.add_argument("repo_path", type=Path)
+    enrich_parser.add_argument("--provider", choices=("claude", "codex"), default="claude")
+    enrich_parser.add_argument("--force", action="store_true", help="Re-extract all files, ignore cache")
+    enrich_parser.add_argument("--db", type=Path, default=None)
 
     install_parser = subparsers.add_parser("install", help="Install Cortex global skill files for an assistant")
     install_parser.add_argument("platform", choices=("codex", "claude"))
@@ -90,6 +97,7 @@ def main() -> None:
             commit_limit=args.commits,
             db_path=args.db,
             enrich=args.enrich,
+            incremental=args.update,
         )
         print(json.dumps(summary, indent=2))
         return
@@ -127,6 +135,21 @@ def main() -> None:
             db_path=args.db,
         )
         print(format_benchmark(result, output_format=args.format))
+        return
+
+    if args.command == "enrich":
+        from .enrich import enrich_repository
+
+        try:
+            result = enrich_repository(
+                repo_path=args.repo_path,
+                provider_name=args.provider,
+                db_path=args.db,
+                force=args.force,
+            )
+            print(json.dumps(result, indent=2))
+        except RuntimeError as exc:
+            print(f"Error: {exc}")
         return
 
     if args.command == "install":
