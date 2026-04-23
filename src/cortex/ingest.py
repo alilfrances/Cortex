@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 from pathlib import Path
 
@@ -39,6 +40,10 @@ def _classify_path(path: Path) -> str:
     return "text"
 
 
+def _content_hash(content: str) -> str:
+    return hashlib.sha256(content.encode('utf-8', errors='replace')).hexdigest()
+
+
 def _scan_sources(repo_root: Path) -> list[SourceRecord]:
     sources: list[SourceRecord] = []
     for root, dirs, files in os.walk(repo_root):
@@ -60,6 +65,7 @@ def _scan_sources(repo_root: Path) -> list[SourceRecord]:
                     kind=_classify_path(path),
                     size_bytes=stat.st_size,
                     modified_at=stat.st_mtime,
+                    content_hash=_content_hash(content),
                 )
             )
     return sorted(sources, key=lambda item: item.path)
