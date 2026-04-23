@@ -5,7 +5,7 @@ import sqlite3
 import time
 from pathlib import Path
 
-from .models import BundleItem, CommitRecord, GraphEdge, GraphNode, RetrievalBundle, SourceRecord
+from .models import BundleItem, CommitRecord, Community, GraphEdge, GraphNode, RetrievalBundle, SourceRecord
 
 
 def default_db_path(repo_path: Path) -> Path:
@@ -23,7 +23,7 @@ class CortexStore:
 
     def initialize_schema(self) -> None:
         self.connection.executescript(
-            """
+            '''
             PRAGMA foreign_keys = ON;
 
             CREATE TABLE IF NOT EXISTS repos (
@@ -38,6 +38,7 @@ class CortexStore:
                 size_bytes INTEGER NOT NULL,
                 modified_at REAL NOT NULL,
                 content TEXT NOT NULL,
+                content_hash TEXT NOT NULL DEFAULT '',
                 PRIMARY KEY (repo_path, path)
             );
 
@@ -67,9 +68,39 @@ class CortexStore:
                 source TEXT NOT NULL,
                 target TEXT NOT NULL,
                 relation TEXT NOT NULL,
+                layer TEXT NOT NULL DEFAULT 'HEADING',
+                confidence TEXT NOT NULL DEFAULT 'EXTRACTED',
                 weight REAL NOT NULL,
                 metadata_json TEXT NOT NULL,
                 PRIMARY KEY (repo_path, edge_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS communities (
+                repo_path TEXT NOT NULL,
+                community_id INTEGER NOT NULL,
+                node_ids_json TEXT NOT NULL,
+                label TEXT NOT NULL DEFAULT '',
+                PRIMARY KEY (repo_path, community_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS llm_cache (
+                content_hash TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                nodes_json TEXT NOT NULL,
+                edges_json TEXT NOT NULL,
+                input_tokens INTEGER NOT NULL DEFAULT 0,
+                output_tokens INTEGER NOT NULL DEFAULT 0,
+                created_at INTEGER NOT NULL,
+                PRIMARY KEY (content_hash, provider)
+            );
+
+            CREATE TABLE IF NOT EXISTS cost (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                repo_path TEXT NOT NULL,
+                run_at INTEGER NOT NULL,
+                provider TEXT NOT NULL,
+                input_tokens INTEGER NOT NULL,
+                output_tokens INTEGER NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS bundles (
@@ -95,9 +126,23 @@ class CortexStore:
                 metadata_json TEXT NOT NULL,
                 PRIMARY KEY (bundle_id, item_id)
             );
-            """
+            '''
         )
         self.connection.commit()
+        self._migrate_existing_schema()
+
+    def _migrate_existing_schema(self) -> None:
+        migrations = [
+            "ALTER TABLE sources ADD COLUMN content_hash TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE graph_edges ADD COLUMN layer TEXT NOT NULL DEFAULT 'HEADING'",
+            "ALTER TABLE graph_edges ADD COLUMN confidence TEXT NOT NULL DEFAULT 'EXTRACTED'",
+        ]
+        for sql in migrations:
+            try:
+                self.connection.execute(sql)
+                self.connection.commit()
+            except Exception:
+                pass  # column already exists
 
     def reset_repo(self, repo_path: Path) -> None:
         repo_key = str(repo_path.resolve())
@@ -126,12 +171,20 @@ class CortexStore:
         repo_key = str(repo_path.resolve())
         with self.connection:
             self.connection.executemany(
-                """
-                INSERT OR REPLACE INTO sources(repo_path, path, kind, size_bytes, modified_at, content)
-                VALUES(?, ?, ?, ?, ?, ?)
-                """,
+                '''
+                INSERT OR REPLACE INTO sources(repo_path, path, kind, size_bytes, modified_at, content, content_hash)
+                VALUES(?, ?, ?, ?, ?, ?, ?)
+                ''',
                 [
-                    (repo_key, source.path, source.kind, source.size_bytes, source.modified_at, source.content)
+                    (
+                        repo_key,
+                        source.path,
+                        source.kind,
+                        source.size_bytes,
+                        source.modified_at,
+                        source.content,
+                        source.content_hash,
+                    )
                     for source in sources
                 ],
             )
@@ -154,20 +207,20 @@ class CortexStore:
         repo_key = str(repo_path.resolve())
         with self.connection:
             self.connection.executemany(
-                """
+                '''
                 INSERT OR REPLACE INTO graph_nodes(repo_path, node_id, kind, label, source_ref, metadata_json)
                 VALUES(?, ?, ?, ?, ?, ?)
-                """,
+                ''',
                 [
                     (repo_key, node.node_id, node.kind, node.label, node.source_ref, json.dumps(node.metadata))
                     for node in nodes
                 ],
             )
             self.connection.executemany(
-                """
-                INSERT OR REPLACE INTO graph_edges(repo_path, edge_id, source, target, relation, weight, metadata_json)
-                VALUES(?, ?, ?, ?, ?, ?, ?)
-                """,
+                '''
+                INSERT OR REPLACE INTO graph_edges(repo_path, edge_id, source, target, relation, layer, confidence, weight, metadata_json)
+                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''',
                 [
                     (
                         repo_key,
@@ -175,6 +228,8 @@ class CortexStore:
                         edge.source,
                         edge.target,
                         edge.relation,
+                        edge.layer,
+                        edge.confidence,
                         edge.weight,
                         json.dumps(edge.metadata),
                     )
@@ -225,10 +280,20 @@ class CortexStore:
     def fetch_sources(self, repo_path: Path) -> list[SourceRecord]:
         repo_key = str(repo_path.resolve())
         rows = self.connection.execute(
-            "SELECT path, content, kind, size_bytes, modified_at FROM sources WHERE repo_path = ? ORDER BY path",
+            'SELECT path, content, kind, size_bytes, modified_at, content_hash FROM sources WHERE repo_path = ? ORDER BY path',
             (repo_key,),
         ).fetchall()
-        return [SourceRecord(**dict(row)) for row in rows]
+        return [
+            SourceRecord(
+                path=row['path'],
+                content=row['content'],
+                kind=row['kind'],
+                size_bytes=row['size_bytes'],
+                modified_at=row['modified_at'],
+                content_hash=row['content_hash'],
+            )
+            for row in rows
+        ]
 
     def fetch_commits(self, repo_path: Path) -> list[CommitRecord]:
         repo_key = str(repo_path.resolve())
@@ -250,35 +315,110 @@ class CortexStore:
     def fetch_graph(self, repo_path: Path) -> tuple[list[GraphNode], list[GraphEdge]]:
         repo_key = str(repo_path.resolve())
         node_rows = self.connection.execute(
-            "SELECT node_id, kind, label, source_ref, metadata_json FROM graph_nodes WHERE repo_path = ? ORDER BY node_id",
+            'SELECT node_id, kind, label, source_ref, metadata_json FROM graph_nodes WHERE repo_path = ? ORDER BY node_id',
             (repo_key,),
         ).fetchall()
         edge_rows = self.connection.execute(
-            "SELECT edge_id, source, target, relation, weight, metadata_json FROM graph_edges WHERE repo_path = ? ORDER BY edge_id",
+            'SELECT edge_id, source, target, relation, layer, confidence, weight, metadata_json FROM graph_edges WHERE repo_path = ? ORDER BY edge_id',
             (repo_key,),
         ).fetchall()
         nodes = [
             GraphNode(
-                node_id=row["node_id"],
-                kind=row["kind"],
-                label=row["label"],
-                source_ref=row["source_ref"],
-                metadata=json.loads(row["metadata_json"]),
+                node_id=row['node_id'],
+                kind=row['kind'],
+                label=row['label'],
+                source_ref=row['source_ref'],
+                metadata=json.loads(row['metadata_json']),
             )
             for row in node_rows
         ]
         edges = [
             GraphEdge(
-                edge_id=row["edge_id"],
-                source=row["source"],
-                target=row["target"],
-                relation=row["relation"],
-                weight=row["weight"],
-                metadata=json.loads(row["metadata_json"]),
+                edge_id=row['edge_id'],
+                source=row['source'],
+                target=row['target'],
+                relation=row['relation'],
+                layer=row['layer'],
+                confidence=row['confidence'],
+                weight=row['weight'],
+                metadata=json.loads(row['metadata_json']),
             )
             for row in edge_rows
         ]
         return nodes, edges
+
+    def save_communities(self, repo_path: Path, communities: list[Community]) -> None:
+        repo_key = str(repo_path.resolve())
+        with self.connection:
+            self.connection.execute('DELETE FROM communities WHERE repo_path = ?', (repo_key,))
+            self.connection.executemany(
+                'INSERT INTO communities(repo_path, community_id, node_ids_json, label) VALUES(?, ?, ?, ?)',
+                [
+                    (repo_key, c.community_id, json.dumps(c.node_ids), c.label)
+                    for c in communities
+                ],
+            )
+
+    def fetch_communities(self, repo_path: Path) -> list[Community]:
+        repo_key = str(repo_path.resolve())
+        rows = self.connection.execute(
+            'SELECT community_id, node_ids_json, label FROM communities WHERE repo_path = ? ORDER BY community_id',
+            (repo_key,),
+        ).fetchall()
+        return [
+            Community(
+                community_id=row['community_id'],
+                node_ids=json.loads(row['node_ids_json']),
+                label=row['label'],
+            )
+            for row in rows
+        ]
+
+    def get_llm_cache(self, content_hash: str, provider: str) -> dict | None:
+        row = self.connection.execute(
+            'SELECT nodes_json, edges_json, input_tokens, output_tokens FROM llm_cache WHERE content_hash = ? AND provider = ?',
+            (content_hash, provider),
+        ).fetchone()
+        if row is None:
+            return None
+        return {
+            'nodes': json.loads(row['nodes_json']),
+            'edges': json.loads(row['edges_json']),
+            'input_tokens': row['input_tokens'],
+            'output_tokens': row['output_tokens'],
+        }
+
+    def set_llm_cache(self, content_hash: str, provider: str, nodes: list, edges: list, input_tokens: int, output_tokens: int) -> None:
+        import time as _time
+        with self.connection:
+            self.connection.execute(
+                '''
+                INSERT OR REPLACE INTO llm_cache(content_hash, provider, nodes_json, edges_json, input_tokens, output_tokens, created_at)
+                VALUES(?, ?, ?, ?, ?, ?, ?)
+                ''',
+                (content_hash, provider, json.dumps(nodes), json.dumps(edges), input_tokens, output_tokens, int(_time.time())),
+            )
+
+    def record_cost(self, repo_path: Path, provider: str, input_tokens: int, output_tokens: int) -> None:
+        import time as _time
+        repo_key = str(repo_path.resolve())
+        with self.connection:
+            self.connection.execute(
+                'INSERT INTO cost(repo_path, run_at, provider, input_tokens, output_tokens) VALUES(?, ?, ?, ?, ?)',
+                (repo_key, int(_time.time()), provider, input_tokens, output_tokens),
+            )
+
+    def fetch_cumulative_cost(self, repo_path: Path) -> dict:
+        repo_key = str(repo_path.resolve())
+        row = self.connection.execute(
+            'SELECT SUM(input_tokens) as total_in, SUM(output_tokens) as total_out, COUNT(*) as runs FROM cost WHERE repo_path = ?',
+            (repo_key,),
+        ).fetchone()
+        return {
+            'total_input_tokens': row['total_in'] or 0,
+            'total_output_tokens': row['total_out'] or 0,
+            'runs': row['runs'] or 0,
+        }
 
     def fetch_latest_bundle(self, repo_path: Path) -> RetrievalBundle | None:
         repo_key = str(repo_path.resolve())
