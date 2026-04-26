@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -35,6 +36,11 @@ class IngestBundleReportTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
+
+    def _copy_fixture_repo(self) -> Path:
+        destination = Path(self.temp_dir.name) / "sample_repo_copy"
+        shutil.copytree(FIXTURE_REPO, destination, ignore=shutil.ignore_patterns(".cortex"))
+        return destination
 
     def test_ingest_repository_populates_store(self) -> None:
         summary = ingest_repository(FIXTURE_REPO, commit_limit=5, db_path=self.db_path)
@@ -94,9 +100,11 @@ class IngestBundleReportTests(unittest.TestCase):
         self.assertTrue(result["per_question"])
 
     def test_refresh_writes_default_report_path(self) -> None:
-        summary = ingest_repository(FIXTURE_REPO, commit_limit=5)
+        repo = self._copy_fixture_repo()
+
+        summary = ingest_repository(repo, commit_limit=5)
         report_path = Path(summary["repo_path"]) / ".cortex" / "cortex_report.md"
-        report_path.write_text(generate_report(FIXTURE_REPO), encoding="utf-8")
+        report_path.write_text(generate_report(repo), encoding="utf-8")
 
         self.assertTrue(report_path.exists())
         self.assertIn("Cortex Report", report_path.read_text(encoding="utf-8"))
@@ -113,9 +121,9 @@ class IntegrationInstallTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
 
-    def test_codex_install_merges_with_graphify_files(self) -> None:
+    def test_codex_install_merges_with_existing_files(self) -> None:
         (self.project_dir / "AGENTS.md").write_text(
-            "## graphify\n\nGraphify instructions\n",
+            "## existing\n\nExisting instructions\n",
             encoding="utf-8",
         )
         codex_hooks = self.project_dir / ".codex" / "hooks.json"
@@ -130,7 +138,7 @@ class IntegrationInstallTests(unittest.TestCase):
                                 "hooks": [
                                     {
                                         "type": "command",
-                                        "command": "echo graphify",
+                                        "command": "echo existing-hook",
                                     }
                                 ],
                             }
@@ -146,9 +154,9 @@ class IntegrationInstallTests(unittest.TestCase):
 
         agents = (self.project_dir / "AGENTS.md").read_text(encoding="utf-8")
         hooks = codex_hooks.read_text(encoding="utf-8")
-        self.assertIn("## graphify", agents)
+        self.assertIn("## existing", agents)
         self.assertIn("## cortex", agents)
-        self.assertIn("graphify", hooks)
+        self.assertIn("existing-hook", hooks)
         self.assertIn("cortex", hooks)
         self.assertEqual(codex_status(self.project_dir), {"agents": True, "hook": True})
 
@@ -156,14 +164,14 @@ class IntegrationInstallTests(unittest.TestCase):
 
         agents = (self.project_dir / "AGENTS.md").read_text(encoding="utf-8")
         hooks = codex_hooks.read_text(encoding="utf-8")
-        self.assertIn("## graphify", agents)
+        self.assertIn("## existing", agents)
         self.assertNotIn("## cortex", agents)
-        self.assertIn("graphify", hooks)
+        self.assertIn("existing-hook", hooks)
         self.assertNotIn("cortex", hooks)
 
-    def test_claude_install_merges_with_graphify_files(self) -> None:
+    def test_claude_install_merges_with_existing_files(self) -> None:
         (self.project_dir / "CLAUDE.md").write_text(
-            "## graphify\n\nGraphify instructions\n",
+            "## existing\n\nExisting instructions\n",
             encoding="utf-8",
         )
         settings = self.project_dir / ".claude" / "settings.json"
@@ -178,7 +186,7 @@ class IntegrationInstallTests(unittest.TestCase):
                                 "hooks": [
                                     {
                                         "type": "command",
-                                        "command": "echo graphify",
+                                        "command": "echo existing-hook",
                                     }
                                 ],
                             }
@@ -194,9 +202,9 @@ class IntegrationInstallTests(unittest.TestCase):
 
         claude_md = (self.project_dir / "CLAUDE.md").read_text(encoding="utf-8")
         hooks = settings.read_text(encoding="utf-8")
-        self.assertIn("## graphify", claude_md)
+        self.assertIn("## existing", claude_md)
         self.assertIn("## cortex", claude_md)
-        self.assertIn("graphify", hooks)
+        self.assertIn("existing-hook", hooks)
         self.assertIn("cortex", hooks)
         self.assertEqual(claude_status(self.project_dir), {"claude_md": True, "hook": True})
 
@@ -204,9 +212,9 @@ class IntegrationInstallTests(unittest.TestCase):
 
         claude_md = (self.project_dir / "CLAUDE.md").read_text(encoding="utf-8")
         hooks = settings.read_text(encoding="utf-8")
-        self.assertIn("## graphify", claude_md)
+        self.assertIn("## existing", claude_md)
         self.assertNotIn("## cortex", claude_md)
-        self.assertIn("graphify", hooks)
+        self.assertIn("existing-hook", hooks)
         self.assertNotIn("cortex", hooks)
 
     def test_global_install_uses_temp_home(self) -> None:
@@ -223,29 +231,29 @@ class IntegrationInstallTests(unittest.TestCase):
         self.assertIn(str(self.home_dir), str(codex_skill))
         self.assertIn("# cortex", registration.read_text(encoding="utf-8"))
 
-    def test_git_hook_install_preserves_existing_graphify_blocks(self) -> None:
+    def test_git_hook_install_preserves_existing_hook_blocks(self) -> None:
         subprocess.run(["git", "init"], cwd=self.project_dir, check=True, capture_output=True, text=True)
         hooks_dir = self.project_dir / ".git" / "hooks"
         hooks_dir.mkdir(parents=True, exist_ok=True)
         post_commit = hooks_dir / "post-commit"
         post_checkout = hooks_dir / "post-checkout"
-        post_commit.write_text("#!/bin/sh\n# graphify-hook-start\necho graphify\n# graphify-hook-end\n", encoding="utf-8")
+        post_commit.write_text("#!/bin/sh\n# existing-hook-start\necho existing-hook\n# existing-hook-end\n", encoding="utf-8")
         post_checkout.write_text(
-            "#!/bin/sh\n# graphify-checkout-hook-start\necho graphify\n# graphify-checkout-hook-end\n",
+            "#!/bin/sh\n# existing-checkout-hook-start\necho existing-hook\n# existing-checkout-hook-end\n",
             encoding="utf-8",
         )
 
         install_git_hooks(self.project_dir)
 
         self.assertEqual(git_hook_status(self.project_dir), {"post_commit": True, "post_checkout": True})
-        self.assertIn("graphify-hook-start", post_commit.read_text(encoding="utf-8"))
+        self.assertIn("existing-hook-start", post_commit.read_text(encoding="utf-8"))
         self.assertIn("cortex-hook-start", post_commit.read_text(encoding="utf-8"))
-        self.assertIn("graphify-checkout-hook-start", post_checkout.read_text(encoding="utf-8"))
+        self.assertIn("existing-checkout-hook-start", post_checkout.read_text(encoding="utf-8"))
         self.assertIn("cortex-checkout-hook-start", post_checkout.read_text(encoding="utf-8"))
 
         uninstall_git_hooks(self.project_dir)
 
-        self.assertIn("graphify-hook-start", post_commit.read_text(encoding="utf-8"))
+        self.assertIn("existing-hook-start", post_commit.read_text(encoding="utf-8"))
         self.assertNotIn("cortex-hook-start", post_commit.read_text(encoding="utf-8"))
-        self.assertIn("graphify-checkout-hook-start", post_checkout.read_text(encoding="utf-8"))
+        self.assertIn("existing-checkout-hook-start", post_checkout.read_text(encoding="utf-8"))
         self.assertNotIn("cortex-checkout-hook-start", post_checkout.read_text(encoding="utf-8"))
