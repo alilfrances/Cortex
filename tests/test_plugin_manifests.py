@@ -18,7 +18,7 @@ class PluginManifestTests(unittest.TestCase):
             ".claude-plugin/plugin.json",
             ".codex-plugin/plugin.json",
             ".mcp.json",
-            "marketplace.json",
+            ".claude-plugin/marketplace.json",
         ):
             self.assertIsInstance(self._load_json(path), dict)
 
@@ -28,7 +28,7 @@ class PluginManifestTests(unittest.TestCase):
 
         self.assertEqual(self._load_json(".claude-plugin/plugin.json")["version"], version)
         self.assertEqual(self._load_json(".codex-plugin/plugin.json")["version"], version)
-        self.assertEqual(self._load_json("marketplace.json")["version"], version)
+        self.assertEqual(self._load_json(".claude-plugin/marketplace.json")["version"], version)
 
     def test_codex_manifest_references_skills_and_mcp_config(self) -> None:
         manifest = self._load_json(".codex-plugin/plugin.json")
@@ -36,4 +36,32 @@ class PluginManifestTests(unittest.TestCase):
 
         self.assertEqual(manifest["skills"], "./skills/")
         self.assertEqual(manifest["mcpServers"], "./.mcp.json")
-        self.assertEqual(mcp, {"mcpServers": {"cortex": {"command": "cortex", "args": ["mcp"]}}})
+        self.assertEqual(
+            mcp,
+            {
+                "mcpServers": {
+                    "cortex": {
+                        "command": "python3",
+                        "args": ["${CLAUDE_PLUGIN_ROOT}/bin/cortex-mcp.py"],
+                    }
+                }
+            },
+        )
+
+    def test_mcp_launcher_needs_no_pip_install(self) -> None:
+        import subprocess
+        import sys
+
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "bin" / "cortex-mcp.py")],
+            input='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}\n',
+            capture_output=True,
+            text=True,
+            timeout=10,
+            cwd=ROOT,
+            env={"PATH": "/usr/bin:/bin", "HOME": "/tmp"},
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        response = json.loads(result.stdout.splitlines()[0])
+        self.assertEqual(response["id"], 1)
+        self.assertIn("serverInfo", response["result"])

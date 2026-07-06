@@ -16,20 +16,44 @@ The result is a repo-native context service: MCP tools for live agent queries, C
 
 ## Install
 
-Requires Python 3.11+.
+Requires Python 3.11+ on PATH as `python3`. Nothing else — the core is stdlib-only and the plugin runs straight from its install directory, no `pip install` needed.
+
+### Claude Code (one-command plugin install)
+
+```bash
+claude plugin marketplace add alilfrances/Cortex
+claude plugin install cortex@cortex
+```
+
+That's it. The plugin registers the Cortex MCP server (`.mcp.json` launches `bin/cortex-mcp.py`, which self-locates its own `src/`), the `cortex` skill, and everything else. In a project, ask Claude to call `cortex_refresh` once to build the index (or run `cortex ingest .` if you installed the CLI).
+
+For local development of the plugin itself:
+
+```bash
+claude --plugin-dir /path/to/Cortex
+```
+
+### Codex
+
+Cortex ships `.codex-plugin/plugin.json`, `skills/cortex/SKILL.md`, and `.mcp.json`. Install through your Codex plugin flow, or register the MCP server explicitly in `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.cortex]
+command = "python3"
+args = ["/path/to/Cortex/bin/cortex-mcp.py"]
+```
+
+### Optional: CLI + extras (pip)
+
+The `cortex` CLI and optional features need a pip install:
 
 ```bash
 cd /path/to/Cortex
-python3 -m pip install -e .
+python3 -m pip install -e .                          # cortex CLI
+python3 -m pip install -e ".[llm,languages,watch]"   # enrichment, tree-sitter, watchdog
 ```
 
-For optional features:
-
-```bash
-python3 -m pip install -e ".[llm,languages,watch]"
-```
-
-Initialize a target repo:
+Initialize a target repo (also available as the `cortex_refresh` MCP tool):
 
 ```bash
 cd /path/to/your-project
@@ -38,51 +62,6 @@ cortex report .
 ```
 
 This creates `.cortex/cortex.db` and `.cortex/cortex_report.md` inside the target repo.
-
-## Plugin Setup
-
-This repo is the plugin directory. The shared MCP config is `.mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "cortex": {
-      "command": "cortex",
-      "args": ["mcp"]
-    }
-  }
-}
-```
-
-If `cortex` is not on the host PATH, use `python3 -m cortex.mcp.server` as the MCP command.
-
-### Claude Code
-
-Cortex ships `.claude-plugin/plugin.json` and `.mcp.json` for Claude Code plugin discovery. During local development, point Claude Code at this checkout as the plugin directory, for example:
-
-```bash
-claude --plugin-dir /path/to/Cortex
-```
-
-Use `claude plugin --help` for the installed CLI's plugin-management subcommands.
-
-### Codex
-
-Cortex ships `.codex-plugin/plugin.json`, `skills/cortex/SKILL.md`, and `.mcp.json`. For explicit MCP registration, add this to `~/.codex/config.toml`:
-
-```toml
-[mcp_servers.cortex]
-command = "cortex"
-args = ["mcp"]
-```
-
-Or, if the console environment does not resolve the script:
-
-```toml
-[mcp_servers.cortex]
-command = "python3"
-args = ["-m", "cortex.mcp.server"]
-```
 
 ## MCP Tools
 

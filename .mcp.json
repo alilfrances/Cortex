@@ -1,9 +1,9 @@
 {
   "mcpServers": {
     "cortex": {
-      "command": "cortex",
+      "command": "python3",
       "args": [
-        "mcp"
+        "${CLAUDE_PLUGIN_ROOT}/bin/cortex-mcp.py"
       ]
     }
   }
