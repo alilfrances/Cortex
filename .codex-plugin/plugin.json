@@ -1,0 +1,36 @@
+{
+  "name": "cortex",
+  "version": "0.2.0",
+  "description": "Local-first repo context engine for Codex. Provides graph-aware MCP tools, repository overview, impact analysis, symbol search, and refresh.",
+  "author": {
+    "name": "Alil Kuizon"
+  },
+  "homepage": "https://github.com/alilfrances/Cortex",
+  "repository": "https://github.com/alilfrances/Cortex",
+  "license": "MIT",
+  "keywords": [
+    "context",
+    "mcp",
+    "code",
+    "graph",
+    "repository"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Cortex",
+    "shortDescription": "Graph-aware local repo context for Codex",
+    "longDescription": "Cortex indexes a git repository into a local SQLite graph and exposes MCP tools for task-focused retrieval, overview reports, impact analysis, symbol search, and refresh.",
+    "developerName": "Alil Kuizon",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Read",
+      "Interactive"
+    ],
+    "brandColor": "#2563EB",
+    "defaultPrompt": [
+      "Use Cortex to inspect this repository before broad file search.",
+      "Ask Cortex which files and symbols are relevant to this change."
+    ]
+  }
+}

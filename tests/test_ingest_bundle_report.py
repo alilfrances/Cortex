@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import shutil
 import subprocess
 import tempfile
@@ -10,18 +9,7 @@ from pathlib import Path
 from cortex.benchmark import run_benchmark
 from cortex.bundle import generate_bundle
 from cortex.ingest import ingest_repository
-from cortex.integrations import (
-    claude_status,
-    codex_status,
-    git_hook_status,
-    install_claude,
-    install_codex,
-    install_git_hooks,
-    install_global_skill,
-    uninstall_claude,
-    uninstall_codex,
-    uninstall_git_hooks,
-)
+from cortex.integrations import git_hook_status, install_git_hooks, uninstall_git_hooks
 from cortex.report import generate_report
 from cortex.store import CortexStore, default_db_path
 
@@ -120,116 +108,6 @@ class IntegrationInstallTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
-
-    def test_codex_install_merges_with_existing_files(self) -> None:
-        (self.project_dir / "AGENTS.md").write_text(
-            "## existing\n\nExisting instructions\n",
-            encoding="utf-8",
-        )
-        codex_hooks = self.project_dir / ".codex" / "hooks.json"
-        codex_hooks.parent.mkdir(parents=True)
-        codex_hooks.write_text(
-            json.dumps(
-                {
-                    "hooks": {
-                        "PreToolUse": [
-                            {
-                                "matcher": "Bash",
-                                "hooks": [
-                                    {
-                                        "type": "command",
-                                        "command": "echo existing-hook",
-                                    }
-                                ],
-                            }
-                        ]
-                    }
-                },
-                indent=2,
-            ),
-            encoding="utf-8",
-        )
-
-        install_codex(self.project_dir)
-
-        agents = (self.project_dir / "AGENTS.md").read_text(encoding="utf-8")
-        hooks = codex_hooks.read_text(encoding="utf-8")
-        self.assertIn("## existing", agents)
-        self.assertIn("## cortex", agents)
-        self.assertIn("existing-hook", hooks)
-        self.assertIn("cortex", hooks)
-        self.assertEqual(codex_status(self.project_dir), {"agents": True, "hook": True})
-
-        uninstall_codex(self.project_dir)
-
-        agents = (self.project_dir / "AGENTS.md").read_text(encoding="utf-8")
-        hooks = codex_hooks.read_text(encoding="utf-8")
-        self.assertIn("## existing", agents)
-        self.assertNotIn("## cortex", agents)
-        self.assertIn("existing-hook", hooks)
-        self.assertNotIn("cortex", hooks)
-
-    def test_claude_install_merges_with_existing_files(self) -> None:
-        (self.project_dir / "CLAUDE.md").write_text(
-            "## existing\n\nExisting instructions\n",
-            encoding="utf-8",
-        )
-        settings = self.project_dir / ".claude" / "settings.json"
-        settings.parent.mkdir(parents=True)
-        settings.write_text(
-            json.dumps(
-                {
-                    "hooks": {
-                        "PreToolUse": [
-                            {
-                                "matcher": "Glob|Grep",
-                                "hooks": [
-                                    {
-                                        "type": "command",
-                                        "command": "echo existing-hook",
-                                    }
-                                ],
-                            }
-                        ]
-                    }
-                },
-                indent=2,
-            ),
-            encoding="utf-8",
-        )
-
-        install_claude(self.project_dir)
-
-        claude_md = (self.project_dir / "CLAUDE.md").read_text(encoding="utf-8")
-        hooks = settings.read_text(encoding="utf-8")
-        self.assertIn("## existing", claude_md)
-        self.assertIn("## cortex", claude_md)
-        self.assertIn("existing-hook", hooks)
-        self.assertIn("cortex", hooks)
-        self.assertEqual(claude_status(self.project_dir), {"claude_md": True, "hook": True})
-
-        uninstall_claude(self.project_dir)
-
-        claude_md = (self.project_dir / "CLAUDE.md").read_text(encoding="utf-8")
-        hooks = settings.read_text(encoding="utf-8")
-        self.assertIn("## existing", claude_md)
-        self.assertNotIn("## cortex", claude_md)
-        self.assertIn("existing-hook", hooks)
-        self.assertNotIn("cortex", hooks)
-
-    def test_global_install_uses_temp_home(self) -> None:
-        codex = install_global_skill("codex", home_dir=self.home_dir)
-        claude = install_global_skill("claude", home_dir=self.home_dir)
-
-        codex_skill = Path(codex["skill"])
-        claude_skill = Path(claude["skill"])
-        registration = Path(claude["registration"])
-
-        self.assertTrue(codex_skill.exists())
-        self.assertTrue(claude_skill.exists())
-        self.assertTrue(registration.exists())
-        self.assertIn(str(self.home_dir), str(codex_skill))
-        self.assertIn("# cortex", registration.read_text(encoding="utf-8"))
 
     def test_git_hook_install_preserves_existing_hook_blocks(self) -> None:
         subprocess.run(["git", "init"], cwd=self.project_dir, check=True, capture_output=True, text=True)

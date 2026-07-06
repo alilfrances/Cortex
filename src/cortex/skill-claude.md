@@ -1,9 +1,5 @@
 # Cortex
 
-Use Cortex as the first-pass repo context layer before broad raw-file exploration.
+This legacy packaged Claude skill is kept for one release.
 
-Workflow:
-1. If `.cortex/cortex_report.md` is missing or stale, run `cortex refresh .`
-2. Read `.cortex/cortex_report.md`
-3. If the report is insufficient, run `cortex bundle . --task "<question>" --budget 4000`
-4. Answer from the bundle before opening many raw files
+Use the shared plugin skill at `skills/cortex/SKILL.md`.

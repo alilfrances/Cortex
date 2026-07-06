@@ -19,11 +19,8 @@ python -m cortex bundle /path/to/repo --task "Summarize the architecture" --budg
 python -m cortex report /path/to/repo
 python -m cortex refresh /path/to/repo
 python -m cortex benchmark /path/to/repo --budget 4000
-python -m cortex codex install /path/to/repo
-python -m cortex claude install /path/to/repo
+python -m cortex migrate /path/to/repo
 python -m cortex hook install /path/to/repo
-python -m cortex install codex
-python -m cortex install claude
 ```
 
 ## Recommended Clean First-Time Setup
@@ -56,21 +53,22 @@ This creates:
 - `.cortex/cortex.db`
 - `.cortex/cortex_report.md`
 
-### 3. Install project-local assistant guidance
+### 3. Install the Cortex plugin
 
-For Codex:
+Use this repository as the Claude Code or Codex plugin directory. The plugin registers the shared Cortex skill and MCP server config:
+
+- `.claude-plugin/plugin.json`
+- `.codex-plugin/plugin.json`
+- `.mcp.json`
+- `skills/cortex/SKILL.md`
+
+For older projects that used `cortex codex install .` or `cortex claude install .`, run:
 
 ```bash
-cortex codex install .
+cortex migrate .
 ```
 
-For Claude:
-
-```bash
-cortex claude install .
-```
-
-These commands append a `## cortex` section to the project-local agent file and add a `PreToolUse` hook in the assistant's project settings.
+This removes the old injected `## cortex` guidance from `AGENTS.md` and `CLAUDE.md`.
 
 ### 4. Optionally install repo-local git hooks
 
@@ -98,7 +96,6 @@ Recommended minimum setup for a Codex-managed repo:
 ```bash
 cortex ingest . --commits 50
 cortex report .
-cortex codex install .
 cortex hook install .
 ```
 
@@ -106,9 +103,9 @@ cortex hook install .
 
 - `refresh` ingests the repo and writes `.cortex/cortex_report.md`
 - `benchmark` compares Cortex bundle size with full-corpus token cost
-- local `codex` / `claude` installers append Cortex guidance without removing existing agent guidance
+- `migrate` removes old injected Cortex guidance from `AGENTS.md` and `CLAUDE.md`
 - `hook install` adds repo-local git hooks that run `cortex refresh .`
-- global `install codex|claude` writes Cortex skill files under your home directory
+- plugin manifests register Cortex skills and MCP config for Claude Code and Codex
 
 ## Design Notes
 

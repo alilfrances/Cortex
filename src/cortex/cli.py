@@ -13,10 +13,8 @@ from .integrations import (
     claude_status,
     codex_status,
     git_hook_status,
-    install_claude,
-    install_codex,
     install_git_hooks,
-    install_global_skill,
+    migrate,
     uninstall_claude,
     uninstall_codex,
     uninstall_git_hooks,
@@ -68,18 +66,18 @@ def build_parser() -> argparse.ArgumentParser:
     enrich_parser.add_argument("--force", action="store_true", help="Re-extract all files, ignore cache")
     enrich_parser.add_argument("--db", type=Path, default=None)
 
-    install_parser = subparsers.add_parser("install", help="Install Cortex global skill files for an assistant")
-    install_parser.add_argument("platform", choices=("codex", "claude"))
+    migrate_parser = subparsers.add_parser("migrate", help="Remove old Cortex injected agent guidance")
+    migrate_parser.add_argument("project_dir", type=Path, nargs="?", default=Path("."))
 
     codex_parser = subparsers.add_parser("codex", help="Manage project-local Codex integration")
     codex_subparsers = codex_parser.add_subparsers(dest="codex_action", required=True)
-    for action in ("install", "uninstall", "status"):
+    for action in ("uninstall", "status"):
         action_parser = codex_subparsers.add_parser(action)
         action_parser.add_argument("project_dir", type=Path, nargs="?", default=Path("."))
 
     claude_parser = subparsers.add_parser("claude", help="Manage project-local Claude integration")
     claude_subparsers = claude_parser.add_subparsers(dest="claude_action", required=True)
-    for action in ("install", "uninstall", "status"):
+    for action in ("uninstall", "status"):
         action_parser = claude_subparsers.add_parser(action)
         action_parser.add_argument("project_dir", type=Path, nargs="?", default=Path("."))
 
@@ -165,14 +163,11 @@ def main() -> None:
             print(f"Error: {exc}")
         return
 
-    if args.command == "install":
-        print(json.dumps(install_global_skill(args.platform), indent=2))
+    if args.command == "migrate":
+        print(json.dumps(migrate(args.project_dir), indent=2))
         return
 
     if args.command == "codex":
-        if args.codex_action == "install":
-            print(json.dumps(install_codex(args.project_dir), indent=2))
-            return
         if args.codex_action == "uninstall":
             print(json.dumps(uninstall_codex(args.project_dir), indent=2))
             return
@@ -180,9 +175,6 @@ def main() -> None:
         return
 
     if args.command == "claude":
-        if args.claude_action == "install":
-            print(json.dumps(install_claude(args.project_dir), indent=2))
-            return
         if args.claude_action == "uninstall":
             print(json.dumps(uninstall_claude(args.project_dir), indent=2))
             return
