@@ -5,6 +5,7 @@ __pycache__/
 .DS_Store
 build/
 dist/
+dist-check/
 .cortex/
 .worktrees/
 graphify-out

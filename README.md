@@ -1,46 +1,35 @@
 # Cortex
 
-Cortex is a local-first context engine that turns a git-backed project into a
-deterministic graph, provenance store, and token-budgeted retrieval bundle for
-live agent work.
+Cortex is a graph-aware, local-first context engine for code agents. It ingests a git repository into a deterministic SQLite store, builds STRUCTURAL, COCHANGE, and HEADING graph layers, ranks context with personalized PageRank, and packs task-focused bundles with symbol skeletons when budgets are tight.
 
-## V1 Thin Slice
+The result is a repo-native context service: MCP tools for live agent queries, CLI commands for reports and exports, and no required network, embedding, vector DB, or LLM dependency.
 
-- ingest the working tree plus a recent commit window
-- persist source, commit, graph, and bundle records in SQLite
-- emit Markdown or JSON retrieval bundles under a hard token budget
-- generate a compact repo report with central nodes and weak links
+## What Cortex Builds
 
-## CLI
+- STRUCTURAL layer: files, imports, definitions, symbol nodes, and contains edges.
+- COCHANGE layer: git history coupling between files changed together.
+- HEADING layer: Markdown sections for docs and planning context.
+- Ranking: personalized PageRank by default, with BFS available for comparison.
+- Packing: full files when they fit; Python skeletons with imports, signatures, spans, and hashes under tight budgets.
+- Communities: local graph clustering for reports and architecture overviews.
+- Transport: stdio MCP server plus plugin manifests for Claude Code and Codex.
 
-```bash
-python -m cortex ingest /path/to/repo --commits 50
-python -m cortex bundle /path/to/repo --task "Summarize the architecture" --budget 4000
-python -m cortex report /path/to/repo
-python -m cortex refresh /path/to/repo
-python -m cortex benchmark /path/to/repo --budget 4000
-python -m cortex migrate /path/to/repo
-python -m cortex hook install /path/to/repo
-```
-
-## Recommended Clean First-Time Setup
-
-Use this flow when setting Cortex up for a repo from scratch.
-
-### 1. Install Cortex
+## Install
 
 Requires Python 3.11+.
-
-From the Cortex repo:
 
 ```bash
 cd /path/to/Cortex
 python3 -m pip install -e .
 ```
 
-### 2. Create the repo-local Cortex artifacts
+For optional features:
 
-From the target project repo:
+```bash
+python3 -m pip install -e ".[llm,languages,watch]"
+```
+
+Initialize a target repo:
 
 ```bash
 cd /path/to/your-project
@@ -48,69 +37,143 @@ cortex ingest . --commits 50
 cortex report .
 ```
 
-This creates:
+This creates `.cortex/cortex.db` and `.cortex/cortex_report.md` inside the target repo.
 
-- `.cortex/cortex.db`
-- `.cortex/cortex_report.md`
+## Plugin Setup
 
-### 3. Install the Cortex plugin
+This repo is the plugin directory. The shared MCP config is `.mcp.json`:
 
-Use this repository as the Claude Code or Codex plugin directory. The plugin registers the shared Cortex skill and MCP server config:
+```json
+{
+  "mcpServers": {
+    "cortex": {
+      "command": "cortex",
+      "args": ["mcp"]
+    }
+  }
+}
+```
 
-- `.claude-plugin/plugin.json`
-- `.codex-plugin/plugin.json`
-- `.mcp.json`
-- `skills/cortex/SKILL.md`
+If `cortex` is not on the host PATH, use `python3 -m cortex.mcp.server` as the MCP command.
 
-For older projects that used `cortex codex install .` or `cortex claude install .`, run:
+### Claude Code
+
+Cortex ships `.claude-plugin/plugin.json` and `.mcp.json` for Claude Code plugin discovery. During local development, point Claude Code at this checkout as the plugin directory, for example:
+
+```bash
+claude --plugin-dir /path/to/Cortex
+```
+
+Use `claude plugin --help` for the installed CLI's plugin-management subcommands.
+
+### Codex
+
+Cortex ships `.codex-plugin/plugin.json`, `skills/cortex/SKILL.md`, and `.mcp.json`. For explicit MCP registration, add this to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.cortex]
+command = "cortex"
+args = ["mcp"]
+```
+
+Or, if the console environment does not resolve the script:
+
+```toml
+[mcp_servers.cortex]
+command = "python3"
+args = ["-m", "cortex.mcp.server"]
+```
+
+## MCP Tools
+
+| Tool | What it does | Example prompt |
+|---|---|---|
+| `cortex_query` | Builds a task-focused retrieval bundle under a token budget. | "Use Cortex to find the files and symbols for adding password reset." |
+| `cortex_overview` | Returns a compact repo overview from the stored graph and report data. | "Ask Cortex for an overview before we refactor the API layer." |
+| `cortex_impact` | Ranks structural and co-change neighbors for a file or symbol. | "Use Cortex impact on `src/cortex/bundle.py` before changing packing." |
+| `cortex_search_symbols` | Searches indexed file and symbol nodes by name. | "Search Cortex symbols for `SessionStore` and related methods." |
+| `cortex_refresh` | Re-ingests the repo and updates freshness metadata. | "Refresh Cortex, then query the checkout flow again." |
+
+Tool results include provenance where available, plus stale-state hints when the repository fingerprint changed since ingestion.
+
+## CLI Reference
+
+| Command | Purpose |
+|---|---|
+| `cortex ingest <repo> [--commits 50] [--update]` | Scan source files, git history, graph layers, symbols, and fingerprints into SQLite. |
+| `cortex bundle <repo> --task "..." [--budget 4000] [--rank pagerank\|bfs] [--format md\|json]` | Emit a token-budgeted context bundle. |
+| `cortex report <repo> [--out .cortex] [--include-test-pairs]` | Write an architecture report with central nodes, communities, and connections. |
+| `cortex enrich <repo> --provider claude\|codex [--force]` | Optional LLM semantic enrichment with local cache. Requires `[llm]`. |
+| `cortex benchmark <repo> [--budget 4000] [--format text\|json]` | Compare bundle token cost against full-corpus reading. |
+| `cortex mcp` | Run the stdio MCP server. |
+| `cortex migrate [project_dir]` | Remove old injected v0.1 `## cortex` guidance and point users to plugin setup. |
+| `cortex graph export <repo> --format graphml\|json\|obsidian --out <path>` | Export the stored graph. |
+| `cortex graph view <repo> --out cortex-graph.html` | Write a self-contained no-CDN HTML graph viewer. |
+| `cortex watch <repo> [--interval 30]` | Refresh on changes using watchdog when installed, polling otherwise. |
+| `cortex hook install\|uninstall\|status [project_dir]` | Manage repo-local git hooks that run `cortex refresh`. |
+
+`cortex refresh <repo>` is also available as a convenience command for ingest plus report generation.
+
+## Extras
+
+| Extra | Adds | Notes |
+|---|---|---|
+| `[llm]` | `anthropic`, `openai` | Enables `cortex enrich`; never required for core graphing or MCP. |
+| `[languages]` | tree-sitter and language grammars | Adds structural extraction for JS/TS/Go/Rust/Swift/Java/Ruby where grammars import cleanly; regex fallback remains available. |
+| `[watch]` | `watchdog` | Improves `cortex watch`; polling fallback is stdlib-only. |
+
+## Eval Numbers
+
+Regenerated on 2026-07-06 with:
+
+```bash
+python3 evals/run_evals.py
+```
+
+The harness creates two small git fixture repos at runtime and runs 10 gold tasks. It reports expected-file precision/recall, expected-symbol recall, token cost, and wall latency. Full per-task output is in `evals/RESULTS.md`.
+
+| Mode | Tasks | Precision | Recall | Avg Tokens | Avg Latency ms |
+|---|---:|---:|---:|---:|---:|
+| bfs | 10 | 0.300 | 1.000 | 655 | 9.9 |
+| pagerank | 10 | 0.300 | 1.000 | 655 | 11.5 |
+| skeleton_off | 10 | 0.733 | 0.725 | 175 | 11.0 |
+| skeleton_on | 10 | 0.750 | 0.825 | 173 | 11.0 |
+
+Interpretation: normal-budget PageRank and BFS both recover all gold files/symbols in these small fixtures but include extra files. Tight-budget skeleton packing improves recall versus tight-budget truncation while keeping token cost nearly flat.
+
+## Cortex vs. The Field
+
+- Serena: Cortex is not an LSP replacement; it focuses on durable repo graph memory, COCHANGE history, and token-budgeted retrieval over MCP.
+- claude-context: Cortex does not require embeddings, a vector DB, or network services. The core is deterministic and SQLite local-first.
+- repomix: Cortex is selective and graph-aware rather than whole-repo packing. It ranks files/symbols and can skeletonize code when the budget is tight.
+- Cortex-specific edge: the COCHANGE temporal layer makes git history a first-class retrieval signal alongside structure and docs.
+
+## Stacking With tokenslim
+
+Cortex and tokenslim solve different parts of the context problem. Cortex proactively selects the right repo context before or during a task; tokenslim reactively compresses large tool outputs after they happen. Prefer Cortex MCP tools for repo retrieval when possible because MCP results are structured and avoid shell-output truncation paths.
+
+## Migrating From v0.1
+
+The old `cortex claude install` and `cortex codex install` string-injection commands were removed. Use plugin manifests and MCP registration instead.
+
+For repos that previously used injected `AGENTS.md` or `CLAUDE.md` sections:
 
 ```bash
 cortex migrate .
 ```
 
-This removes the old injected `## cortex` guidance from `AGENTS.md` and `CLAUDE.md`.
-
-### 4. Optionally install repo-local git hooks
-
-If you want Cortex to refresh automatically after commits and checkout events:
+Then configure the plugin/MCP setup for your host and run:
 
 ```bash
-cortex hook install .
-```
-
-This installs repo-local git hook blocks that run:
-
-```bash
-cortex refresh . --commits 50
-```
-
-### 5. Use Cortex during work
-
-```bash
-cortex bundle . --task "Summarize the architecture" --budget 4000
 cortex refresh .
 ```
 
-Recommended minimum setup for a Codex-managed repo:
+## Development
 
 ```bash
-cortex ingest . --commits 50
-cortex report .
-cortex hook install .
+python3 -m pytest tests/ -q
+python3 evals/run_evals.py
+python3 -m build
 ```
 
-## Agent Workflow
-
-- `refresh` ingests the repo and writes `.cortex/cortex_report.md`
-- `benchmark` compares Cortex bundle size with full-corpus token cost
-- `migrate` removes old injected Cortex guidance from `AGENTS.md` and `CLAUDE.md`
-- `hook install` adds repo-local git hooks that run `cortex refresh .`
-- plugin manifests register Cortex skills and MCP config for Claude Code and Codex
-
-## Design Notes
-
-- Graph construction is deterministic and local.
-- Token accounting is byte-safe and deterministic, with optional enrichment kept
-  off the critical path.
-- Prior graph-retrieval experiments and IntelligentConceptStudio are source research inputs, not runtime
-  dependencies.
+The core package has zero required runtime dependencies. Keep new eval fixtures small enough that the eval suite runs in seconds.
