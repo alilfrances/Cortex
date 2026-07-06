@@ -17,6 +17,7 @@ HOOK = ROOT / "hooks" / "session-start.py"
 def _write_repo(tmp_path: Path) -> Path:
     repo = tmp_path / "repo"
     repo.mkdir()
+    subprocess.run(["git", "init"], cwd=repo, capture_output=True, check=True)
     (repo / "README.md").write_text("# Demo\n", encoding="utf-8")
     (repo / "app.py").write_text("def main():\n    return 'ok'\n", encoding="utf-8")
     return repo
@@ -106,6 +107,18 @@ def test_session_start_hook_emits_missing_db_context(tmp_path: Path) -> None:
     context = _additional_context(result.stdout)
     assert "No Cortex index found" in context
     assert "cortex_refresh can build it" in context
+
+
+def test_session_start_hook_silent_outside_git_repo(tmp_path: Path) -> None:
+    plain_dir = tmp_path / "not-a-repo"
+    plain_dir.mkdir()
+    (plain_dir / "notes.md").write_text("# Notes\n", encoding="utf-8")
+
+    result = _run_hook(plain_dir)
+
+    assert result.returncode == 0
+    assert result.stdout == ""
+    assert result.stderr == ""
 
 
 def test_session_start_hook_fails_open_for_malformed_db(tmp_path: Path) -> None:
