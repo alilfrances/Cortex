@@ -33,9 +33,13 @@ For local development of the plugin itself:
 claude --plugin-dir /path/to/Cortex
 ```
 
-### Codex
+### Codex (one command)
 
-Cortex ships `.codex-plugin/plugin.json`, `skills/cortex/SKILL.md`, and `.mcp.json`. Install through your Codex plugin flow, or register the MCP server explicitly in `~/.codex/config.toml`:
+```bash
+/path/to/Cortex/install.sh --codex
+```
+
+This registers the MCP server in `~/.codex/config.toml` with an absolute path to the self-locating launcher (idempotent; no pip). Skills ship in `.codex-plugin`/`skills/` for Codex's plugin flow, or copy `skills/cortex` to `~/.codex/skills/`. Manual registration equivalent:
 
 ```toml
 [mcp_servers.cortex]
