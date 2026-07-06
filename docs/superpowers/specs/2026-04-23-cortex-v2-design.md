@@ -1,3 +1,5 @@
+> Superseded by 2026-07-06-cortex-v3.md.
+
 # Cortex v2 Design Spec
 
 **Date:** 2026-04-23

@@ -2,32 +2,9 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
 from importlib.resources import files
 from pathlib import Path
 from typing import Any
-
-_AGENTS_SECTION = """\
-## cortex
-
-This project has Cortex context artifacts under .cortex/.
-
-Rules:
-- Before answering architecture or codebase questions, read .cortex/cortex_report.md before searching raw files.
-- If the report is insufficient for the task, run `cortex bundle . --task "<question>" --budget 4000` and answer from that bundle before broad raw-file exploration.
-- After meaningful code changes in this session, run `cortex refresh .` to keep Cortex artifacts current when hooks are unavailable.
-"""
-
-_CLAUDE_SECTION = """\
-## cortex
-
-This project has Cortex context artifacts under .cortex/.
-
-Rules:
-- Before answering architecture or codebase questions, read .cortex/cortex_report.md before searching raw files.
-- If the report is insufficient for the task, run `cortex bundle . --task "<question>" --budget 4000` and answer from that bundle before broad raw-file exploration.
-- After meaningful code changes in this session, run `cortex refresh .` to keep Cortex artifacts current when hooks are unavailable.
-"""
 
 _GLOBAL_CLAUDE_REGISTRATION = (
     "\n# cortex\n"
@@ -38,46 +15,6 @@ _GLOBAL_CLAUDE_REGISTRATION = (
 
 _AGENTS_MARKER = "## cortex"
 _CLAUDE_MARKER = "## cortex"
-
-_CODEX_HOOK_ENTRY = {
-    "matcher": "Bash",
-    "hooks": [
-        {
-            "type": "command",
-            "command": (
-                "[ -f .cortex/cortex_report.md ] && "
-                r"""echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"},"systemMessage":"cortex: Context report exists. Read .cortex/cortex_report.md before broad raw-file searching; generate a task bundle if needed."}' """
-                "|| true"
-            ),
-        }
-    ],
-}
-
-_CLAUDE_HOOK_ENTRY = {
-    "matcher": "Glob|Grep",
-    "hooks": [
-        {
-            "type": "command",
-            "command": (
-                "[ -f .cortex/cortex_report.md ] && "
-                r"""echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"cortex: Context report exists. Read .cortex/cortex_report.md before broad raw-file searching; generate a task bundle if needed."}}' """
-                "|| true"
-            ),
-        }
-    ],
-}
-
-
-def _upsert_section(target: Path, marker: str, section: str) -> str:
-    if target.exists():
-        content = target.read_text(encoding="utf-8")
-        if marker in content:
-            return "already installed"
-        target.write_text(content.rstrip() + "\n\n" + section, encoding="utf-8")
-        return "installed"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(section, encoding="utf-8")
-    return "installed"
 
 
 def _remove_section(target: Path, marker: str) -> str:
@@ -108,22 +45,6 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
-def _install_codex_hook(path: Path) -> None:
-    hooks = _load_json(path)
-    entries = hooks.setdefault("hooks", {}).setdefault("PreToolUse", [])
-    hooks["hooks"]["PreToolUse"] = [entry for entry in entries if "cortex" not in str(entry)]
-    hooks["hooks"]["PreToolUse"].append(_CODEX_HOOK_ENTRY)
-    _write_json(path, hooks)
-
-
-def _install_claude_hook(path: Path) -> None:
-    settings = _load_json(path)
-    entries = settings.setdefault("hooks", {}).setdefault("PreToolUse", [])
-    settings["hooks"]["PreToolUse"] = [entry for entry in entries if "cortex" not in str(entry)]
-    settings["hooks"]["PreToolUse"].append(_CLAUDE_HOOK_ENTRY)
-    _write_json(path, settings)
-
-
 def _remove_hook(path: Path) -> str:
     if not path.exists():
         return "missing"
@@ -135,13 +56,6 @@ def _remove_hook(path: Path) -> str:
     payload.setdefault("hooks", {})["PreToolUse"] = filtered
     _write_json(path, payload)
     return "removed"
-
-
-def install_codex(project_dir: Path) -> dict[str, str]:
-    project = project_dir.resolve()
-    agents_status = _upsert_section(project / "AGENTS.md", _AGENTS_MARKER, _AGENTS_SECTION)
-    _install_codex_hook(project / ".codex" / "hooks.json")
-    return {"agents": agents_status, "hook": "installed"}
 
 
 def uninstall_codex(project_dir: Path) -> dict[str, str]:
@@ -160,13 +74,6 @@ def codex_status(project_dir: Path) -> dict[str, bool]:
     return {"agents": agents, "hook": hook}
 
 
-def install_claude(project_dir: Path) -> dict[str, str]:
-    project = project_dir.resolve()
-    claude_status = _upsert_section(project / "CLAUDE.md", _CLAUDE_MARKER, _CLAUDE_SECTION)
-    _install_claude_hook(project / ".claude" / "settings.json")
-    return {"claude_md": claude_status, "hook": "installed"}
-
-
 def uninstall_claude(project_dir: Path) -> dict[str, str]:
     project = project_dir.resolve()
     return {
@@ -181,6 +88,15 @@ def claude_status(project_dir: Path) -> dict[str, bool]:
     hook_path = project / ".claude" / "settings.json"
     hook = hook_path.exists() and "cortex" in hook_path.read_text(encoding="utf-8")
     return {"claude_md": claude, "hook": hook}
+
+
+def migrate(project_dir: Path) -> dict[str, str]:
+    project = project_dir.resolve()
+    return {
+        "agents": _remove_section(project / "AGENTS.md", _AGENTS_MARKER),
+        "claude_md": _remove_section(project / "CLAUDE.md", _CLAUDE_MARKER),
+        "next_step": "Install the Cortex plugin from this repository and run `cortex refresh .` in the target project.",
+    }
 
 
 def install_global_skill(platform: str, home_dir: Path | None = None) -> dict[str, str]:

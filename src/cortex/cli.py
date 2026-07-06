@@ -2,24 +2,124 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import sys
+import time
+from collections.abc import Callable
 from pathlib import Path
 
 from .benchmark import format_benchmark, run_benchmark
 from .bundle import generate_bundle
-from .ingest import ingest_repository
+from .export import export_graphml, export_json, export_obsidian
+from .gitutils import discover_repo_root
+from .ingest import compute_repo_fingerprint, ingest_repository
 from .integrations import (
     claude_status,
     codex_status,
     git_hook_status,
-    install_claude,
-    install_codex,
     install_git_hooks,
-    install_global_skill,
+    migrate,
     uninstall_claude,
     uninstall_codex,
     uninstall_git_hooks,
 )
 from .report import generate_report, write_report
+from .store import CortexStore, default_db_path
+from .viewer import write_html
+
+
+def _fetch_repo_graph(repo_path: Path, db_path: Path | None = None):
+    repo_root = discover_repo_root(repo_path)
+    store = CortexStore(db_path or default_db_path(repo_root))
+    nodes, edges = store.fetch_graph(repo_root)
+    communities = store.fetch_communities(repo_root)
+    community_by_node: dict[str, int] = {}
+    for community in communities:
+        for node_id in community.node_ids:
+            community_by_node[node_id] = community.community_id
+    return repo_root, nodes, edges, community_by_node
+
+
+def _watch_root(repo_path: Path) -> Path:
+    try:
+        return discover_repo_root(repo_path)
+    except ValueError:
+        return repo_path.resolve()
+
+
+def _watch_polling(
+    repo_path: Path,
+    interval: float,
+    refresh: Callable[[Path], None],
+    sleep: Callable[[float], None] = time.sleep,
+    max_refreshes: int | None = None,
+) -> None:
+    repo_root = _watch_root(repo_path)
+    last_fingerprint = compute_repo_fingerprint(repo_root)
+    refresh_count = 0
+    while True:
+        sleep(interval)
+        current = compute_repo_fingerprint(repo_root)
+        if current == last_fingerprint:
+            continue
+        last_fingerprint = current
+        refresh(repo_root)
+        refresh_count += 1
+        if max_refreshes is not None and refresh_count >= max_refreshes:
+            return
+
+
+def _watch_with_watchdog(repo_path: Path, interval: float, refresh: Callable[[Path], None]) -> None:
+    from watchdog.events import FileSystemEventHandler
+    from watchdog.observers import Observer
+
+    repo_root = _watch_root(repo_path)
+    last_event = 0.0
+    pending = False
+
+    class Handler(FileSystemEventHandler):
+        def on_any_event(self, event) -> None:
+            nonlocal last_event, pending
+            if event.is_directory:
+                return
+            path = Path(event.src_path)
+            if ".cortex" in path.parts or ".git" in path.parts:
+                return
+            last_event = time.monotonic()
+            pending = True
+
+    observer = Observer()
+    observer.schedule(Handler(), str(repo_root), recursive=True)
+    observer.start()
+    print(f"Watching {repo_root} with watchdog. Press Ctrl-C to stop.")
+    try:
+        while True:
+            time.sleep(min(interval, 0.5))
+            if pending and time.monotonic() - last_event >= interval:
+                pending = False
+                refresh(repo_root)
+    except KeyboardInterrupt:
+        print("\nStopped.")
+    finally:
+        observer.stop()
+        observer.join()
+
+
+def watch_repository(repo_path: Path, interval: float = 30.0) -> None:
+    def refresh(path: Path) -> None:
+        summary = ingest_repository(path)
+        print(json.dumps(summary, indent=2))
+
+    try:
+        import watchdog  # noqa: F401
+    except Exception:
+        print(f"Watching {_watch_root(repo_path)} by polling. Press Ctrl-C to stop.")
+        try:
+            _watch_polling(repo_path, interval, refresh)
+        except KeyboardInterrupt:
+            print("\nStopped.")
+        return
+    _watch_with_watchdog(repo_path, interval, refresh)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -30,7 +130,6 @@ def build_parser() -> argparse.ArgumentParser:
     ingest_parser.add_argument("repo_path", type=Path)
     ingest_parser.add_argument("--commits", type=int, default=50)
     ingest_parser.add_argument("--db", type=Path, default=None)
-    ingest_parser.add_argument("--enrich", action="store_true")
     ingest_parser.add_argument("--update", action="store_true", help="Incremental: only re-scan changed files")
 
     bundle_parser = subparsers.add_parser("bundle", help="Generate a token-budgeted retrieval bundle")
@@ -39,11 +138,25 @@ def build_parser() -> argparse.ArgumentParser:
     bundle_parser.add_argument("--budget", type=int, default=4000)
     bundle_parser.add_argument("--db", type=Path, default=None)
     bundle_parser.add_argument("--format", choices=("json", "md"), default="md")
+    bundle_parser.add_argument("--rank", choices=("pagerank", "bfs"), default="pagerank")
 
     report_parser = subparsers.add_parser("report", help="Generate a graph report")
     report_parser.add_argument("repo_path", type=Path)
     report_parser.add_argument("--db", type=Path, default=None)
     report_parser.add_argument("--out", type=Path, default=None)
+    report_parser.add_argument("--include-test-pairs", action="store_true")
+
+    graph_parser = subparsers.add_parser("graph", help="Export or view the Cortex graph")
+    graph_subparsers = graph_parser.add_subparsers(dest="graph_action", required=True)
+    graph_export_parser = graph_subparsers.add_parser("export", help="Export a stored Cortex graph")
+    graph_export_parser.add_argument("repo_path", type=Path)
+    graph_export_parser.add_argument("--format", choices=("graphml", "json", "obsidian"), required=True)
+    graph_export_parser.add_argument("--out", type=Path, required=True)
+    graph_export_parser.add_argument("--db", type=Path, default=None)
+    graph_view_parser = graph_subparsers.add_parser("view", help="Write a self-contained HTML graph viewer")
+    graph_view_parser.add_argument("repo_path", type=Path)
+    graph_view_parser.add_argument("--out", type=Path, default=Path("cortex-graph.html"))
+    graph_view_parser.add_argument("--db", type=Path, default=None)
 
     refresh_parser = subparsers.add_parser("refresh", help="Refresh Cortex state and write the default report")
     refresh_parser.add_argument("repo_path", type=Path, nargs="?", default=Path("."))
@@ -57,24 +170,30 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark_parser.add_argument("--db", type=Path, default=None)
     benchmark_parser.add_argument("--format", choices=("text", "json"), default="text")
 
-    enrich_parser = subparsers.add_parser("enrich", help="Run LLM semantic enrichment (requires cortex-engine[llm])")
+    subparsers.add_parser("mcp", help="Run the Cortex stdio MCP server")
+
+    watch_parser = subparsers.add_parser("watch", help="Watch a repository and refresh Cortex on changes")
+    watch_parser.add_argument("repo_path", type=Path)
+    watch_parser.add_argument("--interval", type=float, default=30.0)
+
+    enrich_parser = subparsers.add_parser("enrich", help="Run LLM semantic enrichment (requires cortex-context-engine[llm])")
     enrich_parser.add_argument("repo_path", type=Path)
     enrich_parser.add_argument("--provider", choices=("claude", "codex"), default="claude")
     enrich_parser.add_argument("--force", action="store_true", help="Re-extract all files, ignore cache")
     enrich_parser.add_argument("--db", type=Path, default=None)
 
-    install_parser = subparsers.add_parser("install", help="Install Cortex global skill files for an assistant")
-    install_parser.add_argument("platform", choices=("codex", "claude"))
+    migrate_parser = subparsers.add_parser("migrate", help="Remove old Cortex injected agent guidance")
+    migrate_parser.add_argument("project_dir", type=Path, nargs="?", default=Path("."))
 
     codex_parser = subparsers.add_parser("codex", help="Manage project-local Codex integration")
     codex_subparsers = codex_parser.add_subparsers(dest="codex_action", required=True)
-    for action in ("install", "uninstall", "status"):
+    for action in ("uninstall", "status"):
         action_parser = codex_subparsers.add_parser(action)
         action_parser.add_argument("project_dir", type=Path, nargs="?", default=Path("."))
 
     claude_parser = subparsers.add_parser("claude", help="Manage project-local Claude integration")
     claude_subparsers = claude_parser.add_subparsers(dest="claude_action", required=True)
-    for action in ("install", "uninstall", "status"):
+    for action in ("uninstall", "status"):
         action_parser = claude_subparsers.add_parser(action)
         action_parser.add_argument("project_dir", type=Path, nargs="?", default=Path("."))
 
@@ -96,7 +215,6 @@ def main() -> None:
             repo_path=args.repo_path,
             commit_limit=args.commits,
             db_path=args.db,
-            enrich=args.enrich,
             incremental=args.update,
         )
         print(json.dumps(summary, indent=2))
@@ -109,6 +227,7 @@ def main() -> None:
             budget=args.budget,
             db_path=args.db,
             output_format=args.format,
+            rank=args.rank,
         )
         if args.format == "json":
             print(json.dumps(bundle, indent=2))
@@ -117,8 +236,28 @@ def main() -> None:
         return
 
     if args.command == "report":
-        report = generate_report(repo_path=args.repo_path, db_path=args.db, out_dir=args.out)
+        report = generate_report(
+            repo_path=args.repo_path,
+            db_path=args.db,
+            out_dir=args.out,
+            include_test_pairs=args.include_test_pairs,
+        )
         print(report)
+        return
+
+    if args.command == "graph":
+        _, nodes, edges, communities = _fetch_repo_graph(args.repo_path, args.db)
+        if args.graph_action == "export":
+            if args.format == "graphml":
+                export_graphml(nodes, edges, communities, args.out)
+            elif args.format == "json":
+                export_json(nodes, edges, communities, args.out)
+            else:
+                export_obsidian(nodes, edges, communities, args.out)
+            print(json.dumps({"path": str(args.out), "format": args.format}, indent=2))
+            return
+        write_html(nodes, edges, communities, args.out)
+        print(json.dumps({"path": str(args.out), "format": "html"}, indent=2))
         return
 
     if args.command == "refresh":
@@ -137,6 +276,13 @@ def main() -> None:
         print(format_benchmark(result, output_format=args.format))
         return
 
+    if args.command == "mcp":
+        os.execv(sys.executable, [sys.executable, "-m", "cortex.mcp.server"])
+
+    if args.command == "watch":
+        watch_repository(args.repo_path, interval=args.interval)
+        return
+
     if args.command == "enrich":
         from .enrich import enrich_repository
 
@@ -152,14 +298,11 @@ def main() -> None:
             print(f"Error: {exc}")
         return
 
-    if args.command == "install":
-        print(json.dumps(install_global_skill(args.platform), indent=2))
+    if args.command == "migrate":
+        print(json.dumps(migrate(args.project_dir), indent=2))
         return
 
     if args.command == "codex":
-        if args.codex_action == "install":
-            print(json.dumps(install_codex(args.project_dir), indent=2))
-            return
         if args.codex_action == "uninstall":
             print(json.dumps(uninstall_codex(args.project_dir), indent=2))
             return
@@ -167,9 +310,6 @@ def main() -> None:
         return
 
     if args.command == "claude":
-        if args.claude_action == "install":
-            print(json.dumps(install_claude(args.project_dir), indent=2))
-            return
         if args.claude_action == "uninstall":
             print(json.dumps(uninstall_claude(args.project_dir), indent=2))
             return

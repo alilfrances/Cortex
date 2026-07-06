@@ -35,13 +35,30 @@ _SKIP_DIRS = {".git", ".cortex", "__pycache__", ".pytest_cache", ".mypy_cache", 
 def _classify_path(path: Path) -> str:
     if path.suffix == ".md":
         return "markdown"
-    if path.suffix in {".py", ".js", ".ts", ".tsx", ".jsx", ".swift", ".java", ".go", ".rs"}:
+    if path.suffix in {".py", ".js", ".ts", ".tsx", ".jsx", ".swift", ".java", ".rb", ".go", ".rs", ".sh"}:
         return "code"
     return "text"
 
 
 def _content_hash(content: str) -> str:
     return hashlib.sha256(content.encode('utf-8', errors='replace')).hexdigest()
+
+
+def compute_repo_fingerprint(repo_root: Path) -> str:
+    parts: list[str] = []
+    for root, dirs, files in os.walk(repo_root):
+        dirs[:] = [directory for directory in dirs if directory not in _SKIP_DIRS]
+        for filename in files:
+            path = Path(root) / filename
+            if path.suffix.lower() not in _TEXT_SUFFIXES:
+                continue
+            try:
+                stat = path.stat()
+            except OSError:
+                continue
+            rel_path = path.relative_to(repo_root).as_posix()
+            parts.append(f"{rel_path}\0{stat.st_size}\0{stat.st_mtime_ns}")
+    return hashlib.sha256("\n".join(sorted(parts)).encode("utf-8")).hexdigest()
 
 
 def _scan_sources(repo_root: Path) -> list[SourceRecord]:
@@ -81,6 +98,7 @@ def ingest_repository(
     repo_root = discover_repo_root(repo_path)
     store = CortexStore(db_path or default_db_path(repo_root))
     all_sources = _scan_sources(repo_root)
+    fingerprint = compute_repo_fingerprint(repo_root)
     commits = collect_recent_commits(repo_root, commit_limit)
 
     if incremental:
@@ -112,6 +130,7 @@ def ingest_repository(
             store.save_sources(repo_root, sources_to_process)
             store.save_commits(repo_root, commits)
             store.save_graph(repo_root, merged_nodes, merged_edges)
+        store.set_repo_fingerprint(repo_root, fingerprint)
 
         return {
             "repo_path": str(repo_root),
@@ -125,7 +144,7 @@ def ingest_repository(
 
     nodes, edges = build_graph(all_sources, commits)
 
-    store.reset_repo(repo_root)
+    store.reset_repo(repo_root, fingerprint=fingerprint)
     store.save_sources(repo_root, all_sources)
     store.save_commits(repo_root, commits)
     store.save_graph(repo_root, nodes, edges)

@@ -5,6 +5,7 @@ from pathlib import Path
 from cortex.models import GraphEdge, GraphNode, SourceRecord, CommitRecord
 from cortex.store import CortexStore
 from cortex.bundle import generate_bundle, _bfs_proximity, _build_adjacency
+from cortex.cli import build_parser
 
 
 def test_build_adjacency_is_undirected():
@@ -68,3 +69,49 @@ def test_graph_neighbor_included_when_seed_matches(tmp_path):
     result = generate_bundle(repo, task='login', budget=2000, db_path=store.db_path)
     assert 'session.py' in result
     assert 'unrelated.py' not in result
+
+
+def test_pagerank_surfaces_three_hop_relevant_node_that_bfs_depth_two_misses(tmp_path):
+    import subprocess
+
+    db_path = tmp_path / 'cortex.db'
+    store = CortexStore(db_path)
+    repo = tmp_path / 'repo'
+    repo.mkdir()
+    subprocess.run(['git', 'init'], cwd=repo, capture_output=True)
+
+    sources = [
+        SourceRecord(path='seed.py', content='graph ranking seed\ndef graph_ranking_seed(): pass', kind='code', size_bytes=30, modified_at=0.0, content_hash='h1'),
+        SourceRecord(path='hop1.py', content='def hop_one(): pass', kind='code', size_bytes=20, modified_at=0.0, content_hash='h2'),
+        SourceRecord(path='hop2.py', content='def hop_two(): pass', kind='code', size_bytes=20, modified_at=0.0, content_hash='h3'),
+        SourceRecord(path='hop3.py', content='def hop_three(): pass', kind='code', size_bytes=20, modified_at=0.0, content_hash='h4'),
+    ]
+    nodes = [
+        GraphNode(node_id=f'file:{source.path}', kind='file', label=source.path, source_ref=source.path)
+        for source in sources
+    ]
+    edges = [
+        GraphEdge(edge_id='e1', source='file:seed.py', target='file:hop1.py', relation='imports', layer='STRUCTURAL'),
+        GraphEdge(edge_id='e2', source='file:hop1.py', target='file:hop2.py', relation='imports', layer='STRUCTURAL'),
+        GraphEdge(edge_id='e3', source='file:hop2.py', target='file:hop3.py', relation='imports', layer='STRUCTURAL'),
+    ]
+    store.reset_repo(repo)
+    store.save_sources(repo, sources)
+    store.save_commits(repo, [])
+    store.save_graph(repo, nodes, edges)
+
+    pagerank_result = generate_bundle(repo, task='graph ranking', budget=2000, db_path=store.db_path, rank='pagerank')
+    bfs_result = generate_bundle(repo, task='graph ranking', budget=2000, db_path=store.db_path, rank='bfs')
+
+    assert 'hop3.py' in pagerank_result
+    assert 'hop3.py' not in bfs_result
+
+
+def test_bundle_cli_rank_flag_defaults_to_pagerank_and_accepts_bfs():
+    parser = build_parser()
+
+    default_args = parser.parse_args(['bundle', '.', '--task', 'graph ranking'])
+    bfs_args = parser.parse_args(['bundle', '.', '--task', 'graph ranking', '--rank', 'bfs'])
+
+    assert default_args.rank == 'pagerank'
+    assert bfs_args.rank == 'bfs'

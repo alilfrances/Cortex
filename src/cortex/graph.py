@@ -6,6 +6,7 @@ from collections import defaultdict
 from .ast_extract import extract_python_edges
 from .cochange import build_cochange_edges
 from .models import CommitRecord, GraphEdge, GraphNode, SourceRecord
+from .structural import extract_structural_edges, supports_path
 
 
 def _content_hash(content: str) -> str:
@@ -36,7 +37,7 @@ def build_graph(
         )
 
         # Heading edges (HEADING layer)
-        if source.kind in {'markdown', 'text', 'code'}:
+        if source.kind == 'markdown':
             for line in source.content.splitlines():
                 if line.startswith('#'):
                     title = line.lstrip('#').strip()
@@ -70,6 +71,10 @@ def build_graph(
             ast_nodes, ast_edges = extract_python_edges(source.path, source.content, known_paths)
             nodes.extend(ast_nodes)
             edges.extend(ast_edges)
+        elif source.kind == 'code' and supports_path(source.path):
+            structural_nodes, structural_edges = extract_structural_edges(source.path, source.content, known_paths)
+            nodes.extend(structural_nodes)
+            edges.extend(structural_edges)
 
     # Co-change edges from git history (COCHANGE layer)
     edges.extend(build_cochange_edges(commits))

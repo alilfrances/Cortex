@@ -16,6 +16,81 @@ def _resolve_relative_import(file_path: str, module: str, known_paths: set[str])
     return None
 
 
+def _function_signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
+    prefix = "async def" if isinstance(node, ast.AsyncFunctionDef) else "def"
+    returns = f" -> {ast.unparse(node.returns)}" if node.returns else ""
+    return f"{prefix} {node.name}({ast.unparse(node.args)}){returns}:"
+
+
+def _class_signature(node: ast.ClassDef) -> str:
+    if node.bases:
+        bases = ", ".join(ast.unparse(base) for base in node.bases)
+        return f"class {node.name}({bases}):"
+    return f"class {node.name}:"
+
+
+def _visit_symbols(
+    path: str,
+    parent_id: str,
+    qual_prefix: str,
+    body: list[ast.stmt],
+    nodes: list[GraphNode],
+    edges: list[GraphEdge],
+) -> None:
+    for node in body:
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            continue
+        qualname = f"{qual_prefix}.{node.name}" if qual_prefix else node.name
+        symbol_id = f"symbol:{path}:{qualname}"
+        if isinstance(node, ast.ClassDef):
+            kind = "class"
+            signature = _class_signature(node)
+        else:
+            kind = "func"
+            signature = _function_signature(node)
+        nodes.append(
+            GraphNode(
+                node_id=symbol_id,
+                kind=kind,
+                label=node.name,
+                source_ref=path,
+                granularity="symbol",
+                signature=signature,
+                span_start=node.lineno,
+                span_end=node.end_lineno,
+                metadata={"lineno": node.lineno},
+            )
+        )
+        edges.append(
+            GraphEdge(
+                edge_id=f"ast:{path}:contains:{qualname}",
+                source=parent_id,
+                target=symbol_id,
+                relation="contains",
+                layer="STRUCTURAL",
+                confidence="EXTRACTED",
+                weight=1.0,
+                metadata={},
+            )
+        )
+        if isinstance(node, ast.ClassDef):
+            for base in node.bases:
+                if isinstance(base, ast.Name):
+                    edges.append(
+                        GraphEdge(
+                            edge_id=f"ast:{path}:inherits:{qualname}:{base.id}",
+                            source=symbol_id,
+                            target=f"name:{base.id}",
+                            relation="inherits",
+                            layer="STRUCTURAL",
+                            confidence="EXTRACTED",
+                            weight=1.0,
+                            metadata={"lineno": node.lineno},
+                        )
+                    )
+        _visit_symbols(path, symbol_id, qualname, node.body, nodes, edges)
+
+
 def extract_python_edges(
     path: str,
     content: str,
@@ -69,66 +144,6 @@ def extract_python_edges(
                 )
             )
 
-        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            func_node_id = f"func:{path}:{node.name}"
-            nodes.append(
-                GraphNode(
-                    node_id=func_node_id,
-                    kind="func",
-                    label=node.name,
-                    source_ref=path,
-                    metadata={"lineno": node.lineno},
-                )
-            )
-            edges.append(
-                GraphEdge(
-                    edge_id=f"ast:{path}:contains:func:{node.name}",
-                    source=file_node_id,
-                    target=func_node_id,
-                    relation="contains",
-                    layer="STRUCTURAL",
-                    confidence="EXTRACTED",
-                    weight=1.0,
-                    metadata={},
-                )
-            )
-
-        elif isinstance(node, ast.ClassDef):
-            class_node_id = f"class:{path}:{node.name}"
-            nodes.append(
-                GraphNode(
-                    node_id=class_node_id,
-                    kind="class",
-                    label=node.name,
-                    source_ref=path,
-                    metadata={"lineno": node.lineno},
-                )
-            )
-            edges.append(
-                GraphEdge(
-                    edge_id=f"ast:{path}:contains:class:{node.name}",
-                    source=file_node_id,
-                    target=class_node_id,
-                    relation="contains",
-                    layer="STRUCTURAL",
-                    confidence="EXTRACTED",
-                    weight=1.0,
-                    metadata={},
-                )
-            )
-            for base in node.bases:
-                if isinstance(base, ast.Name):
-                    edges.append(
-                        GraphEdge(
-                            edge_id=f"ast:{path}:inherits:{node.name}:{base.id}",
-                            source=class_node_id,
-                            target=f"name:{base.id}",
-                            relation="inherits",
-                            layer="STRUCTURAL",
-                            confidence="EXTRACTED",
-                            weight=1.0,
-                            metadata={"lineno": node.lineno},
-                        )
-                    )
+    _visit_symbols(path, file_node_id, "", tree.body, nodes, edges)
 
     return nodes, edges
