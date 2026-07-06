@@ -54,9 +54,16 @@ def _repo_status(repo_root: Path) -> tuple[str, int] | None:
     return ("fresh" if stored_fingerprint == current_fingerprint else "stale", file_count)
 
 
+def _inside_git_repo(path: Path) -> bool:
+    return any((candidate / ".git").exists() for candidate in (path, *path.parents))
+
+
 def main() -> int:
     try:
-        status = _repo_status(Path.cwd())
+        cwd = Path.cwd()
+        if not _inside_git_repo(cwd):
+            return 0
+        status = _repo_status(cwd)
         if status is None:
             return 0
 
