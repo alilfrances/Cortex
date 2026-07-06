@@ -36,17 +36,14 @@ def test_mcp_stdio_roundtrip_outputs_only_json_lines(tmp_path: Path) -> None:
         stderr=subprocess.PIPE,
         text=True,
     )
-    assert process.stdin is not None
-    assert process.stdout is not None
     frames = [
         {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05"}},
         {"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}},
         {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
         {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "cortex_refresh", "arguments": {}}},
     ]
-    process.stdin.write("".join(json.dumps(frame) + "\n" for frame in frames))
-    process.stdin.close()
-    stdout, stderr = process.communicate(timeout=10)
+    input_text = "".join(json.dumps(frame) + "\n" for frame in frames)
+    stdout, stderr = process.communicate(input=input_text, timeout=10)
 
     assert process.returncode == 0, stderr
     lines = [line for line in stdout.splitlines() if line]
