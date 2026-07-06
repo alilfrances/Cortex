@@ -107,6 +107,110 @@ def test_pagerank_surfaces_three_hop_relevant_node_that_bfs_depth_two_misses(tmp
     assert 'hop3.py' not in bfs_result
 
 
+def _make_doc_heavy_store(tmp_path: Path, readme_tokens: int = 60) -> tuple[CortexStore, Path]:
+    import subprocess
+    db_path = tmp_path / 'cortex.db'
+    store = CortexStore(db_path)
+    repo = tmp_path / 'repo'
+    repo.mkdir()
+    subprocess.run(['git', 'init'], cwd=repo, capture_output=True)
+
+    # README contains every task term; bundle.py matches the task only via its filename.
+    readme_content = 'bundle scoring rank nodes apply token budget overview\n' + ('filler words padding the document\n' * readme_tokens)
+    code_content = 'def generate(items):\n    return sorted(items)\n'
+    sources = [
+        SourceRecord(path='README.md', content=readme_content, kind='markdown', size_bytes=len(readme_content), modified_at=0.0, content_hash='hd1'),
+        SourceRecord(path='bundle.py', content=code_content, kind='code', size_bytes=len(code_content), modified_at=0.0, content_hash='hd2'),
+    ]
+    nodes = [
+        GraphNode(node_id='file:README.md', kind='file', label='README.md', source_ref='README.md'),
+        GraphNode(node_id='file:bundle.py', kind='file', label='bundle.py', source_ref='bundle.py'),
+    ]
+    store.reset_repo(repo)
+    store.save_sources(repo, sources)
+    store.save_commits(repo, [])
+    store.save_graph(repo, nodes, [])
+    return store, repo
+
+
+def test_filename_match_outranks_keyword_dense_doc(tmp_path):
+    store, repo = _make_doc_heavy_store(tmp_path)
+    result = generate_bundle(
+        repo,
+        task='how does bundle scoring rank nodes and apply the token budget',
+        budget=4000,
+        db_path=store.db_path,
+        output_format='json',
+    )
+    scores = {item['path']: item['score'] for item in result['items']}
+    assert 'bundle.py' in scores
+    assert scores['bundle.py'] > scores.get('README.md', 0.0)
+
+
+def test_symbol_name_match_gets_bonus(tmp_path):
+    store, repo = _make_doc_heavy_store(tmp_path)
+    # README name-drops the symbol alongside every task term; only bundle.py defines it.
+    readme = 'where is generate implemented docs overview\n' + ('filler words padding the document\n' * 60)
+    code = 'def generate(items):\n    return sorted(items)\n'
+    store.save_sources(repo, [
+        SourceRecord(path='README.md', content=readme, kind='markdown', size_bytes=len(readme), modified_at=0.0, content_hash='hs1'),
+        SourceRecord(path='bundle.py', content=code, kind='code', size_bytes=len(code), modified_at=0.0, content_hash='hs2'),
+    ])
+    nodes = [
+        GraphNode(node_id='file:README.md', kind='file', label='README.md', source_ref='README.md'),
+        GraphNode(node_id='file:bundle.py', kind='file', label='bundle.py', source_ref='bundle.py'),
+        GraphNode(node_id='sym:bundle.py:generate', kind='function', label='generate', source_ref='bundle.py', granularity='symbol'),
+    ]
+    store.save_graph(repo, nodes, [])
+    result = generate_bundle(
+        repo,
+        task='where is generate implemented',
+        budget=4000,
+        db_path=store.db_path,
+        output_format='json',
+    )
+    scores = {item['path']: item['score'] for item in result['items']}
+    assert 'bundle.py' in scores
+    assert scores['bundle.py'] > scores.get('README.md', 0.0)
+
+
+def test_doc_tokens_capped_when_code_candidates_exist(tmp_path):
+    store, repo = _make_doc_heavy_store(tmp_path, readme_tokens=400)
+    budget = 300
+    result = generate_bundle(
+        repo,
+        task='how does bundle scoring rank nodes and apply the token budget',
+        budget=budget,
+        db_path=store.db_path,
+        output_format='json',
+    )
+    doc_tokens = sum(item['token_count'] for item in result['items'] if item['kind'] == 'markdown')
+    code_paths = [item['path'] for item in result['items'] if item['kind'] == 'code']
+    assert 'bundle.py' in code_paths
+    assert doc_tokens <= int(budget * 0.4)
+
+
+def test_doc_cap_not_applied_for_docs_only_repos(tmp_path):
+    import subprocess
+    db_path = tmp_path / 'cortex.db'
+    store = CortexStore(db_path)
+    repo = tmp_path / 'repo'
+    repo.mkdir()
+    subprocess.run(['git', 'init'], cwd=repo, capture_output=True)
+    content = 'setup guide install plugin\n' + ('more docs\n' * 50)
+    store.reset_repo(repo)
+    store.save_sources(repo, [
+        SourceRecord(path='docs/setup.md', content=content, kind='markdown', size_bytes=len(content), modified_at=0.0, content_hash='do1'),
+    ])
+    store.save_commits(repo, [])
+    store.save_graph(repo, [GraphNode(node_id='file:docs/setup.md', kind='file', label='docs/setup.md', source_ref='docs/setup.md')], [])
+
+    result = generate_bundle(repo, task='setup guide install plugin', budget=4000, db_path=store.db_path, output_format='json')
+
+    doc_tokens = sum(item['token_count'] for item in result['items'] if item['kind'] == 'markdown')
+    assert doc_tokens > 0
+
+
 def test_bundle_cli_rank_flag_defaults_to_pagerank_and_accepts_bfs():
     parser = build_parser()
 

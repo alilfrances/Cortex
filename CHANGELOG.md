@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.2 - 2026-07-06
+
+Retrieval-quality fixes from a live efficacy eval on the Cortex repo itself, where a bundle for an implementation question returned docs plus a stale `build/` duplicate and missed the real source file.
+
+- Ingest now honors `.gitignore` (via `git ls-files --cached --others --exclude-standard`) and skips common artifact dirs (`build`, `dist`, `dist-check`, `.venv`, `venv`, `.tox`, `.eggs`, `.ruff_cache`) so stale copies never enter the graph. Repo fingerprints use the same file listing.
+- Bundle scoring adds a name-match bonus: a task term that exactly matches a file stem or symbol name now outranks keyword-dense docs.
+- Markdown items are capped at 40% of the bundle budget whenever code candidates also match, so docs can't crowd out implementation files. Docs-only repos are unaffected.
+- SessionStart hook stays silent outside git repositories instead of nudging about a missing index.
+- New `noisy_lib` eval fixture (fat README, doc plans, gitignored `build/` duplicate) with implementation-detail gold tasks to catch this failure class in CI.
+- All manifest versions aligned at 0.2.2; manifest test now asserts `hooks/hooks.json` is the single source of hook wiring.
+
 ## 0.2.0 - 2026-07-06
 
 - Fixed release hygiene issues: package naming in docs/errors, stale extras, author metadata, heading extraction, code-file classification, and removed the no-op ingest enrichment flag.
