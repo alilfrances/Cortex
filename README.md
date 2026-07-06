@@ -33,6 +33,12 @@ For local development of the plugin itself:
 claude --plugin-dir /path/to/Cortex
 ```
 
+## Hooks
+
+Cortex ports graphify's agent-context behavior as a native Claude Code `SessionStart` hook. When a project has `.cortex/cortex.db`, the hook quickly compares the stored repo fingerprint with the current `compute_repo_fingerprint` value and injects short context saying whether the index is fresh or stale, how many files are indexed, and to prefer `cortex_query`, `cortex_search_symbols`, and `cortex_impact` before raw grep-style exploration. If no database exists, it emits a one-line hint that `cortex_refresh` can build it.
+
+The hook is advisory and fail-open: it never runs ingest, never auto-refreshes, and exits quietly on malformed or unreadable databases.
+
 ### Codex (one command)
 
 ```bash

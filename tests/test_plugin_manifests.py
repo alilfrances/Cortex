@@ -19,6 +19,7 @@ class PluginManifestTests(unittest.TestCase):
             ".codex-plugin/plugin.json",
             ".mcp.json",
             ".claude-plugin/marketplace.json",
+            "hooks/hooks.json",
         ):
             self.assertIsInstance(self._load_json(path), dict)
 
@@ -47,6 +48,15 @@ class PluginManifestTests(unittest.TestCase):
                 }
             },
         )
+
+    def test_claude_plugin_wires_session_start_hook(self) -> None:
+        manifest = self._load_json(".claude-plugin/plugin.json")
+        hook_config = self._load_json("hooks/hooks.json")
+        expected_command = 'python3 "${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-.}}/hooks/session-start.py"'
+
+        for hooks in (manifest["hooks"], hook_config["hooks"]):
+            command = hooks["SessionStart"][0]["hooks"][0]["command"]
+            self.assertEqual(command, expected_command)
 
     def test_mcp_launcher_needs_no_pip_install(self) -> None:
         import subprocess
