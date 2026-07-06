@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import sys
 from pathlib import Path
 
 from .benchmark import format_benchmark, run_benchmark
@@ -57,6 +59,8 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark_parser.add_argument("--budget", type=int, default=4000)
     benchmark_parser.add_argument("--db", type=Path, default=None)
     benchmark_parser.add_argument("--format", choices=("text", "json"), default="text")
+
+    subparsers.add_parser("mcp", help="Run the Cortex stdio MCP server")
 
     enrich_parser = subparsers.add_parser("enrich", help="Run LLM semantic enrichment (requires cortex-context-engine[llm])")
     enrich_parser.add_argument("repo_path", type=Path)
@@ -142,6 +146,9 @@ def main() -> None:
         )
         print(format_benchmark(result, output_format=args.format))
         return
+
+    if args.command == "mcp":
+        os.execv(sys.executable, [sys.executable, "-m", "cortex.mcp.server"])
 
     if args.command == "enrich":
         from .enrich import enrich_repository

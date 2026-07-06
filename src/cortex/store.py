@@ -28,7 +28,8 @@ class CortexStore:
 
             CREATE TABLE IF NOT EXISTS repos (
                 repo_path TEXT PRIMARY KEY,
-                updated_at INTEGER NOT NULL
+                updated_at INTEGER NOT NULL,
+                fingerprint TEXT NOT NULL DEFAULT ''
             );
 
             CREATE TABLE IF NOT EXISTS sources (
@@ -144,6 +145,7 @@ class CortexStore:
             "ALTER TABLE graph_nodes ADD COLUMN signature TEXT NOT NULL DEFAULT ''",
             "ALTER TABLE graph_nodes ADD COLUMN span_start INTEGER",
             "ALTER TABLE graph_nodes ADD COLUMN span_end INTEGER",
+            "ALTER TABLE repos ADD COLUMN fingerprint TEXT NOT NULL DEFAULT ''",
         ]
         for sql in migrations:
             try:
@@ -152,12 +154,12 @@ class CortexStore:
             except Exception:
                 pass  # column already exists
 
-    def reset_repo(self, repo_path: Path) -> None:
+    def reset_repo(self, repo_path: Path, fingerprint: str = '') -> None:
         repo_key = str(repo_path.resolve())
         with self.connection:
             self.connection.execute(
-                "INSERT OR REPLACE INTO repos(repo_path, updated_at) VALUES(?, ?)",
-                (repo_key, int(time.time())),
+                "INSERT OR REPLACE INTO repos(repo_path, updated_at, fingerprint) VALUES(?, ?, ?)",
+                (repo_key, int(time.time()), fingerprint),
             )
             bundle_ids = [
                 row["bundle_id"]
@@ -174,6 +176,28 @@ class CortexStore:
                 self.connection.execute("DELETE FROM bundles WHERE repo_path = ?", (repo_key,))
             for table in ("sources", "commits", "graph_nodes", "graph_edges"):
                 self.connection.execute(f"DELETE FROM {table} WHERE repo_path = ?", (repo_key,))
+
+    def set_repo_fingerprint(self, repo_path: Path, fingerprint: str) -> None:
+        repo_key = str(repo_path.resolve())
+        with self.connection:
+            self.connection.execute(
+                """
+                INSERT INTO repos(repo_path, updated_at, fingerprint)
+                VALUES(?, ?, ?)
+                ON CONFLICT(repo_path) DO UPDATE SET
+                    updated_at = excluded.updated_at,
+                    fingerprint = excluded.fingerprint
+                """,
+                (repo_key, int(time.time()), fingerprint),
+            )
+
+    def get_repo_fingerprint(self, repo_path: Path) -> str:
+        repo_key = str(repo_path.resolve())
+        row = self.connection.execute(
+            "SELECT fingerprint FROM repos WHERE repo_path = ?",
+            (repo_key,),
+        ).fetchone()
+        return "" if row is None else row["fingerprint"]
 
     def save_sources(self, repo_path: Path, sources: list[SourceRecord]) -> None:
         repo_key = str(repo_path.resolve())
@@ -369,6 +393,36 @@ class CortexStore:
             for row in edge_rows
         ]
         return nodes, edges
+
+    def search_nodes(self, repo_path: Path, query: str, limit: int = 20) -> list[GraphNode]:
+        repo_key = str(repo_path.resolve())
+        pattern = f"%{query}%"
+        rows = self.connection.execute(
+            """
+            SELECT node_id, kind, label, source_ref, granularity, signature, span_start, span_end, metadata_json
+            FROM graph_nodes
+            WHERE repo_path = ?
+              AND granularity = 'symbol'
+              AND (label LIKE ? OR source_ref LIKE ? OR signature LIKE ?)
+            ORDER BY label ASC, node_id ASC
+            LIMIT ?
+            """,
+            (repo_key, pattern, pattern, pattern, limit),
+        ).fetchall()
+        return [
+            GraphNode(
+                node_id=row['node_id'],
+                kind=row['kind'],
+                label=row['label'],
+                source_ref=row['source_ref'],
+                granularity=row['granularity'],
+                signature=row['signature'],
+                span_start=row['span_start'],
+                span_end=row['span_end'],
+                metadata=json.loads(row['metadata_json']),
+            )
+            for row in rows
+        ]
 
     def save_communities(self, repo_path: Path, communities: list[Community]) -> None:
         repo_key = str(repo_path.resolve())
