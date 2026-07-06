@@ -8,8 +8,11 @@ from pathlib import Path
 
 from .gitutils import discover_repo_root
 from .models import BundleItem, GraphEdge, RetrievalBundle
+from .rank import personalized_pagerank
 from .store import CortexStore, default_db_path
 from .tokenizer import count_text_tokens, truncate_text_to_budget
+
+PAGERANK_SCORE_MULTIPLIER = 10.0
 
 
 def _tokenize_query(task: str) -> set[str]:
@@ -97,12 +100,13 @@ def generate_bundle(
     budget: int,
     db_path: Path | None = None,
     output_format: str = 'md',
+    rank: str = 'pagerank',
 ) -> str | dict:
     repo_root = discover_repo_root(repo_path)
     store = CortexStore(db_path or default_db_path(repo_root))
     sources = store.fetch_sources(repo_root)
     commits = store.fetch_commits(repo_root)
-    _, edges = store.fetch_graph(repo_root)
+    nodes, edges = store.fetch_graph(repo_root)
 
     task_terms = _tokenize_query(task)
     adj = _build_adjacency(edges)
@@ -119,8 +123,15 @@ def generate_bundle(
             recency_weight,
         )
 
-    seed_ids = {f'file:{path}' for path, score in source_scores.items() if score > 0}
-    proximity = _bfs_proximity(seed_ids, adj, max_depth=2)
+    seed_scores = {f'file:{path}': score for path, score in source_scores.items() if score > 0}
+    if rank == 'bfs':
+        proximity = _bfs_proximity(set(seed_scores), adj, max_depth=2)
+        pagerank_scores: dict[str, float] = {}
+    elif rank == 'pagerank':
+        proximity = {}
+        pagerank_scores = personalized_pagerank(nodes, edges, seed_scores) if seed_scores else {}
+    else:
+        raise ValueError(f'Unknown rank mode: {rank}')
 
     candidates: list[BundleItem] = []
 
@@ -128,6 +139,8 @@ def generate_bundle(
         file_node_id = f'file:{source.path}'
         keyword_score = source_scores[source.path]
         graph_bonus = proximity.get(file_node_id, 0.0)
+        if rank == 'pagerank':
+            graph_bonus = pagerank_scores.get(file_node_id, 0.0) * PAGERANK_SCORE_MULTIPLIER
         final_score = keyword_score + graph_bonus
 
         token_count = count_text_tokens(source.content)
@@ -202,7 +215,7 @@ def generate_bundle(
         generated_at=int(time.time()),
         items=selected,
         confidence_notes=[
-            'Graph-aware packing: keyword-matched files + BFS graph neighbors.',
+            f'Graph-aware packing: keyword-matched files + {rank} graph ranking.',
             'STRUCTURAL (AST) and COCHANGE (git) edges inform neighbor selection.',
             'Token counts use Cortex byte-safe local estimator.',
         ],

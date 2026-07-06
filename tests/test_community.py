@@ -45,3 +45,29 @@ def test_community_ids_are_unique():
     communities = detect_communities(nodes, edges)
     ids = [c.community_id for c in communities]
     assert len(ids) == len(set(ids))
+
+
+def test_heading_contains_edges_do_not_merge_communities():
+    nodes = [_node('file:doc.md'), _node('section:doc.md:1'), _node('file:other.md')]
+    edges = [
+        GraphEdge(edge_id='h1', source='file:doc.md', target='section:doc.md:1', relation='contains', layer='HEADING'),
+        GraphEdge(edge_id='h2', source='section:doc.md:1', target='file:other.md', relation='contains', layer='HEADING'),
+    ]
+
+    communities = detect_communities(nodes, edges)
+
+    assert len(communities) == 3
+
+
+def test_weak_cochange_edges_do_not_collapse_independent_clusters():
+    nodes = [_node('a'), _node('b'), _node('x'), _node('y')]
+    edges = [
+        GraphEdge(edge_id='ab', source='a', target='b', relation='imports', layer='STRUCTURAL', weight=1.0),
+        GraphEdge(edge_id='xy', source='x', target='y', relation='imports', layer='STRUCTURAL', weight=1.0),
+        GraphEdge(edge_id='weak', source='b', target='x', relation='cochange', layer='COCHANGE', weight=0.05),
+    ]
+
+    communities = detect_communities(nodes, edges)
+    sizes = sorted(len(c.node_ids) for c in communities)
+
+    assert sizes == [2, 2]

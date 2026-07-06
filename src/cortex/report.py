@@ -2,11 +2,27 @@ from __future__ import annotations
 
 from collections import Counter
 from pathlib import Path
+import re
 
 from .community import detect_communities
 from .gitutils import discover_repo_root
 from .models import GraphEdge, GraphNode
 from .store import CortexStore, default_db_path
+
+
+def _normalized_test_base(path: str) -> tuple[str, bool]:
+    parts = Path(path).parts
+    stem = Path(path).stem
+    is_test = "tests" in parts or stem.startswith("test_") or stem.endswith("_test")
+    base = re.sub(r"^(test_)+", "", stem)
+    base = re.sub(r"(_test)+$", "", base)
+    return base, is_test
+
+
+def _looks_like_src_test_pair(source: str, target: str) -> bool:
+    source_base, source_is_test = _normalized_test_base(source)
+    target_base, target_is_test = _normalized_test_base(target)
+    return source_is_test != target_is_test and source_base == target_base
 
 
 def default_report_path(repo_path: Path) -> Path:
@@ -30,6 +46,7 @@ def _surprising_connections(
     edges: list[GraphEdge],
     node_community: dict[str, int],
     top_n: int = 5,
+    include_test_pairs: bool = False,
 ) -> list[tuple[str, str, str, float]]:
     node_label = {node.node_id: node.label for node in nodes}
     surprises: list[tuple[str, str, str, float]] = []
@@ -43,10 +60,15 @@ def _surprising_connections(
         if source_community is None or target_community is None or source_community == target_community:
             continue
 
+        source_label = node_label.get(edge.source, edge.source)
+        target_label = node_label.get(edge.target, edge.target)
+        if not include_test_pairs and _looks_like_src_test_pair(source_label, target_label):
+            continue
+
         surprises.append(
             (
-                node_label.get(edge.source, edge.source),
-                node_label.get(edge.target, edge.target),
+                source_label,
+                target_label,
                 f"co-change weight={edge.weight:.2f}",
                 edge.weight,
             )
@@ -56,7 +78,12 @@ def _surprising_connections(
     return surprises[:top_n]
 
 
-def generate_report(repo_path: Path, db_path: Path | None = None, out_dir: Path | None = None) -> str:
+def generate_report(
+    repo_path: Path,
+    db_path: Path | None = None,
+    out_dir: Path | None = None,
+    include_test_pairs: bool = False,
+) -> str:
     repo_root = discover_repo_root(repo_path)
     store = CortexStore(db_path or default_db_path(repo_root))
     nodes, edges = store.fetch_graph(repo_root)
@@ -69,7 +96,7 @@ def generate_report(repo_path: Path, db_path: Path | None = None, out_dir: Path 
     store.save_communities(repo_root, communities)
 
     god_nodes = _god_nodes(nodes, edges)
-    surprises = _surprising_connections(nodes, edges, node_community)
+    surprises = _surprising_connections(nodes, edges, node_community, include_test_pairs=include_test_pairs)
     file_node_count = sum(1 for node in nodes if node.kind == "file")
 
     lines = [
