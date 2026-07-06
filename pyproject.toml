@@ -10,13 +10,12 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [
-  { name = "OpenAI Codex" }
+  { name = "alilfrances" }
 ]
 dependencies = []
 
 [project.optional-dependencies]
 llm   = ["anthropic>=0.40", "openai>=1.0"]
-graph = ["networkx>=3.0"]
 
 [project.scripts]
 cortex = "cortex.cli:main"

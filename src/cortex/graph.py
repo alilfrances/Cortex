@@ -36,7 +36,7 @@ def build_graph(
         )
 
         # Heading edges (HEADING layer)
-        if source.kind in {'markdown', 'text', 'code'}:
+        if source.kind == 'markdown':
             for line in source.content.splitlines():
                 if line.startswith('#'):
                     title = line.lstrip('#').strip()

@@ -35,7 +35,7 @@ _SKIP_DIRS = {".git", ".cortex", "__pycache__", ".pytest_cache", ".mypy_cache", 
 def _classify_path(path: Path) -> str:
     if path.suffix == ".md":
         return "markdown"
-    if path.suffix in {".py", ".js", ".ts", ".tsx", ".jsx", ".swift", ".java", ".go", ".rs"}:
+    if path.suffix in {".py", ".js", ".ts", ".tsx", ".jsx", ".swift", ".java", ".rb", ".go", ".rs", ".sh"}:
         return "code"
     return "text"
 

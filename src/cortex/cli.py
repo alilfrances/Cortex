@@ -30,7 +30,6 @@ def build_parser() -> argparse.ArgumentParser:
     ingest_parser.add_argument("repo_path", type=Path)
     ingest_parser.add_argument("--commits", type=int, default=50)
     ingest_parser.add_argument("--db", type=Path, default=None)
-    ingest_parser.add_argument("--enrich", action="store_true")
     ingest_parser.add_argument("--update", action="store_true", help="Incremental: only re-scan changed files")
 
     bundle_parser = subparsers.add_parser("bundle", help="Generate a token-budgeted retrieval bundle")
@@ -57,7 +56,7 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark_parser.add_argument("--db", type=Path, default=None)
     benchmark_parser.add_argument("--format", choices=("text", "json"), default="text")
 
-    enrich_parser = subparsers.add_parser("enrich", help="Run LLM semantic enrichment (requires cortex-engine[llm])")
+    enrich_parser = subparsers.add_parser("enrich", help="Run LLM semantic enrichment (requires cortex-context-engine[llm])")
     enrich_parser.add_argument("repo_path", type=Path)
     enrich_parser.add_argument("--provider", choices=("claude", "codex"), default="claude")
     enrich_parser.add_argument("--force", action="store_true", help="Re-extract all files, ignore cache")
@@ -96,7 +95,6 @@ def main() -> None:
             repo_path=args.repo_path,
             commit_limit=args.commits,
             db_path=args.db,
-            enrich=args.enrich,
             incremental=args.update,
         )
         print(json.dumps(summary, indent=2))

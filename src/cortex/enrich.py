@@ -50,7 +50,7 @@ class ClaudeProvider:
             from anthropic import Anthropic
         except ImportError:
             raise RuntimeError(
-                'anthropic package not installed. Run: pip install cortex-engine[llm]'
+                'anthropic package not installed. Run: pip install cortex-context-engine[llm]'
             )
         self._client = Anthropic(api_key=api_key)
 
@@ -84,7 +84,7 @@ class CodexProvider:
             from openai import OpenAI
         except ImportError:
             raise RuntimeError(
-                'openai package not installed. Run: pip install cortex-engine[llm]'
+                'openai package not installed. Run: pip install cortex-context-engine[llm]'
             )
         self._client = OpenAI(api_key=api_key)
 
