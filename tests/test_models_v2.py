@@ -1,5 +1,5 @@
 from __future__ import annotations
-from cortex.models import GraphEdge, Community, SourceRecord
+from cortex.models import GraphEdge, GraphNode, Community, SourceRecord
 
 
 def test_graph_edge_has_layer_and_confidence():
@@ -33,6 +33,17 @@ def test_community_dataclass():
     assert c.community_id == 0
     assert len(c.node_ids) == 2
     assert c.label == ''
+
+
+def test_graph_node_granularity_defaults():
+    node = GraphNode(node_id='file:a.py', kind='file', label='a.py', source_ref='a.py')
+    assert node.granularity == 'file'
+    assert node.signature == ''
+    assert node.span_start is None
+    assert node.span_end is None
+    payload = node.to_dict()
+    assert payload['granularity'] == 'file'
+    assert payload['span_start'] is None
 
 
 def test_source_record_has_content_hash():

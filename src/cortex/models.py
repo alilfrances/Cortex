@@ -35,6 +35,10 @@ class GraphNode:
     kind: str
     label: str
     source_ref: str
+    granularity: str = 'file'
+    signature: str = ''
+    span_start: int | None = None
+    span_end: int | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:

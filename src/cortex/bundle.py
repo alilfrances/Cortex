@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import math
 import re
 import time
@@ -7,12 +8,96 @@ from collections import defaultdict
 from pathlib import Path
 
 from .gitutils import discover_repo_root
-from .models import BundleItem, GraphEdge, RetrievalBundle
+from .models import BundleItem, GraphEdge, GraphNode, RetrievalBundle
 from .rank import personalized_pagerank
 from .store import CortexStore, default_db_path
 from .tokenizer import count_text_tokens, truncate_text_to_budget
 
 PAGERANK_SCORE_MULTIPLIER = 10.0
+SKELETON_MARKER = '# [skeleton: bodies elided]'
+
+
+def _symbol_qualname(node: GraphNode) -> str:
+    return node.node_id.split(':', 2)[2]
+
+
+def _render_skeleton(content: str, symbols: list[GraphNode], full_body_ids: set[str]) -> str:
+    """Imports + signatures for every top-level symbol; full bodies only for full_body_ids."""
+    lines = content.splitlines()
+    spanned = [s for s in symbols if s.span_start is not None and s.span_end is not None]
+    top_level = sorted(
+        (s for s in spanned if '.' not in _symbol_qualname(s)),
+        key=lambda s: s.span_start,
+    )
+    children_of: defaultdict[str, list[GraphNode]] = defaultdict(list)
+    for symbol in spanned:
+        qualname = _symbol_qualname(symbol)
+        if '.' in qualname:
+            children_of[qualname.rsplit('.', 1)[0]].append(symbol)
+
+    out = [SKELETON_MARKER]
+    for lineno, line in enumerate(lines, start=1):
+        inside_symbol = any(s.span_start <= lineno <= s.span_end for s in spanned)
+        if not inside_symbol and (line.startswith('import ') or line.startswith('from ')):
+            out.append(line)
+
+    for symbol in top_level:
+        out.append('')
+        if symbol.node_id in full_body_ids:
+            out.extend(lines[symbol.span_start - 1:symbol.span_end])
+            continue
+        out.append(symbol.signature)
+        children = sorted(children_of.get(_symbol_qualname(symbol), []), key=lambda s: s.span_start)
+        if symbol.kind == 'class' and children:
+            for child in children:
+                out.append(f'    {child.signature}')
+                out.append('        ...')
+        else:
+            out.append('    ...')
+    return '\n'.join(out)
+
+
+def _skeleton_item(
+    item: BundleItem,
+    symbols: list[GraphNode],
+    node_scores: dict[str, float],
+    remaining: int,
+) -> BundleItem | None:
+    """Skeleton fit under remaining budget, greedily inlining top-scoring bodies. None if even all-signatures overflows."""
+    skeleton = _render_skeleton(item.content, symbols, set())
+    tokens = count_text_tokens(skeleton)
+    if tokens <= 0 or tokens > remaining:
+        return None
+
+    full_body_ids: set[str] = set()
+    ordered = sorted(symbols, key=lambda s: (-node_scores.get(s.node_id, 0.0), s.node_id))
+    for symbol in ordered:
+        trial_ids = full_body_ids | {symbol.node_id}
+        trial = _render_skeleton(item.content, symbols, trial_ids)
+        trial_tokens = count_text_tokens(trial)
+        if trial_tokens <= remaining:
+            skeleton, tokens, full_body_ids = trial, trial_tokens, trial_ids
+
+    elided_spans = [
+        [s.span_start, s.span_end]
+        for s in symbols
+        if s.node_id not in full_body_ids and s.span_start is not None
+    ]
+    return BundleItem(
+        item_id=item.item_id,
+        kind=item.kind,
+        title=item.title,
+        path=item.path,
+        content=skeleton,
+        token_count=tokens,
+        score=item.score,
+        metadata={
+            **item.metadata,
+            'skeleton': True,
+            'content_hash': hashlib.sha256(item.content.encode()).hexdigest(),
+            'elided_spans': elided_spans,
+        },
+    )
 
 
 def _tokenize_query(task: str) -> set[str]:
@@ -111,6 +196,11 @@ def generate_bundle(
     task_terms = _tokenize_query(task)
     adj = _build_adjacency(edges)
 
+    symbols_by_path: defaultdict[str, list[GraphNode]] = defaultdict(list)
+    for node in nodes:
+        if node.granularity == 'symbol':
+            symbols_by_path[node.source_ref].append(node)
+
     newest_commit = max((c.authored_at for c in commits), default=0)
     source_scores: dict[str, float] = {}
     for source in sources:
@@ -189,6 +279,14 @@ def generate_bundle(
         remaining = budget - total_tokens
         if remaining <= 16:
             continue
+        if item.kind == 'code' and item.path.endswith('.py'):
+            symbols = symbols_by_path.get(item.path, [])
+            if symbols:
+                skeleton = _skeleton_item(item, symbols, pagerank_scores, remaining)
+                if skeleton is not None:
+                    selected.append(skeleton)
+                    total_tokens += skeleton.token_count
+                    continue
         truncated = truncate_text_to_budget(item.content, remaining)
         truncated_tokens = count_text_tokens(truncated)
         if truncated_tokens <= 0:

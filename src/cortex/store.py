@@ -58,6 +58,10 @@ class CortexStore:
                 kind TEXT NOT NULL,
                 label TEXT NOT NULL,
                 source_ref TEXT NOT NULL,
+                granularity TEXT NOT NULL DEFAULT 'file',
+                signature TEXT NOT NULL DEFAULT '',
+                span_start INTEGER,
+                span_end INTEGER,
                 metadata_json TEXT NOT NULL,
                 PRIMARY KEY (repo_path, node_id)
             );
@@ -136,6 +140,10 @@ class CortexStore:
             "ALTER TABLE sources ADD COLUMN content_hash TEXT NOT NULL DEFAULT ''",
             "ALTER TABLE graph_edges ADD COLUMN layer TEXT NOT NULL DEFAULT 'HEADING'",
             "ALTER TABLE graph_edges ADD COLUMN confidence TEXT NOT NULL DEFAULT 'EXTRACTED'",
+            "ALTER TABLE graph_nodes ADD COLUMN granularity TEXT NOT NULL DEFAULT 'file'",
+            "ALTER TABLE graph_nodes ADD COLUMN signature TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE graph_nodes ADD COLUMN span_start INTEGER",
+            "ALTER TABLE graph_nodes ADD COLUMN span_end INTEGER",
         ]
         for sql in migrations:
             try:
@@ -208,11 +216,22 @@ class CortexStore:
         with self.connection:
             self.connection.executemany(
                 '''
-                INSERT OR REPLACE INTO graph_nodes(repo_path, node_id, kind, label, source_ref, metadata_json)
-                VALUES(?, ?, ?, ?, ?, ?)
+                INSERT OR REPLACE INTO graph_nodes(repo_path, node_id, kind, label, source_ref, granularity, signature, span_start, span_end, metadata_json)
+                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''',
                 [
-                    (repo_key, node.node_id, node.kind, node.label, node.source_ref, json.dumps(node.metadata))
+                    (
+                        repo_key,
+                        node.node_id,
+                        node.kind,
+                        node.label,
+                        node.source_ref,
+                        node.granularity,
+                        node.signature,
+                        node.span_start,
+                        node.span_end,
+                        json.dumps(node.metadata),
+                    )
                     for node in nodes
                 ],
             )
@@ -315,7 +334,7 @@ class CortexStore:
     def fetch_graph(self, repo_path: Path) -> tuple[list[GraphNode], list[GraphEdge]]:
         repo_key = str(repo_path.resolve())
         node_rows = self.connection.execute(
-            'SELECT node_id, kind, label, source_ref, metadata_json FROM graph_nodes WHERE repo_path = ? ORDER BY node_id',
+            'SELECT node_id, kind, label, source_ref, granularity, signature, span_start, span_end, metadata_json FROM graph_nodes WHERE repo_path = ? ORDER BY node_id',
             (repo_key,),
         ).fetchall()
         edge_rows = self.connection.execute(
@@ -328,6 +347,10 @@ class CortexStore:
                 kind=row['kind'],
                 label=row['label'],
                 source_ref=row['source_ref'],
+                granularity=row['granularity'],
+                signature=row['signature'],
+                span_start=row['span_start'],
+                span_end=row['span_end'],
                 metadata=json.loads(row['metadata_json']),
             )
             for row in node_rows
