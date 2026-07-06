@@ -71,3 +71,31 @@ def test_weak_cochange_edges_do_not_collapse_independent_clusters():
     sizes = sorted(len(c.node_ids) for c in communities)
 
     assert sizes == [2, 2]
+
+
+def test_high_fanout_commit_touch_edges_do_not_collapse_file_communities():
+    file_ids = [f'file:cluster_{i}.py' for i in range(12)]
+    nodes = [
+        GraphNode(node_id='commit:wide', kind='commit', label='wide commit', source_ref='commit:wide'),
+        *[_node(file_id) for file_id in file_ids],
+    ]
+    edges = [
+        GraphEdge(
+            edge_id=f'touch-{index}',
+            source='commit:wide',
+            target=file_id,
+            relation='touches',
+            layer='COCHANGE',
+            weight=1.0,
+        )
+        for index, file_id in enumerate(file_ids)
+    ]
+
+    communities = detect_communities(nodes, edges)
+    file_community_ids = {
+        community.community_id
+        for community in communities
+        if any(node_id in file_ids for node_id in community.node_ids)
+    }
+
+    assert len(file_community_ids) > 1

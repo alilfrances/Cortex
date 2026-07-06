@@ -21,11 +21,18 @@ def detect_communities(
         return []
 
     node_ids = [n.node_id for n in nodes]
+    propagation_node_ids = {
+        node.node_id
+        for node in nodes
+        if node.kind != 'commit' and not node.node_id.startswith('commit:')
+    }
 
     # Build undirected adjacency list, keeping only edges that carry useful
     # community signal for propagation.
     neighbors: defaultdict[str, list[str]] = defaultdict(list)
     for edge in edges:
+        if edge.source not in propagation_node_ids or edge.target not in propagation_node_ids:
+            continue
         if edge.layer == 'HEADING' and edge.relation == 'contains':
             continue
         if edge.layer == 'COCHANGE' and edge.weight < COCHANGE_WEIGHT_FLOOR:
