@@ -15,6 +15,10 @@ from .tokenizer import count_text_tokens, truncate_text_to_budget
 
 PAGERANK_SCORE_MULTIPLIER = 10.0
 SKELETON_MARKER = '# [skeleton: bodies elided]'
+# Exact task-term hit on a file stem or symbol name must beat keyword-dense docs.
+NAME_MATCH_BONUS = 100.0
+# Markdown share of the budget when code candidates also match the task.
+DOC_BUDGET_SHARE = 0.4
 
 
 def _symbol_qualname(node: GraphNode) -> str:
@@ -197,9 +201,13 @@ def generate_bundle(
     adj = _build_adjacency(edges)
 
     symbols_by_path: defaultdict[str, list[GraphNode]] = defaultdict(list)
+    symbol_names_by_path: defaultdict[str, set[str]] = defaultdict(set)
     for node in nodes:
         if node.granularity == 'symbol':
             symbols_by_path[node.source_ref].append(node)
+            symbol_names_by_path[node.source_ref].add(
+                _symbol_qualname(node).rsplit('.', 1)[-1].lower()
+            )
 
     newest_commit = max((c.authored_at for c in commits), default=0)
     source_scores: dict[str, float] = {}
@@ -207,7 +215,9 @@ def generate_bundle(
         recency_weight = 0.0
         if newest_commit:
             recency_weight = max(0.0, 5.0 - math.log2(max(1, newest_commit - int(source.modified_at) + 1)))
-        source_scores[source.path] = _score_text(
+        name_candidates = {Path(source.path).stem.lower()} | symbol_names_by_path.get(source.path, set())
+        name_bonus = NAME_MATCH_BONUS if task_terms & name_candidates else 0.0
+        source_scores[source.path] = name_bonus + _score_text(
             task_terms,
             f'{source.path}\n{source.content}',
             recency_weight,
@@ -267,16 +277,26 @@ def generate_bundle(
 
     candidates.sort(key=lambda item: (-item.score, item.path))
 
+    has_code_matches = any(item.kind == 'code' and item.score > 0 for item in candidates)
+    doc_cap = int(budget * DOC_BUDGET_SHARE) if has_code_matches else budget
+
     selected: list[BundleItem] = []
     total_tokens = 0
+    doc_tokens = 0
     for item in candidates:
         if item.score <= 0:
             continue
-        if total_tokens + item.token_count <= budget:
+        is_doc = item.kind == 'markdown'
+        allowed = budget - total_tokens
+        if is_doc:
+            allowed = min(allowed, doc_cap - doc_tokens)
+        if item.token_count <= allowed:
             selected.append(item)
             total_tokens += item.token_count
+            if is_doc:
+                doc_tokens += item.token_count
             continue
-        remaining = budget - total_tokens
+        remaining = allowed
         if remaining <= 16:
             continue
         if item.kind == 'code' and item.path.endswith('.py'):
@@ -304,6 +324,8 @@ def generate_bundle(
             )
         )
         total_tokens += truncated_tokens
+        if is_doc:
+            doc_tokens += truncated_tokens
 
     bundle = RetrievalBundle(
         task=task,

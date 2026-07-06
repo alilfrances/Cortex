@@ -29,7 +29,14 @@ class PluginManifestTests(unittest.TestCase):
 
         self.assertEqual(self._load_json(".claude-plugin/plugin.json")["version"], version)
         self.assertEqual(self._load_json(".codex-plugin/plugin.json")["version"], version)
-        self.assertEqual(self._load_json(".claude-plugin/marketplace.json")["version"], version)
+        marketplace = self._load_json(".claude-plugin/marketplace.json")
+        self.assertEqual(marketplace["version"], version)
+        for plugin in marketplace["plugins"]:
+            self.assertEqual(plugin["version"], version)
+
+        from cortex.mcp.server import SERVER_INFO
+
+        self.assertEqual(SERVER_INFO["version"], version)
 
     def test_codex_manifest_references_skills_and_mcp_config(self) -> None:
         manifest = self._load_json(".codex-plugin/plugin.json")
@@ -50,13 +57,15 @@ class PluginManifestTests(unittest.TestCase):
         )
 
     def test_claude_plugin_wires_session_start_hook(self) -> None:
+        # hooks.json is the single source of hook wiring; defining hooks in
+        # plugin.json too causes duplicate SessionStart runs (fixed in 0.2.1).
         manifest = self._load_json(".claude-plugin/plugin.json")
+        self.assertNotIn("hooks", manifest)
+
         hook_config = self._load_json("hooks/hooks.json")
         expected_command = 'python3 "${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-.}}/hooks/session-start.py"'
-
-        for hooks in (manifest["hooks"], hook_config["hooks"]):
-            command = hooks["SessionStart"][0]["hooks"][0]["command"]
-            self.assertEqual(command, expected_command)
+        command = hook_config["hooks"]["SessionStart"][0]["hooks"][0]["command"]
+        self.assertEqual(command, expected_command)
 
     def test_mcp_launcher_needs_no_pip_install(self) -> None:
         import subprocess

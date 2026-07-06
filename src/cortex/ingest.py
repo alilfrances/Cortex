@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import subprocess
 from pathlib import Path
 
 from .gitutils import collect_recent_commits, discover_repo_root
@@ -29,7 +30,49 @@ _TEXT_SUFFIXES = {
     ".sh",
 }
 
-_SKIP_DIRS = {".git", ".cortex", "__pycache__", ".pytest_cache", ".mypy_cache", "node_modules"}
+_SKIP_DIRS = {
+    ".git",
+    ".cortex",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    "node_modules",
+    "build",
+    "dist",
+    "dist-check",
+    ".venv",
+    "venv",
+    ".tox",
+    ".eggs",
+}
+
+
+def _git_listed_files(repo_root: Path) -> list[Path] | None:
+    """Tracked + untracked-but-not-gitignored files, or None outside a git repo."""
+    result = subprocess.run(
+        ["git", "-C", str(repo_root), "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    return [repo_root / rel for rel in result.stdout.split("\0") if rel]
+
+
+def _iter_candidate_files(repo_root: Path) -> list[Path]:
+    listed = _git_listed_files(repo_root)
+    if listed is not None:
+        return [
+            path for path in listed
+            if not set(path.relative_to(repo_root).parts[:-1]) & _SKIP_DIRS
+        ]
+    files: list[Path] = []
+    for root, dirs, names in os.walk(repo_root):
+        dirs[:] = [directory for directory in dirs if directory not in _SKIP_DIRS]
+        files.extend(Path(root) / name for name in names)
+    return files
 
 
 def _classify_path(path: Path) -> str:
@@ -46,45 +89,39 @@ def _content_hash(content: str) -> str:
 
 def compute_repo_fingerprint(repo_root: Path) -> str:
     parts: list[str] = []
-    for root, dirs, files in os.walk(repo_root):
-        dirs[:] = [directory for directory in dirs if directory not in _SKIP_DIRS]
-        for filename in files:
-            path = Path(root) / filename
-            if path.suffix.lower() not in _TEXT_SUFFIXES:
-                continue
-            try:
-                stat = path.stat()
-            except OSError:
-                continue
-            rel_path = path.relative_to(repo_root).as_posix()
-            parts.append(f"{rel_path}\0{stat.st_size}\0{stat.st_mtime_ns}")
+    for path in _iter_candidate_files(repo_root):
+        if path.suffix.lower() not in _TEXT_SUFFIXES:
+            continue
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        rel_path = path.relative_to(repo_root).as_posix()
+        parts.append(f"{rel_path}\0{stat.st_size}\0{stat.st_mtime_ns}")
     return hashlib.sha256("\n".join(sorted(parts)).encode("utf-8")).hexdigest()
 
 
 def _scan_sources(repo_root: Path) -> list[SourceRecord]:
     sources: list[SourceRecord] = []
-    for root, dirs, files in os.walk(repo_root):
-        dirs[:] = [directory for directory in dirs if directory not in _SKIP_DIRS]
-        for filename in files:
-            path = Path(root) / filename
-            if path.suffix.lower() not in _TEXT_SUFFIXES:
-                continue
-            try:
-                content = path.read_text(encoding="utf-8")
-            except UnicodeDecodeError:
-                continue
-            rel_path = str(path.relative_to(repo_root))
-            stat = path.stat()
-            sources.append(
-                SourceRecord(
-                    path=rel_path,
-                    content=content,
-                    kind=_classify_path(path),
-                    size_bytes=stat.st_size,
-                    modified_at=stat.st_mtime,
-                    content_hash=_content_hash(content),
-                )
+    for path in _iter_candidate_files(repo_root):
+        if path.suffix.lower() not in _TEXT_SUFFIXES:
+            continue
+        try:
+            content = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        rel_path = path.relative_to(repo_root).as_posix()
+        stat = path.stat()
+        sources.append(
+            SourceRecord(
+                path=rel_path,
+                content=content,
+                kind=_classify_path(path),
+                size_bytes=stat.st_size,
+                modified_at=stat.st_mtime,
+                content_hash=_content_hash(content),
             )
+        )
     return sorted(sources, key=lambda item: item.path)
 
 
