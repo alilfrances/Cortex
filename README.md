@@ -39,7 +39,7 @@ claude --plugin-dir /path/to/Cortex
 
 Cortex ports graphify's agent-context behavior as a native Claude Code `SessionStart` hook. When a project has `.cortex/cortex.db`, the hook quickly compares the stored repo fingerprint with the current `compute_repo_fingerprint` value and injects short context saying whether the index is fresh or stale, how many files are indexed, and to prefer `cortex_query`, `cortex_search_symbols`, and `cortex_impact` before raw grep-style exploration. If no database exists, it emits a one-line hint that `cortex_refresh` can build it.
 
-The hook is advisory and fail-open: it never runs ingest, never auto-refreshes, exits quietly on malformed or unreadable databases, and stays silent entirely when the working directory is not inside a git repository.
+The hook is advisory and fail-open: it never runs ingest, exits quietly on malformed or unreadable databases, and stays silent entirely when the working directory is not inside a git repository. Staleness resolves itself at query time — the MCP read tools auto-refresh incrementally before answering — so the hook only informs.
 
 ### Codex (one command)
 
@@ -85,7 +85,7 @@ This creates `.cortex/cortex.db` and `.cortex/cortex_report.md` inside the targe
 | `cortex_search_symbols` | Searches indexed file and symbol nodes by name. | "Search Cortex symbols for `SessionStore` and related methods." |
 | `cortex_refresh` | Re-ingests the repo and updates freshness metadata. | "Refresh Cortex, then query the checkout flow again." |
 
-Tool results include provenance where available, plus stale-state hints when the repository fingerprint changed since ingestion.
+Tool results include provenance where available. Read tools keep the index fresh automatically: when the repository fingerprint has changed since ingestion, they run an incremental re-ingest (changed, new, and deleted files only) before answering and report the delta under `auto_refreshed`. Set `CORTEX_AUTO_REFRESH=0` to disable and fall back to stale-state hints plus manual `cortex_refresh`. If no index exists yet, read tools still require an explicit `cortex_refresh` first.
 
 ## CLI Reference
 

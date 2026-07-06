@@ -140,19 +140,21 @@ def ingest_repository(
 
     if incremental:
         existing = {s.path: s.content_hash for s in store.fetch_sources(repo_root)}
+        current_paths = {s.path for s in all_sources}
         new_sources = [s for s in all_sources if s.path not in existing]
         changed_sources = [
             s for s in all_sources
             if s.path in existing and s.content_hash != existing[s.path]
         ]
+        deleted_paths = sorted(set(existing) - current_paths)
         unchanged_count = len(all_sources) - len(new_sources) - len(changed_sources)
 
         sources_to_process = new_sources + changed_sources
 
-        if sources_to_process:
+        if sources_to_process or deleted_paths:
             existing_nodes, existing_edges = store.fetch_graph(repo_root)
 
-            stale_paths = {s.path for s in changed_sources}
+            stale_paths = {s.path for s in changed_sources} | set(deleted_paths)
             filtered_nodes = [n for n in existing_nodes if n.source_ref not in stale_paths]
             filtered_edges = [
                 e for e in existing_edges
@@ -165,8 +167,9 @@ def ingest_repository(
             merged_edges = filtered_edges + new_edges
 
             store.save_sources(repo_root, sources_to_process)
+            store.delete_sources(repo_root, deleted_paths)
             store.save_commits(repo_root, commits)
-            store.save_graph(repo_root, merged_nodes, merged_edges)
+            store.replace_graph(repo_root, merged_nodes, merged_edges)
         store.set_repo_fingerprint(repo_root, fingerprint)
 
         return {
@@ -174,6 +177,7 @@ def ingest_repository(
             "source_count": len(all_sources),
             "new_files": len(new_sources),
             "updated_files": len(changed_sources),
+            "deleted_files": len(deleted_paths),
             "unchanged_files": unchanged_count,
             "commit_count": len(commits),
             "enrichment_enabled": enrich,
@@ -191,6 +195,7 @@ def ingest_repository(
         "source_count": len(all_sources),
         "new_files": len(all_sources),
         "updated_files": 0,
+        "deleted_files": 0,
         "unchanged_files": 0,
         "commit_count": len(commits),
         "node_count": len(nodes),

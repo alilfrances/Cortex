@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.3 - 2026-07-07
+
+Auto-refresh: the index now keeps itself current — no manual `cortex_refresh` discipline needed.
+
+- MCP read tools (`cortex_query`, `cortex_overview`, `cortex_impact`, `cortex_search_symbols`) detect a stale fingerprint and run an incremental ingest before answering, so results always reflect the working tree. Responses report what changed under `auto_refreshed`. Disable with `CORTEX_AUTO_REFRESH=0`.
+- Missing-database behavior is unchanged: read tools still error with a `cortex_refresh` hint rather than building an index implicitly.
+- Incremental ingest now removes deleted files from the index (`deleted_files` in the summary) instead of leaving ghost sources behind.
+- Fixed stale graph rows surviving incremental ingest: graph saves during incremental runs now replace the repo graph wholesale instead of upserting, so symbols removed from a file disappear from search results.
+
 ## 0.2.2 - 2026-07-06
 
 Retrieval-quality fixes from a live efficacy eval on the Cortex repo itself, where a bundle for an implementation question returned docs plus a stale `build/` duplicate and missed the real source file.

@@ -221,6 +221,22 @@ class CortexStore:
                 ],
             )
 
+    def delete_sources(self, repo_path: Path, paths: list[str]) -> None:
+        repo_key = str(repo_path.resolve())
+        with self.connection:
+            self.connection.executemany(
+                'DELETE FROM sources WHERE repo_path = ? AND path = ?',
+                [(repo_key, path) for path in paths],
+            )
+
+    def replace_graph(self, repo_path: Path, nodes: list[GraphNode], edges: list[GraphEdge]) -> None:
+        """Replace the repo graph wholesale — save_graph upserts, so stale rows survive it."""
+        repo_key = str(repo_path.resolve())
+        with self.connection:
+            self.connection.execute('DELETE FROM graph_nodes WHERE repo_path = ?', (repo_key,))
+            self.connection.execute('DELETE FROM graph_edges WHERE repo_path = ?', (repo_key,))
+        self.save_graph(repo_path, nodes, edges)
+
     def save_commits(self, repo_path: Path, commits: list[CommitRecord]) -> None:
         repo_key = str(repo_path.resolve())
         with self.connection:

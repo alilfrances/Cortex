@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -107,6 +108,20 @@ def _staleness(store: CortexStore, repo_root: Path) -> dict[str, Any]:
     }
 
 
+def _ensure_fresh(store: CortexStore, repo_root: Path) -> dict[str, Any]:
+    """Auto-refresh a stale index (incremental) before answering, unless disabled."""
+    status = _staleness(store, repo_root)
+    if not status["stale"] or os.environ.get("CORTEX_AUTO_REFRESH", "1") == "0":
+        return status
+    summary = ingest_repository(repo_root, incremental=True)
+    status = _staleness(store, repo_root)
+    status["auto_refreshed"] = {
+        key: summary[key]
+        for key in ("new_files", "updated_files", "deleted_files", "unchanged_files")
+    }
+    return status
+
+
 def _bundle_why(
     item: dict[str, Any],
     terms: set[str],
@@ -157,6 +172,7 @@ def _call_query(arguments: dict[str, Any]) -> dict[str, Any]:
     if error is not None:
         return _content(error, is_error=True)
     assert store is not None
+    status = _ensure_fresh(store, repo_root)
     task = str(arguments.get("task", ""))
     bundle = generate_bundle(
         repo_path=repo_root,
@@ -174,7 +190,7 @@ def _call_query(arguments: dict[str, Any]) -> dict[str, Any]:
     _nodes, edges = store.fetch_graph(repo_root)
     for item in bundle.get("items", []):
         item["why"] = _bundle_why(item, terms, seed_paths, edges)
-    bundle.update(_staleness(store, repo_root))
+    bundle.update(status)
     return _content(bundle)
 
 
@@ -184,7 +200,8 @@ def _call_overview(arguments: dict[str, Any]) -> dict[str, Any]:
     if error is not None:
         return _content(error, is_error=True)
     assert store is not None
-    return _content({"repo_path": str(repo_root), "report": generate_report(repo_root), **_staleness(store, repo_root)})
+    status = _ensure_fresh(store, repo_root)
+    return _content({"repo_path": str(repo_root), "report": generate_report(repo_root), **status})
 
 
 def _call_impact(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -193,9 +210,10 @@ def _call_impact(arguments: dict[str, Any]) -> dict[str, Any]:
     if error is not None:
         return _content(error, is_error=True)
     assert store is not None
+    status = _ensure_fresh(store, repo_root)
     nodes, edges = store.fetch_graph(repo_root)
     items = rank_file_impact(str(arguments.get("path", "")), nodes, edges, limit=int(arguments.get("limit", 10)))
-    return _content({"repo_path": str(repo_root), "items": items, **_staleness(store, repo_root)})
+    return _content({"repo_path": str(repo_root), "items": items, **status})
 
 
 def _call_search(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -204,10 +222,11 @@ def _call_search(arguments: dict[str, Any]) -> dict[str, Any]:
     if error is not None:
         return _content(error, is_error=True)
     assert store is not None
+    status = _ensure_fresh(store, repo_root)
     nodes = [node.to_dict() for node in store.search_nodes(repo_root, str(arguments.get("query", "")), int(arguments.get("limit", 20)))]
     for node in nodes:
         node["why"] = [{"type": "like_query", "query": str(arguments.get("query", ""))}]
-    return _content({"repo_path": str(repo_root), "items": nodes, **_staleness(store, repo_root)})
+    return _content({"repo_path": str(repo_root), "items": nodes, **status})
 
 
 def _call_refresh(arguments: dict[str, Any]) -> dict[str, Any]:

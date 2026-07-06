@@ -1,6 +1,6 @@
 {
   "name": "cortex",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Local-first repo context engine for Codex. Provides graph-aware MCP tools, repository overview, impact analysis, symbol search, and refresh.",
   "author": {
     "name": "Alil Kuizon"
