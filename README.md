@@ -27,6 +27,8 @@ claude plugin install cortex@cortex
 
 That's it. The plugin registers the Cortex MCP server (`.mcp.json` launches `bin/cortex-mcp.py`, which self-locates its own `src/`), the `cortex` skill, and everything else. In a project, ask Claude to call `cortex_refresh` once to build the index (or run `cortex ingest .` if you installed the CLI).
 
+> **Note:** Plugins load at session start. After installing or updating, restart Claude Code (or run `/reload-plugins` if available) — sessions that were already open won't see the MCP tools, skill, or hook.
+
 For local development of the plugin itself:
 
 ```bash
@@ -37,7 +39,7 @@ claude --plugin-dir /path/to/Cortex
 
 Cortex ports graphify's agent-context behavior as a native Claude Code `SessionStart` hook. When a project has `.cortex/cortex.db`, the hook quickly compares the stored repo fingerprint with the current `compute_repo_fingerprint` value and injects short context saying whether the index is fresh or stale, how many files are indexed, and to prefer `cortex_query`, `cortex_search_symbols`, and `cortex_impact` before raw grep-style exploration. If no database exists, it emits a one-line hint that `cortex_refresh` can build it.
 
-The hook is advisory and fail-open: it never runs ingest, never auto-refreshes, and exits quietly on malformed or unreadable databases.
+The hook is advisory and fail-open: it never runs ingest, never auto-refreshes, exits quietly on malformed or unreadable databases, and stays silent entirely when the working directory is not inside a git repository.
 
 ### Codex (one command)
 

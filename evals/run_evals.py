@@ -90,6 +90,18 @@ GOLD_TASKS: tuple[GoldTask, ...] = (
         expected_files=("tests/test_incidents.py", "handlers/incidents.py"),
         expected_symbols=("tests/test_incidents.py:test_create_incident_notifies_slack",),
     ),
+    GoldTask(
+        repo="noisy_lib",
+        description="How does rank_nodes score and order graph nodes",
+        expected_files=("src/ranker.py",),
+        expected_symbols=("src/ranker.py:rank_nodes",),
+    ),
+    GoldTask(
+        repo="noisy_lib",
+        description="Where is the token budget applied when packing output",
+        expected_files=("src/packer.py",),
+        expected_symbols=("src/packer.py:apply_budget",),
+    ),
 )
 
 
@@ -303,10 +315,59 @@ def test_create_incident_notifies_slack(fake_connection, fake_slack):
     return repo
 
 
+def _build_noisy_lib(base: Path) -> Path:
+    """Repo with keyword-dense docs and a stale build/ duplicate — the noise that hides implementation files."""
+    repo = base / "noisy_lib"
+    _init_repo(repo)
+    _write(repo / ".gitignore", """
+build/
+""")
+    _write(repo / "README.md", """
+# Noisy Lib
+
+Noisy Lib ranks graph nodes and packs bundle output under a token budget.
+The ranker scores nodes, orders graph nodes, and the packer applies the
+token budget when packing output. Rank nodes, score nodes, order nodes:
+this README repeats every keyword an implementation question would use,
+including token budget, packing output, and graph node ordering.
+""")
+    _write(repo / "docs/plan.md", """
+# Plan
+
+Milestone 1: rank_nodes scores and orders graph nodes.
+Milestone 2: apply_budget packs output under the token budget.
+""")
+    _write(repo / "src/ranker.py", """
+def score_node(node, weights):
+    return sum(weights.get(edge, 0.0) for edge in node["edges"])
+
+
+def rank_nodes(nodes, weights):
+    return sorted(nodes, key=lambda node: -score_node(node, weights))
+""")
+    _write(repo / "src/packer.py", """
+def apply_budget(items, budget):
+    packed, used = [], 0
+    for item in items:
+        if used + item["tokens"] <= budget:
+            packed.append(item)
+            used += item["tokens"]
+    return packed
+""")
+    _commit_all(repo, "add noisy lib")
+    # Stale untracked duplicate that ingest must exclude.
+    _write(repo / "build/lib/ranker.py", """
+def rank_nodes(nodes, weights):
+    return nodes
+""")
+    return repo
+
+
 def build_fixture_repos(base: Path) -> dict[str, Path]:
     return {
         "python_app": _build_python_app(base),
         "web_service": _build_web_service(base),
+        "noisy_lib": _build_noisy_lib(base),
     }
 
 
