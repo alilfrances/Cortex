@@ -5,6 +5,7 @@ from pathlib import PurePosixPath
 from typing import Any
 
 from ..models import GraphEdge, GraphNode
+from . import regex_backend
 
 _LANGUAGE_MODULES = {
     ".js": ("tree_sitter_javascript", "language"),
@@ -69,6 +70,8 @@ _BODY_REQUIRED_TYPES = {
     "union_specifier",
     "namespace_definition",
 }
+
+_CPP_SUFFIXES = {".h", ".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx"}
 
 
 def _language_for_suffix(suffix: str) -> Any:
@@ -137,6 +140,47 @@ def _iter_nodes(root: Any) -> Any:
         node = stack.pop()
         yield node
         stack.extend(reversed(node.children))
+
+
+def _cpp_base_names(node: Any, source: bytes) -> list[str]:
+    bases: list[str] = []
+    for child in node.children:
+        if child.type in {"type_identifier", "qualified_identifier", "scoped_type_identifier"}:
+            bases.append(_node_text(child, source))
+            continue
+        if child.type in {"access_specifier", ",", ":"}:
+            continue
+        name = _identifier_text(child, source)
+        if name:
+            bases.append(name)
+    return bases
+
+
+def _extract_cpp_inheritance_edges(
+    path: str,
+    node: Any,
+    source: bytes,
+    symbol_id: str,
+    class_name: str,
+    edges: list[GraphEdge],
+) -> None:
+    for child in node.children:
+        if child.type != "base_class_clause":
+            continue
+        line = node.start_point[0] + 1
+        for base in _cpp_base_names(child, source):
+            edges.append(
+                GraphEdge(
+                    edge_id=f"treesitter:{path}:inherits:{class_name}:{base}",
+                    source=symbol_id,
+                    target=f"name:{base}",
+                    relation="inherits",
+                    layer="STRUCTURAL",
+                    confidence="EXTRACTED",
+                    weight=1.0,
+                    metadata={"lineno": line, "source_file": path},
+                )
+            )
 
 
 def _import_target(node: Any, source: bytes) -> str:
@@ -237,5 +281,12 @@ def extract_treesitter_edges(
                 metadata={"lineno": line, "source_file": path},
             )
         )
+        if suffix in _CPP_SUFFIXES and node.type in {"class_specifier", "struct_specifier"}:
+            _extract_cpp_inheritance_edges(path, node, source, symbol_id, name, edges)
+
+    if suffix in _CPP_SUFFIXES:
+        regex_backend._extract_qt_cpp_edges(path, content, file_node_id, nodes, edges, seen_symbols)
+    if suffix == ".qml":
+        regex_backend._extract_qml_handlers(path, content, file_node_id, nodes, edges)
 
     return nodes, edges

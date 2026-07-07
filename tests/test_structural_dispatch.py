@@ -98,6 +98,26 @@ def test_cpp_regex_fallback_extracts_imports_and_symbols(monkeypatch: pytest.Mon
     assert {edge.confidence for edge in edges} == {"LOW"}
 
 
+def test_cpp_regex_backend_extracts_inherits_edges_directly() -> None:
+    from cortex.structural.regex_backend import extract_regex_edges
+
+    content = (
+        '#include "foo.hpp"\n\n'
+        "class Foo : public Bar, private Baz { public: void run(); };\n"
+    )
+    nodes, edges = extract_regex_edges("inherit.hpp", content, set())
+
+    assert "symbol:inherit.hpp:Foo" in {node.node_id for node in nodes}
+    assert {
+        (edge.source, edge.target, edge.confidence)
+        for edge in edges
+        if edge.relation == "inherits"
+    } == {
+        ("symbol:inherit.hpp:Foo", "name:Bar", "LOW"),
+        ("symbol:inherit.hpp:Foo", "name:Baz", "LOW"),
+    }
+
+
 def test_qml_regex_fallback_extracts_imports_and_symbols(monkeypatch: pytest.MonkeyPatch) -> None:
     from cortex.structural import extract_structural_edges
     import cortex.structural.treesitter_backend as treesitter_backend
@@ -232,6 +252,56 @@ def test_cpp_tree_sitter_extracts_imports_and_symbols() -> None:
     )
     assert "module:engine.hpp" in {edge.target for edge in edges if edge.relation == "imports"}
     assert {edge.confidence for edge in edges} == {"EXTRACTED"}
+
+
+def test_cpp_tree_sitter_extracts_inherits_edges() -> None:
+    pytest.importorskip("tree_sitter_cpp")
+    from cortex.structural import extract_structural_edges
+
+    nodes, edges = extract_structural_edges("inherit.cpp", "class Foo : public Bar { public: void run(); };\n", set())
+
+    assert "symbol:inherit.cpp:Foo" in {node.node_id for node in nodes}
+    assert any(
+        edge.source == "symbol:inherit.cpp:Foo"
+        and edge.target == "name:Bar"
+        and edge.relation == "inherits"
+        and edge.confidence == "EXTRACTED"
+        for edge in edges
+    )
+
+
+def test_cpp_tree_sitter_preserves_qt_emit_and_connect_edges() -> None:
+    pytest.importorskip("tree_sitter_cpp")
+    from cortex.structural import extract_structural_edges
+
+    content = """
+#define emit
+int connect(...);
+class Controller : public QObject {
+public:
+    void started(int value);
+    void start();
+    void run();
+};
+
+void Controller::run() {
+    emit started(1);
+    connect(this, &Controller::started, this, &Controller::start);
+}
+"""
+    nodes, edges = extract_structural_edges("controller.cpp", content, set())
+    node_ids = {node.node_id for node in nodes}
+
+    assert "symbol:controller.cpp:Controller" in node_ids
+    assert any(edge.relation == "emits" and edge.target == "module:started" for edge in edges)
+    assert any(
+        edge.relation == "connects"
+        and edge.source == "module:started"
+        and edge.target == "module:start"
+        and edge.metadata.get("sender_class") == "Controller"
+        and edge.metadata.get("receiver_class") == "Controller"
+        for edge in edges
+    )
 
 
 def test_qml_tree_sitter_extracts_imports_and_symbols() -> None:

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.1 — 2026-07-07
+
+- Fix: C++/QML structural extraction never produced `inherits` edges. Regex backend's base-clause capture was discarded; tree-sitter backend had no inheritance extraction at all. Both backends now emit `inherits` edges for `class Foo : public Bar`-style declarations.
+- Fix: Qt signal/slot/emit/connect/Q_OBJECT detection previously existed only in the regex fallback, so it silently vanished for any file the tree-sitter backend successfully parsed. Tree-sitter path now runs the same Qt/QML detection regardless of which backend handles the file.
+
 ## 0.4.0 — 2026-07-07
 
 - Per-repo data (`cortex.db`, `cortex_report.md`) now lives in a central store at `~/.cortex/data/<sha256-prefix-of-repo-path>/` instead of a `.cortex/` directory inside the target repo. Indexing no longer touches the target repo.

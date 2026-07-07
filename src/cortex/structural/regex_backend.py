@@ -53,7 +53,10 @@ _QML_DEF_PATTERNS = [
 ]
 _QT_SECTION_RE = re.compile(r"^\s*(?:(?:public|private|protected)\s+)?(?P<section>signals|slots|Q_SIGNALS|Q_SLOTS)\s*:?\s*$")
 _QT_ACCESS_RE = re.compile(r"^\s*(?:public|private|protected|signals|slots|Q_SIGNALS|Q_SLOTS)\s*:")
-_QT_CLASS_RE = re.compile(r"^\s*(?:class|struct)\s+(?P<name>[A-Za-z_]\w*)\b[^{;]*\{")
+_QT_CLASS_RE = re.compile(
+    r"^\s*(?:class|struct)\s+(?P<name>[A-Za-z_]\w*)\b(?:\s*:\s*(?P<bases>[^{;]+))?\s*\{",
+    re.MULTILINE,
+)
 _QT_MEMBER_RE = re.compile(
     r"^\s*(?:virtual\s+)?(?:[\w:<>,~*&\s]+\s+)?(?P<name>[A-Za-z_]\w*)\s*\([^;{}]*\)\s*(?:const\s*)?(?:=\s*0\s*)?;"
 )
@@ -186,6 +189,46 @@ def _symbol_node(
 def _symbol_ref(path: str, name: str, symbol_ids: set[str]) -> str:
     symbol_id = f"symbol:{path}:{name}"
     return symbol_id if symbol_id in symbol_ids else _target_id(name)
+
+
+def _cpp_base_names(base_clause: str) -> list[str]:
+    bases: list[str] = []
+    for raw_base in base_clause.split(","):
+        tokens = [
+            token
+            for token in re.split(r"\s+", raw_base.strip())
+            if token and token not in {"public", "private", "protected", "virtual"}
+        ]
+        if not tokens:
+            continue
+        base = tokens[0].strip()
+        base = re.sub(r"<.*>$", "", base)
+        if re.match(r"^[A-Za-z_]\w*(?:::[A-Za-z_]\w*)*$", base):
+            bases.append(base)
+    return bases
+
+
+def _extract_cpp_inheritance_edges(path: str, content: str, edges: list[GraphEdge]) -> None:
+    for match in _QT_CLASS_RE.finditer(content):
+        base_clause = match.group("bases")
+        if not base_clause:
+            continue
+        class_name = match.group("name")
+        class_id = f"symbol:{path}:{class_name}"
+        line = _line_number(content, match.start())
+        for base in _cpp_base_names(base_clause):
+            edges.append(
+                GraphEdge(
+                    edge_id=f"regex:{path}:inherits:{class_name}:{base}",
+                    source=class_id,
+                    target=f"name:{base}",
+                    relation="inherits",
+                    layer="STRUCTURAL",
+                    confidence="LOW",
+                    weight=1.0,
+                    metadata={"lineno": line, "source_file": path},
+                )
+            )
 
 
 def _upsert_qt_symbol(
@@ -406,6 +449,7 @@ def extract_regex_edges(
             )
 
     if suffix in _CPP_SUFFIXES:
+        _extract_cpp_inheritance_edges(path, content, edges)
         _extract_qt_cpp_edges(path, content, file_node_id, nodes, edges, seen)
     if suffix == ".qml":
         _extract_qml_handlers(path, content, file_node_id, nodes, edges)
