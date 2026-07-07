@@ -8,7 +8,7 @@ from pathlib import Path
 from .gitutils import collect_recent_commits, discover_repo_root
 from .graph import build_graph
 from .models import SourceRecord
-from .store import CortexStore, default_db_path
+from .store import CortexStore, default_db_path, write_repo_meta
 
 _TEXT_SUFFIXES = {
     ".md",
@@ -164,6 +164,7 @@ def ingest_repository(
 ) -> dict[str, int | bool | str]:
     repo_root = discover_repo_root(repo_path)
     store = CortexStore(db_path or default_db_path(repo_root))
+    write_repo_meta(store.db_path, repo_root)
     all_sources = _scan_sources(repo_root)
     fingerprint = compute_repo_fingerprint(repo_root)
     commits = collect_recent_commits(repo_root, commit_limit)

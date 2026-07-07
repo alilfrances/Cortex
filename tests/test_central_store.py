@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -59,6 +60,35 @@ class CentralStorePathTests(unittest.TestCase):
         legacy_db.parent.mkdir()
         write_repo_meta(legacy_db, self.repo)
         self.assertFalse((legacy_db.parent / "meta.json").exists())
+
+class IngestWritesMetaTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.repo = Path(self.temp_dir.name) / "repo"
+        self.repo.mkdir()
+        (self.repo / "main.py").write_text("print('hi')\n", encoding="utf-8")
+
+        subprocess.run(["git", "init", "-q"], cwd=self.repo, check=True)
+        subprocess.run(["git", "add", "."], cwd=self.repo, check=True)
+        subprocess.run(
+            ["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init"],
+            cwd=self.repo,
+            check=True,
+        )
+
+    def tearDown(self) -> None:
+        self.temp_dir.cleanup()
+
+    def test_ingest_writes_meta_beside_central_db(self) -> None:
+        from cortex.ingest import ingest_repository
+
+        ingest_repository(self.repo, commit_limit=5)
+        db_path = default_db_path(self.repo)
+        meta_path = db_path.parent / "meta.json"
+        self.assertTrue(db_path.exists())
+        self.assertTrue(meta_path.exists())
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        self.assertEqual(meta["repo_path"], str(self.repo.resolve()))
 
 
 if __name__ == "__main__":
