@@ -14,6 +14,8 @@ Use Cortex when working in a git repository and the task needs codebase orientat
 3. For a concrete task, bug, feature, or question, call `cortex_query` with the task and token budget.
 4. For change-risk analysis around a file or symbol, call `cortex_impact`.
 5. For direct symbol lookup, call `cortex_search_symbols`.
+6. For "who inherits/emits/connects to X" (typed graph edges), call `cortex_relations`.
+7. For "what references/uses X anywhere in the repo" (graph edges + CMake/scripts/configs/docs the parser can't index), call `cortex_references`.
 
 ## MCP Tools
 
@@ -32,6 +34,14 @@ Use before editing a file or symbol, or when reviewing a proposed change. It ret
 ### `cortex_search_symbols`
 
 Use when the user names a function, class, method, module, or file-like identifier. Search first, then use `cortex_query` or `cortex_impact` on promising results if more context is needed.
+
+### `cortex_relations`
+
+Use for typed graph-edge questions with a known relation: `contains`, `imports`, `inherits`, `emits`, `connects`, `handles`. Symbol-granularity. Good for "who inherits Base", "who emits signal X", "what connects to slot Y". Only sees edges the parser extracted — misses files it doesn't index.
+
+### `cortex_references`
+
+Use for "who/what references symbol X" when you don't know (or don't want to restrict to) a relation type, or when the reference may live outside parsed source — CMakeLists.txt, shell scripts, `.qrc`, JSON/YAML configs, docs. Unions graph edges with a repo grep, deduped, bucketed by `code`/`script`/`doc`/`config`/`other`. Slower than `cortex_relations` (does a real grep pass); prefer `cortex_relations` first when the relation type is known and cross-language wiring isn't in question.
 
 ### `cortex_refresh`
 

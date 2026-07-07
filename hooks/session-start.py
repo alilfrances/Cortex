@@ -76,8 +76,13 @@ def main() -> int:
         connector = "and is" if state == "fresh" else "but is"
         _emit(
             f"Cortex index exists {connector} {state} ({file_count} indexed files). "
-            "Prefer cortex_query, cortex_search_symbols, and cortex_impact MCP tools "
-            "over raw Grep/Glob/Bash-grep exploration; call cortex_refresh to update a stale index."
+            "Prefer Cortex MCP tools over raw Grep/Glob/Bash-grep exploration: "
+            "cortex_query (task-focused context bundle), cortex_search_symbols (find a symbol by name), "
+            "cortex_impact (co-change/structural neighbors before editing), "
+            "cortex_relations (parsed graph edges — 'who inherits/emits/connects to X'), "
+            "cortex_references (blast-radius — graph edges + cross-language grep for a symbol, "
+            "including CMake/scripts/configs/docs the parser doesn't index), "
+            "cortex_overview (repo orientation). Call cortex_refresh to update a stale index."
         )
         return 0
     except Exception:

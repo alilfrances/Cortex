@@ -9,6 +9,7 @@ from ..bundle import _tokenize_query, generate_bundle
 from ..gitutils import discover_repo_root
 from ..impact import rank_file_impact
 from ..ingest import compute_repo_fingerprint, ingest_repository
+from ..references import find_references
 from ..report import generate_report
 from ..store import CortexStore, default_db_path
 from ..tokenizer import count_text_tokens
@@ -80,6 +81,24 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "limit": {"type": "integer", "default": 50},
                 "budget": {"type": "integer", "default": 2000},
             },
+        },
+    },
+    {
+        "name": "cortex_references",
+        "description": (
+            "Blast-radius query for a symbol: union of parsed graph edges and a raw grep "
+            "across the repo (honoring ingest skip-dirs), bucketed by code/script/doc/config. "
+            "Use for cross-language wiring the parser misses (CMakeLists.txt, shell scripts, "
+            ".qrc, JSON configs, docs)."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "repo_path": {"type": "string"},
+                "symbol": {"type": "string"},
+                "budget": {"type": "integer", "default": 2000},
+            },
+            "required": ["symbol"],
         },
     },
     {
@@ -325,6 +344,20 @@ def _call_relations(arguments: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def _call_references(arguments: dict[str, Any]) -> dict[str, Any]:
+    repo_root = _repo_root(arguments)
+    store, error = _store_or_error(repo_root)
+    if error is not None:
+        return _content(error, is_error=True)
+    assert store is not None
+    status = _ensure_fresh(store, repo_root)
+    symbol = str(arguments.get("symbol", ""))
+    if not symbol:
+        return _content({"error": "missing_symbol", "message": "symbol is required"}, is_error=True)
+    result = find_references(store, repo_root, symbol, budget=int(arguments.get("budget", 2000)))
+    return _content({"repo_path": str(repo_root), **result, **status})
+
+
 def _call_refresh(arguments: dict[str, Any]) -> dict[str, Any]:
     repo_root = _repo_root(arguments)
     summary = ingest_repository(repo_root, commit_limit=int(arguments.get("commits", 50)))
@@ -344,6 +377,8 @@ def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
             return _call_search(args)
         if name == "cortex_relations":
             return _call_relations(args)
+        if name == "cortex_references":
+            return _call_references(args)
         if name == "cortex_refresh":
             return _call_refresh(args)
         return _content({"error": "unknown_tool", "message": f"Unknown Cortex tool: {name}"}, is_error=True)

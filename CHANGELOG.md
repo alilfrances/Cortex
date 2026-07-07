@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.0 — 2026-07-07
+
+- Add `cortex_references` MCP tool: blast-radius query for a symbol, unioning parsed graph edges with a repo-wide grep (honoring ingest skip-dirs), bucketed by `code`/`script`/`doc`/`config`/`other`, deduped against graph-covered locations. Closes the gap where `cortex_relations` only sees parser-indexed languages and misses cross-language wiring (CMakeLists.txt, shell scripts, `.qrc`, JSON/YAML configs, docs).
+- Fix stale tool-discovery surfaces: `hooks/session-start.py`'s SessionStart context and `skills/cortex/SKILL.md` hadn't been updated since `cortex_relations` shipped (0.3.0) — agents had no signal these tools existed and fell back to raw grep. Both now enumerate all six query tools with per-tool trigger guidance.
+
 ## 0.5.1 — 2026-07-07
 
 - Slim `cortex_relations` and `cortex_impact` output: edge endpoints collapse to a single `"label @ path:line"` string instead of a 3-field object; internal-only `edge_id`/`layer` fields dropped from both tools' responses (`cortex_relations` also drops `weight`/`confidence`, kept in `cortex_impact`'s `why` since it drives ranking there). Both tools now honor a token `budget` param (default 2000, same mechanism as `cortex_query`'s bundle), returning `truncated`/`returned_count` so a broad query can't dump hundreds of edges into a caller's context every turn.

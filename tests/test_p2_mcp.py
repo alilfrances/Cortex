@@ -80,7 +80,10 @@ def test_mcp_stdio_roundtrip_outputs_only_json_lines(tmp_path: Path) -> None:
     decoded = [json.loads(line) for line in lines]
     assert [frame["id"] for frame in decoded] == [1, 2, 3]
     tool_names = {tool["name"] for tool in decoded[1]["result"]["tools"]}
-    assert {"cortex_query", "cortex_overview", "cortex_impact", "cortex_search_symbols", "cortex_relations", "cortex_refresh"} <= tool_names
+    assert {
+        "cortex_query", "cortex_overview", "cortex_impact", "cortex_search_symbols",
+        "cortex_relations", "cortex_references", "cortex_refresh",
+    } <= tool_names
     refresh = decoded[2]["result"]
     assert refresh["content"][0]["type"] == "text"
     assert refresh["isError"] is False
@@ -331,3 +334,73 @@ def test_cortex_impact_returns_truncation_metadata_and_budget_caps(tmp_path: Pat
     assert capped["truncated"] is True
     assert [item["path"] for item in capped["items"]] == ["db.py", "ui.py"]
     assert capped["returned_count"] == len(capped["items"])
+
+
+def _references_repo(tmp_path: Path) -> Path:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git_init(repo)
+    (repo / "engine.cpp").write_text("class Runner {};\nvoid unrelated() {}\n", encoding="utf-8")
+    (repo / "CMakeLists.txt").write_text("target_link_libraries(app Runner)\n", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "fixtures"], cwd=repo, check=True, capture_output=True)
+    return repo
+
+
+def test_cortex_references_unions_graph_and_grep_hits_bucketed(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    repo = _references_repo(tmp_path)
+    store = CortexStore(repo / ".cortex" / "cortex.db")
+    nodes = [
+        GraphNode("file:engine.cpp", "file", "engine.cpp", "engine.cpp"),
+        GraphNode("symbol:engine.cpp:Runner", "class", "Runner", "engine.cpp", granularity="symbol", span_start=1),
+    ]
+    edges = [
+        GraphEdge("e1", "file:engine.cpp", "symbol:engine.cpp:Runner", "contains", layer="STRUCTURAL"),
+    ]
+    store.reset_repo(repo)
+    store.save_graph(repo, nodes, edges)
+
+    payload = _payload(call_tool("cortex_references", {"repo_path": str(repo), "symbol": "Runner"}))
+
+    assert payload["items"]["code"] == ["engine.cpp:1"]
+    assert payload["items"]["config"] == ["CMakeLists.txt:1"]
+    assert payload["truncated"] is False
+
+
+def test_cortex_references_dedupes_grep_hit_already_covered_by_graph_edge(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    repo = _references_repo(tmp_path)
+    store = CortexStore(repo / ".cortex" / "cortex.db")
+    nodes = [
+        GraphNode("file:engine.cpp", "file", "engine.cpp", "engine.cpp"),
+        GraphNode("symbol:engine.cpp:Runner", "class", "Runner", "engine.cpp", granularity="symbol", span_start=1),
+    ]
+    edges = [
+        GraphEdge("e1", "file:engine.cpp", "symbol:engine.cpp:Runner", "contains", layer="STRUCTURAL"),
+    ]
+    store.reset_repo(repo)
+    store.save_graph(repo, nodes, edges)
+
+    payload = _payload(call_tool("cortex_references", {"repo_path": str(repo), "symbol": "Runner"}))
+
+    all_hits = [hit for bucket in payload["items"].values() for hit in bucket]
+    assert all_hits.count("engine.cpp:1") == 1
+
+
+def test_cortex_references_budget_truncates_items(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    repo = _references_repo(tmp_path)
+    store = CortexStore(repo / ".cortex" / "cortex.db")
+    store.reset_repo(repo)
+    store.save_graph(repo, [], [])
+
+    full = _payload(call_tool("cortex_references", {"repo_path": str(repo), "symbol": "Runner", "budget": 999999}))
+    capped = _payload(call_tool("cortex_references", {"repo_path": str(repo), "symbol": "Runner", "budget": 5}))
+
+    full_count = sum(len(v) for v in full["items"].values())
+    capped_count = sum(len(v) for v in capped["items"].values())
+    assert full["truncated"] is False
+    assert capped["truncated"] is True
+    assert capped_count < full_count
+    assert capped["returned_count"] == capped_count
