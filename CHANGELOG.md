@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0 — 2026-07-07
+
+- Per-repo data (`cortex.db`, `cortex_report.md`) now lives in a central store at `~/.cortex/data/<sha256-prefix-of-repo-path>/` instead of a `.cortex/` directory inside the target repo. Indexing no longer touches the target repo.
+- Existing in-repo `.cortex/` directories keep working (legacy fallback); delete one to migrate that repo to the central store on next refresh.
+- New: `CORTEX_DATA_DIR` env var overrides the central store location.
+- New: `cortex gc [--prune]` lists or deletes central data dirs whose source repo is gone.
+- Each central data dir carries a `meta.json` recording the source repo path.
+
 ## 0.3.0 - 2026-07-07
 
 Add C, C++, and QML structural extraction (tree-sitter + regex fallback), including Qt-aware signal, slot, emit, connect, Q_OBJECT, and QML handler detection.

@@ -1,6 +1,6 @@
 {
   "name": "cortex",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Local-first repo context engine for Claude Code. Provides graph-aware MCP tools, repository overview, impact analysis, symbol search, and refresh.",
   "author": {
     "name": "Alil Kuizon"

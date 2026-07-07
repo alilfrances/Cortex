@@ -37,7 +37,7 @@ claude --plugin-dir /path/to/Cortex
 
 ## Hooks
 
-Cortex ports graphify's agent-context behavior as a native Claude Code `SessionStart` hook. When a project has `.cortex/cortex.db`, the hook quickly compares the stored repo fingerprint with the current `compute_repo_fingerprint` value and injects short context saying whether the index is fresh or stale, how many files are indexed, and to prefer `cortex_query`, `cortex_search_symbols`, and `cortex_impact` before raw grep-style exploration. If no database exists, it emits a one-line hint that `cortex_refresh` can build it.
+Cortex ports graphify's agent-context behavior as a native Claude Code `SessionStart` hook. When a project has a Cortex index (legacy `.cortex/cortex.db` in-repo, or the central store under `~/.cortex/data/`), the hook quickly compares the stored repo fingerprint with the current `compute_repo_fingerprint` value and injects short context saying whether the index is fresh or stale, how many files are indexed, and to prefer `cortex_query`, `cortex_search_symbols`, and `cortex_impact` before raw grep-style exploration. If no database exists, it emits a one-line hint that `cortex_refresh` can build it.
 
 The hook is advisory and fail-open: it never runs ingest, exits quietly on malformed or unreadable databases, and stays silent entirely when the working directory is not inside a git repository. Staleness resolves itself at query time — the MCP read tools auto-refresh incrementally before answering — so the hook only informs.
 
@@ -73,7 +73,7 @@ cortex ingest . --commits 50
 cortex report .
 ```
 
-This creates `.cortex/cortex.db` and `.cortex/cortex_report.md` inside the target repo.
+This creates `cortex.db` and `cortex_report.md` under `~/.cortex/data/<repo-path-hash>/` — the target repo itself is never touched. Repos indexed before v0.4.0 keep using their existing in-repo `.cortex/` directory. Set `CORTEX_DATA_DIR` to relocate the central store. Run `cortex gc --prune` to delete data for repos that no longer exist.
 
 ## MCP Tools
 
@@ -93,7 +93,8 @@ Tool results include provenance where available. Read tools keep the index fresh
 |---|---|
 | `cortex ingest <repo> [--commits 50] [--update]` | Scan source files, git history, graph layers, symbols, and fingerprints into SQLite. |
 | `cortex bundle <repo> --task "..." [--budget 4000] [--rank pagerank\|bfs] [--format md\|json]` | Emit a token-budgeted context bundle. |
-| `cortex report <repo> [--out .cortex] [--include-test-pairs]` | Write an architecture report with central nodes, communities, and connections. |
+| `cortex report <repo> [--out] [--include-test-pairs]` | Write an architecture report with central nodes, communities, and connections. |
+| `cortex gc [--prune]` | List central data dirs; `--prune` deletes ones whose repo is gone. |
 | `cortex enrich <repo> --provider claude\|codex [--force]` | Optional LLM semantic enrichment with local cache. Requires `[llm]`. |
 | `cortex benchmark <repo> [--budget 4000] [--format text\|json]` | Compare bundle token cost against full-corpus reading. |
 | `cortex mcp` | Run the stdio MCP server. |

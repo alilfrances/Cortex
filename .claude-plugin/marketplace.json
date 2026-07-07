@@ -1,6 +1,6 @@
 {
   "name": "cortex",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Local-first graph-aware repo context engine for Claude Code and Codex.",
   "owner": {
     "name": "Alil Kuizon"
@@ -8,7 +8,7 @@
   "plugins": [
     {
       "name": "cortex",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "source": "./",
       "description": "Graph-aware local repo context over MCP: task bundles, overviews, impact analysis, symbol search, and refresh.",
       "category": "productivity"

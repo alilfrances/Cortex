@@ -5,7 +5,7 @@ description: Use Cortex MCP tools for repo-first context, graph-aware retrieval,
 
 # Cortex
 
-Use Cortex when working in a git repository and the task needs codebase orientation, impact analysis, relevant files, related symbols, or a compact context bundle. Prefer Cortex before broad raw-file searches when `.cortex/` exists or when a Cortex MCP server is available.
+Use Cortex when working in a git repository and the task needs codebase orientation, impact analysis, relevant files, related symbols, or a compact context bundle. Prefer Cortex before broad raw-file searches when a Cortex index exists (in-repo `.cortex/` or central `~/.cortex/data/`) or when a Cortex MCP server is available.
 
 ## Workflow
 
@@ -35,7 +35,7 @@ Use when the user names a function, class, method, module, or file-like identifi
 
 ### `cortex_refresh`
 
-Use when `.cortex/cortex.db` is missing, stale, or the user asks to refresh repo context. It re-ingests the repo and writes the default Cortex report. Prefer this over manual ingest/report commands when the MCP server is available.
+Use when the Cortex index is missing, stale, or the user asks to refresh repo context. It re-ingests the repo and writes the default Cortex report. Prefer this over manual ingest/report commands when the MCP server is available.
 
 ## Fallback
 
