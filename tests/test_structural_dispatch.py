@@ -79,6 +79,14 @@ def test_c_regex_fallback_extracts_imports_and_symbols(monkeypatch: pytest.Monke
     assert {edge.confidence for edge in edges} == {"LOW"}
 
 
+def test_c_regex_fallback_keeps_function_return_types_line_bounded() -> None:
+    from cortex.structural.regex_backend import extract_regex_edges
+
+    nodes, _ = extract_regex_edges("bad.c", "A *\nbad() {\n}\n", set())
+
+    assert "symbol:bad.c:bad" not in {node.node_id for node in nodes}
+
+
 def test_cpp_regex_fallback_extracts_imports_and_symbols(monkeypatch: pytest.MonkeyPatch) -> None:
     from cortex.structural import extract_structural_edges
     import cortex.structural.treesitter_backend as treesitter_backend

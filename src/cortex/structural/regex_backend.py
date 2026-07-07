@@ -23,7 +23,7 @@ _C_DEF_PATTERNS = [
     _Pattern(re.compile(r"^\s*(?:struct|enum|union)\s+(?P<name>[A-Za-z_]\w*)\s*\{", re.MULTILINE), "class"),
     _Pattern(
         re.compile(
-            r"^\s*(?:[A-Za-z_][\w\s*]+\s+)+(?P<name>[A-Za-z_]\w*)\s*\([^;{}]*\)\s*\{",
+            r"^[ \t]*(?:[A-Za-z_]\w*[ \t*]+)+(?P<name>[A-Za-z_]\w*)[ \t]*\([^;{}\n]*\)[ \t]*\{",
             re.MULTILINE,
         ),
         "func",
