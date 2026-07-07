@@ -11,6 +11,7 @@ from ..impact import rank_file_impact
 from ..ingest import compute_repo_fingerprint, ingest_repository
 from ..report import generate_report
 from ..store import CortexStore, default_db_path
+from ..tokenizer import count_text_tokens
 
 
 TOOL_DEFINITIONS: list[dict[str, Any]] = [
@@ -41,6 +42,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "repo_path": {"type": "string"},
                 "path": {"type": "string"},
                 "limit": {"type": "integer", "default": 10},
+                "budget": {"type": "integer", "default": 2000},
             },
             "required": ["path"],
         },
@@ -76,6 +78,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "symbol": {"type": "string", "description": "substring match against endpoint node id or label"},
                 "direction": {"type": "string", "enum": ["out", "in", "both"], "default": "both"},
                 "limit": {"type": "integer", "default": 50},
+                "budget": {"type": "integer", "default": 2000},
             },
         },
     },
@@ -233,8 +236,22 @@ def _call_impact(arguments: dict[str, Any]) -> dict[str, Any]:
     assert store is not None
     status = _ensure_fresh(store, repo_root)
     nodes, edges = store.fetch_graph(repo_root)
-    items = rank_file_impact(str(arguments.get("path", "")), nodes, edges, limit=int(arguments.get("limit", 10)))
-    return _content({"repo_path": str(repo_root), "items": items, **status})
+    items, truncated = rank_file_impact(
+        str(arguments.get("path", "")),
+        nodes,
+        edges,
+        limit=int(arguments.get("limit", 10)),
+        budget=int(arguments.get("budget", 2000)),
+    )
+    return _content(
+        {
+            "repo_path": str(repo_root),
+            "items": items,
+            "truncated": truncated,
+            "returned_count": len(items),
+            **status,
+        }
+    )
 
 
 def _call_search(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -267,24 +284,45 @@ def _call_relations(arguments: dict[str, Any]) -> dict[str, Any]:
     node_ids = sorted({edge.source for edge in edges} | {edge.target for edge in edges})
     nodes = store.get_nodes(repo_root, node_ids)
 
-    def endpoint(node_id: str) -> dict[str, Any]:
+    def unresolved_endpoint(node_id: str) -> str:
+        if node_id.startswith("name:"):
+            return node_id.removeprefix("name:") or node_id
+        if node_id.startswith("symbol:"):
+            return node_id.rsplit(":", 1)[-1] or node_id
+        if node_id.startswith("file:"):
+            return node_id.removeprefix("file:") or node_id
+        return node_id
+
+    def endpoint(node_id: str) -> str:
         node = nodes.get(node_id)
         if node is None:
-            return {"node_id": node_id, "label": None, "path": None}
-        return {"node_id": node.node_id, "label": node.label, "path": node.source_ref}
+            return unresolved_endpoint(node_id)
+        if node.span_start is not None:
+            return f"{node.label} @ {node.source_ref}:{node.span_start}"
+        return f"{node.label} @ {node.source_ref}"
 
-    items = [
-        {
+    items: list[dict[str, Any]] = []
+    budget = int(arguments.get("budget", 2000))
+    truncated = False
+    for edge in edges:
+        item = {
             "relation": edge.relation,
-            "layer": edge.layer,
-            "weight": edge.weight,
-            "confidence": edge.confidence,
             "source": endpoint(edge.source),
             "target": endpoint(edge.target),
         }
-        for edge in edges
-    ]
-    return _content({"repo_path": str(repo_root), "items": items, **status})
+        if count_text_tokens(json.dumps([*items, item])) > budget:
+            truncated = True
+            break
+        items.append(item)
+    return _content(
+        {
+            "repo_path": str(repo_root),
+            "items": items,
+            "truncated": truncated,
+            "returned_count": len(items),
+            **status,
+        }
+    )
 
 
 def _call_refresh(arguments: dict[str, Any]) -> dict[str, Any]:

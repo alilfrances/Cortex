@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1 — 2026-07-07
+
+- Slim `cortex_relations` and `cortex_impact` output: edge endpoints collapse to a single `"label @ path:line"` string instead of a 3-field object; internal-only `edge_id`/`layer` fields dropped from both tools' responses (`cortex_relations` also drops `weight`/`confidence`, kept in `cortex_impact`'s `why` since it drives ranking there). Both tools now honor a token `budget` param (default 2000, same mechanism as `cortex_query`'s bundle), returning `truncated`/`returned_count` so a broad query can't dump hundreds of edges into a caller's context every turn.
+
 ## 0.5.0 — 2026-07-07
 
 - Add `cortex_relations` MCP tool: query graph edges filtered by relation type (`contains`, `imports`, `inherits`, `emits`, `connects`, `handles`) at symbol granularity, e.g. "who inherits class X", "who emits signal Y". Previously the C++/QML/Qt structural edges added in 0.3.0–0.4.1 had no query path. Backed by new SQL-filtered `CortexStore.query_edges()`/`get_nodes()` (no full-graph load); output resolves edge endpoints to labels/paths without dumping raw edge metadata.

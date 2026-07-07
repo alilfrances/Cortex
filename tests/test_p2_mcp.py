@@ -12,6 +12,7 @@ from cortex.ingest import compute_repo_fingerprint, ingest_repository
 from cortex.mcp.tools import call_tool
 from cortex.models import GraphEdge, GraphNode
 from cortex.store import CortexStore
+from cortex.tokenizer import count_text_tokens
 
 FIXTURE_REPO = Path(__file__).parent / "fixtures" / "multilang_repo"
 
@@ -98,11 +99,33 @@ def test_rank_file_impact_prefers_heavier_cochange_and_structural_edges() -> Non
         GraphEdge("e3", "file:app.py", "symbol:app.py:run", "contains", layer="STRUCTURAL", weight=9.0),
     ]
 
-    impact = rank_file_impact("app.py", nodes, edges)
+    impact, truncated = rank_file_impact("app.py", nodes, edges)
 
     assert [item["path"] for item in impact] == ["db.py", "ui.py"]
-    assert impact[0]["why"] == [{"edge_id": "e1", "layer": "COCHANGE", "relation": "cochange", "weight": 4.0}]
+    assert impact[0]["why"] == [{"relation": "cochange", "weight": 4.0}]
     assert impact[1]["score"] == 2.0
+    assert truncated is False
+
+
+def test_rank_file_impact_budget_trims_lowest_ranked_tail() -> None:
+    nodes = [
+        GraphNode("file:app.py", "file", "app.py", "app.py"),
+        GraphNode("file:db.py", "file", "db.py", "db.py"),
+        GraphNode("file:ui.py", "file", "ui.py", "ui.py"),
+        GraphNode("file:docs.py", "file", "docs.py", "docs.py"),
+    ]
+    edges = [
+        GraphEdge("e1", "file:app.py", "file:db.py", "cochange", layer="COCHANGE", weight=9.0),
+        GraphEdge("e2", "file:app.py", "file:ui.py", "imports", layer="STRUCTURAL", weight=6.0),
+        GraphEdge("e3", "file:app.py", "file:docs.py", "imports", layer="STRUCTURAL", weight=1.0),
+    ]
+    unbudgeted, _ = rank_file_impact("app.py", nodes, edges, budget=999999)
+
+    budget = count_text_tokens(json.dumps(unbudgeted[:2]))
+    impact, truncated = rank_file_impact("app.py", nodes, edges, budget=budget)
+
+    assert truncated is True
+    assert [item["path"] for item in impact] == ["db.py", "ui.py"]
 
 
 def test_compute_repo_fingerprint_includes_path_size_and_mtime(tmp_path: Path) -> None:
@@ -201,9 +224,10 @@ def test_cortex_relations_filters_resolves_and_limits(tmp_path: Path, monkeypatc
     assert result["isError"] is False
     assert payload["repo_path"] == str(repo)
     assert [item["relation"] for item in payload["items"]] == ["inherits"]
-    assert payload["items"][0]["source"] == {"node_id": "symbol:engine.cpp:Runner", "label": "Runner", "path": "engine.cpp"}
-    assert payload["items"][0]["target"] == {"node_id": "symbol:engine.hpp:Base", "label": "Base", "path": "engine.hpp"}
-    assert "metadata" not in payload["items"][0]
+    assert payload["items"][0]["source"] == "Runner @ engine.cpp"
+    assert payload["items"][0]["target"] == "Base @ engine.hpp"
+    assert set(payload["items"][0]) == {"relation", "source", "target"}
+    assert payload["truncated"] is False
 
 
 def test_cortex_relations_direction_and_unresolved_endpoint_fallback(tmp_path: Path, monkeypatch) -> None:
@@ -220,9 +244,11 @@ def test_cortex_relations_direction_and_unresolved_endpoint_fallback(tmp_path: P
     outgoing = _payload(call_tool("cortex_relations", {"repo_path": str(repo), "relation": "inherits", "symbol": "Base", "direction": "out"}))
     both = _payload(call_tool("cortex_relations", {"repo_path": str(repo), "relation": "inherits", "symbol": "ExternalBase", "direction": "both"}))
 
-    assert [item["source"]["label"] for item in incoming["items"]] == ["Runner", "Worker", "Runner"]
+    assert [item["source"] for item in incoming["items"]] == ["Runner @ engine.cpp", "Worker @ engine.cpp", "Runner @ engine.cpp"]
     assert outgoing["items"] == []
-    assert both["items"][0]["target"] == {"node_id": "name:ExternalBase", "label": None, "path": None}
+    assert both["items"][0]["target"] == "ExternalBase"
+    assert isinstance(both["items"][0]["target"], str)
+    assert both["items"][0]["target"]
 
 
 def test_cortex_relations_missing_db_uses_existing_error_shape(tmp_path: Path, monkeypatch) -> None:
@@ -255,4 +281,53 @@ def test_cortex_relations_round_trips_existing_cpp_fixture(tmp_path: Path, monke
     payload = _payload(result)
 
     assert result["isError"] is False
-    assert any(item["target"]["label"] == "Runner" and item["target"]["path"] == "engine.cpp" for item in payload["items"])
+    assert any(item["target"].startswith("Runner @ engine.cpp") for item in payload["items"])
+
+
+def test_cortex_relations_budget_truncates_items(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git_init(repo)
+    store = CortexStore(repo / ".cortex" / "cortex.db")
+    nodes, edges = _relation_graph()
+    store.reset_repo(repo)
+    store.save_graph(repo, nodes, edges)
+
+    full = _payload(call_tool("cortex_relations", {"repo_path": str(repo), "relation": "inherits", "budget": 999999}))
+    capped = _payload(call_tool("cortex_relations", {"repo_path": str(repo), "relation": "inherits", "budget": 50}))
+
+    assert full["truncated"] is False
+    assert capped["truncated"] is True
+    assert len(capped["items"]) < len(full["items"])
+    assert capped["returned_count"] == len(capped["items"])
+
+
+def test_cortex_impact_returns_truncation_metadata_and_budget_caps(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git_init(repo)
+    store = CortexStore(repo / ".cortex" / "cortex.db")
+    nodes = [
+        GraphNode("file:app.py", "file", "app.py", "app.py"),
+        GraphNode("file:db.py", "file", "db.py", "db.py"),
+        GraphNode("file:ui.py", "file", "ui.py", "ui.py"),
+        GraphNode("file:docs.py", "file", "docs.py", "docs.py"),
+    ]
+    edges = [
+        GraphEdge("e1", "file:app.py", "file:db.py", "cochange", layer="COCHANGE", weight=9.0),
+        GraphEdge("e2", "file:app.py", "file:ui.py", "imports", layer="STRUCTURAL", weight=6.0),
+        GraphEdge("e3", "file:app.py", "file:docs.py", "imports", layer="STRUCTURAL", weight=1.0),
+    ]
+    store.reset_repo(repo)
+    store.save_graph(repo, nodes, edges)
+    full = _payload(call_tool("cortex_impact", {"repo_path": str(repo), "path": "app.py", "budget": 999999}))
+    budget = count_text_tokens(json.dumps(full["items"][:2]))
+
+    capped = _payload(call_tool("cortex_impact", {"repo_path": str(repo), "path": "app.py", "budget": budget}))
+
+    assert full["truncated"] is False
+    assert capped["truncated"] is True
+    assert [item["path"] for item in capped["items"]] == ["db.py", "ui.py"]
+    assert capped["returned_count"] == len(capped["items"])
