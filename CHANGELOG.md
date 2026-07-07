@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.0 - 2026-07-07
+
+Add C, C++, and QML structural extraction (tree-sitter + regex fallback), including Qt-aware signal, slot, emit, connect, Q_OBJECT, and QML handler detection.
+
+
 ## 0.2.3 - 2026-07-07
 
 Auto-refresh: the index now keeps itself current — no manual `cortex_refresh` discipline needed.

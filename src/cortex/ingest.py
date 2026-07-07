@@ -25,6 +25,15 @@ _TEXT_SUFFIXES = {
     ".swift",
     ".java",
     ".rb",
+    ".c",
+    ".h",
+    ".cpp",
+    ".cc",
+    ".cxx",
+    ".hpp",
+    ".hh",
+    ".hxx",
+    ".qml",
     ".go",
     ".rs",
     ".sh",
@@ -78,7 +87,28 @@ def _iter_candidate_files(repo_root: Path) -> list[Path]:
 def _classify_path(path: Path) -> str:
     if path.suffix == ".md":
         return "markdown"
-    if path.suffix in {".py", ".js", ".ts", ".tsx", ".jsx", ".swift", ".java", ".rb", ".go", ".rs", ".sh"}:
+    if path.suffix in {
+        ".py",
+        ".js",
+        ".ts",
+        ".tsx",
+        ".jsx",
+        ".swift",
+        ".java",
+        ".rb",
+        ".c",
+        ".h",
+        ".cpp",
+        ".cc",
+        ".cxx",
+        ".hpp",
+        ".hh",
+        ".hxx",
+        ".qml",
+        ".go",
+        ".rs",
+        ".sh",
+    }:
         return "code"
     return "text"
 

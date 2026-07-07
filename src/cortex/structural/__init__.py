@@ -15,6 +15,15 @@ _SUPPORTED_EXTENSIONS = {
     ".swift",
     ".java",
     ".rb",
+    ".c",
+    ".h",
+    ".cpp",
+    ".cc",
+    ".cxx",
+    ".hpp",
+    ".hh",
+    ".hxx",
+    ".qml",
 }
 
 

@@ -16,6 +16,15 @@ _LANGUAGE_MODULES = {
     ".swift": ("tree_sitter_swift", "language"),
     ".java": ("tree_sitter_java", "language"),
     ".rb": ("tree_sitter_ruby", "language"),
+    ".c": ("tree_sitter_c", "language"),
+    ".h": ("tree_sitter_cpp", "language"),
+    ".cpp": ("tree_sitter_cpp", "language"),
+    ".cc": ("tree_sitter_cpp", "language"),
+    ".cxx": ("tree_sitter_cpp", "language"),
+    ".hpp": ("tree_sitter_cpp", "language"),
+    ".hh": ("tree_sitter_cpp", "language"),
+    ".hxx": ("tree_sitter_cpp", "language"),
+    ".qml": ("tree_sitter_language_pack", "qml"),
 }
 
 _IMPORT_TYPES = {
@@ -24,6 +33,8 @@ _IMPORT_TYPES = {
     "use_declaration",
     "require",
     "call",
+    "preproc_include",
+    "ui_import",
 }
 
 _DEF_TYPES = {
@@ -43,6 +54,20 @@ _DEF_TYPES = {
     "trait_item": "class",
     "protocol_declaration": "class",
     "module": "class",
+    "struct_specifier": "class",
+    "class_specifier": "class",
+    "enum_specifier": "class",
+    "union_specifier": "class",
+    "namespace_definition": "class",
+    "ui_object_definition": "class",
+}
+
+_BODY_REQUIRED_TYPES = {
+    "struct_specifier",
+    "class_specifier",
+    "enum_specifier",
+    "union_specifier",
+    "namespace_definition",
 }
 
 
@@ -50,6 +75,10 @@ def _language_for_suffix(suffix: str) -> Any:
     from tree_sitter import Language
 
     module_name, func_name = _LANGUAGE_MODULES[suffix]
+    if suffix == ".qml":
+        from tree_sitter_language_pack import get_language
+
+        return get_language("qml")
     grammar = importlib.import_module(module_name)
     return Language(getattr(grammar, func_name)())
 
@@ -85,7 +114,15 @@ def _name_for_node(node: Any, source: bytes) -> str:
 
 
 def _identifier_text(node: Any, source: bytes) -> str:
-    if node.type in {"identifier", "property_identifier", "type_identifier", "constant", "simple_identifier"}:
+    if node.type in {
+        "identifier",
+        "property_identifier",
+        "type_identifier",
+        "constant",
+        "simple_identifier",
+        "field_identifier",
+        "namespace_identifier",
+    }:
         return _node_text(node, source)
     for child in node.children:
         name = _identifier_text(child, source)
@@ -104,11 +141,19 @@ def _iter_nodes(root: Any) -> Any:
 
 def _import_target(node: Any, source: bytes) -> str:
     for child in node.children:
-        if child.type in {"string", "interpreted_string_literal", "raw_string_literal", "string_literal"}:
-            return _node_text(child, source).strip("\"'`")
-        if child.type in {"scoped_identifier", "identifier", "package_identifier"}:
+        if child.type in {
+            "string",
+            "interpreted_string_literal",
+            "raw_string_literal",
+            "string_literal",
+            "system_lib_string",
+        }:
+            return _node_text(child, source).strip("\"'`<>")
+        if child.type in {"scoped_identifier", "identifier", "package_identifier", "dotted_name"}:
             return _node_text(child, source)
     text = _node_text(node, source).strip().rstrip(";")
+    if text.startswith("import "):
+        return text.split(maxsplit=2)[1].strip("\"'`")
     return text.split(maxsplit=1)[-1].strip("\"'`") if text else "unknown"
 
 
@@ -158,6 +203,8 @@ def extract_treesitter_edges(
                 )
             )
         if node.type not in _DEF_TYPES:
+            continue
+        if node.type in _BODY_REQUIRED_TYPES and node.child_by_field_name("body") is None:
             continue
         name = _name_for_node(node, source)
         if not name or name in seen_symbols:

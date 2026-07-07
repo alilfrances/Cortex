@@ -110,8 +110,11 @@ Tool results include provenance where available. Read tools keep the index fresh
 | Extra | Adds | Notes |
 |---|---|---|
 | `[llm]` | `anthropic`, `openai` | Enables `cortex enrich`; never required for core graphing or MCP. |
-| `[languages]` | tree-sitter and language grammars | Adds structural extraction for JS/TS/Go/Rust/Swift/Java/Ruby where grammars import cleanly; regex fallback remains available. |
+| `[languages]` | tree-sitter and language grammars | Adds structural extraction for JS/TS/Go/Rust/Swift/Java/Ruby/C/C++ where grammars import cleanly; regex fallback remains available. |
+| `[qml]` | `tree-sitter-language-pack` | Adds QML tree-sitter extraction through the bundled qmljs grammar; kept separate because the pack ships many grammars. |
 | `[watch]` | `watchdog` | Improves `cortex watch`; polling fallback is stdlib-only. |
+
+The regex fallback is Qt-aware for C++/QML signal, slot, emit, connect, Q_OBJECT, and handler patterns.
 
 ## Eval Numbers
 

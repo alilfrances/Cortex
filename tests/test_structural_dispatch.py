@@ -62,6 +62,199 @@ def test_dispatcher_falls_back_to_regex_when_tree_sitter_parse_fails(monkeypatch
     assert {edge.confidence for edge in edges} == {"LOW"}
 
 
+def test_c_regex_fallback_extracts_imports_and_symbols(monkeypatch: pytest.MonkeyPatch) -> None:
+    from cortex.structural import extract_structural_edges
+    import cortex.structural.treesitter_backend as treesitter_backend
+
+    def fail_tree_sitter(*args: object, **kwargs: object) -> tuple[list[object], list[object]]:
+        raise RuntimeError("grammar unavailable")
+
+    monkeypatch.setattr(treesitter_backend, "extract_treesitter_edges", fail_tree_sitter)
+
+    content = '#include <stdio.h>\nstruct Counter { int value; };\nint add(int left, int right) {\n    return left + right;\n}\n'
+    nodes, edges = extract_structural_edges("main.c", content, set())
+
+    assert {"symbol:main.c:Counter", "symbol:main.c:add"}.issubset({node.node_id for node in nodes})
+    assert "module:stdio.h" in {edge.target for edge in edges if edge.relation == "imports"}
+    assert {edge.confidence for edge in edges} == {"LOW"}
+
+
+def test_cpp_regex_fallback_extracts_imports_and_symbols(monkeypatch: pytest.MonkeyPatch) -> None:
+    from cortex.structural import extract_structural_edges
+    import cortex.structural.treesitter_backend as treesitter_backend
+
+    def fail_tree_sitter(*args: object, **kwargs: object) -> tuple[list[object], list[object]]:
+        raise RuntimeError("grammar unavailable")
+
+    monkeypatch.setattr(treesitter_backend, "extract_treesitter_edges", fail_tree_sitter)
+
+    content = '#include "engine.hpp"\nnamespace Engine {\nclass Runner { public: void start() {} };\nint Engine::run() {\n    return 1;\n}\n}\n'
+    nodes, edges = extract_structural_edges("engine.cpp", content, set())
+
+    assert {"symbol:engine.cpp:Engine", "symbol:engine.cpp:Runner", "symbol:engine.cpp:run"}.issubset(
+        {node.node_id for node in nodes}
+    )
+    assert "module:engine.hpp" in {edge.target for edge in edges if edge.relation == "imports"}
+    assert {edge.confidence for edge in edges} == {"LOW"}
+
+
+def test_qml_regex_fallback_extracts_imports_and_symbols(monkeypatch: pytest.MonkeyPatch) -> None:
+    from cortex.structural import extract_structural_edges
+    import cortex.structural.treesitter_backend as treesitter_backend
+
+    def fail_tree_sitter(*args: object, **kwargs: object) -> tuple[list[object], list[object]]:
+        raise RuntimeError("grammar unavailable")
+
+    monkeypatch.setattr(treesitter_backend, "extract_treesitter_edges", fail_tree_sitter)
+
+    content = 'import QtQuick.Controls 2.15\nItem {\n    signal started()\n    function launch() {}\n}\n'
+    nodes, edges = extract_structural_edges("Main.qml", content, set())
+
+    assert {"symbol:Main.qml:Item", "symbol:Main.qml:started", "symbol:Main.qml:launch"}.issubset(
+        {node.node_id for node in nodes}
+    )
+    assert "module:QtQuick.Controls" in {edge.target for edge in edges if edge.relation == "imports"}
+    assert {edge.confidence for edge in edges} == {"LOW"}
+
+
+def test_qt_cpp_regex_fallback_extracts_signals_slots_and_edges(monkeypatch: pytest.MonkeyPatch) -> None:
+    from cortex.structural import extract_structural_edges
+    import cortex.structural.treesitter_backend as treesitter_backend
+
+    def fail_tree_sitter(*args: object, **kwargs: object) -> tuple[list[object], list[object]]:
+        raise RuntimeError("grammar unavailable")
+
+    monkeypatch.setattr(treesitter_backend, "extract_treesitter_edges", fail_tree_sitter)
+
+    content = """
+class Controller : public QObject {
+    Q_OBJECT
+signals:
+    void started(int value);
+public slots:
+    void start();
+};
+
+void Controller::run() {
+    emit started(1);
+    Q_EMIT started(2);
+    connect(this, &Controller::started, this, &Controller::start);
+    connect(this, SIGNAL(started(int)), this, SLOT(start()));
+    // emit ignoredComment();
+    const char *text = "emit ignoredString()";
+}
+"""
+    nodes, edges = extract_structural_edges("controller.hpp", content, set())
+    by_id = {node.node_id: node for node in nodes}
+
+    assert by_id["symbol:controller.hpp:Controller"].metadata["qt"] == "qobject"
+    assert by_id["symbol:controller.hpp:started"].metadata["qt"] == "signal"
+    assert by_id["symbol:controller.hpp:start"].metadata["qt"] == "slot"
+    assert "symbol:controller.hpp:ignoredComment" not in by_id
+    assert "symbol:controller.hpp:ignoredString" not in by_id
+
+    emits = [edge for edge in edges if edge.relation == "emits"]
+    connects = [edge for edge in edges if edge.relation == "connects"]
+
+    assert [edge.target for edge in emits] == ["symbol:controller.hpp:started", "symbol:controller.hpp:started"]
+    assert {edge.confidence for edge in emits + connects} == {"LOW"}
+    assert any(
+        edge.source == "symbol:controller.hpp:started"
+        and edge.target == "symbol:controller.hpp:start"
+        and edge.metadata.get("sender_class") == "Controller"
+        and edge.metadata.get("receiver_class") == "Controller"
+        for edge in connects
+    )
+    assert any(
+        edge.source == "symbol:controller.hpp:started"
+        and edge.target == "symbol:controller.hpp:start"
+        and edge.metadata.get("sender") == "this"
+        and edge.metadata.get("receiver") == "this"
+        for edge in connects
+    )
+
+
+def test_qml_regex_fallback_extracts_handlers(monkeypatch: pytest.MonkeyPatch) -> None:
+    from cortex.structural import extract_structural_edges
+    import cortex.structural.treesitter_backend as treesitter_backend
+
+    def fail_tree_sitter(*args: object, **kwargs: object) -> tuple[list[object], list[object]]:
+        raise RuntimeError("grammar unavailable")
+
+    monkeypatch.setattr(treesitter_backend, "extract_treesitter_edges", fail_tree_sitter)
+
+    content = "import QtQuick.Controls 2.15\nButton {\n    signal saved()\n    onClicked: saved()\n}\n"
+    nodes, edges = extract_structural_edges("ButtonView.qml", content, set())
+
+    assert "symbol:ButtonView.qml:saved" in {node.node_id for node in nodes}
+    handles = [edge for edge in edges if edge.relation == "handles"]
+    assert len(handles) == 1
+    assert handles[0].source == "file:ButtonView.qml"
+    assert handles[0].target == "module:onClicked"
+    assert handles[0].confidence == "LOW"
+
+
+def test_c_regex_fallback_ignores_prototypes(monkeypatch: pytest.MonkeyPatch) -> None:
+    from cortex.structural import extract_structural_edges
+    import cortex.structural.treesitter_backend as treesitter_backend
+
+    def fail_tree_sitter(*args: object, **kwargs: object) -> tuple[list[object], list[object]]:
+        raise RuntimeError("grammar unavailable")
+
+    monkeypatch.setattr(treesitter_backend, "extract_treesitter_edges", fail_tree_sitter)
+
+    nodes, _ = extract_structural_edges("engine.h", "int foo(int x);\n", set())
+
+    assert "symbol:engine.h:foo" not in {node.node_id for node in nodes}
+
+
+def test_c_tree_sitter_extracts_imports_and_symbols() -> None:
+    pytest.importorskip("tree_sitter_c")
+    from cortex.structural import extract_structural_edges
+
+    content = '#include <stdio.h>\nstruct Counter { int value; };\nint add(int left, int right) {\n    return left + right;\n}\n'
+    nodes, edges = extract_structural_edges("main.c", content, set())
+
+    assert {"symbol:main.c:Counter", "symbol:main.c:add"}.issubset({node.node_id for node in nodes})
+    assert "module:stdio.h" in {edge.target for edge in edges if edge.relation == "imports"}
+    assert {edge.confidence for edge in edges} == {"EXTRACTED"}
+
+
+def test_cpp_tree_sitter_extracts_imports_and_symbols() -> None:
+    pytest.importorskip("tree_sitter_cpp")
+    from cortex.structural import extract_structural_edges
+
+    content = '#include "engine.hpp"\nnamespace Engine {\nclass Runner { public: void start() {} };\nint compute(int value) {\n    return value + 1;\n}\n}\n'
+    nodes, edges = extract_structural_edges("engine.cpp", content, set())
+
+    assert {"symbol:engine.cpp:Engine", "symbol:engine.cpp:Runner", "symbol:engine.cpp:compute"}.issubset(
+        {node.node_id for node in nodes}
+    )
+    assert "module:engine.hpp" in {edge.target for edge in edges if edge.relation == "imports"}
+    assert {edge.confidence for edge in edges} == {"EXTRACTED"}
+
+
+def test_qml_tree_sitter_extracts_imports_and_symbols() -> None:
+    pytest.importorskip("tree_sitter_language_pack")
+    from cortex.structural import extract_structural_edges
+
+    content = 'import QtQuick.Controls 2.15\nItem {\n    signal started()\n    function launch() {}\n}\n'
+    nodes, edges = extract_structural_edges("Main.qml", content, set())
+
+    assert {"symbol:Main.qml:Item", "symbol:Main.qml:launch"}.issubset({node.node_id for node in nodes})
+    assert "module:QtQuick.Controls" in {edge.target for edge in edges if edge.relation == "imports"}
+    assert {edge.confidence for edge in edges} == {"EXTRACTED"}
+
+
+def test_c_tree_sitter_ignores_struct_usages() -> None:
+    pytest.importorskip("tree_sitter_c")
+    from cortex.structural import extract_structural_edges
+
+    nodes, _ = extract_structural_edges("usage.c", "struct Foo x;\n", set())
+
+    assert "symbol:usage.c:Foo" not in {node.node_id for node in nodes}
+
+
 def test_dispatcher_returns_empty_when_regex_fallback_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     from cortex.structural import extract_structural_edges
     import cortex.structural.regex_backend as regex_backend
@@ -105,6 +298,10 @@ def test_ingest_multilang_fixture_uses_low_confidence_regex_edges(
     assert "symbol:lib.rs:run" in node_ids
     assert "symbol:App.java:App" in node_ids
     assert "symbol:worker.rb:Worker" in node_ids
+    assert "symbol:main.c:Counter" in node_ids
+    assert "symbol:engine.cpp:Runner" in node_ids
+    assert "symbol:engine.hpp:EngineCore" in node_ids
+    assert "symbol:Main.qml:Item" in node_ids
 
     fixture_paths = {path.name for path in FIXTURE_REPO.iterdir()}
     structural = [
