@@ -124,5 +124,66 @@ class ReportPathTests(unittest.TestCase):
         )
 
 
+class GcTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.live_repo = Path(self.temp_dir.name) / "live"
+        self.live_repo.mkdir()
+
+    def tearDown(self) -> None:
+        self.temp_dir.cleanup()
+
+    def _make_entry(self, repo_path: Path) -> Path:
+        entry = repo_data_dir(repo_path)
+        entry.mkdir(parents=True, exist_ok=True)
+        (entry / "cortex.db").touch()
+        write_repo_meta(entry / "cortex.db", repo_path)
+        return entry
+
+    def test_gc_classifies_active_orphaned_unknown(self) -> None:
+        from cortex.cli import gc_data_dirs
+
+        active = self._make_entry(self.live_repo)
+        gone_repo = Path(self.temp_dir.name) / "gone"
+        gone_repo.mkdir()
+        orphan = self._make_entry(gone_repo)
+        gone_repo.rmdir()
+        unknown = data_root() / "deadbeefdeadbeef"
+        unknown.mkdir(parents=True)
+
+        result = gc_data_dirs(prune=False)
+        self.assertEqual([e["dir"] for e in result["active"]], [str(active)])
+        self.assertEqual([e["dir"] for e in result["orphaned"]], [str(orphan)])
+        self.assertEqual([e["dir"] for e in result["unknown"]], [str(unknown)])
+        self.assertEqual(result["pruned"], [])
+        self.assertTrue(orphan.exists())
+
+    def test_gc_prune_deletes_only_orphans_with_meta(self) -> None:
+        from cortex.cli import gc_data_dirs
+
+        active = self._make_entry(self.live_repo)
+        gone_repo = Path(self.temp_dir.name) / "gone"
+        gone_repo.mkdir()
+        orphan = self._make_entry(gone_repo)
+        gone_repo.rmdir()
+        unknown = data_root() / "deadbeefdeadbeef"
+        unknown.mkdir(parents=True)
+
+        result = gc_data_dirs(prune=True)
+        self.assertEqual([e["dir"] for e in result["pruned"]], [str(orphan)])
+        self.assertFalse(orphan.exists())
+        self.assertTrue(active.exists())
+        self.assertTrue(unknown.exists())
+
+    def test_gc_handles_missing_data_root(self) -> None:
+        from cortex.cli import gc_data_dirs
+
+        import shutil
+
+        shutil.rmtree(data_root(), ignore_errors=True)
+        result = gc_data_dirs(prune=False)
+        self.assertEqual(result, {"active": [], "orphaned": [], "unknown": [], "pruned": []})
+
+
 if __name__ == "__main__":
     unittest.main()

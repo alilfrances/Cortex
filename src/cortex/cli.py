@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sys
 import time
 from collections.abc import Callable
@@ -24,7 +25,7 @@ from .integrations import (
     uninstall_git_hooks,
 )
 from .report import generate_report, write_report
-from .store import CortexStore, default_db_path
+from .store import CortexStore, data_root, default_db_path
 from .viewer import write_html
 
 
@@ -38,6 +39,40 @@ def _fetch_repo_graph(repo_path: Path, db_path: Path | None = None):
         for node_id in community.node_ids:
             community_by_node[node_id] = community.community_id
     return repo_root, nodes, edges, community_by_node
+
+
+def gc_data_dirs(prune: bool = False) -> dict:
+    """Classify central data dirs by whether their source repo still exists."""
+    result: dict[str, list[dict[str, str | None]]] = {
+        "active": [],
+        "orphaned": [],
+        "unknown": [],
+        "pruned": [],
+    }
+    base = data_root()
+    if not base.is_dir():
+        return result
+    for entry in sorted(base.iterdir()):
+        if not entry.is_dir():
+            continue
+        meta_path = entry / "meta.json"
+        if not meta_path.exists():
+            result["unknown"].append({"dir": str(entry), "repo_path": None})
+            continue
+        try:
+            repo_path = json.loads(meta_path.read_text(encoding="utf-8")).get("repo_path")
+        except (json.JSONDecodeError, OSError):
+            result["unknown"].append({"dir": str(entry), "repo_path": None})
+            continue
+        record = {"dir": str(entry), "repo_path": repo_path}
+        if repo_path and Path(repo_path).is_dir():
+            result["active"].append(record)
+        else:
+            result["orphaned"].append(record)
+            if prune:
+                shutil.rmtree(entry)
+                result["pruned"].append(record)
+    return result
 
 
 def _watch_root(repo_path: Path) -> Path:
@@ -163,6 +198,9 @@ def build_parser() -> argparse.ArgumentParser:
     refresh_parser.add_argument("--commits", type=int, default=50)
     refresh_parser.add_argument("--db", type=Path, default=None)
 
+    gc_parser = subparsers.add_parser("gc", help="List or prune central data dirs whose repo is gone")
+    gc_parser.add_argument("--prune", action="store_true", help="Delete orphaned data dirs")
+
     benchmark_parser = subparsers.add_parser("benchmark", help="Measure token reduction against full-corpus reading")
     benchmark_parser.add_argument("repo_path", type=Path, nargs="?", default=Path("."))
     benchmark_parser.add_argument("--commits", type=int, default=50)
@@ -264,6 +302,10 @@ def main() -> None:
         summary = ingest_repository(repo_path=args.repo_path, commit_limit=args.commits, db_path=args.db)
         report_path = write_report(repo_path=args.repo_path, db_path=args.db)
         print(json.dumps({**summary, "report_path": str(report_path)}, indent=2))
+        return
+
+    if args.command == "gc":
+        print(json.dumps(gc_data_dirs(prune=args.prune), indent=2))
         return
 
     if args.command == "benchmark":
