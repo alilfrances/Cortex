@@ -7,7 +7,7 @@ from typing import Any
 from .tools import TOOL_DEFINITIONS, call_tool
 
 PROTOCOL_VERSION = "2024-11-05"
-SERVER_INFO = {"name": "cortex", "version": "0.4.1"}
+SERVER_INFO = {"name": "cortex", "version": "0.5.0"}
 
 
 def _response(request_id: Any, result: dict[str, Any]) -> dict[str, Any]:
