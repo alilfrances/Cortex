@@ -442,6 +442,94 @@ class CortexStore:
         ]
         return nodes, edges
 
+    def query_edges(
+        self,
+        repo_path: Path,
+        relation: str | None = None,
+        endpoint_substr: str | None = None,
+        direction: str = "both",
+        limit: int = 50,
+    ) -> list[GraphEdge]:
+        repo_key = str(repo_path.resolve())
+        if direction not in {"out", "in", "both"}:
+            raise ValueError("direction must be 'out', 'in', or 'both'")
+
+        where = ["e.repo_path = ?"]
+        params: list[object] = [repo_key]
+        if relation:
+            where.append("e.relation = ?")
+            params.append(relation)
+        if endpoint_substr:
+            pattern = f"%{endpoint_substr}%"
+            if direction == "out":
+                where.append("(e.source LIKE ? OR source_node.label LIKE ?)")
+                params.extend([pattern, pattern])
+            elif direction == "in":
+                where.append("(e.target LIKE ? OR target_node.label LIKE ?)")
+                params.extend([pattern, pattern])
+            else:
+                where.append(
+                    "(e.source LIKE ? OR e.target LIKE ? OR source_node.label LIKE ? OR target_node.label LIKE ?)"
+                )
+                params.extend([pattern, pattern, pattern, pattern])
+        params.append(limit)
+
+        rows = self.connection.execute(
+            f"""
+            SELECT e.edge_id, e.source, e.target, e.relation, e.layer, e.confidence, e.weight, e.metadata_json
+            FROM graph_edges AS e
+            LEFT JOIN graph_nodes AS source_node
+              ON source_node.repo_path = e.repo_path AND source_node.node_id = e.source
+            LEFT JOIN graph_nodes AS target_node
+              ON target_node.repo_path = e.repo_path AND target_node.node_id = e.target
+            WHERE {' AND '.join(where)}
+            ORDER BY e.edge_id
+            LIMIT ?
+            """,
+            tuple(params),
+        ).fetchall()
+        return [
+            GraphEdge(
+                edge_id=row['edge_id'],
+                source=row['source'],
+                target=row['target'],
+                relation=row['relation'],
+                layer=row['layer'],
+                confidence=row['confidence'],
+                weight=row['weight'],
+                metadata=json.loads(row['metadata_json']),
+            )
+            for row in rows
+        ]
+
+    def get_nodes(self, repo_path: Path, node_ids: list[str]) -> dict[str, GraphNode]:
+        if not node_ids:
+            return {}
+        repo_key = str(repo_path.resolve())
+        placeholders = ", ".join("?" for _ in node_ids)
+        rows = self.connection.execute(
+            f"""
+            SELECT node_id, kind, label, source_ref, granularity, signature, span_start, span_end, metadata_json
+            FROM graph_nodes
+            WHERE repo_path = ? AND node_id IN ({placeholders})
+            """,
+            (repo_key, *node_ids),
+        ).fetchall()
+        return {
+            row['node_id']: GraphNode(
+                node_id=row['node_id'],
+                kind=row['kind'],
+                label=row['label'],
+                source_ref=row['source_ref'],
+                granularity=row['granularity'],
+                signature=row['signature'],
+                span_start=row['span_start'],
+                span_end=row['span_end'],
+                metadata=json.loads(row['metadata_json']),
+            )
+            for row in rows
+        }
+
     def search_nodes(self, repo_path: Path, query: str, limit: int = 20) -> list[GraphNode]:
         repo_key = str(repo_path.resolve())
         pattern = f"%{query}%"

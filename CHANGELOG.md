@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.0 — 2026-07-07
+
+- Add `cortex_relations` MCP tool: query graph edges filtered by relation type (`contains`, `imports`, `inherits`, `emits`, `connects`, `handles`) at symbol granularity, e.g. "who inherits class X", "who emits signal Y". Previously the C++/QML/Qt structural edges added in 0.3.0–0.4.1 had no query path. Backed by new SQL-filtered `CortexStore.query_edges()`/`get_nodes()` (no full-graph load); output resolves edge endpoints to labels/paths without dumping raw edge metadata.
+
 ## 0.4.1 — 2026-07-07
 
 - Fix: C++/QML structural extraction never produced `inherits` edges. Regex backend's base-clause capture was discarded; tree-sitter backend had no inheritance extraction at all. Both backends now emit `inherits` edges for `class Foo : public Bar`-style declarations.

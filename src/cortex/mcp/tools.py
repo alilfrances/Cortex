@@ -59,6 +59,27 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "cortex_relations",
+        "description": (
+            "Query graph edges filtered by relation type (contains, imports, inherits, "
+            "emits, connects, handles), symbol-granularity. Use for 'who inherits X', "
+            "'who emits signal Y', 'what connects to slot Z' questions."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "repo_path": {"type": "string"},
+                "relation": {
+                    "type": "string",
+                    "enum": ["contains", "imports", "inherits", "emits", "connects", "handles"],
+                },
+                "symbol": {"type": "string", "description": "substring match against endpoint node id or label"},
+                "direction": {"type": "string", "enum": ["out", "in", "both"], "default": "both"},
+                "limit": {"type": "integer", "default": 50},
+            },
+        },
+    },
+    {
         "name": "cortex_refresh",
         "description": "Re-ingest the repository into the local Cortex database.",
         "inputSchema": {
@@ -229,6 +250,43 @@ def _call_search(arguments: dict[str, Any]) -> dict[str, Any]:
     return _content({"repo_path": str(repo_root), "items": nodes, **status})
 
 
+def _call_relations(arguments: dict[str, Any]) -> dict[str, Any]:
+    repo_root = _repo_root(arguments)
+    store, error = _store_or_error(repo_root)
+    if error is not None:
+        return _content(error, is_error=True)
+    assert store is not None
+    status = _ensure_fresh(store, repo_root)
+    edges = store.query_edges(
+        repo_root,
+        relation=arguments.get("relation"),
+        endpoint_substr=arguments.get("symbol"),
+        direction=str(arguments.get("direction", "both")),
+        limit=int(arguments.get("limit", 50)),
+    )
+    node_ids = sorted({edge.source for edge in edges} | {edge.target for edge in edges})
+    nodes = store.get_nodes(repo_root, node_ids)
+
+    def endpoint(node_id: str) -> dict[str, Any]:
+        node = nodes.get(node_id)
+        if node is None:
+            return {"node_id": node_id, "label": None, "path": None}
+        return {"node_id": node.node_id, "label": node.label, "path": node.source_ref}
+
+    items = [
+        {
+            "relation": edge.relation,
+            "layer": edge.layer,
+            "weight": edge.weight,
+            "confidence": edge.confidence,
+            "source": endpoint(edge.source),
+            "target": endpoint(edge.target),
+        }
+        for edge in edges
+    ]
+    return _content({"repo_path": str(repo_root), "items": items, **status})
+
+
 def _call_refresh(arguments: dict[str, Any]) -> dict[str, Any]:
     repo_root = _repo_root(arguments)
     summary = ingest_repository(repo_root, commit_limit=int(arguments.get("commits", 50)))
@@ -246,6 +304,8 @@ def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
             return _call_impact(args)
         if name == "cortex_search_symbols":
             return _call_search(args)
+        if name == "cortex_relations":
+            return _call_relations(args)
         if name == "cortex_refresh":
             return _call_refresh(args)
         return _content({"error": "unknown_tool", "message": f"Unknown Cortex tool: {name}"}, is_error=True)

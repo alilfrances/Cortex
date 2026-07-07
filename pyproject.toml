@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cortex-context-engine"
-version = "0.4.1"
+version = "0.5.0"
 description = "Local-first git-native context engine with graph, provenance, and token-budgeted retrieval bundles."
 readme = "README.md"
 requires-python = ">=3.11"
