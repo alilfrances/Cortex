@@ -155,6 +155,25 @@ def _target_id(target: str) -> str:
     return f"module:{cleaned or 'unknown'}"
 
 
+def resolve_local_import(target: str, known_paths: set[str]) -> str | None:
+    """Resolve an include/import target to a repo-relative path if it matches a known file.
+
+    Tries an exact relative-path match first, then falls back to a unique basename
+    match (so `#include "airpod.h"` resolves even when the include omits the
+    subdirectory the file actually lives in).
+    """
+    candidate = target.strip().strip('"').lstrip("./")
+    if not candidate:
+        return None
+    if candidate in known_paths:
+        return candidate
+    basename = PurePosixPath(candidate).name
+    matches = [p for p in known_paths if PurePosixPath(p).name == basename]
+    if len(matches) == 1:
+        return matches[0]
+    return None
+
+
 def _signature(content: str, start: int) -> str:
     line = content[start:content.find("\n", start)]
     if not line:
@@ -402,7 +421,6 @@ def extract_regex_edges(
     content: str,
     known_paths: set[str],
 ) -> tuple[list[GraphNode], list[GraphEdge]]:
-    del known_paths
     suffix = PurePosixPath(path).suffix.lower()
     file_node_id = f"file:{path}"
     nodes: list[GraphNode] = []
@@ -412,11 +430,12 @@ def extract_regex_edges(
         for index, match in enumerate(pattern.finditer(content), start=1):
             line = _line_number(content, match.start())
             target = match.group("target")
+            resolved = resolve_local_import(target, known_paths)
             edges.append(
                 GraphEdge(
                     edge_id=f"regex:{path}:import:{line}:{index}:{target}",
                     source=file_node_id,
-                    target=_target_id(target),
+                    target=f"file:{resolved}" if resolved else _target_id(target),
                     relation="imports",
                     layer="STRUCTURAL",
                     confidence="LOW",

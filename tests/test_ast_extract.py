@@ -29,6 +29,20 @@ def test_intra_project_import_resolves_to_file_node():
     assert "file:src/cortex/models.py" in targets
 
 
+def test_absolute_local_import_resolves_to_file_node():
+    nodes, edges = extract_python_edges("src/extractor.py", "import cortex.models\n", known_paths={"cortex/models.py"})
+    targets = [e.target for e in edges]
+    assert "file:cortex/models.py" in targets
+
+
+def test_absolute_local_from_import_resolves_to_file_node():
+    nodes, edges = extract_python_edges(
+        "src/extractor.py", "from cortex.models import GraphNode\n", known_paths={"cortex/models.py"}
+    )
+    targets = [e.target for e in edges]
+    assert "file:cortex/models.py" in targets
+
+
 def test_extracts_class_node():
     nodes, edges = extract_python_edges("src/extractor.py", SAMPLE, known_paths=set())
     node_kinds = [n.kind for n in nodes]

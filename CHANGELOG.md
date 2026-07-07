@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.2 — 2026-07-07
+
+- Fix `cortex_impact` returning 0 neighbors for C/C++/QML files (and Python files using absolute imports): STRUCTURAL import edges always pointed at synthetic `module:{name}` nodes even when the include/import target matched a real file in the repo, so `rank_file_impact` (which only counts file-to-file edges) had nothing to walk beyond sparse COCHANGE history. Added `resolve_local_import()` (exact-path match, then unique-basename fallback) to `regex_backend.py`, wired into `treesitter_backend.py` and `ast_extract.py`, so `#include "airpod.hpp"` / `import pkg.mod` now resolve to `file:...` edges when the target exists among ingested sources.
+
 ## 0.6.1 — 2026-07-07
 
 - Fix `cortex_search_symbols` dumping 150k+ char results: `GraphNode.to_dict()` now truncates `signature` to 200 chars, and `CortexStore.search_nodes` ranks exact/prefix label matches before substring matches (was alphabetical, so close matches could be pushed out by `limit`).

@@ -387,6 +387,26 @@ def test_cortex_impact_returns_truncation_metadata_and_budget_caps(tmp_path: Pat
     assert capped["returned_count"] == len(capped["items"])
 
 
+def test_cortex_impact_surfaces_neighbor_from_local_cpp_include(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git_init(repo)
+    (repo / "airpod.hpp").write_text("class AirPod { public: void pair(); };\n", encoding="utf-8")
+    (repo / "airpod.cpp").write_text(
+        '#include "airpod.hpp"\nvoid AirPod::pair() {}\n', encoding="utf-8"
+    )
+    subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "airpod"], cwd=repo, check=True, capture_output=True)
+    ingest_repository(repo, commit_limit=0, db_path=repo / ".cortex" / "cortex.db")
+
+    result = call_tool("cortex_impact", {"repo_path": str(repo), "path": "airpod.cpp"})
+    payload = _payload(result)
+
+    assert result["isError"] is False
+    assert "airpod.hpp" in {item["path"] for item in payload["items"]}
+
+
 def test_cortex_impact_unknown_path_returns_explicit_error(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
     repo = tmp_path / "repo"

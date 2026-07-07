@@ -16,6 +16,16 @@ def _resolve_relative_import(file_path: str, module: str, known_paths: set[str])
     return None
 
 
+def _resolve_absolute_import(module: str, known_paths: set[str]) -> str | None:
+    if not module:
+        return None
+    as_path = module.replace(".", "/")
+    for candidate in (f"{as_path}.py", f"{as_path}/__init__.py"):
+        if candidate in known_paths:
+            return f"file:{candidate}"
+    return None
+
+
 def _function_signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
     prefix = "async def" if isinstance(node, ast.AsyncFunctionDef) else "def"
     returns = f" -> {ast.unparse(node.returns)}" if node.returns else ""
@@ -109,11 +119,12 @@ def extract_python_edges(
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
+                target_id = _resolve_absolute_import(alias.name, known_paths) or f"module:{alias.name}"
                 edges.append(
                     GraphEdge(
                         edge_id=f"ast:{path}:import:{alias.name}",
                         source=file_node_id,
-                        target=f"module:{alias.name}",
+                        target=target_id,
                         relation="imports",
                         layer="STRUCTURAL",
                         confidence="EXTRACTED",
@@ -129,7 +140,7 @@ def extract_python_edges(
                 resolved = _resolve_relative_import(path, module, known_paths)
                 target_id = resolved or f"module:{module}"
             else:
-                target_id = f"module:{module}" if module else "module:unknown"
+                target_id = _resolve_absolute_import(module, known_paths) or (f"module:{module}" if module else "module:unknown")
 
             edges.append(
                 GraphEdge(

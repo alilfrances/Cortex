@@ -211,7 +211,6 @@ def extract_treesitter_edges(
     content: str,
     known_paths: set[str],
 ) -> tuple[list[GraphNode], list[GraphEdge]]:
-    del known_paths
     suffix = PurePosixPath(path).suffix.lower()
     if suffix not in _LANGUAGE_MODULES:
         return [], []
@@ -233,12 +232,13 @@ def extract_treesitter_edges(
             if node.type == "call" and not _signature(node, source).startswith(("require", "require_relative", "load")):
                 continue
             target = _import_target(node, source)
+            resolved = regex_backend.resolve_local_import(target, known_paths)
             line = node.start_point[0] + 1
             edges.append(
                 GraphEdge(
                     edge_id=f"treesitter:{path}:import:{line}:{target}",
                     source=file_node_id,
-                    target=f"module:{target or 'unknown'}",
+                    target=f"file:{resolved}" if resolved else f"module:{target or 'unknown'}",
                     relation="imports",
                     layer="STRUCTURAL",
                     confidence="EXTRACTED",

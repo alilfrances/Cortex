@@ -98,6 +98,21 @@ def test_cpp_regex_fallback_extracts_imports_and_symbols(monkeypatch: pytest.Mon
     assert {edge.confidence for edge in edges} == {"LOW"}
 
 
+def test_cpp_regex_fallback_resolves_local_include_to_file_node(monkeypatch: pytest.MonkeyPatch) -> None:
+    from cortex.structural import extract_structural_edges
+    import cortex.structural.treesitter_backend as treesitter_backend
+
+    def fail_tree_sitter(*args: object, **kwargs: object) -> tuple[list[object], list[object]]:
+        raise RuntimeError("grammar unavailable")
+
+    monkeypatch.setattr(treesitter_backend, "extract_treesitter_edges", fail_tree_sitter)
+
+    content = '#include "engine.hpp"\nclass Runner { public: void start() {} };\n'
+    nodes, edges = extract_structural_edges("engine.cpp", content, {"engine.hpp"})
+
+    assert "file:engine.hpp" in {edge.target for edge in edges if edge.relation == "imports"}
+
+
 def test_cpp_regex_backend_extracts_inherits_edges_directly() -> None:
     from cortex.structural.regex_backend import extract_regex_edges
 
@@ -254,6 +269,16 @@ def test_cpp_tree_sitter_extracts_imports_and_symbols() -> None:
     assert {edge.confidence for edge in edges} == {"EXTRACTED"}
 
 
+def test_cpp_tree_sitter_resolves_local_include_to_file_node() -> None:
+    pytest.importorskip("tree_sitter_cpp")
+    from cortex.structural import extract_structural_edges
+
+    content = '#include "engine.hpp"\nnamespace Engine {\nclass Runner { public: void start() {} };\n}\n'
+    nodes, edges = extract_structural_edges("engine.cpp", content, {"engine.hpp"})
+
+    assert "file:engine.hpp" in {edge.target for edge in edges if edge.relation == "imports"}
+
+
 def test_cpp_tree_sitter_extracts_inherits_edges() -> None:
     pytest.importorskip("tree_sitter_cpp")
     from cortex.structural import extract_structural_edges
@@ -323,6 +348,24 @@ def test_c_tree_sitter_ignores_struct_usages() -> None:
     nodes, _ = extract_structural_edges("usage.c", "struct Foo x;\n", set())
 
     assert "symbol:usage.c:Foo" not in {node.node_id for node in nodes}
+
+
+def test_resolve_local_import_matches_exact_path_and_unique_basename() -> None:
+    from cortex.structural.regex_backend import resolve_local_import
+
+    known_paths = {"src/hw/airpod.h", "src/hw/airpod.cpp"}
+
+    assert resolve_local_import("src/hw/airpod.h", known_paths) == "src/hw/airpod.h"
+    assert resolve_local_import("airpod.h", known_paths) == "src/hw/airpod.h"
+    assert resolve_local_import("<stdio.h>".strip("<>"), known_paths) is None
+
+
+def test_resolve_local_import_returns_none_on_ambiguous_basename() -> None:
+    from cortex.structural.regex_backend import resolve_local_import
+
+    known_paths = {"src/a/util.h", "src/b/util.h"}
+
+    assert resolve_local_import("util.h", known_paths) is None
 
 
 def test_dispatcher_returns_empty_when_regex_fallback_fails(monkeypatch: pytest.MonkeyPatch) -> None:
