@@ -110,10 +110,9 @@ class IngestBundleReportTests(unittest.TestCase):
         self.assertIn("# Cortex Report: sample_repo", report)
         self.assertIn("## God Nodes", report)
 
-    def test_default_db_path_uses_local_cortex_directory(self) -> None:
+    def test_default_db_path_resolves_to_cortex_db(self) -> None:
         path = default_db_path(self.fixture_repo)
         self.assertEqual(path.name, "cortex.db")
-        self.assertEqual(path.parent.name, ".cortex")
 
     def test_benchmark_reports_reduction_ratio(self) -> None:
         result = run_benchmark(self.fixture_repo, commit_limit=5, budget=60)
@@ -127,7 +126,7 @@ class IngestBundleReportTests(unittest.TestCase):
         repo = self._copy_fixture_repo()
 
         summary = ingest_repository(repo, commit_limit=5)
-        report_path = Path(summary["repo_path"]) / ".cortex" / "cortex_report.md"
+        report_path = default_db_path(Path(summary["repo_path"])).parent / "cortex_report.md"
         report_path.write_text(generate_report(repo), encoding="utf-8")
 
         self.assertTrue(report_path.exists())

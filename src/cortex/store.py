@@ -1,16 +1,48 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import sqlite3
 import time
 from pathlib import Path
 
 from .models import BundleItem, CommitRecord, Community, GraphEdge, GraphNode, RetrievalBundle, SourceRecord
 
+LEGACY_DIR_NAME = ".cortex"
+
+
+def data_root() -> Path:
+    """Base directory for all central per-repo data dirs."""
+    override = os.environ.get("CORTEX_DATA_DIR")
+    if override:
+        return Path(override).expanduser().resolve()
+    return Path.home() / ".cortex" / "data"
+
+
+def repo_data_dir(repo_path: Path) -> Path:
+    """Central data dir for one repo, keyed by hash of its resolved path."""
+    resolved = repo_path.resolve()
+    digest = hashlib.sha256(str(resolved).encode("utf-8")).hexdigest()[:16]
+    return data_root() / digest
+
 
 def default_db_path(repo_path: Path) -> Path:
     root = repo_path.resolve()
-    return root / ".cortex" / "cortex.db"
+    legacy = root / LEGACY_DIR_NAME / "cortex.db"
+    if legacy.exists():
+        return legacy
+    return repo_data_dir(root) / "cortex.db"
+
+
+def write_repo_meta(db_path: Path, repo_root: Path) -> None:
+    """Record which repo a central data dir belongs to, for `cortex gc` and debugging."""
+    parent = db_path.parent
+    if parent.name == LEGACY_DIR_NAME:
+        return
+    parent.mkdir(parents=True, exist_ok=True)
+    meta = {"repo_path": str(repo_root.resolve()), "updated_at": int(time.time())}
+    (parent / "meta.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
 
 
 class CortexStore:
