@@ -10,7 +10,7 @@ from cortex.benchmark import run_benchmark
 from cortex.bundle import generate_bundle
 from cortex.ingest import ingest_repository
 from cortex.integrations import git_hook_status, install_git_hooks, uninstall_git_hooks
-from cortex.report import generate_report
+from cortex.report import default_report_path, generate_report
 from cortex.store import CortexStore, default_db_path
 
 
@@ -126,7 +126,7 @@ class IngestBundleReportTests(unittest.TestCase):
         repo = self._copy_fixture_repo()
 
         summary = ingest_repository(repo, commit_limit=5)
-        report_path = default_db_path(Path(summary["repo_path"])).parent / "cortex_report.md"
+        report_path = default_report_path(Path(summary["repo_path"]))
         report_path.write_text(generate_report(repo), encoding="utf-8")
 
         self.assertTrue(report_path.exists())

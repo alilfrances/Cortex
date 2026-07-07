@@ -91,5 +91,38 @@ class IngestWritesMetaTests(unittest.TestCase):
         self.assertEqual(meta["repo_path"], str(self.repo.resolve()))
 
 
+class ReportPathTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.repo = Path(self.temp_dir.name) / "repo"
+        self.repo.mkdir()
+
+    def tearDown(self) -> None:
+        self.temp_dir.cleanup()
+
+    def test_report_co_locates_with_central_db(self) -> None:
+        from cortex.report import default_report_path
+
+        expected = default_db_path(self.repo).parent / "cortex_report.md"
+        self.assertEqual(default_report_path(self.repo), expected)
+
+    def test_report_co_locates_with_legacy_db(self) -> None:
+        from cortex.report import default_report_path
+
+        legacy = self.repo / ".cortex" / "cortex.db"
+        legacy.parent.mkdir()
+        legacy.touch()
+        self.assertEqual(default_report_path(self.repo), legacy.parent.resolve() / "cortex_report.md")
+
+    def test_report_follows_explicit_db_path(self) -> None:
+        from cortex.report import default_report_path
+
+        custom_db = Path(self.temp_dir.name) / "elsewhere" / "cortex.db"
+        self.assertEqual(
+            default_report_path(self.repo, db_path=custom_db),
+            custom_db.parent / "cortex_report.md",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

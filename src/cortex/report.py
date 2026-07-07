@@ -25,9 +25,9 @@ def _looks_like_src_test_pair(source: str, target: str) -> bool:
     return source_is_test != target_is_test and source_base == target_base
 
 
-def default_report_path(repo_path: Path) -> Path:
-    repo_root = repo_path.resolve()
-    return repo_root / ".cortex" / "cortex_report.md"
+def default_report_path(repo_path: Path, db_path: Path | None = None) -> Path:
+    resolved_db = db_path or default_db_path(repo_path.resolve())
+    return resolved_db.parent / "cortex_report.md"
 
 
 def _god_nodes(nodes: list[GraphNode], edges: list[GraphEdge], top_n: int = 5) -> list[tuple[GraphNode, int]]:
@@ -135,7 +135,7 @@ def generate_report(
 
 def write_report(repo_path: Path, db_path: Path | None = None) -> Path:
     repo_root = discover_repo_root(repo_path)
-    report_path = default_report_path(repo_root)
+    report_path = default_report_path(repo_root, db_path=db_path)
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(generate_report(repo_root, db_path=db_path), encoding="utf-8")
     return report_path
