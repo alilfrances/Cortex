@@ -29,6 +29,9 @@ class CommitRecord:
         return asdict(self)
 
 
+SIGNATURE_DISPLAY_LIMIT = 200
+
+
 @dataclass(slots=True)
 class GraphNode:
     node_id: str
@@ -42,7 +45,11 @@ class GraphNode:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        payload = asdict(self)
+        signature = payload.get('signature') or ''
+        if len(signature) > SIGNATURE_DISPLAY_LIMIT:
+            payload['signature'] = signature[:SIGNATURE_DISPLAY_LIMIT] + '…'
+        return payload
 
 
 @dataclass(slots=True)

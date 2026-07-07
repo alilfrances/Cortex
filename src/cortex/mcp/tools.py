@@ -7,7 +7,7 @@ from typing import Any
 
 from ..bundle import _tokenize_query, generate_bundle
 from ..gitutils import discover_repo_root
-from ..impact import rank_file_impact
+from ..impact import UnknownPathError, rank_file_impact
 from ..ingest import compute_repo_fingerprint, ingest_repository
 from ..references import find_references
 from ..report import generate_report
@@ -77,6 +77,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                     "enum": ["contains", "imports", "inherits", "emits", "connects", "handles"],
                 },
                 "symbol": {"type": "string", "description": "substring match against endpoint node id or label"},
+                "target": {"type": "string", "description": "alias for 'symbol'"},
                 "direction": {"type": "string", "enum": ["out", "in", "both"], "default": "both"},
                 "limit": {"type": "integer", "default": 50},
                 "budget": {"type": "integer", "default": 2000},
@@ -255,13 +256,24 @@ def _call_impact(arguments: dict[str, Any]) -> dict[str, Any]:
     assert store is not None
     status = _ensure_fresh(store, repo_root)
     nodes, edges = store.fetch_graph(repo_root)
-    items, truncated = rank_file_impact(
-        str(arguments.get("path", "")),
-        nodes,
-        edges,
-        limit=int(arguments.get("limit", 10)),
-        budget=int(arguments.get("budget", 2000)),
-    )
+    try:
+        items, truncated = rank_file_impact(
+            str(arguments.get("path", "")),
+            nodes,
+            edges,
+            limit=int(arguments.get("limit", 10)),
+            budget=int(arguments.get("budget", 2000)),
+        )
+    except UnknownPathError as exc:
+        return _content(
+            {
+                "error": "unknown_path",
+                "message": str(exc),
+                "hint": "Path must match a file node's repo-relative path as stored by cortex_refresh.",
+                **status,
+            },
+            is_error=True,
+        )
     return _content(
         {
             "repo_path": str(repo_root),
@@ -296,7 +308,7 @@ def _call_relations(arguments: dict[str, Any]) -> dict[str, Any]:
     edges = store.query_edges(
         repo_root,
         relation=arguments.get("relation"),
-        endpoint_substr=arguments.get("symbol"),
+        endpoint_substr=arguments.get("symbol") or arguments.get("target"),
         direction=str(arguments.get("direction", "both")),
         limit=int(arguments.get("limit", 50)),
     )

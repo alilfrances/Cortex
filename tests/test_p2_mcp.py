@@ -172,6 +172,36 @@ def test_store_search_nodes_matches_label_signature_and_source_ref(tmp_path: Pat
     assert [node.node_id for node in by_source] == ["symbol:src/payments.py:charge"]
 
 
+def test_store_search_nodes_ranks_exact_and_prefix_matches_first(tmp_path: Path) -> None:
+    store = CortexStore(tmp_path / "cortex.db")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    nodes = [
+        GraphNode("symbol:a.py:has_AirPod_case", "function", "has_AirPod_case", "a.py", granularity="symbol"),
+        GraphNode("symbol:b.py:AirPod_Prefix", "function", "AirPod_Prefix", "b.py", granularity="symbol"),
+        GraphNode("symbol:c.py:AirPod", "function", "AirPod", "c.py", granularity="symbol"),
+    ]
+    store.reset_repo(repo)
+    store.save_graph(repo, nodes, [])
+
+    results = store.search_nodes(repo, "AirPod")
+
+    assert [node.node_id for node in results] == [
+        "symbol:c.py:AirPod",
+        "symbol:b.py:AirPod_Prefix",
+        "symbol:a.py:has_AirPod_case",
+    ]
+
+
+def test_graph_node_to_dict_truncates_oversized_signature() -> None:
+    node = GraphNode("symbol:a.py:BIG", "variable", "BIG", "a.py", granularity="symbol", signature="x" * 5000)
+
+    payload = node.to_dict()
+
+    assert len(payload["signature"]) <= 201
+    assert payload["signature"].endswith("…")
+
+
 def test_store_query_edges_filters_relation_direction_symbol_and_limit(tmp_path: Path) -> None:
     store = CortexStore(tmp_path / "cortex.db")
     repo = tmp_path / "repo"
@@ -231,6 +261,27 @@ def test_cortex_relations_filters_resolves_and_limits(tmp_path: Path, monkeypatc
     assert payload["items"][0]["target"] == "Base @ engine.hpp"
     assert set(payload["items"][0]) == {"relation", "source", "target"}
     assert payload["truncated"] is False
+
+
+def test_cortex_relations_accepts_target_as_symbol_alias(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git_init(repo)
+    store = CortexStore(repo / ".cortex" / "cortex.db")
+    nodes, edges = _relation_graph()
+    store.reset_repo(repo)
+    store.save_graph(repo, nodes, edges)
+
+    result = call_tool(
+        "cortex_relations",
+        {"repo_path": str(repo), "relation": "inherits", "target": "Runner", "direction": "out", "limit": 1},
+    )
+    payload = _payload(result)
+
+    assert result["isError"] is False
+    assert [item["relation"] for item in payload["items"]] == ["inherits"]
+    assert payload["items"][0]["source"] == "Runner @ engine.cpp"
 
 
 def test_cortex_relations_direction_and_unresolved_endpoint_fallback(tmp_path: Path, monkeypatch) -> None:
@@ -334,6 +385,23 @@ def test_cortex_impact_returns_truncation_metadata_and_budget_caps(tmp_path: Pat
     assert capped["truncated"] is True
     assert [item["path"] for item in capped["items"]] == ["db.py", "ui.py"]
     assert capped["returned_count"] == len(capped["items"])
+
+
+def test_cortex_impact_unknown_path_returns_explicit_error(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git_init(repo)
+    store = CortexStore(repo / ".cortex" / "cortex.db")
+    nodes = [GraphNode("file:app.py", "file", "app.py", "app.py")]
+    store.reset_repo(repo)
+    store.save_graph(repo, nodes, [])
+
+    result = call_tool("cortex_impact", {"repo_path": str(repo), "path": "/abs/wrong/path/app.py"})
+    payload = _payload(result)
+
+    assert result["isError"] is True
+    assert payload["error"] == "unknown_path"
 
 
 def _references_repo(tmp_path: Path) -> Path:

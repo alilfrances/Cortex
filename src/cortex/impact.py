@@ -10,6 +10,14 @@ from .tokenizer import count_text_tokens
 IMPACT_LAYERS = {"COCHANGE", "STRUCTURAL"}
 
 
+class UnknownPathError(ValueError):
+    """Raised when the requested path has no matching file node in the graph."""
+
+    def __init__(self, path: str):
+        super().__init__(f"path not found in graph: {path}")
+        self.path = path
+
+
 def _file_node_id(path: str) -> str:
     return path if path.startswith("file:") else f"file:{path}"
 
@@ -23,6 +31,8 @@ def rank_file_impact(
 ) -> tuple[list[dict], bool]:
     seed_id = _file_node_id(path)
     file_paths = {node.node_id: node.source_ref for node in nodes if node.granularity == "file" or node.kind == "file"}
+    if seed_id not in file_paths:
+        raise UnknownPathError(path)
     scores: defaultdict[str, float] = defaultdict(float)
     why: defaultdict[str, list[dict]] = defaultdict(list)
 

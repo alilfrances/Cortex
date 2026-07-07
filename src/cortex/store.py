@@ -533,17 +533,23 @@ class CortexStore:
     def search_nodes(self, repo_path: Path, query: str, limit: int = 20) -> list[GraphNode]:
         repo_key = str(repo_path.resolve())
         pattern = f"%{query}%"
+        prefix_pattern = f"{query}%"
         rows = self.connection.execute(
             """
-            SELECT node_id, kind, label, source_ref, granularity, signature, span_start, span_end, metadata_json
+            SELECT node_id, kind, label, source_ref, granularity, signature, span_start, span_end, metadata_json,
+              CASE
+                WHEN label = ? THEN 0
+                WHEN label LIKE ? THEN 1
+                ELSE 2
+              END AS match_rank
             FROM graph_nodes
             WHERE repo_path = ?
               AND granularity = 'symbol'
               AND (label LIKE ? OR source_ref LIKE ? OR signature LIKE ?)
-            ORDER BY label ASC, node_id ASC
+            ORDER BY match_rank ASC, label ASC, node_id ASC
             LIMIT ?
             """,
-            (repo_key, pattern, pattern, pattern, limit),
+            (query, prefix_pattern, repo_key, pattern, pattern, pattern, limit),
         ).fetchall()
         return [
             GraphNode(

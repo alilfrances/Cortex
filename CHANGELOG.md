@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1 — 2026-07-07
+
+- Fix `cortex_search_symbols` dumping 150k+ char results: `GraphNode.to_dict()` now truncates `signature` to 200 chars, and `CortexStore.search_nodes` ranks exact/prefix label matches before substring matches (was alphabetical, so close matches could be pushed out by `limit`).
+- Fix `cortex_relations` silently returning all edges unfiltered when called with `target` instead of `symbol`: `target` is now accepted as an alias for `symbol`.
+- Fix `cortex_impact` returning an indistinguishable empty result for a path with no co-change/structural edges vs. a path that doesn't match any node in the graph (e.g. absolute path, wrong casing): now raises/returns an explicit `unknown_path` error with a hint instead of a bare `[]`.
+
 ## 0.6.0 — 2026-07-07
 
 - Add `cortex_references` MCP tool: blast-radius query for a symbol, unioning parsed graph edges with a repo-wide grep (honoring ingest skip-dirs), bucketed by `code`/`script`/`doc`/`config`/`other`, deduped against graph-covered locations. Closes the gap where `cortex_relations` only sees parser-indexed languages and misses cross-language wiring (CMakeLists.txt, shell scripts, `.qrc`, JSON/YAML configs, docs).
