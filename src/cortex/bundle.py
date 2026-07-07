@@ -25,6 +25,18 @@ STOPWORDS = {
 NAME_MATCH_BONUS = 100.0
 # Markdown share of the budget when code candidates also match the task.
 DOC_BUDGET_SHARE = 0.4
+# Test/eval/fixture files are demoted unless the task itself is about them.
+AUX_PATH_DEMOTION = 0.5
+AUX_PATH_RE = re.compile(r'(^|/)(tests?|testing|evals?|fixtures?|examples?|benchmarks?|samples?)(/|$)')
+AUX_INTENT_TERMS = {
+    'test', 'tests', 'testing', 'eval', 'evals', 'evaluation', 'fixture', 'fixtures',
+    'benchmark', 'benchmarks', 'example', 'examples', 'sample', 'samples',
+}
+
+
+def _is_aux_path(path: str) -> bool:
+    stem = Path(path).stem
+    return bool(AUX_PATH_RE.search(path)) or stem.startswith('test_') or stem.endswith('_test')
 
 
 def _symbol_qualname(node: GraphNode) -> str:
@@ -263,6 +275,7 @@ def generate_bundle(
 
     task_terms = _tokenize_query(task)
     term_weights = _term_weights(task_terms, sources)
+    demote_aux = not (task_terms & AUX_INTENT_TERMS)
     adj = _build_adjacency(edges)
 
     symbols_by_path: defaultdict[str, list[GraphNode]] = defaultdict(list)
@@ -282,12 +295,15 @@ def generate_bundle(
             recency_weight = max(0.0, 5.0 - math.log2(max(1, newest_commit - int(source.modified_at) + 1)))
         name_candidates = _tokenize_text(Path(source.path).stem) | symbol_names_by_path.get(source.path, set())
         name_bonus = NAME_MATCH_BONUS if task_terms & name_candidates else 0.0
-        source_scores[source.path] = name_bonus + _score_text(
+        score = name_bonus + _score_text(
             task_terms,
             f'{source.path}\n{source.content}',
             recency_weight,
             term_weights,
         )
+        if demote_aux and _is_aux_path(source.path):
+            score *= AUX_PATH_DEMOTION
+        source_scores[source.path] = score
 
     seed_scores = {f'file:{path}': score for path, score in source_scores.items() if score > 0}
     if rank == 'bfs':

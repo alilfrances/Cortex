@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.1 — 2026-07-08
+
+- Demote test/eval/fixture/example/benchmark/sample paths in `cortex_query` ranking (`AUX_PATH_DEMOTION = 0.5`) unless the task itself mentions test/eval intent terms. Fixes keyword-dense auxiliary files (e.g. `evals/run_evals.py` fixture strings) outranking real implementation files and exhausting the token budget; demotion applies before pagerank/BFS seeding so graph ranking inherits it.
+
 ## 0.7.0 — 2026-07-07
 
 - Improve bundle ranking for agent tasks: stopwords no longer dominate query terms, camelCase/snake_case identifiers split into searchable subtokens, and source-file term rarity down-weights repo-wide common words so target symbols like `_ensure_fresh` rank above keyword-noisy distractors.

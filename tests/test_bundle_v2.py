@@ -147,6 +147,69 @@ def test_filename_match_outranks_keyword_dense_doc(tmp_path):
     assert scores['bundle.py'] > scores.get('README.md', 0.0)
 
 
+def _make_aux_store(tmp_path: Path) -> tuple[CortexStore, Path]:
+    import subprocess
+    db_path = tmp_path / 'cortex.db'
+    store = CortexStore(db_path)
+    repo = tmp_path / 'repo'
+    repo.mkdir()
+    subprocess.run(['git', 'init'], cwd=repo, capture_output=True)
+
+    eval_content = 'detect stale index refresh cortex fingerprint\n' + ('filler\n' * 20)
+    impl_content = 'def staleness(store):\n    return detect stale index refresh\n'
+    sources = [
+        SourceRecord(path='evals/run_evals.py', content=eval_content, kind='code', size_bytes=len(eval_content), modified_at=0.0, content_hash='ha1'),
+        SourceRecord(path='src/tools.py', content=impl_content, kind='code', size_bytes=len(impl_content), modified_at=0.0, content_hash='ha2'),
+    ]
+    nodes = [
+        GraphNode(node_id=f'file:{source.path}', kind='file', label=source.path, source_ref=source.path)
+        for source in sources
+    ]
+    store.reset_repo(repo)
+    store.save_sources(repo, sources)
+    store.save_commits(repo, [])
+    store.save_graph(repo, nodes, [])
+    return store, repo
+
+
+def test_aux_eval_file_demoted_below_impl(tmp_path):
+    store, repo = _make_aux_store(tmp_path)
+    result = generate_bundle(
+        repo,
+        task='how does refresh detect stale index',
+        budget=4000,
+        db_path=store.db_path,
+        output_format='json',
+        rank='bfs',
+    )
+    scores = {item['path']: item['score'] for item in result['items']}
+    assert scores['src/tools.py'] > scores['evals/run_evals.py']
+
+
+def test_aux_demotion_skipped_for_test_intent_task(tmp_path):
+    store, repo = _make_aux_store(tmp_path)
+    non_test_result = generate_bundle(
+        repo,
+        task='why is stale index failing',
+        budget=4000,
+        db_path=store.db_path,
+        output_format='json',
+        rank='bfs',
+    )
+    test_intent_result = generate_bundle(
+        repo,
+        task='why is the eval test failing for stale index',
+        budget=4000,
+        db_path=store.db_path,
+        output_format='json',
+        rank='bfs',
+    )
+
+    non_test_scores = {item['path']: item['score'] for item in non_test_result['items']}
+    test_intent_scores = {item['path']: item['score'] for item in test_intent_result['items']}
+    assert test_intent_scores['evals/run_evals.py'] > non_test_scores['evals/run_evals.py']
+
+
 def test_symbol_name_match_gets_bonus(tmp_path):
     store, repo = _make_doc_heavy_store(tmp_path)
     # README name-drops the symbol alongside every task term; only bundle.py defines it.
