@@ -5,59 +5,93 @@ description: Use Cortex MCP tools for repo-first context, graph-aware retrieval,
 
 # Cortex
 
-Use Cortex when working in a git repository and the task needs codebase orientation, impact analysis, relevant files, related symbols, or a compact context bundle. Prefer Cortex before broad raw-file searches when a Cortex index exists (in-repo `.cortex/` or central `~/.cortex/data/`) or when a Cortex MCP server is available.
+Use Cortex when working inside an indexed repository and you need code context, symbol lookup, blast-radius checks, or repository orientation. Prefer Cortex before broad grep/Read exploration because it combines source content, symbol spans, graph edges, co-change history, and token-budgeted packing.
 
 ## Workflow
 
-1. If Cortex state may be missing or stale, call `cortex_refresh`.
-2. For a broad architecture or orientation question, call `cortex_overview`.
-3. For a concrete task, bug, feature, or question, call `cortex_query` with the task and token budget.
-4. For change-risk analysis around a file or symbol, call `cortex_impact`.
-5. For direct symbol lookup, call `cortex_search_symbols`.
-6. For "who inherits/emits/connects to X" (typed graph edges), call `cortex_relations`.
-7. For "what references/uses X anywhere in the repo" (graph edges + CMake/scripts/configs/docs the parser can't index), call `cortex_references`.
+1. Start with `cortex_overview` for unfamiliar repos or architecture questions.
+2. For a concrete task, call `cortex_query` with the task and a budget.
+3. For named code, use the search -> read -> impact loop:
+   - `cortex_search_symbols` to locate candidate functions/classes/methods.
+   - `cortex_read_symbol` with the chosen `node_id` to read only the exact numbered source span.
+   - `cortex_impact` on the containing file to inspect structural and co-change neighbors before editing.
+4. Use `cortex_relations` for parsed graph questions such as imports, contains, inherits, emits, connects, or handles.
+5. Use `cortex_references` when configs, docs, scripts, CMake/QRC, or other parser-missed surfaces may reference a symbol.
+6. Default to `response_format: "concise"`; pass `response_format: "detailed"` only when you need provenance, fingerprints, full metadata, or detailed why-edges.
+7. If a tool reports `stale: true`, call `cortex_refresh` or rerun the read tool after refresh.
 
-## MCP Tools
+## Tools
 
 ### `cortex_query`
 
-Use for task-focused retrieval. Pass the user's task, optional `repo_path`, and a reasonable `budget`. The result is a token-budgeted bundle of relevant files and symbols with provenance explaining why each item was selected.
+Returns a ranked, token-budgeted bundle for a task. Use for "what files matter for this change?" questions before raw file reads. Concise mode keeps compact per-item rationale.
 
-### `cortex_overview`
+Example:
 
-Use for initial repo orientation, architecture questions, and planning. It returns the repository report, central graph nodes, communities, and high-level structure.
-
-### `cortex_impact`
-
-Use before editing a file or symbol, or when reviewing a proposed change. It returns structurally related and cochanged neighbors ranked by connection strength, plus why those nodes may be affected.
+```json
+{"task":"fix stale index detection in the auto refresh path","budget":4000}
+```
 
 ### `cortex_search_symbols`
 
-Use when the user names a function, class, method, module, or file-like identifier. Search first, then use `cortex_query` or `cortex_impact` on promising results if more context is needed.
+Returns symbol candidates without source bodies. Use when the user names an identifier or when `cortex_query` suggests a file and you need a precise function/class.
+
+Example:
+
+```json
+{"query":"generate bundle"}
+```
+
+### `cortex_read_symbol`
+
+Returns exact stored source lines for one symbol span, formatted as `line_number: source`. Use after `cortex_search_symbols`; if the result is ambiguous, call again with the returned `node_id`.
+
+Example:
+
+```json
+{"symbol":"symbol:src/cortex/bundle.py:generate_bundle","budget":2000}
+```
+
+### `cortex_impact`
+
+Returns files related by STRUCTURAL and COCHANGE edges. Use after selecting a file or before editing to find likely tests, callers, and coupled modules.
+
+Example:
+
+```json
+{"path":"src/cortex/store.py","limit":10}
+```
 
 ### `cortex_relations`
 
-Use for typed graph-edge questions with a known relation: `contains`, `imports`, `inherits`, `emits`, `connects`, `handles`. Symbol-granularity. Good for "who inherits Base", "who emits signal X", "what connects to slot Y". Only sees edges the parser extracted — misses files it doesn't index.
+Returns parsed graph edges filtered by relation and symbol. Use for structural questions where parser coverage is enough.
+
+Example:
+
+```json
+{"relation":"imports","symbol":"bundle","direction":"both"}
+```
 
 ### `cortex_references`
 
-Use for "who/what references symbol X" when you don't know (or don't want to restrict to) a relation type, or when the reference may live outside parsed source — CMakeLists.txt, shell scripts, `.qrc`, JSON/YAML configs, docs. Unions graph edges with a repo grep, deduped, bucketed by `code`/`script`/`doc`/`config`/`other`. Slower than `cortex_relations` (does a real grep pass); prefer `cortex_relations` first when the relation type is known and cross-language wiring isn't in question.
+Returns graph plus grep references bucketed by file type. Use for cross-language or config/doc/script blast radius.
+
+Example:
+
+```json
+{"symbol":"_ensure_fresh","budget":2000}
+```
+
+### `cortex_overview`
+
+Returns repository graph summary, communities, god nodes, and surprising links. Use for orientation rather than precise code reading.
+
+Example:
+
+```json
+{"repo_path":"."}
+```
 
 ### `cortex_refresh`
 
-Use when the Cortex index is missing, stale, or the user asks to refresh repo context. It re-ingests the repo and writes the default Cortex report. Prefer this over manual ingest/report commands when the MCP server is available.
-
-## Fallback
-
-If the MCP server is unavailable but the `cortex` command exists, run:
-
-```bash
-cortex refresh .
-cortex bundle . --task "<task>" --budget 4000
-```
-
-If the host cannot find `cortex`, configure the MCP server command as:
-
-```bash
-python3 -m cortex.mcp.server
-```
+Re-ingests the repo into the local SQLite index. Use when no database exists, after large file changes, or when stale results are reported.

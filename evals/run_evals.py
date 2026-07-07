@@ -102,6 +102,12 @@ GOLD_TASKS: tuple[GoldTask, ...] = (
         expected_files=("src/packer.py",),
         expected_symbols=("src/packer.py:apply_budget",),
     ),
+    GoldTask(
+        repo="refresh_distractors",
+        description="fix the stale index detection in the auto refresh path",
+        expected_files=("src/cortex/mcp/tools.py",),
+        expected_symbols=("src/cortex/mcp/tools.py:_ensure_fresh",),
+    ),
 )
 
 
@@ -363,11 +369,41 @@ def rank_nodes(nodes, weights):
     return repo
 
 
+def _build_refresh_distractors(base: Path) -> Path:
+    repo = base / "refresh_distractors"
+    _init_repo(repo)
+    _write(repo / "src/cortex/mcp/tools.py", """
+def _ensure_fresh(store, repo_root):
+    status = detect_stale_index(store, repo_root)
+    if status["stale"]:
+        status["auto_refreshed"] = refresh_index_incrementally(store, repo_root)
+    return status
+""")
+    common = """
+def helper():
+    return "fix the in a of for to and with from by path"
+"""
+    for path in (
+        "src/cortex/cli.py",
+        "tests/test_watch.py",
+        "src/cortex/ingest.py",
+        "src/cortex/report.py",
+        "src/cortex/store.py",
+        "docs/noise.md",
+        "CHANGELOG.md",
+        "README.md",
+    ):
+        _write(repo / path, common)
+    _commit_all(repo, "add refresh distractor fixture")
+    return repo
+
+
 def build_fixture_repos(base: Path) -> dict[str, Path]:
     return {
         "python_app": _build_python_app(base),
         "web_service": _build_web_service(base),
         "noisy_lib": _build_noisy_lib(base),
+        "refresh_distractors": _build_refresh_distractors(base),
     }
 
 
@@ -393,11 +429,15 @@ def _symbol_hit(items: list[dict[str, Any]], expected_symbol: str) -> bool:
 
 
 def _selected_files(items: list[dict[str, Any]]) -> set[str]:
-    return {
+    return set(_selected_file_list(items))
+
+
+def _selected_file_list(items: list[dict[str, Any]]) -> list[str]:
+    return [
         str(item["path"])
         for item in items
         if item.get("kind") != "commit" and not str(item.get("path", "")).startswith("commit:")
-    }
+    ]
 
 
 def _run_bundle(repo: Path, task: GoldTask, mode: str, db_path: Path) -> dict[str, Any]:
@@ -426,9 +466,12 @@ def _score_task(task: GoldTask, mode: str, repo: Path, db_path: Path) -> dict[st
     run = _run_bundle(repo, task, mode, db_path)
     bundle = run["bundle"]
     items = list(bundle["items"])
-    selected = _selected_files(items)
+    selected_list = _selected_file_list(items)
+    selected = set(selected_list)
     expected_files = set(task.expected_files)
     file_precision, file_recall = _precision_recall(selected, expected_files)
+    top3 = selected_list[:3]
+    precision_at_3 = len(set(top3) & expected_files) / 3
     symbol_hits = sum(1 for symbol in task.expected_symbols if _symbol_hit(items, symbol))
     symbol_recall = symbol_hits / len(task.expected_symbols) if task.expected_symbols else 1.0
     recall = (file_recall + symbol_recall) / 2 if task.expected_symbols else file_recall
@@ -436,13 +479,14 @@ def _score_task(task: GoldTask, mode: str, repo: Path, db_path: Path) -> dict[st
         "task": task,
         "mode": mode,
         "precision": file_precision,
+        "precision_at_3": precision_at_3,
         "recall": recall,
         "file_precision": file_precision,
         "file_recall": file_recall,
         "symbol_recall": symbol_recall,
         "tokens": int(bundle["total_tokens"]),
         "latency_ms": run["latency_ms"],
-        "files": sorted(selected),
+        "files": selected_list,
     }
 
 
@@ -457,6 +501,7 @@ def _aggregate(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "mode": mode,
                 "tasks": count,
                 "precision": sum(row["precision"] for row in mode_rows) / count,
+                "precision_at_3": sum(row["precision_at_3"] for row in mode_rows) / count,
                 "recall": sum(row["recall"] for row in mode_rows) / count,
                 "file_recall": sum(row["file_recall"] for row in mode_rows) / count,
                 "symbol_recall": sum(row["symbol_recall"] for row in mode_rows) / count,
@@ -476,12 +521,12 @@ def _format_markdown(rows: list[dict[str, Any]]) -> str:
         "",
         "## Aggregate",
         "",
-        "| Mode | Tasks | Precision | Recall | Avg Tokens | Avg Latency ms |",
-        "|---|---:|---:|---:|---:|---:|",
+        "| Mode | Tasks | Precision | Precision@3 | Recall | Avg Tokens | Avg Latency ms |",
+        "|---|---:|---:|---:|---:|---:|---:|",
     ]
     for row in aggregates:
         lines.append(
-            f"| {row['mode']} | {row['tasks']} | {row['precision']:.3f} | "
+            f"| {row['mode']} | {row['tasks']} | {row['precision']:.3f} | {row['precision_at_3']:.3f} | "
             f"{row['recall']:.3f} | {row['tokens']} | {row['latency_ms']:.1f} |"
         )
     lines.extend(
@@ -489,15 +534,15 @@ def _format_markdown(rows: list[dict[str, Any]]) -> str:
             "",
             "## Per Task",
             "",
-            "| Task | Mode | Precision | Recall | File Recall | Symbol Recall | Tokens | Latency ms | Files |",
-            "|---|---|---:|---:|---:|---:|---:|---:|---|",
+            "| Task | Mode | Precision | Precision@3 | Recall | File Recall | Symbol Recall | Tokens | Latency ms | Files |",
+            "|---|---|---:|---:|---:|---:|---:|---:|---:|---|",
         ]
     )
     for row in rows:
         task = row["task"]
         files = ", ".join(row["files"])
         lines.append(
-            f"| {task.description} | {row['mode']} | {row['precision']:.3f} | {row['recall']:.3f} | "
+            f"| {task.description} | {row['mode']} | {row['precision']:.3f} | {row['precision_at_3']:.3f} | {row['recall']:.3f} | "
             f"{row['file_recall']:.3f} | {row['symbol_recall']:.3f} | {row['tokens']} | "
             f"{row['latency_ms']:.1f} | {files} |"
         )

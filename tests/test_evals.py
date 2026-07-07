@@ -40,6 +40,7 @@ def test_format_markdown_contains_aggregate_table():
             "task": task,
             "mode": "pagerank",
             "precision": 1.0,
+            "precision_at_3": 1 / 3,
             "recall": 1.0,
             "file_precision": 1.0,
             "file_recall": 1.0,
@@ -52,5 +53,5 @@ def test_format_markdown_contains_aggregate_table():
 
     markdown = _format_markdown(rows)
 
-    assert "| Mode | Tasks | Precision | Recall | Avg Tokens | Avg Latency ms |" in markdown
-    assert "| pagerank | 1 | 1.000 | 1.000 | 120 | 3.4 |" in markdown
+    assert "| Mode | Tasks | Precision | Precision@3 | Recall | Avg Tokens | Avg Latency ms |" in markdown
+    assert "| pagerank | 1 | 1.000 | 0.333 | 1.000 | 120 | 3.4 |" in markdown

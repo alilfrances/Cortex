@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.0 — 2026-07-07
+
+- Improve bundle ranking for agent tasks: stopwords no longer dominate query terms, camelCase/snake_case identifiers split into searchable subtokens, and source-file term rarity down-weights repo-wide common words so target symbols like `_ensure_fresh` rank above keyword-noisy distractors.
+- Add `response_format: "concise" | "detailed"` to Cortex read tools. Concise is now the default, with compact status, rounded scores, shorter query rationales, and slim symbol-search results; detailed preserves provenance, fingerprints, and existing metadata.
+- Add `cortex_read_symbol`, which resolves a symbol name or `node_id` and returns exact numbered source lines for its stored span, with non-error disambiguation when multiple symbols match.
+- Generalize tight-budget skeleton packing beyond Python so any code file with symbol spans can emit import/include lines, signatures, and language-neutral body elision.
+- Improve `search_nodes` for multi-token and normalized identifier queries so `generate bundle`, `generate_bundle`, and `generateBundle` converge on the same symbol candidates.
+- Rewrite Cortex tool descriptions and skill guidance around agent tool-use patterns, including the recommended search -> read_symbol -> impact navigation loop.
+- Extend evals with a distractor-rich stale-index auto-refresh task and report Precision@3 alongside existing precision/recall metrics.
+
 ## 0.6.2 — 2026-07-07
 
 - Fix `cortex_impact` returning 0 neighbors for C/C++/QML files (and Python files using absolute imports): STRUCTURAL import edges always pointed at synthetic `module:{name}` nodes even when the include/import target matched a real file in the repo, so `rank_file_impact` (which only counts file-to-file edges) had nothing to walk beyond sparse COCHANGE history. Added `resolve_local_import()` (exact-path match, then unique-basename fallback) to `regex_backend.py`, wired into `treesitter_backend.py` and `ast_extract.py`, so `#include "airpod.hpp"` / `import pkg.mod` now resolve to `file:...` edges when the target exists among ingested sources.

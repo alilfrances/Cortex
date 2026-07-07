@@ -14,7 +14,13 @@ from .store import CortexStore, default_db_path
 from .tokenizer import count_text_tokens, truncate_text_to_budget
 
 PAGERANK_SCORE_MULTIPLIER = 10.0
-SKELETON_MARKER = '# [skeleton: bodies elided]'
+SKELETON_MARKER = '[skeleton: bodies elided]'
+ELISION_MARKER = '[body elided] ...'
+STOPWORDS = {
+    'a', 'an', 'the', 'in', 'on', 'of', 'for', 'to', 'is', 'are', 'and', 'or',
+    'with', 'from', 'by', 'at', 'it', 'this', 'that', 'be', 'as', 'do', 'does',
+    'how', 'what', 'where', 'when', 'why', 'i', 'we', 'you',
+}
 # Exact task-term hit on a file stem or symbol name must beat keyword-dense docs.
 NAME_MATCH_BONUS = 100.0
 # Markdown share of the budget when code candidates also match the task.
@@ -25,8 +31,26 @@ def _symbol_qualname(node: GraphNode) -> str:
     return node.node_id.split(':', 2)[2]
 
 
+def _leading_ws(text: str) -> str:
+    return text[: len(text) - len(text.lstrip())]
+
+
+def _signature_lines(lines: list[str], symbol: GraphNode) -> list[str]:
+    if symbol.span_start is None:
+        return [symbol.signature] if symbol.signature else []
+    line = lines[symbol.span_start - 1] if 0 < symbol.span_start <= len(lines) else ''
+    if line.strip():
+        return [line]
+    return [symbol.signature] if symbol.signature else []
+
+
+def _looks_like_import(line: str) -> bool:
+    stripped = line.strip()
+    return stripped.startswith(('import ', 'from ', '#include ', 'use ', 'require ', 'package '))
+
+
 def _render_skeleton(content: str, symbols: list[GraphNode], full_body_ids: set[str]) -> str:
-    """Imports + signatures for every top-level symbol; full bodies only for full_body_ids."""
+    """Import/include lines + symbol signatures; full bodies only for full_body_ids."""
     lines = content.splitlines()
     spanned = [s for s in symbols if s.span_start is not None and s.span_end is not None]
     top_level = sorted(
@@ -42,7 +66,7 @@ def _render_skeleton(content: str, symbols: list[GraphNode], full_body_ids: set[
     out = [SKELETON_MARKER]
     for lineno, line in enumerate(lines, start=1):
         inside_symbol = any(s.span_start <= lineno <= s.span_end for s in spanned)
-        if not inside_symbol and (line.startswith('import ') or line.startswith('from ')):
+        if not inside_symbol and _looks_like_import(line):
             out.append(line)
 
     for symbol in top_level:
@@ -50,14 +74,18 @@ def _render_skeleton(content: str, symbols: list[GraphNode], full_body_ids: set[
         if symbol.node_id in full_body_ids:
             out.extend(lines[symbol.span_start - 1:symbol.span_end])
             continue
-        out.append(symbol.signature)
+        signature_lines = _signature_lines(lines, symbol)
+        out.extend(signature_lines)
         children = sorted(children_of.get(_symbol_qualname(symbol), []), key=lambda s: s.span_start)
         if symbol.kind == 'class' and children:
             for child in children:
-                out.append(f'    {child.signature}')
-                out.append('        ...')
+                child_lines = _signature_lines(lines, child)
+                out.extend(child_lines)
+                indent = _leading_ws(child_lines[-1]) if child_lines else '    '
+                out.append(f'{indent}    {ELISION_MARKER}')
         else:
-            out.append('    ...')
+            indent = _leading_ws(signature_lines[-1]) if signature_lines else ''
+            out.append(f'{indent}    {ELISION_MARKER}')
     return '\n'.join(out)
 
 
@@ -104,14 +132,50 @@ def _skeleton_item(
     )
 
 
+def _split_identifier(token: str) -> list[str]:
+    normalized = re.sub(r'([a-z0-9])([A-Z])', r'\1 \2', token.replace('_', ' '))
+    return [part.lower() for part in re.findall(r'[A-Za-z0-9]+', normalized) if part]
+
+
+def _tokenize_text(text: str, *, drop_stopwords: bool = False) -> set[str]:
+    terms: set[str] = set()
+    for token in re.findall(r'[A-Za-z0-9_]+', text):
+        for part in _split_identifier(token):
+            if drop_stopwords and part in STOPWORDS:
+                continue
+            terms.add(part)
+    return terms
+
+
 def _tokenize_query(task: str) -> set[str]:
-    return {token.lower() for token in re.findall(r'[A-Za-z0-9_]+', task) if token}
+    return _tokenize_text(task, drop_stopwords=True)
 
 
-def _score_text(task_terms: set[str], text: str, recency_weight: float = 0.0) -> float:
-    haystack_terms = {token.lower() for token in re.findall(r'[A-Za-z0-9_]+', text)}
-    overlap = len(task_terms & haystack_terms)
-    return overlap * 10.0 + recency_weight
+def _score_text(
+    task_terms: set[str],
+    text: str,
+    recency_weight: float = 0.0,
+    term_weights: dict[str, float] | None = None,
+) -> float:
+    haystack_terms = _tokenize_text(text)
+    overlap = task_terms & haystack_terms
+    if term_weights is None:
+        return len(overlap) * 10.0 + recency_weight
+    return sum(term_weights.get(term, 1.0) for term in overlap) * 10.0 + recency_weight
+
+
+def _term_weights(task_terms: set[str], sources: list) -> dict[str, float]:
+    if not task_terms:
+        return {}
+    docs = [_tokenize_text(f'{source.path}\n{source.content}') for source in sources]
+    total = len(docs)
+    if total == 0:
+        return {term: 1.0 for term in task_terms}
+    weights: dict[str, float] = {}
+    for term in task_terms:
+        df = sum(1 for doc in docs if term in doc)
+        weights[term] = math.log((total + 1) / df) if df else math.log(total + 1)
+    return weights
 
 
 def _build_adjacency(edges: list[GraphEdge]) -> dict[str, list[tuple[str, float]]]:
@@ -198,6 +262,7 @@ def generate_bundle(
     nodes, edges = store.fetch_graph(repo_root)
 
     task_terms = _tokenize_query(task)
+    term_weights = _term_weights(task_terms, sources)
     adj = _build_adjacency(edges)
 
     symbols_by_path: defaultdict[str, list[GraphNode]] = defaultdict(list)
@@ -205,8 +270,8 @@ def generate_bundle(
     for node in nodes:
         if node.granularity == 'symbol':
             symbols_by_path[node.source_ref].append(node)
-            symbol_names_by_path[node.source_ref].add(
-                _symbol_qualname(node).rsplit('.', 1)[-1].lower()
+            symbol_names_by_path[node.source_ref].update(
+                _tokenize_text(_symbol_qualname(node).rsplit('.', 1)[-1])
             )
 
     newest_commit = max((c.authored_at for c in commits), default=0)
@@ -215,12 +280,13 @@ def generate_bundle(
         recency_weight = 0.0
         if newest_commit:
             recency_weight = max(0.0, 5.0 - math.log2(max(1, newest_commit - int(source.modified_at) + 1)))
-        name_candidates = {Path(source.path).stem.lower()} | symbol_names_by_path.get(source.path, set())
+        name_candidates = _tokenize_text(Path(source.path).stem) | symbol_names_by_path.get(source.path, set())
         name_bonus = NAME_MATCH_BONUS if task_terms & name_candidates else 0.0
         source_scores[source.path] = name_bonus + _score_text(
             task_terms,
             f'{source.path}\n{source.content}',
             recency_weight,
+            term_weights,
         )
 
     seed_scores = {f'file:{path}': score for path, score in source_scores.items() if score > 0}
@@ -270,7 +336,7 @@ def generate_bundle(
                 path=commit.sha,
                 content=content,
                 token_count=count_text_tokens(content),
-                score=_score_text(task_terms, content, recency_weight=recency_weight),
+                score=_score_text(task_terms, content, recency_weight=recency_weight, term_weights=term_weights),
                 metadata={'sha': commit.sha, 'files': commit.files, 'authored_at': commit.authored_at},
             )
         )
@@ -299,7 +365,7 @@ def generate_bundle(
         remaining = allowed
         if remaining <= 16:
             continue
-        if item.kind == 'code' and item.path.endswith('.py'):
+        if item.kind == 'code':
             symbols = symbols_by_path.get(item.path, [])
             if symbols:
                 skeleton = _skeleton_item(item, symbols, pagerank_scores, remaining)

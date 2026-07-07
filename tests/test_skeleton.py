@@ -99,3 +99,41 @@ def test_oversized_non_python_still_truncates(tmp_path):
     item = [i for i in bundle['items'] if i['path'] == 'guide.md'][0]
     assert item['metadata'].get('truncated') is True
     assert 'skeleton' not in item['metadata']
+
+
+def test_tight_budget_uses_symbol_skeleton_for_non_python_source(tmp_path):
+    body = '\n'.join(f'    value += {i};' for i in range(200))
+    content = f'''#include "engine.hpp"
+
+namespace Engine {{
+class Runner {{
+public:
+    void start() {{
+{body}
+    }}
+}};
+}}
+'''
+    source = SourceRecord(path='engine.cpp', content=content, kind='code', size_bytes=len(content), modified_at=0.0, content_hash='cpp1')
+    store, repo = _make_repo(tmp_path, [source])
+    store.save_graph(repo, [
+        GraphNode(node_id='file:engine.cpp', kind='file', label='engine.cpp', source_ref='engine.cpp'),
+        GraphNode(
+            node_id='symbol:engine.cpp:Runner',
+            kind='class',
+            label='Runner',
+            source_ref='engine.cpp',
+            granularity='symbol',
+            signature='class Runner {',
+            span_start=4,
+            span_end=len(content.splitlines()) - 1,
+        ),
+    ], [])
+
+    bundle = generate_bundle(repo, task='Runner start engine', budget=80, db_path=store.db_path, output_format='json')
+    item = [i for i in bundle['items'] if i['path'] == 'engine.cpp'][0]
+
+    assert item['metadata'].get('skeleton') is True
+    assert 'class Runner {' in item['content']
+    assert '[body elided]' in item['content']
+    assert 'value += 0' not in item['content']

@@ -10,7 +10,7 @@ from pathlib import Path
 from cortex.impact import rank_file_impact
 from cortex.ingest import compute_repo_fingerprint, ingest_repository
 from cortex.mcp.tools import call_tool
-from cortex.models import GraphEdge, GraphNode
+from cortex.models import GraphEdge, GraphNode, SourceRecord
 from cortex.store import CortexStore
 from cortex.tokenizer import count_text_tokens
 
@@ -82,7 +82,7 @@ def test_mcp_stdio_roundtrip_outputs_only_json_lines(tmp_path: Path) -> None:
     tool_names = {tool["name"] for tool in decoded[1]["result"]["tools"]}
     assert {
         "cortex_query", "cortex_overview", "cortex_impact", "cortex_search_symbols",
-        "cortex_relations", "cortex_references", "cortex_refresh",
+        "cortex_relations", "cortex_references", "cortex_read_symbol", "cortex_refresh",
     } <= tool_names
     refresh = decoded[2]["result"]
     assert refresh["content"][0]["type"] == "text"
@@ -190,6 +190,31 @@ def test_store_search_nodes_ranks_exact_and_prefix_matches_first(tmp_path: Path)
         "symbol:c.py:AirPod",
         "symbol:b.py:AirPod_Prefix",
         "symbol:a.py:has_AirPod_case",
+    ]
+
+
+def test_store_search_nodes_matches_multi_token_identifier_subtokens(tmp_path: Path) -> None:
+    store = CortexStore(tmp_path / "cortex.db")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    nodes = [
+        GraphNode("symbol:a.py:generate_bundle", "function", "generate_bundle", "a.py", granularity="symbol"),
+        GraphNode("symbol:b.py:generateBundleMap", "function", "generateBundleMap", "b.py", granularity="symbol"),
+        GraphNode("symbol:c.py:bundle_report", "function", "bundle_report", "c.py", granularity="symbol"),
+    ]
+    store.reset_repo(repo)
+    store.save_graph(repo, nodes, [])
+
+    spaced = store.search_nodes(repo, "generate bundle")
+    camel = store.search_nodes(repo, "generateBundle")
+
+    assert [node.node_id for node in spaced][:2] == [
+        "symbol:a.py:generate_bundle",
+        "symbol:b.py:generateBundleMap",
+    ]
+    assert [node.node_id for node in camel][:2] == [
+        "symbol:a.py:generate_bundle",
+        "symbol:b.py:generateBundleMap",
     ]
 
 
@@ -492,3 +517,69 @@ def test_cortex_references_budget_truncates_items(tmp_path: Path, monkeypatch) -
     assert capped["truncated"] is True
     assert capped_count < full_count
     assert capped["returned_count"] == capped_count
+
+
+def test_cortex_query_defaults_to_concise_and_detailed_preserves_payload(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git_init(repo)
+    (repo / "app.py").write_text("def refresh_index():\n    return 'fresh'\n", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "app"], cwd=repo, check=True, capture_output=True)
+    ingest_repository(repo, commit_limit=0, db_path=repo / ".cortex" / "cortex.db")
+
+    concise = _payload(call_tool("cortex_query", {"repo_path": str(repo), "task": "refresh fresh"}))
+    detailed = _payload(call_tool("cortex_query", {"repo_path": str(repo), "task": "refresh fresh", "response_format": "detailed"}))
+
+    assert "fingerprint" not in concise
+    assert "current_fingerprint" not in concise
+    assert "generated_at" not in concise
+    assert isinstance(concise["items"][0]["why"], str)
+    assert "content_hash" not in concise["items"][0]
+    assert "metadata" not in concise["items"][0] or "graph_bonus" not in concise["items"][0]["metadata"]
+    assert "fingerprint" in detailed
+    assert isinstance(detailed["items"][0]["why"], list)
+
+
+def test_cortex_search_symbols_concise_drops_why(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git_init(repo)
+    store = CortexStore(repo / ".cortex" / "cortex.db")
+    store.reset_repo(repo)
+    store.save_graph(repo, [GraphNode("symbol:app.py:refresh_index", "function", "refresh_index", "app.py", granularity="symbol")], [])
+
+    concise = _payload(call_tool("cortex_search_symbols", {"repo_path": str(repo), "query": "refresh index"}))
+    detailed = _payload(call_tool("cortex_search_symbols", {"repo_path": str(repo), "query": "refresh index", "response_format": "detailed"}))
+
+    assert "why" not in concise["items"][0]
+    assert "why" in detailed["items"][0]
+
+
+def test_cortex_read_symbol_returns_numbered_span_or_disambiguation(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git_init(repo)
+    content = "def alpha():\n    return 1\n\ndef beta():\n    return 2\n"
+    (repo / "app.py").write_text(content, encoding="utf-8")
+    store = CortexStore(repo / ".cortex" / "cortex.db")
+    store.reset_repo(repo)
+    store.save_sources(repo, [SourceRecord("app.py", content, "code", len(content), 0.0, "h1")])
+    store.save_graph(repo, [
+        GraphNode("symbol:app.py:alpha", "function", "alpha", "app.py", granularity="symbol", signature="def alpha():", span_start=1, span_end=2),
+        GraphNode("symbol:app.py:beta", "function", "beta", "app.py", granularity="symbol", signature="def beta():", span_start=4, span_end=5),
+    ], [])
+
+    exact = _payload(call_tool("cortex_read_symbol", {"repo_path": str(repo), "symbol": "alpha", "budget": 200}))
+    ambiguous = _payload(call_tool("cortex_read_symbol", {"repo_path": str(repo), "symbol": "app.py", "budget": 200}))
+    missing = call_tool("cortex_read_symbol", {"repo_path": str(repo), "symbol": "gamma"})
+
+    assert exact["path"] == "app.py"
+    assert exact["body"] == "1: def alpha():\n2:     return 1"
+    assert exact["truncated"] is False
+    assert "matches" in ambiguous
+    assert ambiguous["hint"] == "call again with node_id"
+    assert missing["isError"] is True

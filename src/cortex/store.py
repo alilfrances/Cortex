@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import sqlite3
 import time
 from pathlib import Path
@@ -10,6 +11,22 @@ from pathlib import Path
 from .models import BundleItem, CommitRecord, Community, GraphEdge, GraphNode, RetrievalBundle, SourceRecord
 
 LEGACY_DIR_NAME = ".cortex"
+
+
+def _split_identifier(token: str) -> list[str]:
+    normalized = re.sub(r'([a-z0-9])([A-Z])', r'\1 \2', token.replace('_', ' '))
+    return [part.lower() for part in re.findall(r'[A-Za-z0-9]+', normalized) if part]
+
+
+def _search_tokens(text: str) -> list[str]:
+    tokens: list[str] = []
+    for raw in re.findall(r'[A-Za-z0-9_]+', text):
+        tokens.extend(_split_identifier(raw))
+    return list(dict.fromkeys(tokens))
+
+
+def _normalized_identifier(text: str) -> str:
+    return ''.join(_search_tokens(text))
 
 
 def data_root() -> Path:
@@ -386,6 +403,14 @@ class CortexStore:
             for row in rows
         ]
 
+    def fetch_source_content(self, repo_path: Path, path: str) -> str | None:
+        repo_key = str(repo_path.resolve())
+        row = self.connection.execute(
+            "SELECT content FROM sources WHERE repo_path = ? AND path = ?",
+            (repo_key, path),
+        ).fetchone()
+        return None if row is None else str(row["content"])
+
     def fetch_commits(self, repo_path: Path) -> list[CommitRecord]:
         repo_key = str(repo_path.resolve())
         rows = self.connection.execute(
@@ -532,26 +557,26 @@ class CortexStore:
 
     def search_nodes(self, repo_path: Path, query: str, limit: int = 20) -> list[GraphNode]:
         repo_key = str(repo_path.resolve())
-        pattern = f"%{query}%"
-        prefix_pattern = f"{query}%"
+        tokens = _search_tokens(query)
+        if not tokens:
+            return []
+        where = " OR ".join("(label LIKE ? OR source_ref LIKE ? OR signature LIKE ?)" for _ in tokens)
+        params: list[str] = []
+        for token in tokens:
+            pattern = f"%{token}%"
+            params.extend([pattern, pattern, pattern])
         rows = self.connection.execute(
-            """
-            SELECT node_id, kind, label, source_ref, granularity, signature, span_start, span_end, metadata_json,
-              CASE
-                WHEN label = ? THEN 0
-                WHEN label LIKE ? THEN 1
-                ELSE 2
-              END AS match_rank
+            f"""
+            SELECT node_id, kind, label, source_ref, granularity, signature, span_start, span_end, metadata_json
             FROM graph_nodes
             WHERE repo_path = ?
               AND granularity = 'symbol'
-              AND (label LIKE ? OR source_ref LIKE ? OR signature LIKE ?)
-            ORDER BY match_rank ASC, label ASC, node_id ASC
+              AND ({where})
             LIMIT ?
             """,
-            (query, prefix_pattern, repo_key, pattern, pattern, pattern, limit),
+            (repo_key, *params, max(limit * 8, 50)),
         ).fetchall()
-        return [
+        candidates = [
             GraphNode(
                 node_id=row['node_id'],
                 kind=row['kind'],
@@ -565,6 +590,31 @@ class CortexStore:
             )
             for row in rows
         ]
+
+        query_lower = query.lower()
+        query_norm = _normalized_identifier(query)
+        token_set = set(tokens)
+
+        def rank(node: GraphNode) -> tuple[int, str, str]:
+            label_lower = node.label.lower()
+            label_norm = _normalized_identifier(node.label)
+            haystack = f"{node.label} {node.signature} {node.source_ref}"
+            haystack_tokens = set(_search_tokens(haystack))
+            haystack_lower = haystack.lower()
+            if label_lower == query_lower or label_norm == query_norm:
+                bucket = 0
+            elif token_set <= haystack_tokens:
+                bucket = 1
+            elif label_lower.startswith(query_lower) or label_norm.startswith(query_norm):
+                bucket = 2
+            elif query_lower in haystack_lower or query_norm in _normalized_identifier(haystack):
+                bucket = 3
+            else:
+                bucket = 4
+            return (bucket, node.label.lower(), node.node_id)
+
+        ranked = sorted(candidates, key=rank)
+        return ranked[:limit]
 
     def save_communities(self, repo_path: Path, communities: list[Community]) -> None:
         repo_key = str(repo_path.resolve())

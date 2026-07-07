@@ -4,7 +4,7 @@ import tempfile
 from pathlib import Path
 from cortex.models import GraphEdge, GraphNode, SourceRecord, CommitRecord
 from cortex.store import CortexStore
-from cortex.bundle import generate_bundle, _bfs_proximity, _build_adjacency
+from cortex.bundle import generate_bundle, _bfs_proximity, _build_adjacency, _tokenize_query
 from cortex.cli import build_parser
 
 
@@ -172,6 +172,62 @@ def test_symbol_name_match_gets_bonus(tmp_path):
     scores = {item['path']: item['score'] for item in result['items']}
     assert 'bundle.py' in scores
     assert scores['bundle.py'] > scores.get('README.md', 0.0)
+
+
+def test_stopwords_subtokens_and_rarity_surface_matching_symbol(tmp_path):
+    import subprocess
+    db_path = tmp_path / 'cortex.db'
+    store = CortexStore(db_path)
+    repo = tmp_path / 'repo'
+    repo.mkdir()
+    subprocess.run(['git', 'init'], cwd=repo, capture_output=True)
+
+    target = '''
+def _ensure_fresh(store, repo_root):
+    status = detect_stale_index(store, repo_root)
+    if status["stale"]:
+        return auto_refreshed(status)
+    return status
+'''
+    distractor = '''
+def unrelated():
+    return "fix the in a of for to and with from by auto"
+'''
+    sources = [
+        SourceRecord(path='src/cortex/mcp/tools.py', content=target, kind='code', size_bytes=len(target), modified_at=0.0, content_hash='h0'),
+        SourceRecord(path='src/cortex/cli.py', content=distractor, kind='code', size_bytes=len(distractor), modified_at=0.0, content_hash='h1'),
+        SourceRecord(path='tests/test_watch.py', content=distractor, kind='code', size_bytes=len(distractor), modified_at=0.0, content_hash='h2'),
+        SourceRecord(path='CHANGELOG.md', content='fix the stale in a of for to and with from by\n', kind='markdown', size_bytes=48, modified_at=0.0, content_hash='h3'),
+    ]
+    for i in range(8):
+        content = f'def helper_{i}():\n    return "fix the in a of for to and with from by"\n'
+        sources.append(SourceRecord(path=f'noise/noise_{i}.py', content=content, kind='code', size_bytes=len(content), modified_at=0.0, content_hash=f'n{i}'))
+    nodes = [GraphNode(node_id=f'file:{source.path}', kind='file', label=source.path, source_ref=source.path) for source in sources]
+    nodes.append(GraphNode(
+        node_id='symbol:src/cortex/mcp/tools.py:_ensure_fresh',
+        kind='function',
+        label='_ensure_fresh',
+        source_ref='src/cortex/mcp/tools.py',
+        granularity='symbol',
+        signature='def _ensure_fresh(store, repo_root):',
+        span_start=2,
+        span_end=6,
+    ))
+    store.reset_repo(repo)
+    store.save_sources(repo, sources)
+    store.save_commits(repo, [])
+    store.save_graph(repo, nodes, [])
+
+    assert {'in', 'the', 'a'}.isdisjoint(_tokenize_query('fix the stale index detection in the auto refresh path'))
+    result = generate_bundle(
+        repo,
+        task='fix the stale index detection in the auto refresh path',
+        budget=4000,
+        db_path=store.db_path,
+        output_format='json',
+    )
+
+    assert result['items'][0]['path'] == 'src/cortex/mcp/tools.py'
 
 
 def test_doc_tokens_capped_when_code_candidates_exist(tmp_path):
