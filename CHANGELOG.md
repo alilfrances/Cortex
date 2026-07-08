@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.4 — 2026-07-08
+
+- Document standing guidance in `skills/cortex/SKILL.md` for `cortex_query`: include the filename or extension/language in the `task` string when it's known, since ranking gives a large bonus for a task term hitting a file stem/symbol name and boosts/demotes by language when one is named (see 0.7.2/0.7.3 ranking changes) — phrasing the task with the known file name resolves ties that keyword-only phrasing leaves to chance.
+
 ## 0.7.3 — 2026-07-08
 
 - Boost whole-identifier matches in `cortex_search_symbols` over sub-token floods. A camelCase/snake query splits into tokens matched independently, so a query containing one common token ("flow") could flood the results — and, via the candidate `LIMIT`, drop the real target entirely — with that token's matches. Candidate fetch now orders by a whole-identifier `LIKE` pattern (tokens in sequence, so `DeviceListModel` / `device_list_model` / `device list model` all match either spelling) and then by how many query tokens hit the label; ranking adds a whole-query-embedded tier above scattered-token matches and grades partial name matches by token coverage.

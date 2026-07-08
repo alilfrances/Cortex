@@ -26,10 +26,12 @@ Use Cortex when working inside an indexed repository and you need code context, 
 
 Returns a ranked, token-budgeted bundle for a task. Use for "what files matter for this change?" questions before raw file reads. Concise mode keeps compact per-item rationale.
 
+**Standing guidance:** when you already know the filename or extension/language involved, include it in the `task` string. Ranking gives a large bonus to task terms that hit a file stem or symbol name, a smaller bonus for a matching directory segment, and boosts/demotes files by language when the task names one (e.g. "qml", "python", ".cpp") — so naming the file explicitly resolves ties and language-alike distractors that keyword-only phrasing can't.
+
 Example:
 
 ```json
-{"task":"fix stale index detection in the auto refresh path","budget":4000}
+{"task":"fix stale index detection in store.py auto refresh path","budget":4000}
 ```
 
 ### `cortex_search_symbols`
