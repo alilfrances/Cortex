@@ -94,3 +94,46 @@ def test_nested_symbol_contained_by_parent_symbol():
     contains = {(e.source, e.target) for e in edges if e.relation == "contains"}
     assert ("file:src/extractor.py", "symbol:src/extractor.py:Extractor") in contains
     assert ("symbol:src/extractor.py:Extractor", "symbol:src/extractor.py:Extractor.parse") in contains
+
+
+CALLS_SAMPLE = '''\
+def helper(x):
+    return x + 1
+
+
+def run(value):
+    total = helper(value)
+    return len(str(total))
+
+
+def outer():
+    def inner():
+        return helper(1)
+    return inner
+'''
+
+
+def test_extracts_call_edges_name_based():
+    _, edges = extract_python_edges("src/calls.py", CALLS_SAMPLE, known_paths=set())
+    calls = {(e.source, e.target) for e in edges if e.relation == "calls"}
+    assert ("symbol:src/calls.py:run", "name:helper") in calls
+    assert ("symbol:src/calls.py:run", "name:len") in calls
+    assert ("symbol:src/calls.py:run", "name:str") in calls
+
+
+def test_call_edges_attributed_to_enclosing_scope_not_parent():
+    # helper() is called inside `inner`, so the edge is owned by inner, not outer.
+    _, edges = extract_python_edges("src/calls.py", CALLS_SAMPLE, known_paths=set())
+    calls = {(e.source, e.target) for e in edges if e.relation == "calls"}
+    assert ("symbol:src/calls.py:outer.inner", "name:helper") in calls
+    assert ("symbol:src/calls.py:outer", "name:helper") not in calls
+
+
+def test_call_edges_are_structural_extracted():
+    _, edges = extract_python_edges("src/calls.py", CALLS_SAMPLE, known_paths=set())
+    call_edges = [e for e in edges if e.relation == "calls"]
+    assert call_edges
+    for edge in call_edges:
+        assert edge.layer == "STRUCTURAL"
+        assert edge.confidence == "EXTRACTED"
+        assert edge.weight == 1.0

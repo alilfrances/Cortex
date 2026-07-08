@@ -81,7 +81,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "name": "cortex_relations",
         "description": (
-            "Returns parsed graph edges like imports/inherits/emits/connects. Use for structural symbol questions; use cortex_references when configs/docs/scripts may mention it. Example: {\"relation\":\"imports\",\"symbol\":\"bundle\"}."
+            "Returns parsed graph edges like imports/inherits/calls/emits/connects. Use for structural symbol questions; use cortex_references when configs/docs/scripts may mention it. Example: {\"relation\":\"calls\",\"symbol\":\"generate_bundle\",\"direction\":\"out\"}."
         ),
         "inputSchema": {
             "type": "object",
@@ -89,7 +89,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "repo_path": {"type": "string"},
                 "relation": {
                     "type": "string",
-                    "enum": ["contains", "imports", "inherits", "emits", "connects", "handles"],
+                    "enum": ["contains", "imports", "inherits", "calls", "emits", "connects", "handles"],
                 },
                 "symbol": {"type": "string", "description": "substring match against endpoint node id or label"},
                 "target": {"type": "string", "description": "alias for 'symbol'"},

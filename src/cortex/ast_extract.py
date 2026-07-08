@@ -26,6 +26,41 @@ def _resolve_absolute_import(module: str, known_paths: set[str]) -> str | None:
     return None
 
 
+def _call_name(func: ast.expr) -> str | None:
+    # foo(...) -> "foo"; obj.foo(...) -> "foo" (the attribute base is dynamic;
+    # like inherits targets, callees stay name-based `name:` endpoints).
+    if isinstance(func, ast.Name):
+        return func.id
+    if isinstance(func, ast.Attribute):
+        return func.attr
+    return None
+
+
+def _calls_in_scope(func_node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[tuple[int, str]]:
+    """Callee names invoked directly in this function's own body, not inside a
+    nested def/class (those get their own symbol and their own call edges).
+    Returns (lineno, callee) in first-seen order, deduped per callee."""
+    found: list[tuple[int, str]] = []
+    seen: set[str] = set()
+
+    def walk(node: ast.AST) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                continue  # scope boundary
+            if isinstance(child, ast.Call):
+                name = _call_name(child.func)
+                if name and name not in seen:
+                    seen.add(name)
+                    found.append((child.lineno, name))
+            walk(child)
+
+    for stmt in func_node.body:
+        if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            continue
+        walk(stmt)
+    return found
+
+
 def _function_signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
     prefix = "async def" if isinstance(node, ast.AsyncFunctionDef) else "def"
     returns = f" -> {ast.unparse(node.returns)}" if node.returns else ""
@@ -98,6 +133,20 @@ def _visit_symbols(
                             metadata={"lineno": node.lineno},
                         )
                     )
+        else:
+            for lineno, callee in _calls_in_scope(node):
+                edges.append(
+                    GraphEdge(
+                        edge_id=f"ast:{path}:calls:{qualname}:{callee}",
+                        source=symbol_id,
+                        target=f"name:{callee}",
+                        relation="calls",
+                        layer="STRUCTURAL",
+                        confidence="EXTRACTED",
+                        weight=1.0,
+                        metadata={"lineno": lineno},
+                    )
+                )
         _visit_symbols(path, symbol_id, qualname, node.body, nodes, edges)
 
 
