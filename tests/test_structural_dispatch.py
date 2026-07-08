@@ -141,6 +141,60 @@ def test_cpp_regex_backend_extracts_inherits_edges_directly() -> None:
     }
 
 
+def test_cpp_regex_backend_spans_full_symbol_body() -> None:
+    from cortex.structural.regex_backend import extract_regex_edges
+
+    content = (
+        "#include <QObject>\n"
+        "\n"
+        "class DeviceListModel : public QAbstractListModel {\n"
+        "    Q_OBJECT\n"
+        "public:\n"
+        "    int rowCount() const {\n"
+        "        return m_items.size();\n"
+        "    }\n"
+        "};\n"
+    )
+    nodes, _ = extract_regex_edges("model.cpp", content, set())
+    by_label = {node.label: node for node in nodes}
+
+    # Span must reach the closing brace, not collapse to the declaration line.
+    assert (by_label["DeviceListModel"].span_start, by_label["DeviceListModel"].span_end) == (3, 9)
+    assert by_label["DeviceListModel"].signature == "class DeviceListModel : public QAbstractListModel {"
+    assert (by_label["rowCount"].span_start, by_label["rowCount"].span_end) == (6, 8)
+    assert by_label["rowCount"].signature == "int rowCount() const {"
+
+
+def test_qml_regex_backend_spans_full_component_body() -> None:
+    from cortex.structural.regex_backend import extract_regex_edges
+
+    content = (
+        "import QtQuick 2.0\n"
+        "\n"
+        "ProcessFlowItem {\n"
+        "    id: root\n"
+        "    function reset() {\n"
+        "        count = 0\n"
+        "    }\n"
+        "}\n"
+    )
+    nodes, _ = extract_regex_edges("ProcessFlowItem.qml", content, set())
+    by_label = {node.label: node for node in nodes}
+
+    assert (by_label["ProcessFlowItem"].span_start, by_label["ProcessFlowItem"].span_end) == (3, 8)
+    assert (by_label["reset"].span_start, by_label["reset"].span_end) == (5, 7)
+
+
+def test_regex_backend_signature_not_truncated_on_final_line() -> None:
+    from cortex.structural.regex_backend import extract_regex_edges
+
+    # No trailing newline: the signature must not overshoot / drop its last char.
+    nodes, _ = extract_regex_edges("t.c", "int only(int a) { return a; }", set())
+    only = next(node for node in nodes if node.label == "only")
+    assert only.signature == "int only(int a) { return a; }"
+    assert only.span_start == 1
+
+
 def test_qml_regex_fallback_extracts_imports_and_symbols(monkeypatch: pytest.MonkeyPatch) -> None:
     from cortex.structural import extract_structural_edges
     import cortex.structural.treesitter_backend as treesitter_backend

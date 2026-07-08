@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.2 — 2026-07-08
+
+- Fix `cortex_search_symbols` (P0) burying the queried symbol under alphabetical, unrelated results. `CortexStore.search_nodes` matched query tokens against each node's `source_ref` (file path) with the same weight as the symbol name, so a query like `CortexStore` matched the *path* of every symbol under `src/cortex/` and ranked `__init__`, `_bfs_proximity`, … equal to the real class (then sorted alphabetically). With no `ORDER BY`, the genuine node could also be dropped by the candidate `LIMIT` before ranking ran. Now the SQL fetches label matches first (`ORDER BY` a label/signature/path priority) so a name match is never truncated away, and the Python ranker buckets strictly name → signature → path, so path-only hits always rank last. (Not related to `enrichment_enabled`, which does not gate symbol matching.)
+- Fix `cortex_read_symbol` (P1) returning a single declaration line for C/C++/QML/JS/… symbols. The regex structural backend hard-coded `span_end = span_start`; it now brace-matches the body (skipping strings and comments) to the closing brace, and anchors the line number and signature on the symbol *name* so leading `^\s*` / greedy return-type matches no longer skew the span onto a blank or preceding line. Also fixes `_signature` overshooting toward EOF for a symbol on the final line with no trailing newline.
+- Fix `cortex_impact` (P2) listing commit SHAs as impacted paths ranked `1.0`. Commit nodes default to `granularity="file"` and link to files via COCHANGE `touches` edges, so `rank_file_impact` counted them as file neighbors; it now excludes commit nodes with the same guard the community/rank layers use.
+- Improve `cortex_query` relevance (P2) when the task names a language or extension: same-language files are boosted and other code languages demoted (multiplicatively, so unrelated files are never seeded by language alone), so e.g. a QML task no longer resolves to the same-named C++ file.
+
 ## 0.7.1 — 2026-07-08
 
 - Demote test/eval/fixture/example/benchmark/sample paths in `cortex_query` ranking (`AUX_PATH_DEMOTION = 0.5`) unless the task itself mentions test/eval intent terms. Fixes keyword-dense auxiliary files (e.g. `evals/run_evals.py` fixture strings) outranking real implementation files and exhausting the token budget; demotion applies before pagerank/BFS seeding so graph ranking inherits it.

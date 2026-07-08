@@ -110,6 +110,25 @@ def test_rank_file_impact_prefers_heavier_cochange_and_structural_edges() -> Non
     assert truncated is False
 
 
+def test_rank_file_impact_excludes_commit_nodes() -> None:
+    # Commit nodes default to granularity="file" and link to files via COCHANGE
+    # "touches" edges; their SHAs must never surface as impacted paths.
+    nodes = [
+        GraphNode("file:app.py", "file", "app.py", "app.py"),
+        GraphNode("file:db.py", "file", "db.py", "db.py"),
+        GraphNode("commit:abc123", "commit", "tweak app", "abc123"),
+    ]
+    edges = [
+        GraphEdge("e1", "file:app.py", "file:db.py", "cochange", layer="COCHANGE", weight=1.0),
+        GraphEdge("e2", "commit:abc123", "file:app.py", "touches", layer="COCHANGE", weight=1.0),
+    ]
+
+    impact, _ = rank_file_impact("app.py", nodes, edges)
+
+    assert [item["path"] for item in impact] == ["db.py"]
+    assert all(not item["node_id"].startswith("commit:") for item in impact)
+
+
 def test_rank_file_impact_budget_trims_lowest_ranked_tail() -> None:
     nodes = [
         GraphNode("file:app.py", "file", "app.py", "app.py"),
@@ -216,6 +235,28 @@ def test_store_search_nodes_matches_multi_token_identifier_subtokens(tmp_path: P
         "symbol:a.py:generate_bundle",
         "symbol:b.py:generateBundleMap",
     ]
+
+
+def test_store_search_nodes_name_match_beats_shared_path_token(tmp_path: Path) -> None:
+    # Regression: a query for a symbol name must not be buried under unrelated
+    # symbols that only share a token with the *file path*. Every symbol below
+    # lives under src/cortex/, so "cortex" matches each one's source_ref.
+    store = CortexStore(tmp_path / "cortex.db")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    nodes = [
+        GraphNode("symbol:src/cortex/store.py:CortexStore", "class", "CortexStore", "src/cortex/store.py", granularity="symbol"),
+        GraphNode("symbol:src/cortex/store.py:__init__", "function", "__init__", "src/cortex/store.py", granularity="symbol"),
+        GraphNode("symbol:src/cortex/graph.py:_build_adjacency", "function", "_build_adjacency", "src/cortex/graph.py", granularity="symbol"),
+        GraphNode("symbol:src/cortex/bundle.py:generate_bundle", "function", "generate_bundle", "src/cortex/bundle.py", granularity="symbol"),
+    ]
+    store.reset_repo(repo)
+    store.save_graph(repo, nodes, [])
+
+    results = store.search_nodes(repo, "CortexStore")
+
+    assert results, "query returned no results"
+    assert results[0].node_id == "symbol:src/cortex/store.py:CortexStore"
 
 
 def test_graph_node_to_dict_truncates_oversized_signature() -> None:

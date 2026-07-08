@@ -32,6 +32,42 @@ AUX_INTENT_TERMS = {
     'test', 'tests', 'testing', 'eval', 'evals', 'evaluation', 'fixture', 'fixtures',
     'benchmark', 'benchmarks', 'example', 'examples', 'sample', 'samples',
 }
+# When the task names a language/extension, boost same-language files and demote
+# other code languages so e.g. a QML task does not resolve to C++. Only tokens
+# that unambiguously denote a language are used, to avoid false hints from
+# common English words. Bare extension mentions (".qml") tokenize to these too.
+LANG_MATCH_BOOST = 1.5
+LANG_MISMATCH_DEMOTION = 0.5
+LANGUAGE_HINT_SUFFIXES: dict[str, frozenset[str]] = {
+    'qml': frozenset({'.qml'}),
+    'cpp': frozenset({'.cpp', '.cc', '.cxx', '.hpp', '.hh', '.hxx', '.h'}),
+    'cplusplus': frozenset({'.cpp', '.cc', '.cxx', '.hpp', '.hh', '.hxx', '.h'}),
+    'python': frozenset({'.py'}),
+    'javascript': frozenset({'.js', '.jsx'}),
+    'typescript': frozenset({'.ts', '.tsx'}),
+    'golang': frozenset({'.go'}),
+    'rust': frozenset({'.rs'}),
+    'java': frozenset({'.java'}),
+    'ruby': frozenset({'.rb'}),
+    'swift': frozenset({'.swift'}),
+    'kotlin': frozenset({'.kt', '.kts'}),
+}
+
+
+def _language_hint_suffixes(task: str, task_terms: set[str]) -> frozenset[str]:
+    """File suffixes implied by a language/extension named in the task.
+
+    Matches curated language tokens (``task_terms`` are already camel/snake
+    split and lowercased) plus explicit ``c++`` mentions the tokenizer drops.
+    Returns an empty set when the task names no language, leaving ranking
+    untouched.
+    """
+    suffixes: set[str] = set()
+    for term in task_terms:
+        suffixes.update(LANGUAGE_HINT_SUFFIXES.get(term, ()))
+    if 'c++' in task.lower():
+        suffixes.update(LANGUAGE_HINT_SUFFIXES['cplusplus'])
+    return frozenset(suffixes)
 
 
 def _is_aux_path(path: str) -> bool:
@@ -276,6 +312,7 @@ def generate_bundle(
     task_terms = _tokenize_query(task)
     term_weights = _term_weights(task_terms, sources)
     demote_aux = not (task_terms & AUX_INTENT_TERMS)
+    lang_suffixes = _language_hint_suffixes(task, task_terms)
     adj = _build_adjacency(edges)
 
     symbols_by_path: defaultdict[str, list[GraphNode]] = defaultdict(list)
@@ -303,6 +340,14 @@ def generate_bundle(
         )
         if demote_aux and _is_aux_path(source.path):
             score *= AUX_PATH_DEMOTION
+        if lang_suffixes and score > 0:
+            # Multiplicative so unrelated files (score 0) are never seeded by
+            # language alone; only reorders files the task already matches.
+            suffix = Path(source.path).suffix.lower()
+            if suffix in lang_suffixes:
+                score *= LANG_MATCH_BOOST
+            elif source.kind == 'code' and suffix:
+                score *= LANG_MISMATCH_DEMOTION
         source_scores[source.path] = score
 
     seed_scores = {f'file:{path}': score for path, score in source_scores.items() if score > 0}

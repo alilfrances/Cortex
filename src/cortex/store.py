@@ -560,21 +560,36 @@ class CortexStore:
         tokens = _search_tokens(query)
         if not tokens:
             return []
-        where = " OR ".join("(label LIKE ? OR source_ref LIKE ? OR signature LIKE ?)" for _ in tokens)
-        params: list[str] = []
-        for token in tokens:
-            pattern = f"%{token}%"
-            params.extend([pattern, pattern, pattern])
+        patterns = [f"%{token}%" for token in tokens]
+        label_clause = " OR ".join("label LIKE ?" for _ in tokens)
+        signature_clause = " OR ".join("signature LIKE ?" for _ in tokens)
+        source_clause = " OR ".join("source_ref LIKE ?" for _ in tokens)
+        where = f"(({label_clause}) OR ({signature_clause}) OR ({source_clause}))"
+        # Fetch label matches first so a candidate whose *name* matches the query
+        # is never dropped by LIMIT in favour of symbols that merely share a file
+        # path token (e.g. every symbol under src/cortex/ matching "cortex").
+        priority = (
+            f"CASE WHEN ({label_clause}) THEN 0 "
+            f"WHEN ({signature_clause}) THEN 1 ELSE 2 END"
+        )
+        params: list[Any] = [repo_key]
+        params.extend(patterns)  # label clause (WHERE)
+        params.extend(patterns)  # signature clause (WHERE)
+        params.extend(patterns)  # source_ref clause (WHERE)
+        params.extend(patterns)  # label clause (ORDER BY priority)
+        params.extend(patterns)  # signature clause (ORDER BY priority)
+        params.append(max(limit * 8, 50))
         rows = self.connection.execute(
             f"""
             SELECT node_id, kind, label, source_ref, granularity, signature, span_start, span_end, metadata_json
             FROM graph_nodes
             WHERE repo_path = ?
               AND granularity = 'symbol'
-              AND ({where})
+              AND {where}
+            ORDER BY {priority}, length(label)
             LIMIT ?
             """,
-            (repo_key, *params, max(limit * 8, 50)),
+            tuple(params),
         ).fetchall()
         candidates = [
             GraphNode(
@@ -595,23 +610,34 @@ class CortexStore:
         query_norm = _normalized_identifier(query)
         token_set = set(tokens)
 
-        def rank(node: GraphNode) -> tuple[int, str, str]:
+        def rank(node: GraphNode) -> tuple[int, int, str, str]:
             label_lower = node.label.lower()
             label_norm = _normalized_identifier(node.label)
-            haystack = f"{node.label} {node.signature} {node.source_ref}"
-            haystack_tokens = set(_search_tokens(haystack))
-            haystack_lower = haystack.lower()
+            label_tokens = set(_search_tokens(node.label))
+            signature = node.signature or ""
+            signature_lower = signature.lower()
+            signature_tokens = set(_search_tokens(signature))
+            source_tokens = set(_search_tokens(node.source_ref or ""))
+            # Bucket strictly by where the query hit, best-to-worst. Crucially,
+            # a match against the file path (source_ref) ranks *below* every
+            # match against the symbol name or signature, so plain-text
+            # greppable identifiers surface instead of being buried under
+            # unrelated symbols that only share a path token.
             if label_lower == query_lower or label_norm == query_norm:
-                bucket = 0
-            elif token_set <= haystack_tokens:
-                bucket = 1
+                bucket = 0  # exact symbol name
             elif label_lower.startswith(query_lower) or label_norm.startswith(query_norm):
-                bucket = 2
-            elif query_lower in haystack_lower or query_norm in _normalized_identifier(haystack):
-                bucket = 3
+                bucket = 1  # symbol name prefix
+            elif token_set <= label_tokens:
+                bucket = 2  # all query tokens present in the symbol name
+            elif query_norm and query_norm in label_norm:
+                bucket = 3  # query is a substring of the symbol name
+            elif token_set <= signature_tokens or query_lower in signature_lower:
+                bucket = 4  # matched in the signature only
+            elif token_set <= source_tokens:
+                bucket = 5  # matched only via the file path
             else:
-                bucket = 4
-            return (bucket, node.label.lower(), node.node_id)
+                bucket = 6
+            return (bucket, len(node.label), label_lower, node.node_id)
 
         ranked = sorted(candidates, key=rank)
         return ranked[:limit]
