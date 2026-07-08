@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.3 — 2026-07-08
+
+- Boost whole-identifier matches in `cortex_search_symbols` over sub-token floods. A camelCase/snake query splits into tokens matched independently, so a query containing one common token ("flow") could flood the results — and, via the candidate `LIMIT`, drop the real target entirely — with that token's matches. Candidate fetch now orders by a whole-identifier `LIKE` pattern (tokens in sequence, so `DeviceListModel` / `device_list_model` / `device list model` all match either spelling) and then by how many query tokens hit the label; ranking adds a whole-query-embedded tier above scattered-token matches and grades partial name matches by token coverage.
+- Weight directory-path tokens in `cortex_query` ranking (`PATH_MATCH_BONUS = 40`): a task term matching a path segment ("ui", "backend", "mcp") now breaks ties between same-named files, weaker than the existing stem/symbol `NAME_MATCH_BONUS` but stronger than body keyword density.
+- Return multiple ranked snippets from `cortex_query` instead of one budget-filling file dump: when more than one candidate matches, each item is capped at `ITEM_BUDGET_SHARE = 0.4` of the budget (oversized items degrade to skeleton/truncated form via the existing packing fallbacks), so the top file can no longer crowd out every other match.
+
 ## 0.7.2 — 2026-07-08
 
 - Fix `cortex_search_symbols` (P0) burying the queried symbol under alphabetical, unrelated results. `CortexStore.search_nodes` matched query tokens against each node's `source_ref` (file path) with the same weight as the symbol name, so a query like `CortexStore` matched the *path* of every symbol under `src/cortex/` and ranked `__init__`, `_bfs_proximity`, … equal to the real class (then sorted alphabetically). With no `ORDER BY`, the genuine node could also be dropped by the candidate `LIMIT` before ranking ran. Now the SQL fetches label matches first (`ORDER BY` a label/signature/path priority) so a name match is never truncated away, and the Python ranker buckets strictly name → signature → path, so path-only hits always rank last. (Not related to `enrichment_enabled`, which does not gate symbol matching.)
