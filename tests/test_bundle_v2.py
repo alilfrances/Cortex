@@ -110,6 +110,60 @@ def test_language_hint_absent_leaves_ranking_neutral(tmp_path):
     assert code_scores['ui/ProcessFlowItem.qml'] == code_scores['backend/ProcessFlowItem.cpp']
 
 
+def test_path_directory_tokens_boost_matching_file(tmp_path):
+    import subprocess
+    db_path = tmp_path / 'cortex.db'
+    store = CortexStore(db_path)
+    repo = tmp_path / 'repo'
+    repo.mkdir()
+    subprocess.run(['git', 'init'], cwd=repo, capture_output=True)
+
+    sources = [
+        SourceRecord(path='ui/flow/panel.py', content='def draw(): pass', kind='code', size_bytes=20, modified_at=0.0, content_hash='h1'),
+        SourceRecord(path='core/panel.py', content='def draw(): pass', kind='code', size_bytes=20, modified_at=0.0, content_hash='h2'),
+    ]
+    nodes = [GraphNode(node_id=f'file:{s.path}', kind='file', label=s.path, source_ref=s.path) for s in sources]
+    store.reset_repo(repo)
+    store.save_sources(repo, sources)
+    store.save_commits(repo, [])
+    store.save_graph(repo, nodes, [])
+
+    result = generate_bundle(repo, task='fix flow panel draw', budget=2000, db_path=store.db_path, output_format='json')
+    scores = {item['path']: item['score'] for item in result['items']}
+    # Same stem + same content: the directory segment "flow" must break the tie.
+    assert scores['ui/flow/panel.py'] > scores['core/panel.py']
+
+
+def test_item_budget_cap_returns_multiple_snippets_not_one_dump(tmp_path):
+    import subprocess
+    db_path = tmp_path / 'cortex.db'
+    store = CortexStore(db_path)
+    repo = tmp_path / 'repo'
+    repo.mkdir()
+    subprocess.run(['git', 'init'], cwd=repo, capture_output=True)
+
+    big = 'def top_match(): pass  # panel widget\n' + '# padding filler line for tokens\n' * 600
+    sources = [
+        SourceRecord(path='big.py', content=big, kind='code', size_bytes=len(big), modified_at=0.0, content_hash='h1'),
+        SourceRecord(path='small.py', content='def panel(): pass', kind='code', size_bytes=18, modified_at=0.0, content_hash='h2'),
+    ]
+    nodes = [GraphNode(node_id=f'file:{s.path}', kind='file', label=s.path, source_ref=s.path) for s in sources]
+    store.reset_repo(repo)
+    store.save_sources(repo, sources)
+    store.save_commits(repo, [])
+    store.save_graph(repo, nodes, [])
+
+    budget = 2000
+    result = generate_bundle(repo, task='panel widget', budget=budget, db_path=store.db_path, output_format='json')
+    paths = [item['path'] for item in result['items']]
+    # Both matches make it into the bundle; the big file may not consume the
+    # whole budget and crowd out the second snippet.
+    assert 'big.py' in paths and 'small.py' in paths
+    big_item = next(item for item in result['items'] if item['path'] == 'big.py')
+    from cortex.bundle import ITEM_BUDGET_SHARE
+    assert big_item['token_count'] <= int(budget * ITEM_BUDGET_SHARE)
+
+
 def test_pagerank_surfaces_three_hop_relevant_node_that_bfs_depth_two_misses(tmp_path):
     import subprocess
 

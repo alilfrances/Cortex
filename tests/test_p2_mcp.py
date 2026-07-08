@@ -259,6 +259,29 @@ def test_store_search_nodes_name_match_beats_shared_path_token(tmp_path: Path) -
     assert results[0].node_id == "symbol:src/cortex/store.py:CortexStore"
 
 
+def test_store_search_nodes_whole_identifier_beats_common_token_flood(tmp_path: Path) -> None:
+    # Regression: a query containing one common sub-token ("flow") must not let
+    # that token's many matches flood out — or, via the candidate LIMIT, drop
+    # entirely — the symbol matching the whole identifier.
+    store = CortexStore(tmp_path / "cortex.db")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    nodes = [
+        GraphNode(f"symbol:f{i}.py:flow_{i:02d}", "function", f"flow_{i:02d}", f"f{i}.py", granularity="symbol")
+        for i in range(60)
+    ]
+    nodes.append(GraphNode("symbol:ui.py:resetFlowCount", "function", "resetFlowCount", "ui.py", granularity="symbol"))
+    nodes.append(GraphNode("symbol:x.py:reset", "function", "reset", "x.py", granularity="symbol"))
+    store.reset_repo(repo)
+    store.save_graph(repo, nodes, [])
+
+    for query in ("resetFlowCount", "reset flow count", "reset_flow_count"):
+        results = store.search_nodes(repo, query, limit=5)
+        assert results and results[0].label == "resetFlowCount", query
+        # Two-token partial ("reset" via prefix-ish overlap) outranks one-token floods.
+        assert results[1].label == "reset", query
+
+
 def test_graph_node_to_dict_truncates_oversized_signature() -> None:
     node = GraphNode("symbol:a.py:BIG", "variable", "BIG", "a.py", granularity="symbol", signature="x" * 5000)
 

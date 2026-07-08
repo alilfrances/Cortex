@@ -23,8 +23,17 @@ STOPWORDS = {
 }
 # Exact task-term hit on a file stem or symbol name must beat keyword-dense docs.
 NAME_MATCH_BONUS = 100.0
+# Task-term hit on a directory segment of the path ("ui", "backend", "mcp")
+# is a weaker locality signal than a stem/symbol hit but must still beat
+# body-text keyword density.
+PATH_MATCH_BONUS = 40.0
 # Markdown share of the budget when code candidates also match the task.
 DOC_BUDGET_SHARE = 0.4
+# No single item may swallow the whole bundle: when several candidates match,
+# cap each item's share so the bundle returns multiple ranked snippets instead
+# of one budget-filling file dump (oversized items degrade to skeleton/truncated
+# form via the existing packing fallbacks).
+ITEM_BUDGET_SHARE = 0.4
 # Test/eval/fixture files are demoted unless the task itself is about them.
 AUX_PATH_DEMOTION = 0.5
 AUX_PATH_RE = re.compile(r'(^|/)(tests?|testing|evals?|fixtures?|examples?|benchmarks?|samples?)(/|$)')
@@ -332,7 +341,9 @@ def generate_bundle(
             recency_weight = max(0.0, 5.0 - math.log2(max(1, newest_commit - int(source.modified_at) + 1)))
         name_candidates = _tokenize_text(Path(source.path).stem) | symbol_names_by_path.get(source.path, set())
         name_bonus = NAME_MATCH_BONUS if task_terms & name_candidates else 0.0
-        score = name_bonus + _score_text(
+        dir_tokens = _tokenize_text("/".join(Path(source.path).parts[:-1]))
+        path_bonus = PATH_MATCH_BONUS if task_terms & dir_tokens else 0.0
+        score = name_bonus + path_bonus + _score_text(
             task_terms,
             f'{source.path}\n{source.content}',
             recency_weight,
@@ -406,6 +417,10 @@ def generate_bundle(
 
     has_code_matches = any(item.kind == 'code' and item.score > 0 for item in candidates)
     doc_cap = int(budget * DOC_BUDGET_SHARE) if has_code_matches else budget
+    positive_matches = sum(1 for item in candidates if item.score > 0)
+    # With multiple matches, cap each item so the top file cannot swallow the
+    # whole budget; lone matches keep the full budget.
+    item_cap = int(budget * ITEM_BUDGET_SHARE) if positive_matches > 1 else budget
 
     selected: list[BundleItem] = []
     total_tokens = 0
@@ -414,7 +429,7 @@ def generate_bundle(
         if item.score <= 0:
             continue
         is_doc = item.kind == 'markdown'
-        allowed = budget - total_tokens
+        allowed = min(budget - total_tokens, item_cap)
         if is_doc:
             allowed = min(allowed, doc_cap - doc_tokens)
         if item.token_count <= allowed:
