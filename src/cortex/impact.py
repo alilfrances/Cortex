@@ -30,7 +30,17 @@ def rank_file_impact(
     budget: int = 2000,
 ) -> tuple[list[dict], bool]:
     seed_id = _file_node_id(path)
-    file_paths = {node.node_id: node.source_ref for node in nodes if node.granularity == "file" or node.kind == "file"}
+    # Commit nodes default to granularity="file" (see models.GraphNode) and are
+    # linked to files by COCHANGE "touches" edges, so they must be excluded here
+    # or their SHAs surface as bogus impacted "paths" ranked 1.0. Same guard the
+    # community/rank layers use.
+    file_paths = {
+        node.node_id: node.source_ref
+        for node in nodes
+        if (node.granularity == "file" or node.kind == "file")
+        and node.kind != "commit"
+        and not node.node_id.startswith("commit:")
+    }
     if seed_id not in file_paths:
         raise UnknownPathError(path)
     scores: defaultdict[str, float] = defaultdict(float)

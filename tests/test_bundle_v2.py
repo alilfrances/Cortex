@@ -71,6 +71,45 @@ def test_graph_neighbor_included_when_seed_matches(tmp_path):
     assert 'unrelated.py' not in result
 
 
+def _make_multilang_store(tmp_path: Path) -> tuple[CortexStore, Path]:
+    import subprocess
+    db_path = tmp_path / 'cortex.db'
+    store = CortexStore(db_path)
+    repo = tmp_path / 'repo'
+    repo.mkdir()
+    subprocess.run(['git', 'init'], cwd=repo, capture_output=True)
+
+    sources = [
+        SourceRecord(path='ui/ProcessFlowItem.qml', content='ProcessFlowItem { function reset() {} }', kind='code', size_bytes=40, modified_at=0.0, content_hash='h1'),
+        SourceRecord(path='backend/ProcessFlowItem.cpp', content='class ProcessFlowItem { int reset() { return 0; } };', kind='code', size_bytes=52, modified_at=0.0, content_hash='h2'),
+    ]
+    nodes = [
+        GraphNode(node_id=f'file:{source.path}', kind='file', label=source.path, source_ref=source.path)
+        for source in sources
+    ]
+    store.reset_repo(repo)
+    store.save_sources(repo, sources)
+    store.save_commits(repo, [])
+    store.save_graph(repo, nodes, [])
+    return store, repo
+
+
+def test_language_hint_ranks_matching_extension_above_other_code(tmp_path):
+    store, repo = _make_multilang_store(tmp_path)
+    result = generate_bundle(repo, task='fix ProcessFlowItem reset in QML', budget=4000, db_path=store.db_path, output_format='json')
+    paths = [item['path'] for item in result['items'] if item['kind'] == 'code']
+    assert paths[0] == 'ui/ProcessFlowItem.qml'
+    assert paths.index('ui/ProcessFlowItem.qml') < paths.index('backend/ProcessFlowItem.cpp')
+
+
+def test_language_hint_absent_leaves_ranking_neutral(tmp_path):
+    store, repo = _make_multilang_store(tmp_path)
+    result = generate_bundle(repo, task='fix ProcessFlowItem reset', budget=4000, db_path=store.db_path, output_format='json')
+    code_scores = {item['path']: item['score'] for item in result['items'] if item['kind'] == 'code'}
+    # No language named: same-name .qml and .cpp keep equal keyword scores.
+    assert code_scores['ui/ProcessFlowItem.qml'] == code_scores['backend/ProcessFlowItem.cpp']
+
+
 def test_pagerank_surfaces_three_hop_relevant_node_that_bfs_depth_two_misses(tmp_path):
     import subprocess
 

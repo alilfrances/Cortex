@@ -175,10 +175,78 @@ def resolve_local_import(target: str, known_paths: set[str]) -> str | None:
 
 
 def _signature(content: str, start: int) -> str:
-    line = content[start:content.find("\n", start)]
-    if not line:
-        line = content[start:]
-    return line.strip()
+    end = content.find("\n", start)
+    if end == -1:
+        end = len(content)
+    return content[start:end].strip()
+
+
+def _matching_brace(content: str, open_idx: int) -> int | None:
+    """Return the offset of the '}' that closes the '{' at ``open_idx``.
+
+    Skips braces inside strings, char literals, and line/block comments so a
+    body span is not cut short by a ``}`` that merely appears in text. Returns
+    ``None`` when no balanced closing brace exists (unbalanced source).
+    """
+    depth = 0
+    i = open_idx
+    n = len(content)
+    quote = ""
+    while i < n:
+        ch = content[i]
+        if quote:
+            if ch == "\\":
+                i += 2
+                continue
+            if ch == quote:
+                quote = ""
+            i += 1
+            continue
+        if ch in "\"'`":
+            quote = ch
+            i += 1
+            continue
+        if ch == "/" and i + 1 < n:
+            nxt = content[i + 1]
+            if nxt == "/":
+                nl = content.find("\n", i)
+                if nl == -1:
+                    return None
+                i = nl + 1
+                continue
+            if nxt == "*":
+                close = content.find("*/", i + 2)
+                if close == -1:
+                    return None
+                i = close + 2
+                continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return i
+        i += 1
+    return None
+
+
+def _def_span_end(content: str, match_start: int, start_line: int) -> int:
+    """Line of the closing brace for a definition, or ``start_line`` if none.
+
+    Finds the body's opening brace (the first ``{`` after the declaration) and
+    brace-matches to its close. A ``;`` before any ``{`` means the match is a
+    forward declaration or prototype with no body, so the span stays one line.
+    """
+    open_idx = content.find("{", match_start)
+    if open_idx == -1:
+        return start_line
+    semi_idx = content.find(";", match_start, open_idx)
+    if semi_idx != -1:
+        return start_line
+    close_idx = _matching_brace(content, open_idx)
+    if close_idx is None:
+        return start_line
+    return _line_number(content, close_idx)
 
 
 def _symbol_node(
@@ -188,6 +256,7 @@ def _symbol_node(
     signature: str,
     line: int,
     metadata: dict[str, str | int] | None = None,
+    span_end: int | None = None,
 ) -> GraphNode:
     node_metadata: dict[str, str | int] = {"lineno": line}
     if metadata:
@@ -200,7 +269,7 @@ def _symbol_node(
         granularity="symbol",
         signature=signature,
         span_start=line,
-        span_end=line,
+        span_end=span_end if span_end is not None else line,
         metadata=node_metadata,
     )
 
@@ -451,8 +520,15 @@ def extract_regex_edges(
             if name in seen:
                 continue
             seen.add(name)
-            line = _line_number(content, match.start())
-            node = _symbol_node(path, name, pattern.kind, _signature(content, match.start()), line)
+            # Anchor on the name, not match.start(): leading `^\s*` and greedy
+            # return-type groups can pull the match onto a blank line or a
+            # preceding line (e.g. the Q_OBJECT line above a method), which
+            # would otherwise skew the line number, signature, and span.
+            name_start = match.start(pattern.name_group)
+            line_start = content.rfind("\n", 0, name_start) + 1
+            line = _line_number(content, line_start)
+            span_end = _def_span_end(content, match.end(pattern.name_group), line)
+            node = _symbol_node(path, name, pattern.kind, _signature(content, line_start), line, span_end=span_end)
             nodes.append(node)
             edges.append(
                 GraphEdge(
