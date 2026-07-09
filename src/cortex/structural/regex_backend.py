@@ -49,8 +49,8 @@ _QML_IMPORT_PATTERNS = [
 _QML_DEF_PATTERNS = [
     _Pattern(re.compile(r"^\s*function\s+(?P<name>[A-Za-z_]\w*)\s*\(", re.MULTILINE), "func"),
     _Pattern(re.compile(r"^\s*signal\s+(?P<name>[A-Za-z_]\w*)\s*\(", re.MULTILINE), "func"),
-    _Pattern(re.compile(r"^\s*(?P<name>[A-Z][A-Za-z0-9_]*)\s*\{", re.MULTILINE), "class"),
 ]
+_QML_OBJECT_RE = re.compile(r"^\s*(?P<name>[A-Z][A-Za-z0-9_]*)\s*\{", re.MULTILINE)
 _QT_SECTION_RE = re.compile(r"^\s*(?:(?:public|private|protected)\s+)?(?P<section>signals|slots|Q_SIGNALS|Q_SLOTS)\s*:?\s*$")
 _QT_ACCESS_RE = re.compile(r"^\s*(?:public|private|protected|signals|slots|Q_SIGNALS|Q_SLOTS)\s*:")
 _QT_CLASS_RE = re.compile(
@@ -174,6 +174,10 @@ def resolve_local_import(target: str, known_paths: set[str]) -> str | None:
     return None
 
 
+def resolve_qml_component(name: str, known_paths: set[str]) -> str | None:
+    return resolve_local_import(f"{name}.qml", known_paths)
+
+
 def _signature(content: str, start: int) -> str:
     end = content.find("\n", start)
     if end == -1:
@@ -247,6 +251,10 @@ def _def_span_end(content: str, match_start: int, start_line: int) -> int:
     if close_idx is None:
         return start_line
     return _line_number(content, close_idx)
+
+
+def _line_count(content: str) -> int:
+    return content.count("\n") + (0 if content.endswith("\n") and content else 1)
 
 
 def _symbol_node(
@@ -485,6 +493,68 @@ def _extract_qml_handlers(path: str, content: str, file_node_id: str, nodes: lis
         )
 
 
+def _extract_qml_component_definition(
+    path: str,
+    content: str,
+    file_node_id: str,
+    nodes: list[GraphNode],
+    edges: list[GraphEdge],
+    seen: set[str],
+) -> None:
+    stem = PurePosixPath(path).stem
+    if not stem or not stem[0].isupper():
+        return
+
+    root_match = _QML_OBJECT_RE.search(content)
+    if root_match:
+        name_start = root_match.start("name")
+        line_start = content.rfind("\n", 0, name_start) + 1
+        line = _line_number(content, line_start)
+        signature = _signature(content, line_start)
+        span_end = _def_span_end(content, root_match.end("name"), line)
+    else:
+        line = 1
+        signature = _signature(content, 0)
+        span_end = _line_count(content)
+
+    seen.add(stem)
+    node = _symbol_node(path, stem, "class", signature, line, span_end=span_end)
+    nodes.append(node)
+    edges.append(
+        GraphEdge(
+            edge_id=f"regex:{path}:contains:{stem}",
+            source=file_node_id,
+            target=node.node_id,
+            relation="contains",
+            layer="STRUCTURAL",
+            confidence="LOW",
+            weight=1.0,
+            metadata={"lineno": line, "source_file": path},
+        )
+    )
+
+
+def _extract_qml_instantiates(path: str, content: str, known_paths: set[str], file_node_id: str, edges: list[GraphEdge]) -> None:
+    for index, match in enumerate(_QML_OBJECT_RE.finditer(content), start=1):
+        name = match.group("name")
+        resolved = resolve_qml_component(name, known_paths)
+        if resolved is None or resolved == path:
+            continue
+        line = _line_number(content, match.start("name"))
+        edges.append(
+            GraphEdge(
+                edge_id=f"regex:{path}:instantiates:{line}:{index}:{name}",
+                source=file_node_id,
+                target=f"file:{resolved}",
+                relation="instantiates",
+                layer="STRUCTURAL",
+                confidence="LOW",
+                weight=1.0,
+                metadata={"lineno": line, "source_file": path},
+            )
+        )
+
+
 def extract_regex_edges(
     path: str,
     content: str,
@@ -514,6 +584,9 @@ def extract_regex_edges(
             )
 
     seen: set[str] = set()
+    if suffix == ".qml":
+        _extract_qml_component_definition(path, content, file_node_id, nodes, edges, seen)
+
     for pattern in _DEF_PATTERNS.get(suffix, []):
         for match in pattern.regex.finditer(content):
             name = match.group(pattern.name_group)
@@ -547,6 +620,7 @@ def extract_regex_edges(
         _extract_cpp_inheritance_edges(path, content, edges)
         _extract_qt_cpp_edges(path, content, file_node_id, nodes, edges, seen)
     if suffix == ".qml":
+        _extract_qml_instantiates(path, content, known_paths, file_node_id, edges)
         _extract_qml_handlers(path, content, file_node_id, nodes, edges)
 
     return nodes, edges

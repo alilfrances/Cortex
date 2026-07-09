@@ -206,12 +206,31 @@ def test_qml_regex_fallback_extracts_imports_and_symbols(monkeypatch: pytest.Mon
 
     content = 'import QtQuick.Controls 2.15\nItem {\n    signal started()\n    function launch() {}\n}\n'
     nodes, edges = extract_structural_edges("Main.qml", content, set())
+    node_ids = {node.node_id for node in nodes}
 
-    assert {"symbol:Main.qml:Item", "symbol:Main.qml:started", "symbol:Main.qml:launch"}.issubset(
-        {node.node_id for node in nodes}
-    )
+    assert {"symbol:Main.qml:Main", "symbol:Main.qml:started", "symbol:Main.qml:launch"}.issubset(node_ids)
+    assert "symbol:Main.qml:Item" not in node_ids
     assert "module:QtQuick.Controls" in {edge.target for edge in edges if edge.relation == "imports"}
     assert {edge.confidence for edge in edges} == {"LOW"}
+
+
+def test_qml_regex_fallback_instantiates_known_component_without_false_definition() -> None:
+    from cortex.structural.regex_backend import extract_regex_edges
+
+    known_paths = {"DeviceCardTagSelection.qml", "DeviceCardDisplaySection.qml"}
+    tag_selection = "import QtQuick 2.0\nItem {\n    id: root\n}\n"
+    display_section = "import QtQuick 2.0\nColumn {\n    DeviceCardTagSelection {\n        id: tags\n    }\n}\n"
+
+    tag_nodes, _ = extract_regex_edges("DeviceCardTagSelection.qml", tag_selection, known_paths)
+    display_nodes, display_edges = extract_regex_edges("DeviceCardDisplaySection.qml", display_section, known_paths)
+
+    assert "symbol:DeviceCardTagSelection.qml:DeviceCardTagSelection" in {node.node_id for node in tag_nodes}
+    assert "symbol:DeviceCardDisplaySection.qml:DeviceCardTagSelection" not in {node.node_id for node in display_nodes}
+    assert (
+        "file:DeviceCardDisplaySection.qml",
+        "file:DeviceCardTagSelection.qml",
+        "instantiates",
+    ) in {(edge.source, edge.target, edge.relation) for edge in display_edges}
 
 
 def test_qt_cpp_regex_fallback_extracts_signals_slots_and_edges(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -397,10 +416,32 @@ def test_qml_tree_sitter_extracts_imports_and_symbols() -> None:
 
     content = 'import QtQuick.Controls 2.15\nItem {\n    signal started()\n    function launch() {}\n}\n'
     nodes, edges = extract_structural_edges("Main.qml", content, set())
+    node_ids = {node.node_id for node in nodes}
 
-    assert {"symbol:Main.qml:Item", "symbol:Main.qml:launch"}.issubset({node.node_id for node in nodes})
+    assert {"symbol:Main.qml:Main", "symbol:Main.qml:launch"}.issubset(node_ids)
+    assert "symbol:Main.qml:Item" not in node_ids
     assert "module:QtQuick.Controls" in {edge.target for edge in edges if edge.relation == "imports"}
     assert {edge.confidence for edge in edges} == {"EXTRACTED"}
+
+
+def test_qml_tree_sitter_instantiates_known_component_without_false_definition() -> None:
+    pytest.importorskip("tree_sitter_language_pack")
+    from cortex.structural.treesitter_backend import extract_treesitter_edges
+
+    known_paths = {"DeviceCardTagSelection.qml", "DeviceCardDisplaySection.qml"}
+    tag_selection = "import QtQuick 2.0\nItem {\n    id: root\n}\n"
+    display_section = "import QtQuick 2.0\nColumn {\n    DeviceCardTagSelection {\n        id: tags\n    }\n}\n"
+
+    tag_nodes, _ = extract_treesitter_edges("DeviceCardTagSelection.qml", tag_selection, known_paths)
+    display_nodes, display_edges = extract_treesitter_edges("DeviceCardDisplaySection.qml", display_section, known_paths)
+
+    assert "symbol:DeviceCardTagSelection.qml:DeviceCardTagSelection" in {node.node_id for node in tag_nodes}
+    assert "symbol:DeviceCardDisplaySection.qml:DeviceCardTagSelection" not in {node.node_id for node in display_nodes}
+    assert (
+        "file:DeviceCardDisplaySection.qml",
+        "file:DeviceCardTagSelection.qml",
+        "instantiates",
+    ) in {(edge.source, edge.target, edge.relation) for edge in display_edges}
 
 
 def test_c_tree_sitter_ignores_struct_usages() -> None:
@@ -476,7 +517,8 @@ def test_ingest_multilang_fixture_uses_low_confidence_regex_edges(
     assert "symbol:main.c:Counter" in node_ids
     assert "symbol:engine.cpp:Runner" in node_ids
     assert "symbol:engine.hpp:EngineCore" in node_ids
-    assert "symbol:Main.qml:Item" in node_ids
+    assert "symbol:Main.qml:Main" in node_ids
+    assert "symbol:Main.qml:Item" not in node_ids
 
     fixture_paths = {path.name for path in FIXTURE_REPO.iterdir()}
     structural = [

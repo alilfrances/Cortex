@@ -60,7 +60,6 @@ _DEF_TYPES = {
     "enum_specifier": "class",
     "union_specifier": "class",
     "namespace_definition": "class",
-    "ui_object_definition": "class",
 }
 
 _BODY_REQUIRED_TYPES = {
@@ -206,6 +205,74 @@ def _signature(node: Any, source: bytes) -> str:
     return text.splitlines()[0].strip()
 
 
+def _qml_component_node(
+    path: str,
+    content: str,
+    source: bytes,
+    root: Any,
+    file_node_id: str,
+    nodes: list[GraphNode],
+    edges: list[GraphEdge],
+    seen_symbols: set[str],
+) -> None:
+    stem = PurePosixPath(path).stem
+    if not stem or not stem[0].isupper():
+        return
+
+    root_object = next((node for node in _iter_nodes(root) if node.type == "ui_object_definition"), None)
+    if root_object is None:
+        line = 1
+        signature = content.splitlines()[0].strip() if content.splitlines() else ""
+        span_end = regex_backend._line_count(content)
+    else:
+        line = root_object.start_point[0] + 1
+        signature = _signature(root_object, source)
+        span_end = root_object.end_point[0] + 1
+
+    seen_symbols.add(stem)
+    node = regex_backend._symbol_node(path, stem, "class", signature, line, span_end=span_end)
+    nodes.append(node)
+    edges.append(
+        GraphEdge(
+            edge_id=f"treesitter:{path}:contains:{stem}",
+            source=file_node_id,
+            target=node.node_id,
+            relation="contains",
+            layer="STRUCTURAL",
+            confidence="EXTRACTED",
+            weight=1.0,
+            metadata={"lineno": line, "source_file": path},
+        )
+    )
+
+
+def _qml_instantiates_edge(
+    path: str,
+    node: Any,
+    source: bytes,
+    known_paths: set[str],
+    file_node_id: str,
+    index: int,
+) -> GraphEdge | None:
+    name = _name_for_node(node, source)
+    if not name:
+        return None
+    resolved = regex_backend.resolve_qml_component(name, known_paths)
+    if resolved is None or resolved == path:
+        return None
+    line = node.start_point[0] + 1
+    return GraphEdge(
+        edge_id=f"treesitter:{path}:instantiates:{line}:{index}:{name}",
+        source=file_node_id,
+        target=f"file:{resolved}",
+        relation="instantiates",
+        layer="STRUCTURAL",
+        confidence="EXTRACTED",
+        weight=1.0,
+        metadata={"lineno": line, "source_file": path},
+    )
+
+
 def extract_treesitter_edges(
     path: str,
     content: str,
@@ -226,8 +293,18 @@ def extract_treesitter_edges(
     nodes: list[GraphNode] = []
     edges: list[GraphEdge] = []
     seen_symbols: set[str] = set()
+    qml_object_index = 0
+
+    if suffix == ".qml":
+        _qml_component_node(path, content, source, root, file_node_id, nodes, edges, seen_symbols)
 
     for node in _iter_nodes(root):
+        if suffix == ".qml" and node.type == "ui_object_definition":
+            qml_object_index += 1
+            edge = _qml_instantiates_edge(path, node, source, known_paths, file_node_id, qml_object_index)
+            if edge is not None:
+                edges.append(edge)
+            continue
         if node.type in _IMPORT_TYPES:
             if node.type == "call" and not _signature(node, source).startswith(("require", "require_relative", "load")):
                 continue
