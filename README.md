@@ -4,6 +4,8 @@ Cortex is a graph-aware, local-first context engine for code agents. It ingests 
 
 The result is a repo-native context service: MCP tools for live agent queries, CLI commands for reports and exports, and no required network, embedding, vector DB, or LLM dependency.
 
+Current package and plugin metadata is `0.7.5` (`pyproject.toml` and `.codex-plugin/plugin.json`). Use that as the shipped docs version.
+
 ## What Cortex Builds
 
 - STRUCTURAL layer: files, imports, definitions, symbol nodes, and contains edges.
@@ -18,14 +20,23 @@ The result is a repo-native context service: MCP tools for live agent queries, C
 
 Requires Python 3.11+ on PATH as `python3`. Nothing else — the core is stdlib-only and the plugin runs straight from its install directory, no `pip install` needed.
 
-### Claude Code (one-command plugin install)
+### Claude Code
+
+Inside Claude Code, use slash commands:
+
+```text
+/plugin marketplace add alilfrances/Cortex
+/plugin install cortex@cortex
+```
+
+From a shell, use the Claude CLI equivalents:
 
 ```bash
 claude plugin marketplace add alilfrances/Cortex
 claude plugin install cortex@cortex
 ```
 
-That's it. The plugin registers the Cortex MCP server (`.mcp.json` launches `bin/cortex-mcp.py`, which self-locates its own `src/`), the `cortex` skill, and everything else. In a project, ask Claude to call `cortex_refresh` once to build the index (or run `cortex ingest .` if you installed the CLI).
+That's the full plugin path. It installs the Cortex plugin bundle, which registers the Cortex MCP server (`.mcp.json` launches `bin/cortex-mcp.py`, which self-locates its own `src/`), the `cortex` skill, and the session-start hook. In a project, ask Claude to call `cortex_refresh` once to build the index (or run `cortex ingest .` if you installed the CLI).
 
 > **Note:** Plugins load at session start. After installing or updating, restart Claude Code (or run `/reload-plugins` if available) — sessions that were already open won't see the MCP tools, skill, or hook.
 
@@ -41,13 +52,24 @@ Cortex ports graphify's agent-context behavior as a native Claude Code `SessionS
 
 The hook is advisory and fail-open: it never runs ingest, exits quietly on malformed or unreadable databases, and stays silent entirely when the working directory is not inside a git repository. Staleness resolves itself at query time — the MCP read tools auto-refresh incrementally before answering — so the hook only informs.
 
-### Codex (one command)
+### Codex
+
+```bash
+codex plugin marketplace add alilfrances/Cortex
+codex plugin add cortex@cortex
+```
+
+This is the official Codex marketplace flow: first add the marketplace source (the current repo remote, `alilfrances/Cortex`), then install the `cortex` plugin from the `cortex` marketplace. OpenAI's Codex plugin docs cover [`codex plugin marketplace add`](https://developers.openai.com/codex/plugins/build#add-a-marketplace-from-the-cli) and [`codex plugin add`](https://developers.openai.com/codex/cli/reference#codex-plugin).
+
+Start a new Codex session after installation so the plugin MCP server, skill, and hook are loaded.
+
+Alternative: if you only want MCP server registration in Codex and do not want to install the marketplace plugin bundle, use:
 
 ```bash
 /path/to/Cortex/install.sh --codex
 ```
 
-This registers the MCP server in `~/.codex/config.toml` with an absolute path to the self-locating launcher (idempotent; no pip). Skills ship in `.codex-plugin`/`skills/` for Codex's plugin flow, or copy `skills/cortex` to `~/.codex/skills/`. Manual registration equivalent:
+`install.sh --codex` writes an absolute `mcp_servers.cortex` entry to `~/.codex/config.toml` (idempotent; no pip), but it does not install the Codex plugin bundle or add a marketplace source. The Codex plugin manifest in this repo points to `./skills/` and `./.mcp.json`; for manual setup, point Codex at the repo root as a plugin dir or copy `skills/cortex` to `~/.codex/skills/`. Manual MCP registration equivalent:
 
 ```toml
 [mcp_servers.cortex]
@@ -83,6 +105,9 @@ This creates `cortex.db` and `cortex_report.md` under `~/.cortex/data/<repo-path
 | `cortex_overview` | Returns a compact repo overview from the stored graph and report data. | "Ask Cortex for an overview before we refactor the API layer." |
 | `cortex_impact` | Ranks structural and co-change neighbors for a file or symbol. | "Use Cortex impact on `src/cortex/bundle.py` before changing packing." |
 | `cortex_search_symbols` | Searches indexed file and symbol nodes by name. | "Search Cortex symbols for `SessionStore` and related methods." |
+| `cortex_read_symbol` | Returns numbered source lines for one indexed symbol span. | "Read the `generate_bundle` symbol with Cortex instead of opening the whole file." |
+| `cortex_relations` | Returns parsed graph edges such as imports, calls, inherits, emits, and connects. | "Show Cortex relations for `generate_bundle` outgoing calls." |
+| `cortex_references` | Returns cross-file references from parsed graph edges plus repo grep, bucketed by file type. | "Find all references to `_ensure_fresh` with Cortex." |
 | `cortex_refresh` | Re-ingests the repo and updates freshness metadata. | "Refresh Cortex, then query the checkout flow again." |
 
 Tool results include provenance where available. Read tools keep the index fresh automatically: when the repository fingerprint has changed since ingestion, they run an incremental re-ingest (changed, new, and deleted files only) before answering and report the delta under `auto_refreshed`. Set `CORTEX_AUTO_REFRESH=0` to disable and fall back to stale-state hints plus manual `cortex_refresh`. If no index exists yet, read tools still require an explicit `cortex_refresh` first.
@@ -99,6 +124,8 @@ Tool results include provenance where available. Read tools keep the index fresh
 | `cortex benchmark <repo> [--budget 4000] [--format text\|json]` | Compare bundle token cost against full-corpus reading. |
 | `cortex mcp` | Run the stdio MCP server. |
 | `cortex migrate [project_dir]` | Remove old injected v0.1 `## cortex` guidance and point users to plugin setup. |
+| `cortex codex status\|uninstall [project_dir]` | Inspect or remove project-local Codex integration files. |
+| `cortex claude status\|uninstall [project_dir]` | Inspect or remove project-local Claude integration files. |
 | `cortex graph export <repo> --format graphml\|json\|obsidian --out <path>` | Export the stored graph. |
 | `cortex graph view <repo> --out cortex-graph.html` | Write a self-contained no-CDN HTML graph viewer. |
 | `cortex watch <repo> [--interval 30]` | Refresh on changes using watchdog when installed, polling otherwise. |
@@ -125,14 +152,14 @@ Regenerated on 2026-07-06 with:
 python3 evals/run_evals.py
 ```
 
-The harness creates two small git fixture repos at runtime and runs 10 gold tasks. It reports expected-file precision/recall, expected-symbol recall, token cost, and wall latency. Full per-task output is in `evals/RESULTS.md`.
+The harness creates two small git fixture repos at runtime and runs 13 tasks. It reports expected-file precision/recall, expected-symbol recall, token cost, and wall latency. Full per-task output is in `evals/RESULTS.md`.
 
-| Mode | Tasks | Precision | Recall | Avg Tokens | Avg Latency ms |
-|---|---:|---:|---:|---:|---:|
-| bfs | 10 | 0.300 | 1.000 | 655 | 9.9 |
-| pagerank | 10 | 0.300 | 1.000 | 655 | 11.5 |
-| skeleton_off | 10 | 0.733 | 0.725 | 175 | 11.0 |
-| skeleton_on | 10 | 0.750 | 0.825 | 173 | 11.0 |
+| Mode | Tasks | Precision | Recall | Symbol Recall | Avg Tokens | Avg Latency ms |
+|---|---:|---:|---:|---:|---:|---:|
+| bfs | 13 | 0.293 | 0.692 | 1.000 | 677 | 12.4 |
+| pagerank | 13 | 0.290 | 0.692 | 1.000 | 678 | 13.9 |
+| skeleton_off | 13 | 0.679 | 0.692 | 0.942 | 179 | 14.1 |
+| skeleton_on | 13 | 0.641 | 0.692 | 0.942 | 176 | 13.7 |
 
 Interpretation: normal-budget PageRank and BFS both recover all gold files/symbols in these small fixtures but include extra files. Tight-budget skeleton packing improves recall versus tight-budget truncation while keeping token cost nearly flat.
 

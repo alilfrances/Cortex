@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.5 — 2026-07-09
+
+- Documentation refresh only. Current shipped metadata is `0.7.5` in `pyproject.toml` and `.codex-plugin/plugin.json`; the README and contributor docs now reflect the 8-tool MCP surface, current `evals/RESULTS.md` totals (13 tasks), Codex and Claude `status`/`uninstall` CLI commands, central storage under `~/.cortex/data/` with `CORTEX_DATA_DIR` and `cortex gc --prune`, and the Codex manifest skill root at `./skills/`.
+
 ## 0.7.4 — 2026-07-08
 
 - Document standing guidance in `skills/cortex/SKILL.md` for `cortex_query`: include the filename or extension/language in the `task` string when it's known, since ranking gives a large bonus for a task term hitting a file stem/symbol name and boosts/demotes by language when one is named (see 0.7.2/0.7.3 ranking changes) — phrasing the task with the known file name resolves ties that keyword-only phrasing leaves to chance.

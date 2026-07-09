@@ -10,6 +10,7 @@ Requires Python 3.11+.
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install -e ".[llm,languages,watch]"
+python3 -m pip install build
 ```
 
 The core package has no required runtime dependencies. Keep new dependencies optional unless they are essential to the default CLI, MCP server, or package import path.
@@ -23,6 +24,8 @@ python3 -m pytest tests/ -q
 python3 evals/run_evals.py
 python3 -m build
 ```
+
+`python3 -m build` requires the `build` package to be installed in the active environment first.
 
 Keep eval fixtures small and deterministic so the suite stays fast.
 
