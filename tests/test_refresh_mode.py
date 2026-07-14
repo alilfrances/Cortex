@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 
 from cortex.cli import build_parser
+from cortex.ingest import ingest_repository
 from cortex.mcp.tools import call_tool
 from cortex.store import CortexStore, default_db_path
 
@@ -69,3 +70,41 @@ def test_cli_refresh_accepts_full_flag():
     assert args.full is True
     args = parser.parse_args(["refresh", "."])
     assert args.full is False
+
+
+def test_incremental_refresh_recomputes_degrees_and_resolves_new_member(tmp_path, monkeypatch):
+    import cortex.structural.treesitter_backend as treesitter_backend
+
+    def fail_tree_sitter(*args, **kwargs):
+        raise RuntimeError("grammar unavailable")
+
+    monkeypatch.setattr(treesitter_backend, "extract_treesitter_edges", fail_tree_sitter)
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git_init(repo)
+    (repo / "wiring.cpp").write_text(
+        "void wire() {\n"
+        "    connect(a, &Cls::member, b, &Other::slot);\n"
+        "}\n"
+    )
+    (repo / "definition.cpp").write_text("void unrelated() {}\n")
+    subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "initial"], cwd=repo, check=True, capture_output=True)
+    db_path = repo / ".cortex" / "cortex.db"
+
+    ingest_repository(repo, commit_limit=0, db_path=db_path)
+    (repo / "definition.cpp").write_text("void Cls::member() {}\n")
+    ingest_repository(repo, commit_limit=0, db_path=db_path, incremental=True)
+
+    store = CortexStore(db_path)
+    incremental_nodes, incremental_edges = store.fetch_graph(repo)
+    connect = next(edge for edge in incremental_edges if edge.relation == "connects")
+    assert connect.source == "symbol:definition.cpp:member"
+    incremental_degrees = {node.node_id: node.metadata.get("degree") for node in incremental_nodes}
+
+    ingest_repository(repo, commit_limit=0, db_path=db_path, incremental=False)
+    full_nodes, _full_edges = store.fetch_graph(repo)
+    full_degrees = {node.node_id: node.metadata.get("degree") for node in full_nodes}
+
+    assert incremental_degrees == full_degrees

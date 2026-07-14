@@ -13,7 +13,7 @@ def _content_hash(content: str) -> str:
     return hashlib.sha256(content.encode('utf-8', errors='replace')).hexdigest()
 
 
-def _resolve_connect_endpoints(
+def resolve_connect_endpoints(
     nodes: list[GraphNode],
     edges: list[GraphEdge],
 ) -> list[GraphEdge]:
@@ -58,6 +58,15 @@ def _resolve_connect_endpoints(
                 continue
         resolved.append(edge)
     return resolved
+
+
+def annotate_degree(nodes: list[GraphNode], edges: list[GraphEdge]) -> None:
+    degree: Counter[str] = Counter()
+    for edge in edges:
+        degree[edge.source] += 1
+        degree[edge.target] += 1
+    for node in nodes:
+        node.metadata['degree'] = degree.get(node.node_id, 0)
 
 
 def build_graph(
@@ -129,7 +138,7 @@ def build_graph(
             nodes.extend(structural_nodes)
             edges.extend(structural_edges)
 
-    edges = _resolve_connect_endpoints(nodes, edges)
+    edges = resolve_connect_endpoints(nodes, edges)
 
     # Co-change edges from git history (COCHANGE layer)
     edges.extend(build_cochange_edges(commits))
@@ -161,11 +170,6 @@ def build_graph(
                 )
             )
 
-    degree: Counter[str] = Counter()
-    for edge in edges:
-        degree[edge.source] += 1
-        degree[edge.target] += 1
-    for node in nodes:
-        node.metadata['degree'] = degree.get(node.node_id, 0)
+    annotate_degree(nodes, edges)
 
     return nodes, edges

@@ -524,6 +524,8 @@ def _unresolved_endpoint(node_id: str) -> str:
         return node_id.rsplit(":", 1)[-1] or node_id
     if node_id.startswith("file:"):
         return node_id.removeprefix("file:") or node_id
+    if node_id.startswith("module:"):
+        return node_id.removeprefix("module:") or node_id
     return node_id
 
 

@@ -44,6 +44,7 @@ def _relation_graph() -> tuple[list[GraphNode], list[GraphEdge]]:
         GraphEdge("e4", "symbol:controller.hpp:started", "symbol:controller.hpp:start", "connects", layer="STRUCTURAL"),
         GraphEdge("e5", "file:engine.cpp", "symbol:engine.cpp:Runner", "contains", layer="STRUCTURAL"),
         GraphEdge("e6", "symbol:engine.cpp:Runner", "name:ExternalBase", "inherits", layer="STRUCTURAL", confidence="LOW"),
+        GraphEdge("e7", "symbol:engine.cpp:Runner", "module:numpy", "imports", layer="STRUCTURAL"),
     ]
     return nodes, edges
 
@@ -394,6 +395,8 @@ def test_cortex_relations_direction_and_unresolved_endpoint_fallback(tmp_path: P
     assert both["items"][0]["target"] == "ExternalBase"
     assert isinstance(both["items"][0]["target"], str)
     assert both["items"][0]["target"]
+    imports = _payload(call_tool("cortex_relations", {"repo_path": str(repo), "relation": "imports", "symbol": "numpy", "direction": "in"}))
+    assert imports["items"][0]["target"] == "numpy"
 
 
 def test_cortex_relations_missing_db_uses_existing_error_shape(tmp_path: Path, monkeypatch) -> None:

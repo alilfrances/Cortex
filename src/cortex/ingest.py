@@ -9,7 +9,7 @@ from typing import TypeVar
 
 from .config import load_config
 from .gitutils import collect_recent_commits, discover_repo_root
-from .graph import build_graph
+from .graph import annotate_degree, build_graph, resolve_connect_endpoints
 from .models import SourceRecord
 from .store import CortexStore, default_db_path, write_repo_meta
 
@@ -233,6 +233,8 @@ def ingest_repository(
 
             merged_nodes = _dedupe_by_id(filtered_nodes + new_nodes, lambda n: n.node_id)
             merged_edges = _dedupe_by_id(filtered_edges + new_edges, lambda e: e.edge_id)
+            merged_edges = resolve_connect_endpoints(merged_nodes, merged_edges)
+            annotate_degree(merged_nodes, merged_edges)
 
             store.save_sources(repo_root, sources_to_process)
             store.delete_sources(repo_root, deleted_paths)
