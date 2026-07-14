@@ -13,10 +13,55 @@ def _content_hash(content: str) -> str:
     return hashlib.sha256(content.encode('utf-8', errors='replace')).hexdigest()
 
 
+def _resolve_connect_endpoints(
+    nodes: list[GraphNode],
+    edges: list[GraphEdge],
+) -> list[GraphEdge]:
+    """Rewrite `name:Cls::member` connects endpoints to real symbol ids.
+
+    A `name:Cls::member` endpoint resolves when exactly one file defines both
+    the class `Cls` and a symbol `member`. Unresolvable endpoints keep the
+    class-qualified `name:` form. Self-loop connects edges are parse
+    artifacts and are dropped.
+    """
+    class_files: defaultdict[str, set[str]] = defaultdict(set)
+    symbol_by_file_label: dict[tuple[str, str], str] = {}
+    for node in nodes:
+        if node.granularity != 'symbol':
+            continue
+        if node.kind == 'class':
+            class_files[node.label].add(node.source_ref)
+        symbol_by_file_label[(node.source_ref, node.label)] = node.node_id
+
+    def resolve(endpoint: str) -> str:
+        if not endpoint.startswith('name:') or '::' not in endpoint:
+            return endpoint
+        class_name, _, member = endpoint.removeprefix('name:').partition('::')
+        candidates = {
+            symbol_by_file_label[(file_path, member)]
+            for file_path in class_files.get(class_name, set())
+            if (file_path, member) in symbol_by_file_label
+        }
+        if len(candidates) == 1:
+            return candidates.pop()
+        return endpoint
+
+    resolved: list[GraphEdge] = []
+    for edge in edges:
+        if edge.relation == 'connects':
+            edge.source = resolve(edge.source)
+            edge.target = resolve(edge.target)
+            if edge.source == edge.target:
+                continue
+        resolved.append(edge)
+    return resolved
+
+
 def build_graph(
     sources: list[SourceRecord],
     commits: list[CommitRecord],
     all_paths: set[str] | None = None,
+    connect_names: list[str] | None = None,
 ) -> tuple[list[GraphNode], list[GraphEdge]]:
     nodes: list[GraphNode] = []
     edges: list[GraphEdge] = []
@@ -75,9 +120,13 @@ def build_graph(
             nodes.extend(ast_nodes)
             edges.extend(ast_edges)
         elif source.kind == 'code' and supports_path(source.path):
-            structural_nodes, structural_edges = extract_structural_edges(source.path, source.content, known_paths)
+            structural_nodes, structural_edges = extract_structural_edges(
+                source.path, source.content, known_paths, connect_names
+            )
             nodes.extend(structural_nodes)
             edges.extend(structural_edges)
+
+    edges = _resolve_connect_endpoints(nodes, edges)
 
     # Co-change edges from git history (COCHANGE layer)
     edges.extend(build_cochange_edges(commits))

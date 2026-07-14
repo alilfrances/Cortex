@@ -61,15 +61,29 @@ _QT_MEMBER_RE = re.compile(
     r"^\s*(?:virtual\s+)?(?:[\w:<>,~*&\s]+\s+)?(?P<name>[A-Za-z_]\w*)\s*\([^;{}]*\)\s*(?:const\s*)?(?:=\s*0\s*)?;"
 )
 _QT_EMIT_RE = re.compile(r"^\s*(?:Q_EMIT|emit)\s+(?P<name>[A-Za-z_]\w*)\s*\(")
-_QT_CONNECT_POINTER_RE = re.compile(
-    r"connect\s*\(\s*(?P<sender>[^,]+),\s*&(?P<sender_class>[A-Za-z_]\w*)::(?P<signal>[A-Za-z_]\w*)\s*,\s*"
-    r"(?P<receiver>[^,]+),\s*&(?P<receiver_class>[A-Za-z_]\w*)::(?P<slot>[A-Za-z_]\w*)"
-)
-_QT_CONNECT_MACRO_RE = re.compile(
-    r"connect\s*\(\s*(?P<sender>[^,]+),\s*SIGNAL\s*\(\s*(?P<signal>[A-Za-z_]\w*)\s*\([^)]*\)\s*\)\s*,\s*"
-    r"(?P<receiver>[^,]+),\s*SLOT\s*\(\s*(?P<slot>[A-Za-z_]\w*)\s*\([^)]*\)\s*\)"
-)
 _QML_HANDLER_RE = re.compile(r"^\s*(?P<name>on[A-Z][A-Za-z0-9_]*)\s*:")
+
+DEFAULT_CONNECT_NAMES = ["connect"]
+
+
+def _connect_patterns(name: str) -> tuple[re.Pattern[str], re.Pattern[str]]:
+    """Pointer-to-member and SIGNAL/SLOT connect regexes for one function name.
+
+    The `[^,]+` argument captures cross newlines, so a single `finditer` over
+    the whole file matches multi-line connect calls.
+    """
+    prefix = rf"\b{re.escape(name)}\s*\(\s*"
+    pointer = re.compile(
+        prefix
+        + r"(?P<sender>[^,]+),\s*&(?P<sender_class>[A-Za-z_]\w*)::(?P<signal>[A-Za-z_]\w*)\s*,\s*"
+        r"(?P<receiver>[^,]+),\s*&(?P<receiver_class>[A-Za-z_]\w*)::(?P<slot>[A-Za-z_]\w*)"
+    )
+    macro = re.compile(
+        prefix
+        + r"(?P<sender>[^,]+),\s*SIGNAL\s*\(\s*(?P<signal>[A-Za-z_]\w*)\s*\([^)]*\)\s*\)\s*,\s*"
+        r"(?P<receiver>[^,]+),\s*SLOT\s*\(\s*(?P<slot>[A-Za-z_]\w*)\s*\([^)]*\)\s*\)"
+    )
+    return pointer, macro
 
 
 _IMPORT_PATTERNS: dict[str, list[re.Pattern[str]]] = {
@@ -368,6 +382,7 @@ def _extract_qt_cpp_edges(
     nodes: list[GraphNode],
     edges: list[GraphEdge],
     seen: set[str],
+    connect_names: list[str] | None = None,
 ) -> None:
     current_class = ""
     class_depth = 0
@@ -425,13 +440,32 @@ def _extract_qt_cpp_edges(
                 )
             )
 
-        for index, match in enumerate(_QT_CONNECT_POINTER_RE.finditer(line), start=1):
-            symbol_ids = {node.node_id for node in nodes}
+        brace_depth += line.count("{") - line.count("}")
+        if current_class and brace_depth < class_depth:
+            current_class = ""
+            section = ""
+
+    # Connect calls routinely span lines, so they are scanned over the whole
+    # file rather than per line.
+    symbol_ids = {node.node_id for node in nodes}
+
+    def macro_ref(name: str) -> str:
+        symbol_id = f"symbol:{path}:{name}"
+        return symbol_id if symbol_id in symbol_ids else f"name:{name}"
+
+    for connect_name in connect_names or DEFAULT_CONNECT_NAMES:
+        pointer_re, macro_re = _connect_patterns(connect_name)
+        for index, match in enumerate(pointer_re.finditer(content), start=1):
+            source = f"name:{match.group('sender_class')}::{match.group('signal')}"
+            target = f"name:{match.group('receiver_class')}::{match.group('slot')}"
+            if source == target:
+                continue
+            lineno = _line_number(content, match.start())
             edges.append(
                 GraphEdge(
                     edge_id=f"regex:{path}:connects:{lineno}:{index}:{match.group('signal')}:{match.group('slot')}",
-                    source=_symbol_ref(path, match.group("signal"), symbol_ids),
-                    target=_symbol_ref(path, match.group("slot"), symbol_ids),
+                    source=source,
+                    target=target,
                     relation="connects",
                     layer="STRUCTURAL",
                     confidence="LOW",
@@ -446,13 +480,17 @@ def _extract_qt_cpp_edges(
                     },
                 )
             )
-        for index, match in enumerate(_QT_CONNECT_MACRO_RE.finditer(line), start=1):
-            symbol_ids = {node.node_id for node in nodes}
+        for index, match in enumerate(macro_re.finditer(content), start=1):
+            source = macro_ref(match.group("signal"))
+            target = macro_ref(match.group("slot"))
+            if source == target:
+                continue
+            lineno = _line_number(content, match.start())
             edges.append(
                 GraphEdge(
                     edge_id=f"regex:{path}:connects:{lineno}:macro:{index}:{match.group('signal')}:{match.group('slot')}",
-                    source=_symbol_ref(path, match.group("signal"), symbol_ids),
-                    target=_symbol_ref(path, match.group("slot"), symbol_ids),
+                    source=source,
+                    target=target,
                     relation="connects",
                     layer="STRUCTURAL",
                     confidence="LOW",
@@ -465,11 +503,6 @@ def _extract_qt_cpp_edges(
                     },
                 )
             )
-
-        brace_depth += line.count("{") - line.count("}")
-        if current_class and brace_depth < class_depth:
-            current_class = ""
-            section = ""
 
 
 def _extract_qml_handlers(path: str, content: str, file_node_id: str, nodes: list[GraphNode], edges: list[GraphEdge]) -> None:
@@ -559,6 +592,7 @@ def extract_regex_edges(
     path: str,
     content: str,
     known_paths: set[str],
+    connect_names: list[str] | None = None,
 ) -> tuple[list[GraphNode], list[GraphEdge]]:
     suffix = PurePosixPath(path).suffix.lower()
     file_node_id = f"file:{path}"
@@ -618,7 +652,7 @@ def extract_regex_edges(
 
     if suffix in _CPP_SUFFIXES:
         _extract_cpp_inheritance_edges(path, content, edges)
-        _extract_qt_cpp_edges(path, content, file_node_id, nodes, edges, seen)
+        _extract_qt_cpp_edges(path, content, file_node_id, nodes, edges, seen, connect_names)
     if suffix == ".qml":
         _extract_qml_instantiates(path, content, known_paths, file_node_id, edges)
         _extract_qml_handlers(path, content, file_node_id, nodes, edges)

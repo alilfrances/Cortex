@@ -275,8 +275,8 @@ void Controller::run() {
     assert [edge.target for edge in emits] == ["symbol:controller.hpp:started", "symbol:controller.hpp:started"]
     assert {edge.confidence for edge in emits + connects} == {"LOW"}
     assert any(
-        edge.source == "symbol:controller.hpp:started"
-        and edge.target == "symbol:controller.hpp:start"
+        edge.source == "name:Controller::started"
+        and edge.target == "name:Controller::start"
         and edge.metadata.get("sender_class") == "Controller"
         and edge.metadata.get("receiver_class") == "Controller"
         for edge in connects
@@ -402,8 +402,8 @@ void Controller::run() {
     assert any(edge.relation == "emits" and edge.target == "module:started" for edge in edges)
     assert any(
         edge.relation == "connects"
-        and edge.source == "module:started"
-        and edge.target == "module:start"
+        and edge.source == "name:Controller::started"
+        and edge.target == "name:Controller::start"
         and edge.metadata.get("sender_class") == "Controller"
         and edge.metadata.get("receiver_class") == "Controller"
         for edge in edges
