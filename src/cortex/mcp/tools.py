@@ -136,12 +136,13 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "cortex_refresh",
-        "description": "Re-ingest the repository into the local Cortex database.",
+        "description": "Re-ingest the repository into the local Cortex database. Incremental by default; pass mode=\"full\" to rebuild from scratch.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "repo_path": {"type": "string"},
                 "commits": {"type": "integer", "default": 1000},
+                "mode": {"type": "string", "enum": ["incremental", "full"], "default": "incremental"},
             },
         },
     },
@@ -677,8 +678,15 @@ def _call_references(arguments: dict[str, Any]) -> dict[str, Any]:
 
 def _call_refresh(arguments: dict[str, Any]) -> dict[str, Any]:
     repo_root = _repo_root(arguments)
-    summary = ingest_repository(repo_root, commit_limit=int(arguments.get("commits", 1000)))
-    return _content({"summary": summary, "stale": False})
+    mode = str(arguments.get("mode", "incremental"))
+    # Incremental needs an existing database to diff against.
+    incremental = mode != "full" and default_db_path(repo_root).exists()
+    summary = ingest_repository(
+        repo_root,
+        commit_limit=int(arguments.get("commits", 1000)),
+        incremental=incremental,
+    )
+    return _content({"summary": summary, "mode": "incremental" if incremental else "full", "stale": False})
 
 
 def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
