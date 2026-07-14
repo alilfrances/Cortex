@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 from .ast_extract import extract_python_edges
 from .cochange import build_cochange_edges
@@ -157,5 +157,12 @@ def build_graph(
                     weight=1.0,
                 )
             )
+
+    degree: Counter[str] = Counter()
+    for edge in edges:
+        degree[edge.source] += 1
+        degree[edge.target] += 1
+    for node in nodes:
+        node.metadata['degree'] = degree.get(node.node_id, 0)
 
     return nodes, edges

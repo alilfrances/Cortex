@@ -387,6 +387,7 @@ def _call_search(arguments: dict[str, Any]) -> dict[str, Any]:
     status = _ensure_fresh(store, repo_root)
     nodes = [node.to_dict() for node in store.search_nodes(repo_root, str(arguments.get("query", "")), int(arguments.get("limit", 20)))]
     for node in nodes:
+        node["degree"] = node.get("metadata", {}).get("degree", 0)
         node["why"] = [{"type": "like_query", "query": str(arguments.get("query", ""))}]
     response_format = _response_format(arguments)
     if response_format == "concise":
