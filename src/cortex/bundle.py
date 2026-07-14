@@ -7,6 +7,7 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
+from .config import load_config
 from .gitutils import discover_repo_root
 from .models import BundleItem, GraphEdge, GraphNode, RetrievalBundle
 from .rank import personalized_pagerank
@@ -224,8 +225,26 @@ def _tokenize_text(text: str, *, drop_stopwords: bool = False) -> set[str]:
     return terms
 
 
-def _tokenize_query(task: str) -> set[str]:
-    return _tokenize_text(task, drop_stopwords=True)
+def _expand_synonyms(terms: set[str], synonyms: dict[str, list[str]]) -> set[str]:
+    """Two-way task-term expansion: a matched key pulls its values' tokens and
+    a matched value pulls the key's tokens."""
+    expanded = set(terms)
+    for key, values in synonyms.items():
+        key_tokens = _tokenize_text(key)
+        value_token_sets = [_tokenize_text(value) for value in values]
+        if key_tokens and key_tokens <= terms:
+            for value_tokens in value_token_sets:
+                expanded |= value_tokens
+        if any(value_tokens and value_tokens <= terms for value_tokens in value_token_sets):
+            expanded |= key_tokens
+    return expanded
+
+
+def _tokenize_query(task: str, synonyms: dict[str, list[str]] | None = None) -> set[str]:
+    terms = _tokenize_text(task, drop_stopwords=True)
+    if synonyms:
+        terms = _expand_synonyms(terms, synonyms)
+    return terms
 
 
 def _score_text(
@@ -233,8 +252,9 @@ def _score_text(
     text: str,
     recency_weight: float = 0.0,
     term_weights: dict[str, float] | None = None,
+    noise_terms: frozenset[str] = frozenset(),
 ) -> float:
-    haystack_terms = _tokenize_text(text)
+    haystack_terms = _tokenize_text(text) - noise_terms
     overlap = task_terms & haystack_terms
     if term_weights is None:
         return len(overlap) * 10.0 + recency_weight
@@ -338,7 +358,11 @@ def generate_bundle(
     commits = store.fetch_commits(repo_root)
     nodes, edges = store.fetch_graph(repo_root)
 
-    task_terms = _tokenize_query(task)
+    config = load_config(repo_root)
+    task_terms = _tokenize_query(task, config.synonyms)
+    noise_terms = frozenset(
+        term for identifier in config.noise_identifiers for term in _tokenize_text(identifier)
+    )
     term_weights = _term_weights(task_terms, sources)
     demote_aux = not (task_terms & AUX_INTENT_TERMS)
     lang_suffixes = _language_hint_suffixes(task, task_terms)
@@ -369,6 +393,7 @@ def generate_bundle(
             f'{source.path}\n{haystack}',
             recency_weight,
             term_weights,
+            noise_terms,
         )
         if demote_aux and _is_aux_path(source.path):
             score *= AUX_PATH_DEMOTION
@@ -429,7 +454,7 @@ def generate_bundle(
                 path=commit.sha,
                 content=content,
                 token_count=count_text_tokens(content),
-                score=_score_text(task_terms, content, recency_weight=recency_weight, term_weights=term_weights),
+                score=_score_text(task_terms, content, recency_weight=recency_weight, term_weights=term_weights, noise_terms=noise_terms),
                 metadata={'sha': commit.sha, 'files': commit.files, 'authored_at': commit.authored_at},
             )
         )
@@ -450,7 +475,7 @@ def generate_bundle(
                 continue
             span_text = '\n'.join(span_lines)
             name_bonus = NAME_MATCH_BONUS if task_terms & _tokenize_text(symbol.label) else 0.0
-            span_score = _score_text(task_terms, _strip_boilerplate(span_text), 0.0, term_weights)
+            span_score = _score_text(task_terms, _strip_boilerplate(span_text), 0.0, term_weights, noise_terms)
             # The file share is a tiebreaker for spans that match the task
             # themselves, not a qualifier for spans that match nothing.
             if name_bonus + span_score <= 0:

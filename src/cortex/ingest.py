@@ -7,6 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TypeVar
 
+from .config import load_config
 from .gitutils import collect_recent_commits, discover_repo_root
 from .graph import build_graph
 from .models import SourceRecord
@@ -74,16 +75,18 @@ def _git_listed_files(repo_root: Path) -> list[Path] | None:
     return [repo_root / rel for rel in result.stdout.split("\0") if rel]
 
 
-def _iter_candidate_files(repo_root: Path) -> list[Path]:
+def _iter_candidate_files(repo_root: Path, skip_dirs: set[str] | None = None) -> list[Path]:
+    if skip_dirs is None:
+        skip_dirs = _SKIP_DIRS | set(load_config(repo_root).skip_dirs)
     listed = _git_listed_files(repo_root)
     if listed is not None:
         return [
             path for path in listed
-            if not set(path.relative_to(repo_root).parts[:-1]) & _SKIP_DIRS
+            if not set(path.relative_to(repo_root).parts[:-1]) & skip_dirs
         ]
     files: list[Path] = []
     for root, dirs, names in os.walk(repo_root):
-        dirs[:] = [directory for directory in dirs if directory not in _SKIP_DIRS]
+        dirs[:] = [directory for directory in dirs if directory not in skip_dirs]
         files.extend(Path(root) / name for name in names)
     return files
 
@@ -121,9 +124,9 @@ def _content_hash(content: str) -> str:
     return hashlib.sha256(content.encode('utf-8', errors='replace')).hexdigest()
 
 
-def compute_repo_fingerprint(repo_root: Path) -> str:
+def compute_repo_fingerprint(repo_root: Path, skip_dirs: set[str] | None = None) -> str:
     parts: list[str] = []
-    for path in _iter_candidate_files(repo_root):
+    for path in _iter_candidate_files(repo_root, skip_dirs):
         if path.suffix.lower() not in _TEXT_SUFFIXES:
             continue
         try:
@@ -135,9 +138,9 @@ def compute_repo_fingerprint(repo_root: Path) -> str:
     return hashlib.sha256("\n".join(sorted(parts)).encode("utf-8")).hexdigest()
 
 
-def _scan_sources(repo_root: Path) -> list[SourceRecord]:
+def _scan_sources(repo_root: Path, skip_dirs: set[str] | None = None) -> list[SourceRecord]:
     sources: list[SourceRecord] = []
-    for path in _iter_candidate_files(repo_root):
+    for path in _iter_candidate_files(repo_root, skip_dirs):
         if path.suffix.lower() not in _TEXT_SUFFIXES:
             continue
         try:
@@ -178,10 +181,12 @@ def ingest_repository(
     incremental: bool = False,
 ) -> dict[str, int | bool | str]:
     repo_root = discover_repo_root(repo_path)
+    config = load_config(repo_root)
+    skip_dirs = _SKIP_DIRS | set(config.skip_dirs)
     store = CortexStore(db_path or default_db_path(repo_root))
     write_repo_meta(store.db_path, repo_root)
-    all_sources = _scan_sources(repo_root)
-    fingerprint = compute_repo_fingerprint(repo_root)
+    all_sources = _scan_sources(repo_root, skip_dirs)
+    fingerprint = compute_repo_fingerprint(repo_root, skip_dirs)
     commits = collect_recent_commits(repo_root, commit_limit)
 
     if incremental:
@@ -214,7 +219,10 @@ def ingest_repository(
             ]
 
             new_nodes, new_edges = build_graph(
-                sources_to_process, commits, all_paths=current_paths
+                sources_to_process,
+                commits,
+                all_paths=current_paths,
+                connect_names=config.connect_functions,
             )
 
             merged_nodes = _dedupe_by_id(filtered_nodes + new_nodes, lambda n: n.node_id)
@@ -237,7 +245,7 @@ def ingest_repository(
             "cochange_commits": len(commits),
         }
 
-    nodes, edges = build_graph(all_sources, commits)
+    nodes, edges = build_graph(all_sources, commits, connect_names=config.connect_functions)
 
     store.reset_repo(repo_root, fingerprint=fingerprint)
     store.save_sources(repo_root, all_sources)
