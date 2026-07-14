@@ -350,7 +350,7 @@ def test_cortex_relations_filters_resolves_and_limits(tmp_path: Path, monkeypatc
     assert [item["relation"] for item in payload["items"]] == ["inherits"]
     assert payload["items"][0]["source"] == "Runner @ engine.cpp"
     assert payload["items"][0]["target"] == "Base @ engine.hpp"
-    assert set(payload["items"][0]) == {"relation", "source", "target"}
+    assert set(payload["items"][0]) == {"relation", "source", "target", "layer", "confidence", "origin"}
     assert payload["truncated"] is False
 
 
@@ -542,8 +542,8 @@ def test_cortex_references_unions_graph_and_grep_hits_bucketed(tmp_path: Path, m
 
     payload = _payload(call_tool("cortex_references", {"repo_path": str(repo), "symbol": "Runner"}))
 
-    assert payload["items"]["code"] == ["engine.cpp:1"]
-    assert payload["items"]["config"] == ["CMakeLists.txt:1"]
+    assert payload["items"]["code"] == [{"text": "engine.cpp:1", "origin": "graph"}]
+    assert payload["items"]["config"] == [{"text": "CMakeLists.txt:1", "origin": "grep"}]
     assert payload["truncated"] is False
 
 
@@ -563,7 +563,7 @@ def test_cortex_references_dedupes_grep_hit_already_covered_by_graph_edge(tmp_pa
 
     payload = _payload(call_tool("cortex_references", {"repo_path": str(repo), "symbol": "Runner"}))
 
-    all_hits = [hit for bucket in payload["items"].values() for hit in bucket]
+    all_hits = [hit["text"] for bucket in payload["items"].values() for hit in bucket]
     assert all_hits.count("engine.cpp:1") == 1
 
 

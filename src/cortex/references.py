@@ -50,7 +50,11 @@ def _graph_hits(store: CortexStore, repo_root: Path, symbol: str) -> tuple[list[
                 continue
             seen_edge_locations.add(key)
             line_part = f":{node.span_start}" if node.span_start is not None else ""
-            hits.append({"bucket": _bucket(Path(node.source_ref)), "text": f"{node.source_ref}{line_part}"})
+            hits.append({
+                "bucket": _bucket(Path(node.source_ref)),
+                "text": f"{node.source_ref}{line_part}",
+                "origin": "graph",
+            })
     return hits, covered
 
 
@@ -68,7 +72,7 @@ def _grep_hits(repo_root: Path, symbol: str, covered: set[tuple[str, int | None]
                 continue
             if (rel_path, lineno) in covered:
                 continue
-            hits.append({"bucket": _bucket(path), "text": f"{rel_path}:{lineno}"})
+            hits.append({"bucket": _bucket(path), "text": f"{rel_path}:{lineno}", "origin": "grep"})
     return hits
 
 
@@ -76,11 +80,12 @@ def find_references(store: CortexStore, repo_root: Path, symbol: str, budget: in
     graph_hits, covered = _graph_hits(store, repo_root, symbol)
     grep_hits = _grep_hits(repo_root, symbol, covered)
 
-    items: dict[str, list[str]] = {"code": [], "script": [], "doc": [], "config": [], "other": []}
+    items: dict[str, list[dict[str, str]]] = {"code": [], "script": [], "doc": [], "config": [], "other": []}
     truncated = False
     returned_count = 0
     for hit in [*graph_hits, *grep_hits]:
-        candidate = {**items, hit["bucket"]: [*items[hit["bucket"]], hit["text"]]}
+        entry = {"text": hit["text"], "origin": hit["origin"]}
+        candidate = {**items, hit["bucket"]: [*items[hit["bucket"]], entry]}
         if count_text_tokens(str(candidate)) > budget:
             truncated = True
             break

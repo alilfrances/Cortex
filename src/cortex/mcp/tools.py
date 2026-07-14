@@ -9,6 +9,7 @@ from ..bundle import _tokenize_query, generate_bundle
 from ..gitutils import discover_repo_root
 from ..impact import UnknownPathError, rank_file_impact
 from ..ingest import compute_repo_fingerprint, ingest_repository
+from ..pathfind import shortest_paths
 from ..references import find_references
 from ..report import generate_report
 from ..store import CortexStore, default_db_path
@@ -114,6 +115,23 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "response_format": {"type": "string", "enum": ["concise", "detailed"], "default": "concise"},
             },
             "required": ["symbol"],
+        },
+    },
+    {
+        "name": "cortex_path",
+        "description": (
+            "Returns up to 3 shortest graph paths between two symbols over parsed structural edges. Use to answer how A reaches B (calls/contains/connects wiring); use cortex_relations for one-hop neighbors. Example: {\"symbol_a\":\"generate_bundle\",\"symbol_b\":\"count_text_tokens\"}."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "repo_path": {"type": "string"},
+                "symbol_a": {"type": "string"},
+                "symbol_b": {"type": "string"},
+                "max_depth": {"type": "integer", "default": 6},
+                "response_format": {"type": "string", "enum": ["concise", "detailed"], "default": "concise"},
+            },
+            "required": ["symbol_a", "symbol_b"],
         },
     },
     {
@@ -484,6 +502,46 @@ def _call_read_symbol(arguments: dict[str, Any]) -> dict[str, Any]:
     return _content(_format_payload(payload, status, response_format))
 
 
+def _unresolved_endpoint(node_id: str) -> str:
+    if node_id.startswith("name:"):
+        return node_id.removeprefix("name:") or node_id
+    if node_id.startswith("symbol:"):
+        return node_id.rsplit(":", 1)[-1] or node_id
+    if node_id.startswith("file:"):
+        return node_id.removeprefix("file:") or node_id
+    return node_id
+
+
+def _endpoint(node_id: str, nodes: dict[str, Any]) -> str:
+    node = nodes.get(node_id)
+    if node is None:
+        return _unresolved_endpoint(node_id)
+    if node.span_start is not None:
+        return f"{node.label} @ {node.source_ref}:{node.span_start}"
+    return f"{node.label} @ {node.source_ref}"
+
+
+_ORIGIN_PREFIXES = {
+    "regex:": "regex-parser",
+    "treesitter:": "treesitter-parser",
+    "ts:": "treesitter-parser",
+    "ast:": "ast-parser",
+    "cochange:": "git-history",
+    "semantic:": "llm",
+}
+
+
+def _edge_origin(edge: Any) -> str:
+    for prefix, origin in _ORIGIN_PREFIXES.items():
+        if edge.edge_id.startswith(prefix):
+            return origin
+    if edge.layer == "COCHANGE":
+        return "git-history"
+    if edge.layer == "HEADING":
+        return "markdown-parser"
+    return "unknown"
+
+
 def _call_relations(arguments: dict[str, Any]) -> dict[str, Any]:
     repo_root = _repo_root(arguments)
     store, error = _store_or_error(repo_root)
@@ -501,31 +559,17 @@ def _call_relations(arguments: dict[str, Any]) -> dict[str, Any]:
     node_ids = sorted({edge.source for edge in edges} | {edge.target for edge in edges})
     nodes = store.get_nodes(repo_root, node_ids)
 
-    def unresolved_endpoint(node_id: str) -> str:
-        if node_id.startswith("name:"):
-            return node_id.removeprefix("name:") or node_id
-        if node_id.startswith("symbol:"):
-            return node_id.rsplit(":", 1)[-1] or node_id
-        if node_id.startswith("file:"):
-            return node_id.removeprefix("file:") or node_id
-        return node_id
-
-    def endpoint(node_id: str) -> str:
-        node = nodes.get(node_id)
-        if node is None:
-            return unresolved_endpoint(node_id)
-        if node.span_start is not None:
-            return f"{node.label} @ {node.source_ref}:{node.span_start}"
-        return f"{node.label} @ {node.source_ref}"
-
     items: list[dict[str, Any]] = []
     budget = int(arguments.get("budget", 2000))
     truncated = False
     for edge in edges:
         item = {
             "relation": edge.relation,
-            "source": endpoint(edge.source),
-            "target": endpoint(edge.target),
+            "source": _endpoint(edge.source, nodes),
+            "target": _endpoint(edge.target, nodes),
+            "layer": edge.layer,
+            "confidence": edge.confidence,
+            "origin": _edge_origin(edge),
         }
         if count_text_tokens(json.dumps([*items, item])) > budget:
             truncated = True
@@ -537,6 +581,83 @@ def _call_relations(arguments: dict[str, Any]) -> dict[str, Any]:
         status,
         response_format,
     ))
+
+
+def _call_path(arguments: dict[str, Any]) -> dict[str, Any]:
+    repo_root = _repo_root(arguments)
+    store, error = _store_or_error(repo_root)
+    if error is not None:
+        return _content(error, is_error=True)
+    assert store is not None
+    status = _ensure_fresh(store, repo_root)
+    response_format = _response_format(arguments)
+    symbol_a = str(arguments.get("symbol_a", ""))
+    symbol_b = str(arguments.get("symbol_b", ""))
+    if not symbol_a or not symbol_b:
+        return _content({"error": "missing_symbol", "message": "symbol_a and symbol_b are required"}, is_error=True)
+
+    resolved: dict[str, Any] = {}
+    for key, symbol in (("symbol_a", symbol_a), ("symbol_b", symbol_b)):
+        node, matches = _resolve_symbol(store, repo_root, symbol)
+        if node is None:
+            if matches:
+                return _content(_format_payload(
+                    {
+                        "repo_path": str(repo_root),
+                        "hint": "call again with node_id",
+                        "ambiguous": key,
+                        "matches": [_symbol_match_payload(match) for match in matches],
+                    },
+                    status,
+                    response_format,
+                ))
+            return _content(
+                {
+                    "error": "symbol_not_found",
+                    "message": f"No symbol matched {symbol!r}.",
+                    "hint": "try cortex_search_symbols",
+                    **(status if response_format == "detailed" else _concise_status(status)),
+                },
+                is_error=True,
+            )
+        resolved[key] = node
+
+    graph_nodes, graph_edges = store.fetch_graph(repo_root)
+    node_by_id = {node.node_id: node for node in graph_nodes}
+    edge_by_id = {edge.edge_id: edge for edge in graph_edges}
+    max_depth = int(arguments.get("max_depth", 6))
+    raw_paths = shortest_paths(
+        graph_nodes,
+        graph_edges,
+        resolved["symbol_a"].node_id,
+        resolved["symbol_b"].node_id,
+        max_depth=max_depth,
+    )
+    paths = [
+        [
+            {
+                "node": _endpoint(hop["node"], node_by_id),
+                "node_id": hop["node"],
+                "relation": hop["relation"],
+                "direction": hop["direction"],
+                "layer": hop["layer"],
+                "confidence": hop["confidence"],
+                "origin": _edge_origin(edge_by_id[hop["edge_id"]]),
+            }
+            for hop in path
+        ]
+        for path in raw_paths
+    ]
+    payload: dict[str, Any] = {
+        "repo_path": str(repo_root),
+        "source": _endpoint(resolved["symbol_a"].node_id, node_by_id),
+        "target": _endpoint(resolved["symbol_b"].node_id, node_by_id),
+        "paths": paths,
+        "returned_count": len(paths),
+    }
+    if not paths:
+        payload["note"] = f"No path between the symbols within {max_depth} hops (COCHANGE edges and commit nodes excluded)."
+    return _content(_format_payload(payload, status, response_format))
 
 
 def _call_references(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -575,6 +696,8 @@ def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
             return _call_read_symbol(args)
         if name == "cortex_relations":
             return _call_relations(args)
+        if name == "cortex_path":
+            return _call_path(args)
         if name == "cortex_references":
             return _call_references(args)
         if name == "cortex_refresh":
