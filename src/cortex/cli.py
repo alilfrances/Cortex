@@ -163,7 +163,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     ingest_parser = subparsers.add_parser("ingest", help="Ingest a repository into Cortex state")
     ingest_parser.add_argument("repo_path", type=Path)
-    ingest_parser.add_argument("--commits", type=int, default=50)
+    ingest_parser.add_argument("--commits", type=int, default=1000)
     ingest_parser.add_argument("--db", type=Path, default=None)
     ingest_parser.add_argument("--update", action="store_true", help="Incremental: only re-scan changed files")
 
@@ -195,7 +195,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     refresh_parser = subparsers.add_parser("refresh", help="Refresh Cortex state and write the default report")
     refresh_parser.add_argument("repo_path", type=Path, nargs="?", default=Path("."))
-    refresh_parser.add_argument("--commits", type=int, default=50)
+    refresh_parser.add_argument("--commits", type=int, default=1000)
     refresh_parser.add_argument("--db", type=Path, default=None)
 
     gc_parser = subparsers.add_parser("gc", help="List or prune central data dirs whose repo is gone")

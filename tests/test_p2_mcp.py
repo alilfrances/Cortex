@@ -105,7 +105,9 @@ def test_rank_file_impact_prefers_heavier_cochange_and_structural_edges() -> Non
     impact, truncated = rank_file_impact("app.py", nodes, edges)
 
     assert [item["path"] for item in impact] == ["db.py", "ui.py"]
-    assert impact[0]["why"] == [{"relation": "cochange", "weight": 4.0}]
+    assert impact[0]["why"] == [
+        {"relation": "cochange", "weight": 4.0, "layer": "COCHANGE", "confidence": "EXTRACTED"}
+    ]
     assert impact[1]["score"] == 2.0
     assert truncated is False
 

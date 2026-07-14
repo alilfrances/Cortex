@@ -4,6 +4,10 @@ from collections import Counter
 
 from .models import CommitRecord, GraphEdge
 
+# Commits touching more files than this (bulk refactors, vendor imports)
+# would create O(n^2) meaningless pairs, so they are ignored.
+MAX_COMMIT_FILES = 50
+
 
 def build_cochange_edges(commits: list[CommitRecord]) -> list[GraphEdge]:
     """
@@ -15,6 +19,8 @@ def build_cochange_edges(commits: list[CommitRecord]) -> list[GraphEdge]:
 
     for commit in commits:
         files = [f for f in commit.files if f]
+        if len(files) > MAX_COMMIT_FILES:
+            continue
         for i, a in enumerate(files):
             for b in files[i + 1 :]:
                 pair = (min(a, b), max(a, b))

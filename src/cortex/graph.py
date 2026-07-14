@@ -16,12 +16,15 @@ def _content_hash(content: str) -> str:
 def build_graph(
     sources: list[SourceRecord],
     commits: list[CommitRecord],
+    all_paths: set[str] | None = None,
 ) -> tuple[list[GraphNode], list[GraphEdge]]:
     nodes: list[GraphNode] = []
     edges: list[GraphEdge] = []
     file_nodes: dict[str, str] = {}
     section_index: defaultdict[str, int] = defaultdict(int)
-    known_paths = {s.path for s in sources}
+    # On incremental runs `sources` is only the changed subset; `all_paths`
+    # keeps reference resolution and commit linking aware of the whole repo.
+    known_paths = all_paths if all_paths is not None else {s.path for s in sources}
 
     for source in sources:
         file_node_id = f'file:{source.path}'
@@ -92,14 +95,13 @@ def build_graph(
             )
         )
         for file_path in commit.files:
-            file_node_id = file_nodes.get(file_path)
-            if file_node_id is None:
+            if file_path not in known_paths:
                 continue
             edges.append(
                 GraphEdge(
                     edge_id=f'edge:{commit.sha}:{file_path}',
                     source=commit_node_id,
-                    target=file_node_id,
+                    target=f'file:{file_path}',
                     relation='touches',
                     layer='COCHANGE',
                     confidence='EXTRACTED',

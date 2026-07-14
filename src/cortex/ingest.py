@@ -3,12 +3,16 @@ from __future__ import annotations
 import hashlib
 import os
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
+from typing import TypeVar
 
 from .gitutils import collect_recent_commits, discover_repo_root
 from .graph import build_graph
 from .models import SourceRecord
 from .store import CortexStore, default_db_path, write_repo_meta
+
+_T = TypeVar("_T")
 
 _TEXT_SUFFIXES = {
     ".md",
@@ -155,11 +159,22 @@ def _scan_sources(repo_root: Path) -> list[SourceRecord]:
     return sorted(sources, key=lambda item: item.path)
 
 
+def _dedupe_by_id(items: list[_T], key: Callable[[_T], str]) -> list[_T]:
+    seen: set[str] = set()
+    unique: list[_T] = []
+    for item in items:
+        item_id = key(item)
+        if item_id in seen:
+            continue
+        seen.add(item_id)
+        unique.append(item)
+    return unique
+
+
 def ingest_repository(
     repo_path: Path,
-    commit_limit: int = 50,
+    commit_limit: int = 1000,
     db_path: Path | None = None,
-    enrich: bool = False,
     incremental: bool = False,
 ) -> dict[str, int | bool | str]:
     repo_root = discover_repo_root(repo_path)
@@ -186,16 +201,24 @@ def ingest_repository(
             existing_nodes, existing_edges = store.fetch_graph(repo_root)
 
             stale_paths = {s.path for s in changed_sources} | set(deleted_paths)
-            filtered_nodes = [n for n in existing_nodes if n.source_ref not in stale_paths]
+            # COCHANGE edges and commit nodes are fully rebuilt from `commits`
+            # each run, so retained copies would duplicate on every refresh.
+            filtered_nodes = [
+                n for n in existing_nodes
+                if n.source_ref not in stale_paths and n.kind != "commit"
+            ]
             filtered_edges = [
                 e for e in existing_edges
                 if e.metadata.get("source_file") not in stale_paths
+                and e.layer != "COCHANGE"
             ]
 
-            new_nodes, new_edges = build_graph(sources_to_process, commits)
+            new_nodes, new_edges = build_graph(
+                sources_to_process, commits, all_paths=current_paths
+            )
 
-            merged_nodes = filtered_nodes + new_nodes
-            merged_edges = filtered_edges + new_edges
+            merged_nodes = _dedupe_by_id(filtered_nodes + new_nodes, lambda n: n.node_id)
+            merged_edges = _dedupe_by_id(filtered_edges + new_edges, lambda e: e.edge_id)
 
             store.save_sources(repo_root, sources_to_process)
             store.delete_sources(repo_root, deleted_paths)
@@ -211,7 +234,7 @@ def ingest_repository(
             "deleted_files": len(deleted_paths),
             "unchanged_files": unchanged_count,
             "commit_count": len(commits),
-            "enrichment_enabled": enrich,
+            "cochange_commits": len(commits),
         }
 
     nodes, edges = build_graph(all_sources, commits)
@@ -231,5 +254,5 @@ def ingest_repository(
         "commit_count": len(commits),
         "node_count": len(nodes),
         "edge_count": len(edges),
-        "enrichment_enabled": enrich,
+        "cochange_commits": len(commits),
     }

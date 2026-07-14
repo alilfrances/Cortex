@@ -123,7 +123,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "type": "object",
             "properties": {
                 "repo_path": {"type": "string"},
-                "commits": {"type": "integer", "default": 50},
+                "commits": {"type": "integer", "default": 1000},
             },
         },
     },
@@ -549,7 +549,7 @@ def _call_references(arguments: dict[str, Any]) -> dict[str, Any]:
 
 def _call_refresh(arguments: dict[str, Any]) -> dict[str, Any]:
     repo_root = _repo_root(arguments)
-    summary = ingest_repository(repo_root, commit_limit=int(arguments.get("commits", 50)))
+    summary = ingest_repository(repo_root, commit_limit=int(arguments.get("commits", 1000)))
     return _content({"summary": summary, "stale": False})
 
 
