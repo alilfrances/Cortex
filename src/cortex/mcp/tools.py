@@ -303,6 +303,7 @@ def _concise_query_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
         "repo_path": bundle.get("repo_path", ""),
         "budget": bundle.get("budget", 0),
         "total_tokens": bundle.get("total_tokens", 0),
+        "token_stats": bundle.get("token_stats", {}),
         "confidence_notes": bundle.get("confidence_notes", []),
         "open_questions": bundle.get("open_questions", []),
         "items": [],
@@ -345,6 +346,18 @@ def _call_query(arguments: dict[str, Any]) -> dict[str, Any]:
     _nodes, edges = store.fetch_graph(repo_root)
     for item in bundle.get("items", []):
         item["why"] = _bundle_why(item, terms, seed_paths, edges)
+    returned_tokens = int(bundle.get("total_tokens", 0))
+    matched_tokens = sum(
+        int(item.get("token_count", 0))
+        for item in bundle.get("items", [])
+        if any(entry.get("type") == "keyword" for entry in item.get("why", []))
+    )
+    bundle["token_stats"] = {
+        "budget": int(bundle.get("budget", arguments.get("budget", 4000))),
+        "returned_tokens": returned_tokens,
+        "matched_tokens": matched_tokens,
+        "matched_ratio": round(matched_tokens / returned_tokens, 2) if returned_tokens else 0.0,
+    }
     response_format = _response_format(arguments)
     payload = bundle if response_format == "detailed" else _concise_query_bundle(bundle)
     return _content(_format_payload(payload, status, response_format))

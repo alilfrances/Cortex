@@ -606,6 +606,11 @@ def test_cortex_query_defaults_to_concise_and_detailed_preserves_payload(tmp_pat
     assert "metadata" not in concise["items"][0] or "graph_bonus" not in concise["items"][0]["metadata"]
     assert "fingerprint" in detailed
     assert isinstance(detailed["items"][0]["why"], list)
+    for payload in (concise, detailed):
+        stats = payload["token_stats"]
+        assert stats["budget"] == 4000
+        assert 0 <= stats["matched_ratio"] <= 1
+        assert stats["matched_tokens"] <= stats["returned_tokens"]
 
 
 def test_cortex_search_symbols_concise_drops_why(tmp_path: Path, monkeypatch) -> None:
