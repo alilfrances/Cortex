@@ -104,7 +104,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "name": "cortex_references",
         "description": (
-            "Returns symbol references from graph edges plus repo grep, bucketed by file type. Use for cross-language blast radius; use cortex_relations for parsed-only edges. Example: {\"symbol\":\"_ensure_fresh\"}."
+            "Returns symbol references from graph edges plus repo grep, bucketed by file type. Use for cross-language blast radius; use cortex_relations for parsed-only edges. Pass mode:\"writes\" to answer where a symbol is mutated. Example: {\"symbol\":\"_ensure_fresh\",\"mode\":\"writes\"}."
         ),
         "inputSchema": {
             "type": "object",
@@ -112,6 +112,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "repo_path": {"type": "string"},
                 "symbol": {"type": "string"},
                 "budget": {"type": "integer", "default": 2000},
+                "mode": {"type": "string", "enum": ["all", "writes"], "default": "all"},
                 "response_format": {"type": "string", "enum": ["concise", "detailed"], "default": "concise"},
             },
             "required": ["symbol"],
@@ -671,7 +672,13 @@ def _call_references(arguments: dict[str, Any]) -> dict[str, Any]:
     symbol = str(arguments.get("symbol", ""))
     if not symbol:
         return _content({"error": "missing_symbol", "message": "symbol is required"}, is_error=True)
-    result = find_references(store, repo_root, symbol, budget=int(arguments.get("budget", 2000)))
+    result = find_references(
+        store,
+        repo_root,
+        symbol,
+        budget=int(arguments.get("budget", 2000)),
+        mode=str(arguments.get("mode", "all")),
+    )
     response_format = _response_format(arguments)
     return _content(_format_payload({"repo_path": str(repo_root), **result}, status, response_format))
 

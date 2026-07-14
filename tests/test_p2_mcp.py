@@ -542,8 +542,8 @@ def test_cortex_references_unions_graph_and_grep_hits_bucketed(tmp_path: Path, m
 
     payload = _payload(call_tool("cortex_references", {"repo_path": str(repo), "symbol": "Runner"}))
 
-    assert payload["items"]["code"] == [{"text": "engine.cpp:1", "origin": "graph"}]
-    assert payload["items"]["config"] == [{"text": "CMakeLists.txt:1", "origin": "grep"}]
+    assert payload["items"]["code"] == [{"text": "engine.cpp:1", "origin": "graph", "access": "definition"}]
+    assert payload["items"]["config"] == [{"text": "CMakeLists.txt:1", "origin": "grep", "access": "read"}]
     assert payload["truncated"] is False
 
 
