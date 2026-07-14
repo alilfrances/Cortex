@@ -388,9 +388,18 @@ def _extract_qt_cpp_edges(
     class_depth = 0
     section = ""
     brace_depth = 0
+    function_nodes = [
+        node
+        for node in nodes
+        if node.source_ref == path and node.kind == "func"
+    ]
+    current_function: GraphNode | None = None
 
     for lineno, line in enumerate(content.splitlines(), start=1):
         stripped = line.strip()
+        for node in function_nodes:
+            if node.span_start == lineno:
+                current_function = node
         class_match = _QT_CLASS_RE.match(line)
         if class_match:
             current_class = class_match.group("name")
@@ -427,10 +436,22 @@ def _extract_qt_cpp_edges(
         if emit_match:
             name = emit_match.group("name")
             symbol_ids = {node.node_id for node in nodes}
+            enclosing = next(
+                (
+                    node
+                    for node in function_nodes
+                    if node.span_start is not None
+                    and node.span_end is not None
+                    and node.span_start <= lineno <= node.span_end
+                ),
+                None,
+            )
+            if enclosing is None and current_function is not None and brace_depth > 0:
+                enclosing = current_function
             edges.append(
                 GraphEdge(
                     edge_id=f"regex:{path}:emits:{lineno}:{name}",
-                    source=file_node_id,
+                    source=enclosing.node_id if enclosing is not None else file_node_id,
                     target=_symbol_ref(path, name, symbol_ids),
                     relation="emits",
                     layer="STRUCTURAL",
@@ -441,6 +462,8 @@ def _extract_qt_cpp_edges(
             )
 
         brace_depth += line.count("{") - line.count("}")
+        if current_function is not None and brace_depth <= 0:
+            current_function = None
         if current_class and brace_depth < class_depth:
             current_class = ""
             section = ""
@@ -507,11 +530,22 @@ def _extract_qt_cpp_edges(
 
 def _extract_qml_handlers(path: str, content: str, file_node_id: str, nodes: list[GraphNode], edges: list[GraphEdge]) -> None:
     symbol_ids = {node.node_id for node in nodes}
+    signal_names = {node.label for node in nodes if node.source_ref == path}
     for lineno, line in enumerate(content.splitlines(), start=1):
         match = _QML_HANDLER_RE.match(line)
         if not match:
             continue
         name = match.group("name")
+        signal_name = name[2:]
+        signal_name = signal_name[:1].lower() + signal_name[1:]
+        candidates = {signal_name}
+        if signal_name.endswith("Changed"):
+            candidates.add(signal_name.removesuffix("Changed"))
+        else:
+            candidates.add(signal_name + "Changed")
+        metadata: dict[str, str | int | bool] = {"lineno": lineno, "source_file": path}
+        if not signal_names.intersection(candidates):
+            metadata["unverified"] = True
         edges.append(
             GraphEdge(
                 edge_id=f"regex:{path}:handles:{lineno}:{name}",
@@ -521,7 +555,7 @@ def _extract_qml_handlers(path: str, content: str, file_node_id: str, nodes: lis
                 layer="STRUCTURAL",
                 confidence="LOW",
                 weight=1.0,
-                metadata={"lineno": lineno, "source_file": path},
+                metadata=metadata,
             )
         )
 
