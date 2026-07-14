@@ -24,11 +24,13 @@ _SUPPORTED_EXTENSIONS = {
     ".hh",
     ".hxx",
     ".qml",
+    ".cmake",
+    ".qrc",
 }
 
 
 def supports_path(path: str) -> bool:
-    return PurePosixPath(path).suffix.lower() in _SUPPORTED_EXTENSIONS
+    return PurePosixPath(path).name.lower() == "cmakelists.txt" or PurePosixPath(path).suffix.lower() in _SUPPORTED_EXTENSIONS
 
 
 def extract_structural_edges(
@@ -39,6 +41,9 @@ def extract_structural_edges(
 ) -> tuple[list[GraphNode], list[GraphEdge]]:
     if not supports_path(path):
         return [], []
+
+    if PurePosixPath(path).name.lower() == "cmakelists.txt" or PurePosixPath(path).suffix.lower() in {".cmake", ".qrc"}:
+        return regex_backend.extract_regex_edges(path, content, known_paths, connect_names)
 
     try:
         from .treesitter_backend import extract_treesitter_edges

@@ -90,7 +90,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "repo_path": {"type": "string"},
                 "relation": {
                     "type": "string",
-                    "enum": ["contains", "imports", "inherits", "calls", "emits", "connects", "handles", "instantiates"],
+                    "enum": ["contains", "imports", "inherits", "calls", "emits", "connects", "handles", "instantiates", "builds", "registers"],
                 },
                 "symbol": {"type": "string", "description": "substring match against endpoint node id or label"},
                 "target": {"type": "string", "description": "alias for 'symbol'"},

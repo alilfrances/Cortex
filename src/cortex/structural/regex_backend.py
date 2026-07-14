@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import posixpath
 import re
+import shlex
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 
@@ -62,6 +64,23 @@ _QT_MEMBER_RE = re.compile(
 )
 _QT_EMIT_RE = re.compile(r"^\s*(?:Q_EMIT|emit)\s+(?P<name>[A-Za-z_]\w*)\s*\(")
 _QML_HANDLER_RE = re.compile(r"^\s*(?P<name>on[A-Z][A-Za-z0-9_]*)\s*:")
+_CMAKE_CALL_RE = re.compile(
+    r"\b(?P<command>add_executable|add_library|qt_add_executable|qt_add_library|target_sources|qt_add_resources|qt_add_qml_module)\s*\((?P<body>[^)]*)\)",
+    re.IGNORECASE | re.DOTALL,
+)
+_QRC_FILE_RE = re.compile(r"<file[^>]*>([^<]+)</file>", re.IGNORECASE)
+_CMAKE_SKIP_TOKENS = {
+    "EXCLUDE_FROM_ALL",
+    "EXCLUDE_FROM_DEFAULT_BUILD",
+    "INTERFACE",
+    "MODULE",
+    "OBJECT",
+    "PRIVATE",
+    "PUBLIC",
+    "SHARED",
+    "STATIC",
+    "WIN32",
+}
 
 DEFAULT_CONNECT_NAMES = ["connect"]
 
@@ -375,6 +394,104 @@ def _upsert_qt_symbol(
     )
 
 
+def _cmake_tokens(body: str) -> list[str]:
+    try:
+        return shlex.split(body, comments=True)
+    except ValueError:
+        return body.split()
+
+
+def _resolve_build_path(path: str, raw_path: str, known_paths: set[str]) -> str | None:
+    cleaned = raw_path.strip().strip('"').strip("'")
+    if not cleaned or "${" in cleaned or "$<" in cleaned:
+        return None
+    resolved = posixpath.normpath(posixpath.join(posixpath.dirname(path), cleaned))
+    return resolved if resolved in known_paths else None
+
+
+def _target_node(path: str, name: str, line: int, nodes: list[GraphNode]) -> str:
+    node_id = f"target:{name}"
+    if not any(node.node_id == node_id for node in nodes):
+        nodes.append(
+            GraphNode(
+                node_id=node_id,
+                kind="target",
+                label=name,
+                source_ref=path,
+                granularity="symbol",
+                span_start=line,
+                span_end=line,
+                metadata={"lineno": line},
+            )
+        )
+    return node_id
+
+
+def _append_wiring_edge(
+    path: str,
+    source: str,
+    target: str,
+    relation: str,
+    line: int,
+    edges: list[GraphEdge],
+) -> None:
+    edge_id = f"regex:{path}:{relation}:{source}:{target}"
+    if any(edge.edge_id == edge_id for edge in edges):
+        return
+    edges.append(
+        GraphEdge(
+            edge_id=edge_id,
+            source=source,
+            target=target,
+            relation=relation,
+            layer="STRUCTURAL",
+            confidence="EXTRACTED",
+            weight=1.0,
+            metadata={"lineno": line, "source_file": path},
+        )
+    )
+
+
+def _extract_cmake_wiring(path: str, content: str, known_paths: set[str], nodes: list[GraphNode], edges: list[GraphEdge]) -> None:
+    build_commands = {"add_executable", "add_library", "qt_add_executable", "qt_add_library", "target_sources"}
+    resource_commands = {"qt_add_resources", "qt_add_qml_module"}
+    for match in _CMAKE_CALL_RE.finditer(content):
+        tokens = _cmake_tokens(match.group("body"))
+        if not tokens or "${" in tokens[0]:
+            continue
+        command = match.group("command").lower()
+        target_name = tokens[0]
+        line = _line_number(content, match.start())
+        target_id = _target_node(path, target_name, line, nodes)
+        if command in build_commands:
+            source_tokens = tokens[1:]
+            relation = "builds"
+        elif command in resource_commands:
+            marker = "FILES" if command == "qt_add_resources" else "QML_FILES"
+            marker_index = next(
+                (index for index, token in enumerate(tokens) if token.upper() == marker),
+                None,
+            )
+            source_tokens = tokens[marker_index + 1:] if marker_index is not None else []
+            relation = "registers"
+        else:
+            continue
+        for raw_path in source_tokens:
+            if raw_path.upper() in _CMAKE_SKIP_TOKENS:
+                continue
+            resolved = _resolve_build_path(path, raw_path, known_paths)
+            if resolved is not None:
+                _append_wiring_edge(path, target_id, f"file:{resolved}", relation, line, edges)
+
+
+def _extract_qrc_wiring(path: str, content: str, known_paths: set[str], edges: list[GraphEdge]) -> None:
+    source = f"file:{path}"
+    for match in _QRC_FILE_RE.finditer(content):
+        resolved = _resolve_build_path(path, match.group(1), known_paths)
+        if resolved is not None:
+            _append_wiring_edge(path, source, f"file:{resolved}", "registers", _line_number(content, match.start()), edges)
+
+
 def _extract_qt_cpp_edges(
     path: str,
     content: str,
@@ -632,6 +749,11 @@ def extract_regex_edges(
     file_node_id = f"file:{path}"
     nodes: list[GraphNode] = []
     edges: list[GraphEdge] = []
+
+    if path.lower().endswith("cmakelists.txt") or suffix == ".cmake":
+        _extract_cmake_wiring(path, content, known_paths, nodes, edges)
+    elif suffix == ".qrc":
+        _extract_qrc_wiring(path, content, known_paths, edges)
 
     for pattern in _IMPORT_PATTERNS.get(suffix, []):
         for index, match in enumerate(pattern.finditer(content), start=1):

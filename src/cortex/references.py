@@ -14,7 +14,7 @@ _CODE_SUFFIXES = {
 }
 _SCRIPT_SUFFIXES = {".sh"}
 _DOC_SUFFIXES = {".md", ".txt", ".rst"}
-_CONFIG_SUFFIXES = {".json", ".yaml", ".yml", ".toml", ".qrc", ".cmake"}
+_CONFIG_SUFFIXES = {".json", ".yaml", ".yml", ".toml", ".qrc", ".cmake", ".pro", ".ui"}
 _CONFIG_NAMES = {"cmakelists.txt"}
 _MUTATING_METHODS = (
     "append",

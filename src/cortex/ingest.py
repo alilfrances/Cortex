@@ -42,6 +42,10 @@ _TEXT_SUFFIXES = {
     ".go",
     ".rs",
     ".sh",
+    ".cmake",
+    ".qrc",
+    ".ui",
+    ".pro",
 }
 
 _SKIP_DIRS = {
@@ -94,6 +98,8 @@ def _iter_candidate_files(repo_root: Path, skip_dirs: set[str] | None = None) ->
 def _classify_path(path: Path) -> str:
     if path.suffix == ".md":
         return "markdown"
+    if path.name.lower() == "cmakelists.txt" or path.suffix in {".cmake", ".qrc"}:
+        return "code"
     if path.suffix in {
         ".py",
         ".js",
