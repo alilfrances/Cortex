@@ -216,10 +216,16 @@ def _bundle_why(
     seed_paths: set[str],
     edges: list,
 ) -> list[dict[str, Any]]:
-    matched = sorted(term for term in terms if term in f"{item.get('path', '')}\n{item.get('content', '')}".lower())
+    node_id = str(item.get("metadata", {}).get("node_id", ""))
+    symbol_name = node_id.split(":", 2)[-1] if node_id else ""
+    haystack = f"{item.get('path', '')}\n{symbol_name}\n{item.get('content', '')}".lower()
+    matched = sorted(term for term in terms if term in haystack)
     why: list[dict[str, Any]] = []
     if matched:
-        why.append({"type": "keyword", "terms": matched[:8], "path": item.get("path", "")})
+        entry: dict[str, Any] = {"type": "keyword", "terms": matched[:8], "path": item.get("path", "")}
+        if node_id:
+            entry["node_id"] = node_id
+        why.append(entry)
 
     item_node = f"file:{item.get('path', '')}"
     seed_nodes = {f"file:{path}" for path in seed_paths}
