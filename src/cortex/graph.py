@@ -31,6 +31,9 @@ def _resolve_connect_endpoints(
             continue
         if node.kind == 'class':
             class_files[node.label].add(node.source_ref)
+        qualifier = node.metadata.get('qualifier')
+        if isinstance(qualifier, str) and qualifier:
+            class_files[qualifier].add(node.source_ref)
         symbol_by_file_label[(node.source_ref, node.label)] = node.node_id
 
     def resolve(endpoint: str) -> str:

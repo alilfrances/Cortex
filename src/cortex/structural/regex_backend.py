@@ -39,7 +39,7 @@ _CPP_DEF_PATTERNS = [
     ),
     _Pattern(
         re.compile(
-            r"^\s*(?:template\s*<[^>]+>\s*)?(?:[\w:<>,~*&\s]+\s+)(?:[A-Za-z_]\w*::)*(?P<name>~?[A-Za-z_]\w*)\s*\([^;{}]*\)\s*(?:const\s*)?(?:noexcept\s*)?\{",
+            r"^\s*(?:template\s*<[^>]+>\s*)?(?:[\w:<>,~*&\s]+\s+)(?P<qualifier>(?:[A-Za-z_]\w*::)*)(?P<name>~?[A-Za-z_]\w*)\s*\([^;{}]*\)\s*(?:const\s*)?(?:noexcept\s*)?\{",
             re.MULTILINE,
         ),
         "func",
@@ -791,7 +791,19 @@ def extract_regex_edges(
             line_start = content.rfind("\n", 0, name_start) + 1
             line = _line_number(content, line_start)
             span_end = _def_span_end(content, match.end(pattern.name_group), line)
-            node = _symbol_node(path, name, pattern.kind, _signature(content, line_start), line, span_end=span_end)
+            qualifier = match.groupdict().get("qualifier", "")
+            metadata = None
+            if qualifier:
+                metadata = {"qualifier": qualifier.rstrip(":").split("::")[-1]}
+            node = _symbol_node(
+                path,
+                name,
+                pattern.kind,
+                _signature(content, line_start),
+                line,
+                metadata=metadata,
+                span_end=span_end,
+            )
             nodes.append(node)
             edges.append(
                 GraphEdge(

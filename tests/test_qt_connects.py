@@ -82,6 +82,54 @@ def test_build_graph_resolves_connect_endpoint_to_defining_symbol():
     assert connects[0].source == "name:Alpha::changed"
 
 
+def test_build_graph_resolves_qualified_members_across_header_and_cpp_files(monkeypatch):
+    import cortex.structural.treesitter_backend as treesitter_backend
+
+    def fail_tree_sitter(*args, **kwargs):
+        raise RuntimeError("grammar unavailable")
+
+    monkeypatch.setattr(treesitter_backend, "extract_treesitter_edges", fail_tree_sitter)
+
+    header = "class Cls {\nsignals:\n    void thing();\n};\n"
+    implementation = (
+        "void Cls::slot() {\n}\n"
+        "void wire(Cls *sender, Cls *receiver) {\n"
+        "    connect(sender, &Cls::thing, receiver, &Cls::slot);\n"
+        "}\n"
+    )
+
+    nodes, edges = build_graph(
+        [_source("Cls.h", header), _source("Cls.cpp", implementation)],
+        [],
+    )
+    connects = _connects(edges)
+
+    assert len(connects) == 1
+    assert connects[0].source == "symbol:Cls.h:thing"
+    assert connects[0].target == "symbol:Cls.cpp:slot"
+
+
+def test_qualified_member_resolution_stays_unresolved_when_class_is_ambiguous(monkeypatch):
+    import cortex.structural.treesitter_backend as treesitter_backend
+
+    def fail_tree_sitter(*args, **kwargs):
+        raise RuntimeError("grammar unavailable")
+
+    monkeypatch.setattr(treesitter_backend, "extract_treesitter_edges", fail_tree_sitter)
+
+    sources = [
+        _source("first.cpp", "void Cls::member() {}\n"),
+        _source("second.cpp", "void Cls::member() {}\n"),
+        _source("wiring.cpp", "void wire() { connect(a, &Cls::member, b, &Other::slot); }\n"),
+    ]
+
+    _nodes, edges = build_graph(sources, [])
+    connects = _connects(edges)
+
+    assert len(connects) == 1
+    assert connects[0].source == "name:Cls::member"
+
+
 def test_custom_connect_wrapper_names():
     content = "void setup() {\n  safeConnect(a, SIGNAL(x()), b, SLOT(y()));\n}\n"
 
