@@ -136,5 +136,5 @@ def format_savings(summary: dict[str, Any], output_format: str = "text", daily: 
             lines.append("No recorded tool usage yet.")
     if totals["calls"] == 0:
         lines.append("")
-        lines.append("No recorded tool usage yet. Call Cortex MCP tools (cortex_query, cortex_read_symbol, ...) to populate the ledger.")
+        lines.append("No recorded tool usage yet. Call Cortex MCP tools (cortex_context, cortex_query, cortex_read_symbol, ...) to populate the ledger.")
     return "\n".join(lines)

@@ -41,6 +41,21 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "inputSchema": {"type": "object", "properties": {"repo_path": {"type": "string"}, "response_format": {"type": "string", "enum": ["concise", "detailed"], "default": "concise"}}},
     },
     {
+        "name": "cortex_context",
+        "description": "Returns one compact triage card per path or symbol in a single call. Resolves exact file paths/node ids before symbol names, includes structural neighbors, co-change partners, hotspots, and Qt/QML wiring; optional include expansions are impact, cochange, and symbols. Use once before editing several files. Example: {\"targets\":[\"src/app.py\",\"symbol:src/app.py:run\"],\"budget\":2000}.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "repo_path": {"type": "string"},
+                "targets": {"type": "array", "items": {"type": "string"}, "description": "Repository-relative paths, file node ids, or symbol names/node ids."},
+                "budget": {"type": "integer", "default": 2000},
+                "include": {"type": "array", "items": {"type": "string", "enum": ["impact", "cochange", "symbols"]}, "description": "Optional detail expansions."},
+                "response_format": {"type": "string", "enum": ["concise", "detailed"], "default": "concise"},
+            },
+            "required": ["targets"],
+        },
+    },
+    {
         "name": "cortex_impact",
         "description": "Returns files structurally or historically coupled to one path. Use after editing/reading a file to assess blast radius; use cortex_references for symbol wiring. Example: {\"path\":\"src/cortex/store.py\"}.",
         "inputSchema": {
@@ -617,6 +632,494 @@ def _call_impact(arguments: dict[str, Any]) -> dict[str, Any]:
     return _content(_format_payload(payload, status, response_format, cached=False))
 
 
+_CONTEXT_INCLUDES = ("impact", "cochange", "symbols")
+
+
+def _context_resolve_file_target(
+    target: str,
+    repo_root: Path,
+    file_nodes: dict[str, Any],
+    files_by_path: dict[str, Any],
+) -> Any | None:
+    """Resolve a file target without letting symbol search reinterpret it.
+
+    File paths are deliberately checked before ``_resolve_symbol``: the
+    symbol search API only searches symbol-granularity rows, so a path such as
+    ``src/app.py`` would otherwise become an ambiguous collection of symbols
+    instead of the exact ``file:src/app.py`` node the caller supplied.
+    """
+    if target in file_nodes:
+        return file_nodes[target]
+    if target.startswith("file:") and target in file_nodes:
+        return file_nodes[target]
+
+    candidate = target.replace("\\", "/")
+    if candidate.startswith("./"):
+        candidate = candidate[2:]
+    try:
+        raw_path = Path(candidate)
+        if raw_path.is_absolute():
+            candidate = raw_path.resolve().relative_to(repo_root.resolve()).as_posix()
+    except (OSError, ValueError):
+        # A symbol-like string, or an absolute path outside the repository, is
+        # not a file target; let the normal symbol resolver handle it.
+        pass
+    return files_by_path.get(candidate) or file_nodes.get(f"file:{candidate}")
+
+
+def _context_file_for_node(node: Any, files_by_path: dict[str, Any]) -> Any | None:
+    if node is None:
+        return None
+    if node.kind == "file" or node.node_id.startswith("file:"):
+        return node
+    return files_by_path.get(node.source_ref)
+
+
+def _context_span(node: Any, source: Any | None) -> dict[str, int | None]:
+    if node is not None and node.granularity == "symbol":
+        return {"start": node.span_start, "end": node.span_end}
+    if source is not None:
+        line_count = len(source.content.splitlines())
+        return {"start": 1 if line_count else 0, "end": line_count}
+    return {"start": node.span_start if node is not None else None, "end": node.span_end if node is not None else None}
+
+
+def _context_node_ref(node: Any | None, node_id: str | None = None) -> dict[str, Any]:
+    if node is None:
+        return {"node_id": node_id or "", "kind": "unknown", "label": node_id or "", "path": ""}
+    return {
+        "node_id": node.node_id,
+        "path": node.source_ref,
+    }
+
+
+def _context_structural_neighbors(node: Any, nodes_by_id: dict[str, Any], edges: list[Any]) -> list[dict[str, Any]]:
+    candidates: dict[str, tuple[Any, str]] = {}
+    for edge in edges:
+        if edge.layer != "STRUCTURAL":
+            continue
+        if edge.source == node.node_id:
+            neighbor_id, direction = edge.target, "out"
+        elif edge.target == node.node_id:
+            neighbor_id, direction = edge.source, "in"
+        else:
+            continue
+        if neighbor_id == node.node_id:
+            continue
+        previous = candidates.get(neighbor_id)
+        if previous is None or (float(edge.weight), edge.relation, edge.edge_id) > (
+            float(previous[0].weight), previous[0].relation, previous[0].edge_id
+        ):
+            candidates[neighbor_id] = (edge, direction)
+
+    ranked = sorted(
+        candidates.items(),
+        key=lambda item: (-float(item[1][0].weight), item[1][0].relation, item[0], item[1][0].edge_id),
+    )
+    result: list[dict[str, Any]] = []
+    for neighbor_id, (edge, _direction) in ranked[:3]:
+        ref = _context_node_ref(nodes_by_id.get(neighbor_id), neighbor_id)
+        ref.update({"relation": edge.relation, "weight": round(float(edge.weight), 3)})
+        result.append(ref)
+    return result
+
+
+def _context_cochange_partners(
+    path: str,
+    nodes: list[Any],
+    edges: list[Any],
+    *,
+    limit: int,
+) -> list[dict[str, Any]]:
+    if not path:
+        return []
+    cochange_edges = [
+        edge for edge in edges if edge.layer == "COCHANGE" and edge.relation != "touches"
+    ]
+    try:
+        ranked, _truncated = rank_file_impact(path, nodes, cochange_edges, limit=limit, budget=10**9)
+    except UnknownPathError:
+        return []
+    return [
+        {
+            "path": item["path"],
+            "weight": round(float(item.get("score", 0.0)), 3),
+        }
+        for item in ranked
+    ]
+
+
+def _context_hotspot(file_node: Any | None) -> dict[str, int]:
+    values = file_node.metadata.get("hotspot", {}) if file_node is not None else {}
+    if not isinstance(values, dict):
+        values = {}
+    churn = int(values.get("churn", 0))
+    complexity = int(values.get("complexity", 0))
+    return {"churn": churn, "complexity": complexity, "score": int(values.get("score", churn * complexity))}
+
+
+def _context_qt_details(
+    node: Any,
+    file_path: str,
+    nodes: list[Any],
+    nodes_by_id: dict[str, Any],
+    edges: list[Any],
+) -> dict[str, Any]:
+    """Collect compact Qt/QML details directly from the already-fetched graph."""
+    source_nodes = [item for item in nodes if item.granularity == "symbol" and item.source_ref == file_path]
+    signal_nodes = sorted(
+        (item for item in source_nodes if item.metadata.get("qt") == "signal"),
+        key=lambda item: (item.span_start or 0, item.node_id),
+    )
+    slot_nodes = sorted(
+        (item for item in source_nodes if item.metadata.get("qt") == "slot"),
+        key=lambda item: (item.span_start or 0, item.node_id),
+    )
+    handler_nodes = sorted(
+        (item for item in source_nodes if item.metadata.get("qt") == "handler"),
+        key=lambda item: (item.span_start or 0, item.node_id),
+    )
+    class_names = {node.label}
+    if node.kind != "class":
+        class_names = set()
+    file_stem = Path(file_path).stem
+    if node.kind == "class":
+        class_names.add(file_stem)
+
+    signal_ids = {item.node_id for item in signal_nodes}
+    slot_ids = {item.node_id for item in slot_nodes}
+    emits: set[str] = set()
+    connects: list[dict[str, Any]] = []
+    for edge in edges:
+        if edge.relation == "emits":
+            signal_name = str(edge.metadata.get("signal_name", ""))
+            source_file = str(edge.metadata.get("source_file", ""))
+            target_node = nodes_by_id.get(edge.target)
+            if signal_name and (
+                source_file == file_path
+                or Path(source_file).stem == file_stem
+                or edge.target in signal_ids
+                or (target_node is not None and target_node.source_ref == file_path)
+            ):
+                emits.add(signal_name)
+        elif edge.relation == "connects":
+            sender_class = str(edge.metadata.get("sender_class", ""))
+            receiver_class = str(edge.metadata.get("receiver_class", ""))
+            source_node = nodes_by_id.get(edge.source)
+            target_node = nodes_by_id.get(edge.target)
+            relevant = bool(class_names & {sender_class, receiver_class})
+            relevant = relevant or edge.source in signal_ids or edge.target in slot_ids
+            relevant = relevant or (source_node is not None and source_node.source_ref == file_path)
+            relevant = relevant or (target_node is not None and target_node.source_ref == file_path)
+            if not relevant:
+                continue
+            connects.append(
+                {
+                    "signal": source_node.label if source_node is not None else str(edge.metadata.get("signal_name", "")),
+                    "slot": target_node.label if target_node is not None else str(edge.metadata.get("slot_name", "")),
+                    "source": edge.source,
+                    "target": edge.target,
+                }
+            )
+    connects.sort(key=lambda item: (str(item["signal"]), str(item["slot"]), json.dumps(item, sort_keys=True)))
+
+    instantiates: list[dict[str, Any]] = []
+    handlers = [item.label for item in handler_nodes]
+    for edge in edges:
+        if edge.relation != "instantiates" or edge.source != f"file:{file_path}":
+            continue
+        target_node = nodes_by_id.get(edge.target)
+        ref = _context_node_ref(target_node, edge.target)
+        if target_node is None:
+            ref["label"] = str(edge.metadata.get("type_name", edge.target))
+            ref["path"] = str(edge.metadata.get("component_path", ""))
+        else:
+            ref["label"] = target_node.label
+            ref["kind"] = target_node.kind
+        instantiates.append(ref)
+    instantiates.sort(key=lambda item: (str(item.get("label", "")), str(item.get("node_id", ""))))
+
+    details = {
+        "signals": [item.label for item in signal_nodes],
+        "slots": [item.label for item in slot_nodes],
+        "emits": sorted(emits),
+        "connects": connects,
+        "handlers": handlers,
+        "instantiates": instantiates,
+    }
+    has_qt_metadata = bool(node.metadata.get("qt")) or any(
+        bool(item.metadata.get("qt")) for item in source_nodes
+    )
+    has_qt_edge = any(
+        edge.relation in {"emits", "connects", "handles", "instantiates"}
+        and (
+            edge.metadata.get("source_file") == file_path
+            or edge.source == node.node_id
+            or edge.target == node.node_id
+        )
+        for edge in edges
+    )
+    if file_path.lower().endswith(".qml") or has_qt_metadata or has_qt_edge:
+        # QML and actual Qt contexts keep the stable six-key shape, including
+        # empty relation lists, so callers can inspect Qt cards uniformly.
+        return details
+    # Ordinary source and Markdown cards stay compact: do not pay for six
+    # empty Qt arrays when no Qt metadata or relation exists.
+    return {key: value for key, value in details.items() if value}
+
+
+def _context_card(
+    target: str,
+    node: Any,
+    source: Any | None,
+    nodes: list[Any],
+    nodes_by_id: dict[str, Any],
+    files_by_path: dict[str, Any],
+    edges: list[Any],
+    includes: list[str],
+) -> dict[str, Any]:
+    file_node = _context_file_for_node(node, files_by_path)
+    file_path = node.source_ref
+    hotspot = _context_hotspot(file_node)
+    span = _context_span(node, source)
+    card: dict[str, Any] = {
+        "target": target,
+        "node_id": node.node_id,
+        "kind": node.kind,
+        "path": file_path,
+        "span": span,
+        "neighbors": _context_structural_neighbors(node, nodes_by_id, edges),
+        "cochange": _context_cochange_partners(file_path, nodes, edges, limit=3),
+        "hotspot": hotspot,
+        "hotspot_bit": bool(hotspot.get("score", 0)),
+        "truncated": False,
+    }
+
+    if node.granularity == "symbol":
+        card["signature"] = node.signature or node.label
+    elif source is not None and source.kind == "markdown":
+        # Section graph nodes intentionally stay lightweight and do not carry
+        # spans; read the already-fetched source lines here so heading order
+        # remains source order even after ``# 9``/``# 10``.
+        card["headings"] = [
+            match.group(1).strip()
+            for line in source.content.splitlines()
+            if (match := re.match(r"^\s*#+\s+(.+?)\s*$", line)) is not None
+        ]
+    else:
+        file_symbols = sorted(
+            (
+                candidate
+                for candidate in nodes
+                if candidate.granularity == "symbol"
+                and candidate.source_ref == file_path
+                and candidate.metadata.get("qt") != "handler"
+            ),
+            key=lambda item: (item.span_start or 0, item.node_id),
+        )
+        signature_limit = 1 if file_path.lower().endswith(".qml") else 3
+        card["signatures"] = [item.signature or item.label for item in file_symbols[:signature_limit]]
+
+    card.update(_context_qt_details(node, file_path, nodes, nodes_by_id, edges))
+
+    if "impact" in includes:
+        try:
+            impact, _truncated = rank_file_impact(file_path, nodes, edges, limit=10, budget=10**9)
+        except UnknownPathError:
+            impact = []
+        card["impact"] = impact
+    if "cochange" in includes:
+        # Keep the compact top-three field stable; the expansion is additive.
+        card["cochange_detail"] = _context_cochange_partners(file_path, nodes, edges, limit=10)
+    if "symbols" in includes:
+        symbols = sorted(
+            (candidate for candidate in nodes if candidate.granularity == "symbol" and candidate.source_ref == file_path),
+            key=lambda item: (item.span_start or 0, item.node_id),
+        )
+        card["symbols"] = [_symbol_match_payload(item) for item in symbols]
+    return card
+
+
+def _context_problem_card(target: str, *, status: str, matches: list[Any] | None = None) -> dict[str, Any]:
+    card: dict[str, Any] = {
+        "target": target,
+        "node_id": None,
+        "kind": None,
+        "path": None,
+        "span": {"start": None, "end": None},
+        "status": status,
+        "neighbors": [],
+        "cochange": [],
+        "hotspot": {"churn": 0, "complexity": 0, "score": 0},
+        "hotspot_bit": False,
+        "signature": "",
+        "truncated": False,
+    }
+    if matches:
+        card["hint"] = "call again with node_id"
+        card["matches"] = [_symbol_match_payload(match) for match in matches]
+    else:
+        card["message"] = f"No target matched {target!r}."
+        card["hint"] = "try cortex_search_symbols or an indexed repository-relative path"
+    return card
+
+
+def _context_fit_card(card: dict[str, Any], allowance: int) -> dict[str, Any]:
+    """Trim optional/detail fields while keeping a card for every target."""
+    if count_text_tokens(json.dumps(card, sort_keys=True)) <= allowance:
+        return card
+    card["truncated"] = True
+
+    # Expansions are the first thing to trim.  The compact defaults (including
+    # the three-neighbor/co-change caps and Qt fields) remain represented even
+    # when a very small per-target share cannot retain every entry.
+    for key in ("impact", "symbols", "cochange_detail"):
+        if key in card:
+            card[key] = []
+
+    # Keep the compact Qt/QML facts ahead of optional list expansions: a
+    # small budget may shorten the neighbor/co-change views, but must not
+    # erase the signal/slot/handler/instantiation facts that make this tool
+    # useful for Qt triage.
+    list_keys = (
+        "matches", "neighbors", "cochange", "cochange_detail", "signatures", "headings",
+        "signals", "slots", "emits", "connects", "handlers", "instantiates",
+    )
+    while count_text_tokens(json.dumps(card, sort_keys=True)) > allowance:
+        changed = False
+        for key in list_keys:
+            value = card.get(key)
+            if isinstance(value, list) and value:
+                value.pop()
+                changed = True
+                if count_text_tokens(json.dumps(card, sort_keys=True)) <= allowance:
+                    break
+        if changed:
+            continue
+        # Keep required scalar fields but shorten their human-readable parts.
+        # ``target`` is the stable input-to-card mapping and must never be
+        # altered, even when the requested budget is impossibly small.
+        for key in ("signature", "message", "hint", "path"):
+            value = card.get(key)
+            if isinstance(value, str) and value:
+                shortened = truncate_text_to_budget(value, max(1, allowance // 4), kind="text")
+                if shortened != value:
+                    card[key] = shortened
+                    changed = True
+                    break
+        if changed:
+            continue
+        # At an impossibly small budget there is no way to encode every
+        # required key and its JSON punctuation. Emptying variable fields is
+        # the deterministic last resort; one card and its truncation signal
+        # are still retained rather than silently dropping the target.
+        for key in list_keys:
+            if isinstance(card.get(key), list):
+                card[key] = []
+        for key in ("signature", "message", "hint", "path"):
+            if isinstance(card.get(key), str):
+                card[key] = ""
+        break
+    return card
+
+
+def _call_context(arguments: dict[str, Any]) -> dict[str, Any]:
+    repo_root = _repo_root(arguments)
+    store, error = _store_or_error(repo_root)
+    if error is not None:
+        return _content(error, is_error=True)
+    assert store is not None
+
+    raw_targets = arguments.get("targets")
+    if not isinstance(raw_targets, list):
+        return _content({"error": "missing_targets", "message": "targets must be a list of paths or symbols"}, is_error=True)
+    targets = [str(target) for target in raw_targets]
+    budget = max(0, int(arguments.get("budget", 2000)))
+    requested_includes = arguments.get("include", [])
+    if not isinstance(requested_includes, list):
+        requested_includes = []
+    includes = []
+    for value in requested_includes:
+        name = str(value)
+        if name in _CONTEXT_INCLUDES and name not in includes:
+            includes.append(name)
+    response_format = _response_format(arguments)
+
+    # Exactly one freshness check covers the complete batch. The graph is
+    # fetched once and target source records are loaded lazily/deduplicated.
+    status = _ensure_fresh(store, repo_root)
+    nodes, edges = store.fetch_graph(repo_root)
+    nodes_by_id = {node.node_id: node for node in nodes}
+    file_nodes = {node.node_id: node for node in nodes if node.kind == "file" or node.node_id.startswith("file:")}
+    files_by_path = {node.source_ref: node for node in file_nodes.values()}
+    # Context cards only need source bodies for resolved target paths (Markdown
+    # headings and file spans). Keep this cache local to the batch so duplicate
+    # targets and a path+symbol pair perform one focused lookup, never a
+    # full-corpus fetch.
+    source_records: dict[str, Any | None] = {}
+
+    def fetch_target_source(path: str) -> Any | None:
+        if not path:
+            return None
+        if path not in source_records:
+            source_records[path] = store.fetch_source_record(repo_root, path)
+        return source_records[path]
+
+    cards: list[dict[str, Any]] = []
+    for target in targets:
+        node = _context_resolve_file_target(target, repo_root, file_nodes, files_by_path)
+        matches: list[Any] = []
+        if node is None:
+            # Exact node ids are resolved from the prefetched graph first; only
+            # non-exact symbol names go through the established resolver.
+            node = nodes_by_id.get(target)
+            if node is None and "/" in target and ":" in target:
+                # Accept the human-facing ``path:label`` spelling as an
+                # exact symbol id as well as the stored ``symbol:path:label``
+                # form, without broadening it into an ambiguous search.
+                node = nodes_by_id.get(f"symbol:{target}")
+        qualified_symbol = bool(
+            ":" in target and re.fullmatch(r"[A-Za-z_]\w*", target.rsplit(":", 1)[-1])
+        )
+        if node is None and not (
+            target.startswith(("file:", "symbol:"))
+            or ("/" in target and not qualified_symbol)
+            or (Path(target).suffix and not qualified_symbol)
+        ):
+            node, matches = _resolve_symbol(store, repo_root, target)
+        if node is None:
+            cards.append(_context_problem_card(target, status="ambiguous" if matches else "missing", matches=matches))
+            continue
+        # Symbol cards already carry their signature/span and graph metadata;
+        # source bodies are needed only for file cards (notably Markdown
+        # headings and file line spans).
+        source = fetch_target_source(node.source_ref) if node.granularity != "symbol" else None
+        cards.append(_context_card(target, node, source, nodes, nodes_by_id, files_by_path, edges, includes))
+
+    if cards:
+        base_share, remainder = divmod(budget, len(cards))
+        for index, card in enumerate(cards):
+            allowance = base_share + (1 if index < remainder else 0)
+            _context_fit_card(card, max(1, allowance))
+    total_tokens = count_text_tokens(json.dumps(cards, sort_keys=True))
+    budget_feasible = total_tokens <= budget
+    payload = {
+        "repo_path": str(repo_root),
+        "targets": targets,
+        "budget": budget,
+        "include": includes,
+        "cards": cards,
+        "total_tokens": total_tokens,
+        "budget_feasible": budget_feasible,
+    }
+    if not budget_feasible:
+        payload["budget_note"] = (
+            "The minimum per-card mapping metadata exceeds the requested budget; "
+            "all input targets are retained unchanged."
+        )
+    return _content(_format_payload(payload, status, response_format))
+
+
 def _call_search(arguments: dict[str, Any]) -> dict[str, Any]:
     repo_root = _repo_root(arguments)
     store, error = _store_or_error(repo_root)
@@ -948,6 +1451,7 @@ def _call_refresh(arguments: dict[str, Any]) -> dict[str, Any]:
 _LEDGER_TOOLS = {
     "cortex_query",
     "cortex_overview",
+    "cortex_context",
     "cortex_impact",
     "cortex_search_symbols",
     "cortex_read_symbol",
@@ -1016,8 +1520,9 @@ def _estimate_baseline(
     Policy (kept in this one function so it stays auditable -- see P0-1 in
     IMPROVEMENT_PLAN.md):
 
-    - File-returning tools (cortex_query, cortex_impact, cortex_read_symbol,
-      cortex_read_file, cortex_references, cortex_search_text): baseline is
+    - File-returning tools (cortex_query, cortex_context, cortex_impact,
+      cortex_read_symbol, cortex_read_file, cortex_references,
+      cortex_search_text): baseline is
       the token cost of reading, in full and raw, every DISTINCT file
       referenced in the actual response -- the tokens an agent would have
       spent with plain Read/grep instead of this tool. Computed via
@@ -1031,6 +1536,10 @@ def _estimate_baseline(
       (response_tokens), which is what makes the ledger credit skeleton/
       signature reads as bigger savings than a full-span read of the same
       symbol.
+    - `cortex_context` is file-returning for ledger purposes: its baseline is
+      the full raw content of every distinct resolved target-card path (so a
+      batch with the same file twice is priced once, and ambiguous/missing
+      cards contribute zero).
     - Structure-only tools (cortex_search_symbols, cortex_relations,
       cortex_overview): these return an index/graph view with no single
       "raw file" backing them, so there's no direct raw-read baseline. The
@@ -1050,6 +1559,14 @@ def _estimate_baseline(
     """
     if tool in ("cortex_query", "cortex_impact", "cortex_search_text"):
         paths = {str(item.get("path", "")) for item in payload.get("items", []) if item.get("path")}
+        return _referenced_file_tokens(store, repo_root, paths)
+
+    if tool == "cortex_context":
+        paths = {
+            str(card.get("path", ""))
+            for card in payload.get("cards", [])
+            if card.get("path")
+        }
         return _referenced_file_tokens(store, repo_root, paths)
 
     if tool in ("cortex_read_symbol", "cortex_read_file"):
@@ -1164,6 +1681,8 @@ def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
             result = _call_query(args)
         elif name == "cortex_overview":
             result = _call_overview(args)
+        elif name == "cortex_context":
+            result = _call_context(args)
         elif name == "cortex_impact":
             result = _call_impact(args)
         elif name == "cortex_search_symbols":

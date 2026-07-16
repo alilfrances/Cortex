@@ -161,6 +161,21 @@ def _resolve_qt_edges(edges: list[GraphEdge], index: QtSymbolIndex) -> None:
             if resolved:
                 edge.target = resolved
 
+        elif edge.relation == "instantiates":
+            # QML scenes can instantiate a registered QObject type whose
+            # declaration lives in a C++ header rather than in Type.qml.
+            # The regex/tree-sitter extractors emit a placeholder only for a
+            # local matching C++ path; resolve it here after the complete
+            # batch (or the stored incremental Qt index) has supplied class
+            # symbols.  Unresolved framework/external types remain absent from
+            # the graph rather than being invented.
+            type_name = edge.metadata.get("type_name")
+            if not type_name or edge.target != f"module:{type_name}":
+                continue
+            class_path = index.classes.get(type_name)
+            if class_path:
+                edge.target = f"symbol:{class_path}:{type_name}"
+
 
 def build_file_layer(
     sources: list[SourceRecord],

@@ -187,6 +187,35 @@ def resolve_qml_component(name: str, known_paths: set[str]) -> str | None:
     return resolve_local_import(f"{name}.qml", known_paths)
 
 
+def resolve_qml_cpp_type(name: str, known_paths: set[str]) -> str | None:
+    """Return a local C/C++ declaration path for a QML object type.
+
+    QML can instantiate a registered QObject type even though there is no
+    ``Type.qml`` file to resolve.  The regex extractor only has the repository
+    path set at per-file parse time, so use the conventional header/source
+    basename as a conservative signal and let the graph-wide Qt resolution
+    pass map the type to the real class node.  Unique-basename matching keeps
+    this incremental-safe: an unchanged header is enough to resolve a newly
+    parsed QML file, while framework/external types remain unmarked.
+    """
+    if not name or not name[0].isupper():
+        return None
+    for suffix in (".hpp", ".h", ".hh", ".hxx", ".cpp", ".cc", ".cxx"):
+        resolved = resolve_local_import(f"{name}{suffix}", known_paths)
+        if resolved is not None:
+            return resolved
+    # Also recognize the common snake_case filename spelling without making
+    # a repo-wide class guess; the graph pass still requires a real class node
+    # with the exact QML type name before it rewrites the endpoint.
+    normalised_name = re.sub(r"[^a-z0-9]", "", name.lower())
+    candidates = [
+        path for path in known_paths
+        if PurePosixPath(path).suffix.lower() in _CPP_SUFFIXES
+        and re.sub(r"[^a-z0-9]", "", PurePosixPath(path).stem.lower()) == normalised_name
+    ]
+    return sorted(candidates)[0] if len(candidates) == 1 else None
+
+
 def _signature(content: str, start: int) -> str:
     end = content.find("\n", start)
     if end == -1:
@@ -753,20 +782,52 @@ def _extract_qml_component_definition(
 def _extract_qml_instantiates(path: str, content: str, known_paths: set[str], file_node_id: str, edges: list[GraphEdge]) -> None:
     for index, match in enumerate(_QML_OBJECT_RE.finditer(content), start=1):
         name = match.group("name")
-        resolved = resolve_qml_component(name, known_paths)
-        if resolved is None or resolved == path:
+        qml_path = resolve_qml_component(name, known_paths)
+        if qml_path is not None:
+            if qml_path == path:
+                continue
+            line = _line_number(content, match.start("name"))
+            edges.append(
+                GraphEdge(
+                    edge_id=f"regex:{path}:instantiates:{line}:{index}:{name}",
+                    source=file_node_id,
+                    target=f"file:{qml_path}",
+                    relation="instantiates",
+                    layer="STRUCTURAL",
+                    confidence="LOW",
+                    weight=1.0,
+                    metadata={"lineno": line, "source_file": path, "type_name": name, "component_kind": "qml"},
+                )
+            )
+            continue
+
+        # A local QML file is not the only thing a scene can instantiate:
+        # registered QObject types are commonly declared in a sibling C++
+        # header.  Emit a placeholder only when a matching local C++
+        # declaration path exists; graph.py resolves it to the real class
+        # symbol after all files (or the stored incremental Qt index) are
+        # available.  External Qt Quick controls therefore stay out of the
+        # graph instead of becoming fabricated symbols.
+        cpp_path = resolve_qml_cpp_type(name, known_paths)
+        if cpp_path is None:
             continue
         line = _line_number(content, match.start("name"))
         edges.append(
             GraphEdge(
                 edge_id=f"regex:{path}:instantiates:{line}:{index}:{name}",
                 source=file_node_id,
-                target=f"file:{resolved}",
+                target=f"module:{name}",
                 relation="instantiates",
                 layer="STRUCTURAL",
                 confidence="LOW",
                 weight=1.0,
-                metadata={"lineno": line, "source_file": path},
+                metadata={
+                    "lineno": line,
+                    "source_file": path,
+                    "type_name": name,
+                    "component_path": cpp_path,
+                    "component_kind": "cpp",
+                },
             )
         )
 

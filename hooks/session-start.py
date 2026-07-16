@@ -77,6 +77,7 @@ def main() -> int:
         _emit(
             f"Cortex index exists {connector} {state} ({file_count} indexed files). "
             "Prefer Cortex MCP tools over raw Grep/Glob/Read exploration: "
+            "cortex_context (batch all paths/symbols once before editing several files), "
             "cortex_query (task-focused context bundle), cortex_search_symbols (find a symbol by name), "
             "cortex_read_symbol (read one symbol's span; mode=skeleton/signature for cheaper partial reads), "
             "cortex_read_file (direct Read replacement for an indexed file; mode=skeleton by default -- "

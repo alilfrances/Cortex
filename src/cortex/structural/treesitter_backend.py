@@ -258,18 +258,29 @@ def _qml_instantiates_edge(
     if not name:
         return None
     resolved = regex_backend.resolve_qml_component(name, known_paths)
+    component_kind = "qml"
+    if resolved is None:
+        resolved = regex_backend.resolve_qml_cpp_type(name, known_paths)
+        component_kind = "cpp"
     if resolved is None or resolved == path:
         return None
     line = node.start_point[0] + 1
+    target = f"file:{resolved}" if component_kind == "qml" else f"module:{name}"
     return GraphEdge(
         edge_id=f"treesitter:{path}:instantiates:{line}:{index}:{name}",
         source=file_node_id,
-        target=f"file:{resolved}",
+        target=target,
         relation="instantiates",
         layer="STRUCTURAL",
         confidence="EXTRACTED",
         weight=1.0,
-        metadata={"lineno": line, "source_file": path},
+        metadata={
+            "lineno": line,
+            "source_file": path,
+            "type_name": name,
+            "component_path": resolved,
+            "component_kind": component_kind,
+        },
     )
 
 

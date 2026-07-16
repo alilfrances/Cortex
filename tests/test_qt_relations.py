@@ -106,6 +106,16 @@ def test_qml_handler_resolves_to_instantiated_component_signal(tmp_path):
     assert resolved, device_connected_handles
 
 
+def test_qml_instantiates_real_cpp_type_symbol(tmp_path):
+    repo = _ingest_qt_app(tmp_path)
+    store = CortexStore(default_db_path(repo))
+    edges = store.query_edges(repo, relation="instantiates", endpoint_substr="DeviceManager", limit=20)
+    main_edges = [edge for edge in edges if edge.source == "file:qml/Main.qml"]
+    assert main_edges
+    assert any(edge.target == "symbol:include/DeviceManager.hpp:DeviceManager" for edge in main_edges), main_edges
+    assert not any(edge.target == "module:DeviceManager" for edge in main_edges), main_edges
+
+
 def test_qml_handler_on_external_type_stays_placeholder(tmp_path):
     # DeviceDelegate.qml's MouseArea { onClicked: clicked() } handles Qt
     # Quick's own MouseArea.clicked signal, not the enclosing DeviceDelegate's
@@ -140,12 +150,30 @@ def test_emit_and_handles_resolve_cross_file_tree_sitter_backend(tmp_path):
     handles = _relations(repo, relation="handles")
     main_handles = [item for item in handles if "Main.qml" in item["source"]]
     assert any("deviceConnected @ qml/DeviceDelegate.qml" in item["target"] for item in main_handles), main_handles
+    instantiates = _relations(repo, relation="instantiates", symbol="DeviceManager")
+    assert any("DeviceManager @ include/DeviceManager.hpp" in item["target"] for item in instantiates), instantiates
 
 
 # ---------------------------------------------------------------------------
 # P0-3 incremental-ingest interaction: the signal declaration lives in a
 # header that is *not* part of the incremental batch (only the .cpp changed).
 # ---------------------------------------------------------------------------
+
+
+def test_incremental_reingest_of_qml_alone_still_resolves_cpp_instantiation(tmp_path):
+    repo = _ingest_qt_app(tmp_path)
+    qml_path = repo / "qml" / "Main.qml"
+    content = qml_path.read_text(encoding="utf-8")
+    assert "// context tick" not in content
+    qml_path.write_text(content.replace("ApplicationWindow {", "ApplicationWindow {\n    // context tick"), encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "touch qml scene"], cwd=repo, check=True, capture_output=True)
+
+    result = ingest_repository(repo, commit_limit=20, incremental=True)
+    assert result["updated_files"] == 1
+    store = CortexStore(default_db_path(repo))
+    edges = store.query_edges(repo, relation="instantiates", endpoint_substr="DeviceManager", limit=20)
+    assert any(edge.target == "symbol:include/DeviceManager.hpp:DeviceManager" for edge in edges), edges
 
 
 def test_incremental_reingest_of_cpp_alone_still_resolves_emit_to_header_signal(tmp_path):

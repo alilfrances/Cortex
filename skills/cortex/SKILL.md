@@ -1,6 +1,6 @@
 ---
 name: cortex
-description: Use Cortex MCP tools for repo-first context, graph-aware retrieval, impact analysis, symbol search, and refreshing local Cortex state before broad raw-file exploration.
+description: Use Cortex MCP tools for repo-first context, batched triage, graph-aware retrieval, impact analysis, symbol search, and refreshing local Cortex state before broad raw-file exploration.
 ---
 
 # Cortex
@@ -12,20 +12,31 @@ Use Cortex when working inside an indexed repository and you need code context, 
 ## Workflow
 
 1. Start with `cortex_overview` for unfamiliar repos or architecture questions; inspect its `top_hotspots` list before choosing risky files.
-2. For a concrete task, call `cortex_query` with the task and a budget. Leave ranking unchanged by default; pass `hotspot_boost: true` only when churn×complexity should be an explicit tie-breaker.
-3. For named code, use the search -> read -> impact loop:
+2. Before editing several known files or symbols, call `cortex_context` once with all targets. It returns one ordered triage card per target under a shared budget, covering paths, symbols, neighbors, co-change, hotspots, and Qt/QML wiring in one round trip.
+3. For a concrete task, call `cortex_query` with the task and a budget. Leave ranking unchanged by default; pass `hotspot_boost: true` only when churn×complexity should be an explicit tie-breaker.
+4. For named code, use the search -> read -> impact loop:
    - `cortex_search_symbols` to locate candidate functions/classes/methods.
    - `cortex_read_symbol` with the chosen `node_id` to read only the exact numbered source span. Pass `mode: "skeleton"` for a signature-plus-nested-members view or `mode: "signature"` for just the signature line when you don't need the full body yet.
    - `cortex_impact` on the containing file to inspect structural and co-change neighbors before editing.
-4. Need to look at a whole file instead of one symbol? Use `cortex_read_file` in place of the built-in `Read` tool — it defaults to `mode: "skeleton"` (imports/includes + top-level signatures, bodies elided); pass `mode: "full"` when you actually need every line.
-5. Use `cortex_relations` for parsed graph questions such as imports, contains, inherits, emits, connects, or handles.
-6. Use `cortex_references` when configs, docs, scripts, CMake/QRC, or other parser-missed surfaces may reference a symbol.
-7. Use `cortex_search_text` for body text — string literals, error messages, comments, Markdown prose — that `cortex_search_symbols` can't find because it only matches symbol names/signatures/paths, not file contents.
-8. Default to `response_format: "concise"`; pass `response_format: "detailed"` only when you need provenance, fingerprints, full metadata, or detailed why-edges.
-9. If a tool reports `stale: true`, call `cortex_refresh` or rerun the read tool after refresh.
-10. Watch for a `_meta` object on any response (`index_age_seconds`, `indexed_at`, `fingerprint_fresh`, and optionally `auto_refreshed`/`cached`/`saved_tokens`). `detailed` responses always carry it; a `concise` response only carries it when something is worth acting on, so its mere presence is itself a signal — check `fingerprint_fresh`/`auto_refreshed` before trusting a concise result on a repo you suspect just changed.
+5. Need to look at a whole file instead of one symbol? Use `cortex_read_file` in place of the built-in `Read` tool — it defaults to `mode: "skeleton"` (imports/includes + top-level signatures, bodies elided); pass `mode: "full"` when you actually need every line.
+6. Use `cortex_relations` for parsed graph questions such as imports, contains, inherits, emits, connects, handles, or QML `instantiates` wiring.
+7. Use `cortex_references` when configs, docs, scripts, CMake/QRC, or other parser-missed surfaces may reference a symbol.
+8. Use `cortex_search_text` for body text — string literals, error messages, comments, Markdown prose — that `cortex_search_symbols` can't find because it only matches symbol names/signatures/paths, not file contents.
+9. Default to `response_format: "concise"`; pass `response_format: "detailed"` only when you need provenance, fingerprints, full metadata, or detailed why-edges.
+10. If a tool reports `stale: true`, call `cortex_refresh` or rerun the read tool after refresh.
+11. Watch for a `_meta` object on any response (`index_age_seconds`, `indexed_at`, `fingerprint_fresh`, and optionally `auto_refreshed`/`cached`/`saved_tokens`). `detailed` responses always carry it; a `concise` response only carries it when something is worth acting on, so its mere presence is itself a signal — check `fingerprint_fresh`/`auto_refreshed` before trusting a concise result on a repo you suspect just changed.
 
 ## Tools
+
+### `cortex_context`
+
+Batches repository-relative file paths, exact file node ids, and symbol names/node ids into one deterministic response. The default `budget` is 2000 and is split across targets while retaining one card per input in the original order. Each compact card includes its resolved `node_id`/`kind`/`path`, signature or Markdown headings, span, structural neighbors, co-change partners with weights, hotspot data, and a per-card `truncated` flag. Ambiguous symbols return non-error `matches` cards using the same shape as `cortex_read_symbol`; missing targets get a missing card without aborting the rest. Optional `include` values add broader `impact`, `cochange`, or `symbols` detail without changing the compact defaults. Qt/QML cards expose QObject signals/slots/emits/connects and QML handlers plus local QML/C++ instantiation relations. If a deliberately tiny budget cannot fit irreducible card metadata, the response sets `budget_feasible: false` and preserves each original target string.
+
+Use this before editing a group of files:
+
+```json
+{"targets":["src/cortex/mcp/tools.py","symbol:src/cortex/bundle.py:generate_bundle","README.md"],"budget":2000,"include":["impact"]}
+```
 
 ### `cortex_query`
 
@@ -85,7 +96,7 @@ Example:
 
 ### `cortex_relations`
 
-Returns parsed graph edges filtered by relation and symbol. Use for structural questions where parser coverage is enough.
+Returns parsed graph edges filtered by relation and symbol. Use for structural questions where parser coverage is enough, including Qt `emits`/`connects`/`handles` and QML `instantiates` edges.
 
 Example:
 

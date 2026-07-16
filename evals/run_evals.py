@@ -486,8 +486,9 @@ def helper():
 
 def _build_qt_app(base: Path) -> Path:
     """Small Qt/C++/QML fixture: two QObject classes wired via connect(), plus a QML
-    scene that instantiates a local component and defines handlers. Second commit
-    co-changes a .cpp and a .qml so COCHANGE edges form between them."""
+    scene that instantiates a local component and a real C++ ``DeviceManager``
+    type and defines handlers. Second commit co-changes a .cpp and a .qml so
+    COCHANGE edges form between them."""
     repo = base / "qt_app"
     _init_repo(repo)
     _write(repo / "include/DeviceManager.hpp", """
@@ -565,6 +566,8 @@ import QtQuick.Controls 2.15
 ApplicationWindow {
     signal sceneReady()
 
+    DeviceManager {}
+
     DeviceDelegate {
         id: delegate
         onClicked: console.log("delegate clicked")
@@ -622,6 +625,8 @@ import QtQuick.Controls 2.15
 
 ApplicationWindow {
     signal sceneReady()
+
+    DeviceManager {}
 
     DeviceDelegate {
         id: delegate
