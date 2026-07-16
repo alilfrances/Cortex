@@ -83,8 +83,8 @@ The `cortex` CLI and optional features need a pip install:
 
 ```bash
 cd /path/to/Cortex
-python3 -m pip install -e .                          # cortex CLI
-python3 -m pip install -e ".[llm,languages,watch]"   # enrichment, tree-sitter, watchdog
+python3 -m pip install -e .                                 # cortex CLI
+python3 -m pip install -e ".[llm,languages,watch,tokens]"   # enrichment, tree-sitter, watchdog, exact tokenizer
 ```
 
 Initialize a target repo (also available as the `cortex_refresh` MCP tool):
@@ -145,27 +145,41 @@ Tool results include provenance where available. Read tools keep the index fresh
 | `[languages]` | tree-sitter and language grammars | Adds structural extraction for JS/TS/Go/Rust/Swift/Java/Ruby/C/C++ where grammars import cleanly; regex fallback remains available. |
 | `[qml]` | `tree-sitter-language-pack` | Adds QML tree-sitter extraction through the bundled qmljs grammar; kept separate because the pack ships many grammars. |
 | `[watch]` | `watchdog` | Improves `cortex watch`; polling fallback is stdlib-only. |
+| `[tokens]` | `tiktoken` | Exact o200k_base BPE token counts everywhere Cortex counts/budgets tokens; without it, `count_text_tokens` uses a calibrated stdlib regex-segment heuristic (see Token Counting below). |
 
 The regex fallback is Qt-aware for C++/QML signal, slot, emit, connect, Q_OBJECT, and handler patterns.
 
+## Token Counting
+
+`cortex.tokenizer.count_text_tokens(text, kind="code"|"markdown"|"text")` drives every budget decision (bundle packing, skeletons, truncation, MCP response budgets, `cortex saved` baselines). With the optional `[tokens]` extra installed, it returns an exact `tiktoken` o200k_base count. Without it (the default, stdlib-only install), it falls back to a deterministic regex-segment estimate scaled by a per-`kind` `CALIBRATION` factor in `src/cortex/tokenizer.py`, since a plain segment count is a biased estimate of real BPE tokens (differently biased for code vs. prose). Regenerate those factors for your own corpus with:
+
+```bash
+pip install tiktoken
+python3 evals/calibrate_tokenizer.py [repo_path]
+```
+
+and paste the printed per-kind factors into `CALIBRATION`. The checked-in factors currently ship as provisional `1.0` (no-op) placeholders — see the CHANGELOG's P1-4 entry for why — so re-running the script in a network-enabled environment and updating those constants is a recommended follow-up.
+
 ## Eval Numbers
 
-Regenerated on 2026-07-06 with:
+Regenerated on 2026-07-16 with:
 
 ```bash
 python3 evals/run_evals.py
 ```
 
-The harness creates two small git fixture repos at runtime and runs 13 tasks. It reports expected-file precision/recall, expected-symbol recall, token cost, and wall latency. Full per-task output is in `evals/RESULTS.md`.
+The harness creates three small git fixture repos (including a C++/Qt + QML fixture) at runtime and runs 17 tasks. It reports expected-file precision/recall, expected-symbol recall, token cost, and wall latency. Full per-task output is in `evals/RESULTS.md`.
 
-| Mode | Tasks | Precision | Recall | Symbol Recall | Avg Tokens | Avg Latency ms |
+| Mode | Tasks | Precision | Precision@3 | Recall | Avg Tokens | Avg Latency ms |
 |---|---:|---:|---:|---:|---:|---:|
-| bfs | 13 | 0.293 | 0.692 | 1.000 | 677 | 12.4 |
-| pagerank | 13 | 0.290 | 0.692 | 1.000 | 678 | 13.9 |
-| skeleton_off | 13 | 0.679 | 0.692 | 0.942 | 179 | 14.1 |
-| skeleton_on | 13 | 0.641 | 0.692 | 0.942 | 176 | 13.7 |
+| bfs | 17 | 0.303 | 0.647 | 0.956 | 630 | 10-15 |
+| pagerank | 17 | 0.304 | 0.647 | 0.956 | 632 | 11-15 |
+| skeleton_off | 17 | 0.618 | 0.627 | 0.853 | 178 | 12-18 |
+| skeleton_on | 17 | 0.588 | 0.627 | 0.853 | 176 | 12-16 |
 
-Interpretation: normal-budget PageRank and BFS both recover all gold files/symbols in these small fixtures but include extra files. Tight-budget skeleton packing improves recall versus tight-budget truncation while keeping token cost nearly flat.
+Interpretation: normal-budget PageRank and BFS both recover almost all gold files/symbols across these fixtures but include extra files. Tight-budget skeleton packing improves recall versus tight-budget truncation while keeping token cost nearly flat. Latency figures are wall-clock on a shared dev sandbox and fluctuate run to run; treat the ranges as illustrative, not a benchmark result.
+
+Token counts reflect Cortex's tokenizer (P1-4): exact `tiktoken` o200k_base counts when the optional `[tokens]` extra is installed, otherwise the calibrated stdlib heuristic described in Token Counting above (currently shipping with provisional 1.0/no-op calibration factors, so these numbers are unchanged from the pre-P1-4 heuristic until real factors are measured and baked in).
 
 ## Token Savings
 

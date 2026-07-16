@@ -169,7 +169,7 @@ def _skeleton_item(
 ) -> BundleItem | None:
     """Skeleton fit under remaining budget, greedily inlining top-scoring bodies. None if even all-signatures overflows."""
     skeleton = _render_skeleton(item.content, symbols, set())
-    tokens = count_text_tokens(skeleton)
+    tokens = count_text_tokens(skeleton, kind=item.kind)
     if tokens <= 0 or tokens > remaining:
         return None
 
@@ -178,7 +178,7 @@ def _skeleton_item(
     for symbol in ordered:
         trial_ids = full_body_ids | {symbol.node_id}
         trial = _render_skeleton(item.content, symbols, trial_ids)
-        trial_tokens = count_text_tokens(trial)
+        trial_tokens = count_text_tokens(trial, kind=item.kind)
         if trial_tokens <= remaining:
             skeleton, tokens, full_body_ids = trial, trial_tokens, trial_ids
 
@@ -459,7 +459,7 @@ def generate_bundle(
             graph_bonus = pagerank_scores.get(file_node_id, 0.0) * PAGERANK_SCORE_MULTIPLIER
         final_score = keyword_score + graph_bonus
 
-        token_count = count_text_tokens(source.content)
+        token_count = count_text_tokens(source.content, kind=source.kind)
         candidates.append(
             BundleItem(
                 item_id=f'source:{source.path}',
@@ -527,8 +527,8 @@ def generate_bundle(
                     selected.append(skeleton)
                     total_tokens += skeleton.token_count
                     continue
-        truncated = truncate_text_to_budget(item.content, remaining)
-        truncated_tokens = count_text_tokens(truncated)
+        truncated = truncate_text_to_budget(item.content, remaining, kind=item.kind)
+        truncated_tokens = count_text_tokens(truncated, kind=item.kind)
         if truncated_tokens <= 0:
             continue
         selected.append(

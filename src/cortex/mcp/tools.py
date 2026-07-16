@@ -554,8 +554,10 @@ def _call_read_symbol(arguments: dict[str, Any]) -> dict[str, Any]:
     body = _numbered_span(content, node.span_start, node.span_end)
     truncated = False
     budget = int(arguments.get("budget", 2000))
-    if count_text_tokens(body) > budget:
-        body = truncate_text_to_budget(body, budget)
+    # Symbol spans are always parsed structural code (functions/classes/etc.),
+    # never markdown or plain text, so "code" is unconditionally correct here.
+    if count_text_tokens(body, kind="code") > budget:
+        body = truncate_text_to_budget(body, budget, kind="code")
         truncated = True
     payload = {
         "repo_path": str(repo_root),
