@@ -88,7 +88,8 @@ def main() -> int:
             "cortex_search_text (full-text body search over indexed file contents — string "
             "literals, error messages, comments, prose — a grep replacement that reads from "
             "the index), "
-            "cortex_overview (repo orientation). Call cortex_refresh to update a stale index."
+            "cortex_overview (repo orientation and top churn×complexity hotspots; cortex_query accepts "
+            "hotspot_boost=true as an opt-in ranking signal). Call cortex_refresh to update a stale index."
         )
         return 0
     except Exception:

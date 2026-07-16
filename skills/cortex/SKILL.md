@@ -11,8 +11,8 @@ Use Cortex when working inside an indexed repository and you need code context, 
 
 ## Workflow
 
-1. Start with `cortex_overview` for unfamiliar repos or architecture questions.
-2. For a concrete task, call `cortex_query` with the task and a budget.
+1. Start with `cortex_overview` for unfamiliar repos or architecture questions; inspect its `top_hotspots` list before choosing risky files.
+2. For a concrete task, call `cortex_query` with the task and a budget. Leave ranking unchanged by default; pass `hotspot_boost: true` only when churn×complexity should be an explicit tie-breaker.
 3. For named code, use the search -> read -> impact loop:
    - `cortex_search_symbols` to locate candidate functions/classes/methods.
    - `cortex_read_symbol` with the chosen `node_id` to read only the exact numbered source span. Pass `mode: "skeleton"` for a signature-plus-nested-members view or `mode: "signature"` for just the signature line when you don't need the full body yet.
@@ -29,7 +29,7 @@ Use Cortex when working inside an indexed repository and you need code context, 
 
 ### `cortex_query`
 
-Returns a ranked, token-budgeted bundle for a task. Use for "what files matter for this change?" questions before raw file reads. Concise mode keeps compact per-item rationale.
+Returns a ranked, token-budgeted bundle for a task. Use for "what files matter for this change?" questions before raw file reads. Concise mode keeps compact per-item rationale. `hotspot_boost: true` is opt-in and promotes files that combine frequent git touches with high per-language branch/binding complexity; omit it to preserve the default ranking.
 
 **Standing guidance:** when you already know the filename or extension/language involved, include it in the `task` string. Ranking gives a large bonus to task terms that hit a file stem or symbol name, a smaller bonus for a matching directory segment, and boosts/demotes files by language when the task names one (e.g. "qml", "python", ".cpp") — so naming the file explicitly resolves ties and language-alike distractors that keyword-only phrasing can't.
 
@@ -115,7 +115,7 @@ Example:
 
 ### `cortex_overview`
 
-Returns repository graph summary, communities, god nodes, and surprising links. Use for orientation rather than precise code reading.
+Returns repository graph summary, communities, god nodes, top churn×complexity hotspots, and surprising links. Use for orientation rather than precise code reading.
 
 Example:
 

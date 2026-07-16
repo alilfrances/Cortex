@@ -6,6 +6,7 @@ from typing import NamedTuple
 
 from .ast_extract import extract_python_edges
 from .cochange import build_cochange_edges
+from .hotspots import annotate_file_nodes, compute_hotspots
 from .models import CommitRecord, GraphEdge, GraphNode, SourceRecord
 from .structural import extract_structural_edges, supports_path
 
@@ -331,5 +332,6 @@ def build_graph(
     cochange_nodes, cochange_edges = build_cochange_layer(commits, known_paths)
     nodes.extend(cochange_nodes)
     edges.extend(cochange_edges)
+    annotate_file_nodes(nodes, compute_hotspots(sources, commits))
 
     return nodes, edges

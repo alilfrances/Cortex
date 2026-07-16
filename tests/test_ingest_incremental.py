@@ -273,7 +273,14 @@ def test_incremental_prunes_stale_edges_for_changed_cpp_file(tmp_path, monkeypat
     ingest_repository(repo, commit_limit=0)
     store = CortexStore(default_db_path(repo))
     _, edges = store.fetch_graph(repo)
-    assert any(e.edge_id == "regex:engine.cpp:contains:compute" for e in edges)
+    compute_edges = [
+        edge
+        for edge in edges
+        if edge.relation == "contains" and edge.target == "symbol:engine.cpp:compute"
+    ]
+    assert len(compute_edges) == 1
+    old_compute_edge_id = compute_edges[0].edge_id
+    assert old_compute_edge_id.startswith(("regex:", "treesitter:"))
 
     read_paths: list[Path] = []
     original_read_text = Path.read_text
@@ -297,9 +304,18 @@ def test_incremental_prunes_stale_edges_for_changed_cpp_file(tmp_path, monkeypat
 
     _, edges_after = store.fetch_graph(repo)
     edge_ids_after = {e.edge_id for e in edges_after}
-    assert "regex:engine.cpp:contains:compute" not in edge_ids_after, "stale C++ symbol edge must be pruned"
-    assert "regex:engine.cpp:contains:computeValue" in edge_ids_after, "new C++ symbol edge must be present"
-    # Every other fixture file's edges must be byte-for-byte untouched.
-    other_files_edges_before = {e.edge_id for e in edges if not e.edge_id.startswith("regex:engine.cpp:") and e.edge_id != "regex:engine.cpp:import:1:1:engine.hpp"}
-    other_files_edges_after = {e.edge_id for e in edges_after if not e.edge_id.startswith("regex:engine.cpp:") and e.edge_id != "regex:engine.cpp:import:1:1:engine.hpp"}
+    assert old_compute_edge_id not in edge_ids_after, "stale C++ symbol edge must be pruned"
+    assert any(
+        edge.relation == "contains" and edge.target == "symbol:engine.cpp:computeValue"
+        for edge in edges_after
+    ), "new C++ symbol edge must be present"
+    # Every other fixture file's edges must be byte-for-byte untouched. This
+    # deliberately accepts either the optional tree-sitter or stdlib regex
+    # backend's edge-id namespace while still asserting the delta boundary.
+    other_files_edges_before = {
+        edge.edge_id for edge in edges if edge.metadata.get("source_file") != "engine.cpp"
+    }
+    other_files_edges_after = {
+        edge.edge_id for edge in edges_after if edge.metadata.get("source_file") != "engine.cpp"
+    }
     assert other_files_edges_after == other_files_edges_before

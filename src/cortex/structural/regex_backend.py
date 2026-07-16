@@ -194,6 +194,92 @@ def _signature(content: str, start: int) -> str:
     return content[start:end].strip()
 
 
+_CPP_RAW_PREFIX_RE = re.compile(r'(?:u8|u|U|L)?R"(?P<delimiter>[^\s()\\]{0,16})\(')
+
+
+def _mask_comments_and_strings(content: str, *, hash_comments: bool = False) -> str:
+    """Replace comments and literals with spaces while preserving newlines.
+
+    The structural regex backend and the hotspot estimator both need a cheap
+    line-preserving view of source. Keeping the scanner here avoids having two
+    subtly different interpretations of braces/keywords. In addition to
+    ordinary quoted strings and comments it understands Python triple-quoted
+    literals and C++ raw strings such as ``R"TAG(... )TAG"``.
+    """
+    chars = list(content)
+    n = len(content)
+    i = 0
+
+    def blank(start: int, end: int) -> None:
+        for index in range(start, min(end, n)):
+            if content[index] != "\n":
+                chars[index] = " "
+
+    while i < n:
+        raw_match = _CPP_RAW_PREFIX_RE.match(content, i)
+        if raw_match:
+            delimiter = raw_match.group("delimiter")
+            terminator = ")" + delimiter + '"'
+            close = content.find(terminator, raw_match.end())
+            end = n if close == -1 else close + len(terminator)
+            blank(i, end)
+            i = end
+            continue
+
+        if content.startswith("//", i):
+            end = content.find("\n", i)
+            end = n if end == -1 else end
+            blank(i, end)
+            i = end
+            continue
+        if content.startswith("/*", i):
+            close = content.find("*/", i + 2)
+            end = n if close == -1 else close + 2
+            blank(i, end)
+            i = end
+            continue
+        if hash_comments and content[i] == "#":
+            end = content.find("\n", i)
+            end = n if end == -1 else end
+            blank(i, end)
+            i = end
+            continue
+
+        if content.startswith('"""', i) or content.startswith("'''", i):
+            quote = content[i : i + 3]
+            end = i + 3
+            while end < n:
+                if content[end] == "\\":
+                    end += 2
+                    continue
+                if content.startswith(quote, end):
+                    end += 3
+                    break
+                end += 1
+            blank(i, end)
+            i = end
+            continue
+
+        if content[i] in {'"', "'", "`"}:
+            quote = content[i]
+            end = i + 1
+            while end < n:
+                if content[end] == "\\":
+                    end += 2
+                    continue
+                if content[end] == quote:
+                    end += 1
+                    break
+                end += 1
+            blank(i, end)
+            i = end
+            continue
+
+        i += 1
+
+    return "".join(chars)
+
+
 def _matching_brace(content: str, open_idx: int) -> int | None:
     """Return the offset of the '}' that closes the '{' at ``open_idx``.
 
@@ -201,45 +287,15 @@ def _matching_brace(content: str, open_idx: int) -> int | None:
     body span is not cut short by a ``}`` that merely appears in text. Returns
     ``None`` when no balanced closing brace exists (unbalanced source).
     """
+    masked = _mask_comments_and_strings(content[open_idx:])
     depth = 0
-    i = open_idx
-    n = len(content)
-    quote = ""
-    while i < n:
-        ch = content[i]
-        if quote:
-            if ch == "\\":
-                i += 2
-                continue
-            if ch == quote:
-                quote = ""
-            i += 1
-            continue
-        if ch in "\"'`":
-            quote = ch
-            i += 1
-            continue
-        if ch == "/" and i + 1 < n:
-            nxt = content[i + 1]
-            if nxt == "/":
-                nl = content.find("\n", i)
-                if nl == -1:
-                    return None
-                i = nl + 1
-                continue
-            if nxt == "*":
-                close = content.find("*/", i + 2)
-                if close == -1:
-                    return None
-                i = close + 2
-                continue
+    for offset, ch in enumerate(masked):
         if ch == "{":
             depth += 1
         elif ch == "}":
             depth -= 1
             if depth == 0:
-                return i
-        i += 1
+                return open_idx + offset
     return None
 
 

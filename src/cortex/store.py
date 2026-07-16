@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 
 from .graph import QtSymbolIndex
+from .hotspots import estimate_complexity, hotspot_stats
 from .models import BundleItem, CommitRecord, Community, GraphEdge, GraphNode, RetrievalBundle, SourceRecord
 
 LEGACY_DIR_NAME = ".cortex"
@@ -544,6 +545,58 @@ class CortexStore:
         incremental call sites: pair with delete_graph_for_sources /
         delete_cochange_layer first so this only ever "appends" fresh state."""
         self.save_graph(repo_path, nodes, edges)
+
+    def update_file_hotspots(
+        self,
+        repo_path: Path,
+        churn: dict[str, int],
+        complexities: dict[str, int] | None = None,
+    ) -> None:
+        """Refresh hotspot metadata without rebuilding the graph.
+
+        ``complexities`` contains freshly parsed changed/new files. Existing
+        nodes retain their stored complexity; legacy nodes without hotspot
+        metadata fall back to their indexed source content once. Churn is
+        updated for every retained file because a changed commit window can
+        affect more than the files re-ingested in this delta.
+        """
+        repo_key = str(repo_path.resolve())
+        rows = self.connection.execute(
+            "SELECT node_id, source_ref, metadata_json FROM graph_nodes "
+            "WHERE repo_path = ? AND kind = 'file'",
+            (repo_key,),
+        ).fetchall()
+        complexity_map = complexities or {}
+        source_content: dict[str, str] = {}
+        updates: list[tuple[str, str, str]] = []
+        for row in rows:
+            path = str(row["source_ref"])
+            metadata = json.loads(row["metadata_json"])
+            previous = metadata.get("hotspot")
+            previous_complexity = previous.get("complexity") if isinstance(previous, dict) else None
+            if path in complexity_map:
+                complexity = int(complexity_map[path])
+            elif previous_complexity is not None:
+                complexity = int(previous_complexity)
+            else:
+                if path not in source_content:
+                    content_row = self.connection.execute(
+                        "SELECT content FROM sources WHERE repo_path = ? AND path = ?",
+                        (repo_key, path),
+                    ).fetchone()
+                    source_content[path] = "" if content_row is None else str(content_row["content"])
+                complexity = estimate_complexity(source_content[path], path)
+            next_hotspot = hotspot_stats(churn.get(path, 0), complexity)
+            if previous == next_hotspot:
+                continue
+            metadata["hotspot"] = next_hotspot
+            updates.append((json.dumps(metadata), repo_key, row["node_id"]))
+        if updates:
+            with self.connection:
+                self.connection.executemany(
+                    "UPDATE graph_nodes SET metadata_json = ? WHERE repo_path = ? AND node_id = ?",
+                    updates,
+                )
 
     def save_commits(self, repo_path: Path, commits: list[CommitRecord]) -> None:
         repo_key = str(repo_path.resolve())

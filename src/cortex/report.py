@@ -6,6 +6,7 @@ import re
 
 from .community import detect_communities
 from .gitutils import discover_repo_root
+from .hotspots import top_hotspots
 from .models import GraphEdge, GraphNode
 from .store import CortexStore, default_db_path
 
@@ -96,6 +97,7 @@ def generate_report(
     store.save_communities(repo_root, communities)
 
     god_nodes = _god_nodes(nodes, edges)
+    hotspots = top_hotspots(nodes)
     surprises = _surprising_connections(nodes, edges, node_community, include_test_pairs=include_test_pairs)
     file_node_count = sum(1 for node in nodes if node.kind == "file")
 
@@ -110,6 +112,15 @@ def generate_report(
         "## God Nodes (Most Connected Files)",
     ]
     lines.extend(f"- `{node.label}` — {degree} connections" for node, degree in god_nodes)
+
+    lines.extend(["", "## Hotspots"])
+    if hotspots:
+        lines.extend(
+            f"- `{item['path']}` — score={item['score']} (churn={item['churn']}, complexity={item['complexity']})"
+            for item in hotspots
+        )
+    else:
+        lines.append("- None detected yet.")
 
     lines.extend(["", "## Communities"])
     for community in sorted(communities, key=lambda item: (-len(item.node_ids), item.community_id))[:10]:

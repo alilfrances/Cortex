@@ -11,7 +11,8 @@ Current package and plugin metadata is `0.7.5` (`pyproject.toml` and `.codex-plu
 - STRUCTURAL layer: files, imports, definitions, symbol nodes, and contains edges.
 - COCHANGE layer: git history coupling between files changed together.
 - HEADING layer: Markdown sections for docs and planning context.
-- Ranking: personalized PageRank by default, with BFS available for comparison.
+- Ranking: personalized PageRank by default, with BFS available for comparison; optional churn×complexity hotspot boosting is opt-in.
+- Hotspots: deterministic per-language complexity and git touch-count analytics persisted with file nodes.
 - Packing: full files when they fit; Python skeletons with imports, signatures, spans, and hashes under tight budgets.
 - Communities: local graph clustering for reports and architecture overviews.
 - Transport: stdio MCP server plus plugin manifests for Claude Code and Codex.
@@ -101,8 +102,8 @@ This creates `cortex.db` and `cortex_report.md` under `~/.cortex/data/<repo-path
 
 | Tool | What it does | Example prompt |
 |---|---|---|
-| `cortex_query` | Builds a task-focused retrieval bundle under a token budget. | "Use Cortex to find the files and symbols for adding password reset." |
-| `cortex_overview` | Returns a compact repo overview from the stored graph and report data. | "Ask Cortex for an overview before we refactor the API layer." |
+| `cortex_query` | Builds a task-focused retrieval bundle under a token budget; pass `hotspot_boost: true` only when churn×complexity should influence ranking. | "Use Cortex to find the files and symbols for adding password reset." |
+| `cortex_overview` | Returns a compact repo overview, including `top_hotspots`, from the stored graph and report data. | "Ask Cortex for an overview before we refactor the API layer." |
 | `cortex_impact` | Ranks structural and co-change neighbors for a file or symbol. | "Use Cortex impact on `src/cortex/bundle.py` before changing packing." |
 | `cortex_search_symbols` | Searches indexed file and symbol nodes by name. | "Search Cortex symbols for `SessionStore` and related methods." |
 | `cortex_read_symbol` | Returns source for one indexed symbol span; `mode` picks `full` (numbered lines, default), `skeleton` (signature + nested member signatures, bodies elided), or `signature` (signature line + span only). | "Read the `generate_bundle` symbol with Cortex instead of opening the whole file." |
@@ -123,8 +124,8 @@ All 9 read/query tools (everything above except `cortex_refresh`) can carry a `_
 | Command | Purpose |
 |---|---|
 | `cortex ingest <repo> [--commits 50] [--update]` | Scan source files, git history, graph layers, symbols, and fingerprints into SQLite. |
-| `cortex bundle <repo> --task "..." [--budget 4000] [--rank pagerank\|bfs] [--format md\|json]` | Emit a token-budgeted context bundle. |
-| `cortex report <repo> [--out] [--include-test-pairs]` | Write an architecture report with central nodes, communities, and connections. |
+| `cortex bundle <repo> --task "..." [--budget 4000] [--rank pagerank\|bfs] [--hotspot-boost] [--format md\|json]` | Emit a token-budgeted context bundle. |
+| `cortex report <repo> [--out] [--include-test-pairs]` | Write an architecture report with central nodes, hotspots, communities, and connections. |
 | `cortex gc [--prune]` | List central data dirs (`--prune` deletes ones whose repo is gone) and prune each repo's query result cache. |
 | `cortex enrich <repo> --provider claude\|codex [--force]` | Optional LLM semantic enrichment with local cache. Requires `[llm]`. |
 | `cortex benchmark <repo> [--budget 4000] [--format text\|json]` | Compare bundle token cost against full-corpus reading. |

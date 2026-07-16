@@ -8,6 +8,7 @@ from typing import NamedTuple
 
 from .gitutils import collect_recent_commits, discover_repo_root
 from .graph import build_cochange_layer, build_file_layer, build_graph
+from .hotspots import annotate_file_nodes, compute_churn, compute_hotspots
 from .models import CommitRecord, SourceRecord
 from .store import CortexStore, default_db_path, write_repo_meta
 
@@ -277,6 +278,7 @@ def ingest_repository(
 
         commits = collect_recent_commits(repo_root, commit_limit)
         commits_changed = _commits_changed(store, repo_root, commits)
+        hotspot_overrides = compute_hotspots(sources_to_process, commits)
 
         # Delta graph writes: delete only the rows owned by changed/deleted
         # files, then append fresh rows for the changed/new files. Rows for
@@ -299,6 +301,7 @@ def ingest_repository(
             new_nodes, new_edges = build_file_layer(
                 sources_to_process, scan.current_paths, existing_qt_index=existing_qt_index
             )
+            annotate_file_nodes(new_nodes, hotspot_overrides)
             if stale_paths:
                 store.delete_graph_for_sources(repo_root, stale_paths)
             store.append_graph(repo_root, new_nodes, new_edges)
@@ -324,6 +327,20 @@ def ingest_repository(
             store.append_graph(repo_root, cochange_nodes, cochange_edges)
         if commits_changed:
             store.save_commits(repo_root, commits)
+
+        # Recompute churn for retained file nodes only when the commit window
+        # changed. Source-only edits already annotated their replacement nodes,
+        # and uncommitted deletions cannot change retained-file churn; avoiding
+        # this call keeps the P0-3 delta path O(changed) for ordinary refreshes.
+        # Legacy graph rows without hotspot metadata are backfilled here on the
+        # next commit refresh (or by a full ingest), not with an O(all-files)
+        # probe on every source-only refresh.
+        if commits_changed:
+            store.update_file_hotspots(
+                repo_root,
+                compute_churn(commits),
+                {path: int(values["complexity"]) for path, values in hotspot_overrides.items()},
+            )
 
         store.set_repo_fingerprint(repo_root, scan.fingerprint)
 

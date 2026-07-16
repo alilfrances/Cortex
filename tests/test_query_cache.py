@@ -86,6 +86,29 @@ def test_second_identical_query_skips_pagerank(tmp_path, monkeypatch):
     assert calls["n"] == 1, "second identical call must hit the cache and skip PageRank"
 
 
+def test_hotspot_boost_is_part_of_query_cache_key(tmp_path, monkeypatch):
+    repo = _repo_with_index(tmp_path, monkeypatch)
+    calls = _count_pagerank_calls(monkeypatch)
+    base = {"repo_path": str(repo), "task": "login billing", "hotspot_boost": False}
+
+    call_tool("cortex_query", base)
+    call_tool("cortex_query", {**base, "hotspot_boost": True})
+    assert calls["n"] == 2, "hotspot_boost changes ranking policy and must miss the off-mode cache entry"
+
+    call_tool("cortex_query", {**base, "hotspot_boost": True})
+    assert calls["n"] == 2, "repeating the same hotspot_boost mode must hit its own cache entry"
+
+    store = CortexStore(default_db_path(repo))
+    rows = store.connection.execute(
+        "SELECT COUNT(*) AS n FROM query_cache WHERE repo_path = ?",
+        (str(repo.resolve()),),
+    ).fetchone()
+    assert rows["n"] == 2
+    assert mcp_tools._cache_key("fingerprint", "cortex_query", base) != mcp_tools._cache_key(
+        "fingerprint", "cortex_query", {**base, "hotspot_boost": True}
+    )
+
+
 def test_second_identical_impact_hits_cache(tmp_path, monkeypatch):
     repo = _repo_with_index(tmp_path, monkeypatch)
     calls = {"n": 0}

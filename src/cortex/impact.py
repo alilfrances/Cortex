@@ -34,13 +34,14 @@ def rank_file_impact(
     # linked to files by COCHANGE "touches" edges, so they must be excluded here
     # or their SHAs surface as bogus impacted "paths" ranked 1.0. Same guard the
     # community/rank layers use.
-    file_paths = {
-        node.node_id: node.source_ref
+    file_nodes = {
+        node.node_id: node
         for node in nodes
         if (node.granularity == "file" or node.kind == "file")
         and node.kind != "commit"
         and not node.node_id.startswith("commit:")
     }
+    file_paths = {node_id: node.source_ref for node_id, node in file_nodes.items()}
     if seed_id not in file_paths:
         raise UnknownPathError(path)
     scores: defaultdict[str, float] = defaultdict(float)
@@ -61,15 +62,26 @@ def rank_file_impact(
         why[neighbor].append({"relation": edge.relation, "weight": edge.weight})
 
     ranked = sorted(scores, key=lambda node_id: (-scores[node_id], file_paths[node_id], node_id))
-    result = [
-        {
-            "path": file_paths[node_id],
-            "node_id": node_id,
-            "score": scores[node_id],
-            "why": sorted(why[node_id], key=lambda item: (-item["weight"], item["relation"])),
-        }
-        for node_id in ranked[:limit]
-    ]
+    result = []
+    for node_id in ranked[:limit]:
+        raw_hotspot = file_nodes[node_id].metadata.get("hotspot", {})
+        hotspot = raw_hotspot if isinstance(raw_hotspot, dict) else {}
+        hotspot_churn = int(hotspot.get("churn", 0))
+        hotspot_complexity = int(hotspot.get("complexity", 0))
+        hotspot_score = int(hotspot.get("score", hotspot_churn * hotspot_complexity))
+        result.append(
+            {
+                "path": file_paths[node_id],
+                "node_id": node_id,
+                "score": scores[node_id],
+                "why": sorted(why[node_id], key=lambda item: (-item["weight"], item["relation"])),
+                "hotspot": {
+                    "churn": hotspot_churn,
+                    "complexity": hotspot_complexity,
+                    "score": hotspot_score,
+                },
+            }
+        )
     truncated = False
     while result and count_text_tokens(json.dumps(result)) > budget:
         result.pop()

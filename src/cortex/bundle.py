@@ -77,6 +77,10 @@ FUSION_SCORE_MULTIPLIER = 40.0
 # relative to typical fixture/repo sizes so a real gold file rarely misses
 # the cut before RRF even sees it.
 FTS_CANDIDATE_LIMIT = 50
+# Hotspot ranking is deliberately opt-in. A normalized score keeps the signal
+# bounded and the default path byte-for-byte unchanged; even the hottest file
+# gets at most this many extra multiples of its existing relevance score.
+HOTSPOT_BOOST_MAX = 3.0
 
 
 def _language_hint_suffixes(task: str, task_terms: set[str]) -> frozenset[str]:
@@ -480,6 +484,7 @@ def generate_bundle(
     db_path: Path | None = None,
     output_format: str = 'md',
     rank: str = 'pagerank',
+    hotspot_boost: bool = False,
 ) -> str | dict:
     repo_root = discover_repo_root(repo_path)
     store = CortexStore(db_path or default_db_path(repo_root))
@@ -490,6 +495,18 @@ def generate_bundle(
     task_terms = _tokenize_query(task)
     term_weights = _term_weights(task_terms, sources)
     demote_aux = not (task_terms & AUX_INTENT_TERMS)
+    hotspot_by_path: dict[str, dict] = {}
+    for node in nodes:
+        if node.kind != 'file' or not isinstance(node.metadata.get('hotspot'), dict):
+            continue
+        hotspot_by_path[node.source_ref] = node.metadata['hotspot']
+    max_hotspot_score = max(
+        (
+            float(values.get('score', values.get('churn', 0) * values.get('complexity', 0)))
+            for values in hotspot_by_path.values()
+        ),
+        default=0.0,
+    )
     lang_suffixes = _language_hint_suffixes(task, task_terms)
     adj = _build_adjacency(edges)
 
@@ -512,12 +529,17 @@ def generate_bundle(
         name_bonus = NAME_MATCH_BONUS if task_terms & name_candidates else 0.0
         dir_tokens = _tokenize_text("/".join(Path(source.path).parts[:-1]))
         path_bonus = PATH_MATCH_BONUS if task_terms & dir_tokens else 0.0
-        base_scores[source.path] = name_bonus + path_bonus + _score_text(
+        score = name_bonus + path_bonus + _score_text(
             task_terms,
             f'{source.path}\n{source.content}',
             recency_weight,
             term_weights,
         )
+        if hotspot_boost and score > 0 and max_hotspot_score > 0:
+            values = hotspot_by_path.get(source.path, {})
+            hotspot_score = float(values.get('score', values.get('churn', 0) * values.get('complexity', 0)))
+            score *= 1.0 + HOTSPOT_BOOST_MAX * (hotspot_score / max_hotspot_score)
+        base_scores[source.path] = score
 
     # P0-2: fuse the existing name/keyword ranking with an FTS5 body-text
     # ranked list (plus a definition-boost list) via reciprocal rank fusion,

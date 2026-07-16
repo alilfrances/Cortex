@@ -599,7 +599,17 @@ DeviceManager::DeviceManager(QObject *parent) : QObject(parent) {
 }
 
 void DeviceManager::scan() {
-    emit deviceConnected(42);
+    const auto deviceId = 42;
+    switch (deviceId) {
+    case 42:
+        emit deviceConnected(deviceId);
+        break;
+    case 7:
+        emit deviceConnected(deviceId);
+        break;
+    default:
+        break;
+    }
 }
 
 void DeviceManager::onDeviceConnected(int deviceId) {

@@ -14,6 +14,7 @@ from ..impact import UnknownPathError, rank_file_impact
 from ..ingest import compute_repo_fingerprint, ingest_repository
 from ..references import find_references
 from ..report import generate_report
+from ..hotspots import top_hotspots
 from ..store import CortexStore, default_db_path
 from ..tokenizer import count_text_tokens, truncate_text_to_budget
 
@@ -28,6 +29,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "repo_path": {"type": "string"},
                 "task": {"type": "string"},
                 "budget": {"type": "integer", "default": 4000},
+                "hotspot_boost": {"type": "boolean", "default": False, "description": "Opt-in churn×complexity ranking boost; default retrieval is unchanged."},
                 "response_format": {"type": "string", "enum": ["concise", "detailed"], "default": "concise"},
             },
             "required": ["task"],
@@ -35,7 +37,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "cortex_overview",
-        "description": "Returns repo graph size, communities, god nodes, and surprising links. Use for orientation before targeted tools; not for finding one symbol. Example: {\"repo_path\":\".\"}.",
+        "description": "Returns repo graph size, communities, god nodes, top churn×complexity hotspots, and surprising links. Use for orientation before targeted tools; not for finding one symbol. Example: {\"repo_path\":\".\"}.",
         "inputSchema": {"type": "object", "properties": {"repo_path": {"type": "string"}, "response_format": {"type": "string", "enum": ["concise", "detailed"], "default": "concise"}}},
     },
     {
@@ -501,6 +503,7 @@ def _call_query(arguments: dict[str, Any]) -> dict[str, Any]:
             task=task,
             budget=int(arguments.get("budget", 4000)),
             output_format="json",
+            hotspot_boost=bool(arguments.get("hotspot_boost", False)),
         )
         assert isinstance(bundle, dict)
         terms = _tokenize_query(task)
@@ -533,8 +536,19 @@ def _call_overview(arguments: dict[str, Any]) -> dict[str, Any]:
     cache_hit = cached_payload is not None
     if cache_hit:
         payload = cached_payload
+        # Older query-cache rows predate P1-2. Enrich them lazily rather than
+        # hiding hotspots until the repository fingerprint changes.
+        if "top_hotspots" not in payload:
+            nodes, _edges = store.fetch_graph(repo_root)
+            payload = {**payload, "top_hotspots": top_hotspots(nodes)}
+            _cache_set(store, repo_root, cache_key, payload)
     else:
-        payload = {"repo_path": str(repo_root), "report": generate_report(repo_root)}
+        nodes, _edges = store.fetch_graph(repo_root)
+        payload = {
+            "repo_path": str(repo_root),
+            "report": generate_report(repo_root),
+            "top_hotspots": top_hotspots(nodes),
+        }
         _cache_set(store, repo_root, cache_key, payload)
     return _content(_format_payload(payload, status, response_format, cached=cache_hit))
 
@@ -550,7 +564,29 @@ def _call_impact(arguments: dict[str, Any]) -> dict[str, Any]:
     cache_key = _cache_key(status["current_fingerprint"], "cortex_impact", arguments)
     cached_payload = _cache_get(store, repo_root, cache_key)
     if cached_payload is not None:
-        return _content(_format_payload(cached_payload, status, response_format, cached=True))
+        payload = cached_payload
+        if any("hotspot" not in item for item in payload.get("items", [])):
+            graph_nodes, _graph_edges = store.fetch_graph(repo_root)
+            hotspot_by_id = {node.node_id: node.metadata.get("hotspot", {}) for node in graph_nodes}
+            enriched_items = []
+            for item in payload.get("items", []):
+                if "hotspot" in item:
+                    enriched_items.append(item)
+                    continue
+                raw = hotspot_by_id.get(item.get("node_id"), {})
+                values = raw if isinstance(raw, dict) else {}
+                churn = int(values.get("churn", 0))
+                complexity = int(values.get("complexity", 0))
+                enriched_items.append(
+                    {**item, "hotspot": {
+                        "churn": churn,
+                        "complexity": complexity,
+                        "score": int(values.get("score", churn * complexity)),
+                    }}
+                )
+            payload = {**payload, "items": enriched_items}
+            _cache_set(store, repo_root, cache_key, payload)
+        return _content(_format_payload(payload, status, response_format, cached=True))
     nodes, edges = store.fetch_graph(repo_root)
     try:
         items, truncated = rank_file_impact(

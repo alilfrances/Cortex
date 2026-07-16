@@ -212,6 +212,7 @@ def build_parser() -> argparse.ArgumentParser:
     bundle_parser.add_argument("--db", type=Path, default=None)
     bundle_parser.add_argument("--format", choices=("json", "md"), default="md")
     bundle_parser.add_argument("--rank", choices=("pagerank", "bfs"), default="pagerank")
+    bundle_parser.add_argument("--hotspot-boost", action="store_true", help="Opt into churn×complexity ranking boost")
 
     report_parser = subparsers.add_parser("report", help="Generate a graph report")
     report_parser.add_argument("repo_path", type=Path)
@@ -317,6 +318,7 @@ def main() -> None:
             db_path=args.db,
             output_format=args.format,
             rank=args.rank,
+            hotspot_boost=args.hotspot_boost,
         )
         if args.format == "json":
             print(json.dumps(bundle, indent=2))
