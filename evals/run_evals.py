@@ -66,6 +66,18 @@ GOLD_TASKS: tuple[GoldTask, ...] = (
         expected_files=("app/audit.py", "app/auth.py", "app/orders.py"),
         expected_symbols=("app/audit.py:AuditLog.record",),
     ),
+    # P0-2: gold file findable only via body text -- "power-cycle" and
+    # "gateway" appear only inside the error string literal in
+    # app/messages.py, not in its filename, path, or the (unindexed)
+    # constant name. Exercises the FTS5 fusion signal in generate_bundle,
+    # not just cortex_search_text directly. Isolated in its own repo (see
+    # _build_body_text_repo) so it can't perturb any other task's IDF-based
+    # term weights.
+    GoldTask(
+        repo="body_text_repo",
+        description="Locate the power-cycle gateway retry connection error message text",
+        expected_files=("app/messages.py",),
+    ),
     GoldTask(
         repo="web_service",
         description="Trace API route for creating incidents and notifying Slack",
@@ -279,6 +291,52 @@ Claude Code uses claude plugin with this plugin directory. Codex uses the
 .codex-plugin manifest plus an mcp_servers.cortex configuration entry.
 """)
     _commit_all(repo, "add cleanup and setup docs")
+    return repo
+
+
+def _build_body_text_repo(base: Path) -> Path:
+    """Small standalone fixture for the P0-2 body-text-only gold task.
+
+    Deliberately isolated from the other fixture repos: python_app,
+    web_service, etc. are each reused by several unrelated gold tasks, and
+    `_term_weights`'s IDF is computed over every source in a repo, so
+    dropping a new distinctive-vocabulary file into one of them would
+    shift every other task's term weights and candidate pool slightly
+    (confirmed by a regression run: adding the error-message file to
+    python_app measurably moved precision on five unrelated python_app
+    tasks). A dedicated repo keeps this task's fixture from perturbing any
+    other task's baseline.
+    """
+    repo = base / "body_text_repo"
+    _init_repo(repo)
+    # The distinctive words ("gateway", "power-cycle") live only inside the
+    # string literal, not in the constant name or the file name/path, and a
+    # module-level string assignment is not extracted as a symbol node
+    # (ast_extract.py only extracts functions/classes) -- so this file is
+    # discoverable only through body-text/content search, never through
+    # name or symbol matching.
+    _write(repo / "app/messages.py", """
+DEVICE_OFFLINE_ERROR = "please power-cycle the gateway before retrying the connection"
+""")
+    # Distractor sharing generic vocabulary ("retry", "connection") with the
+    # gold file's string, as identifiers rather than the message text, so
+    # the task genuinely exercises ranking instead of trivially resolving
+    # to the only file in the repo.
+    _write(repo / "app/network.py", """
+def retry_connection(client, attempts=3):
+    for _ in range(attempts):
+        if client.connect():
+            return True
+    return False
+""")
+    _write(repo / "README.md", """
+# Body Text Repo
+
+Fixture repository exercising Cortex's FTS5 body-text search: the gold
+error message lives only inside a string literal, not in any file name,
+path, or indexed symbol name.
+""")
+    _commit_all(repo, "add device error message and network retry helper")
     return repo
 
 
@@ -573,6 +631,7 @@ def build_fixture_repos(base: Path) -> dict[str, Path]:
         "noisy_lib": _build_noisy_lib(base),
         "refresh_distractors": _build_refresh_distractors(base),
         "qt_app": _build_qt_app(base),
+        "body_text_repo": _build_body_text_repo(base),
     }
 
 

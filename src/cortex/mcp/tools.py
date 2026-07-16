@@ -118,6 +118,21 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "cortex_search_text",
+        "description": "Full-text body search (FTS5 BM25) across indexed file contents, with line-anchored snippets -- a grep replacement that reads from the index instead of the tree. Use for string literals, error messages, comments, or prose that cortex_search_symbols (name/signature only, not body text) can't find. Returns empty results with fts_available:false if this Python's sqlite3 build lacks FTS5. Example: {\"query\":\"device offline retry\",\"limit\":10}.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "repo_path": {"type": "string"},
+                "query": {"type": "string"},
+                "limit": {"type": "integer", "default": 10},
+                "budget": {"type": "integer", "default": 2000},
+                "response_format": {"type": "string", "enum": ["concise", "detailed"], "default": "concise"},
+            },
+            "required": ["query"],
+        },
+    },
+    {
         "name": "cortex_refresh",
         "description": "Re-ingest the repository into the local Cortex database.",
         "inputSchema": {
@@ -548,6 +563,48 @@ def _call_references(arguments: dict[str, Any]) -> dict[str, Any]:
     return _content(_format_payload({"repo_path": str(repo_root), **result}, status, response_format))
 
 
+def _call_search_text(arguments: dict[str, Any]) -> dict[str, Any]:
+    repo_root = _repo_root(arguments)
+    store, error = _store_or_error(repo_root)
+    if error is not None:
+        return _content(error, is_error=True)
+    assert store is not None
+    status = _ensure_fresh(store, repo_root)
+    query = str(arguments.get("query", ""))
+    if not query:
+        return _content({"error": "missing_query", "message": "query is required"}, is_error=True)
+    response_format = _response_format(arguments)
+    if not store.fts_enabled:
+        payload = {
+            "repo_path": str(repo_root),
+            "items": [],
+            "fts_available": False,
+            "truncated": False,
+            "returned_count": 0,
+            "message": "FTS5 is unavailable in this Python's sqlite3 build; full-text body search is disabled.",
+        }
+        return _content(_format_payload(payload, status, response_format))
+    limit = int(arguments.get("limit", 10))
+    budget = int(arguments.get("budget", 2000))
+    hits = store.search_fulltext(repo_root, query, limit=limit)
+    items: list[dict[str, Any]] = []
+    truncated = False
+    for path, score, snippet in hits:
+        item = {"path": path, "score": score, "snippet": snippet}
+        if count_text_tokens(json.dumps([*items, item])) > budget:
+            truncated = True
+            break
+        items.append(item)
+    payload = {
+        "repo_path": str(repo_root),
+        "items": items,
+        "fts_available": True,
+        "truncated": truncated,
+        "returned_count": len(items),
+    }
+    return _content(_format_payload(payload, status, response_format))
+
+
 def _call_refresh(arguments: dict[str, Any]) -> dict[str, Any]:
     repo_root = _repo_root(arguments)
     summary = ingest_repository(repo_root, commit_limit=int(arguments.get("commits", 50)))
@@ -564,6 +621,7 @@ _LEDGER_TOOLS = {
     "cortex_read_symbol",
     "cortex_relations",
     "cortex_references",
+    "cortex_search_text",
 }
 
 # Matches the "<label> @ <path>[:<line>]" endpoint rendering built by
@@ -619,11 +677,11 @@ def _estimate_baseline(
     IMPROVEMENT_PLAN.md):
 
     - File-returning tools (cortex_query, cortex_impact, cortex_read_symbol,
-      cortex_references): baseline is the token cost of reading, in full and
-      raw, every DISTINCT file referenced in the actual response -- the
-      tokens an agent would have spent with plain Read/grep instead of this
-      tool. Computed via store.fetch_source_content, so it reflects the
-      exact indexed content Cortex itself read.
+      cortex_references, cortex_search_text): baseline is the token cost of
+      reading, in full and raw, every DISTINCT file referenced in the
+      actual response -- the tokens an agent would have spent with plain
+      Read/grep instead of this tool. Computed via store.fetch_source_content,
+      so it reflects the exact indexed content Cortex itself read.
     - Structure-only tools (cortex_search_symbols, cortex_relations,
       cortex_overview): these return an index/graph view with no single
       "raw file" backing them, so there's no direct raw-read baseline. The
@@ -640,7 +698,7 @@ def _estimate_baseline(
     "which symbol did you mean" response has no single resolved file either,
     so its baseline is 0 (no content was delivered to compare against).
     """
-    if tool in ("cortex_query", "cortex_impact"):
+    if tool in ("cortex_query", "cortex_impact", "cortex_search_text"):
         paths = {str(item.get("path", "")) for item in payload.get("items", []) if item.get("path")}
         return _referenced_file_tokens(store, repo_root, paths)
 
@@ -714,6 +772,8 @@ def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
             result = _call_relations(args)
         elif name == "cortex_references":
             result = _call_references(args)
+        elif name == "cortex_search_text":
+            result = _call_search_text(args)
         elif name == "cortex_refresh":
             result = _call_refresh(args)
         else:

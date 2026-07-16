@@ -82,6 +82,9 @@ def main() -> int:
             "cortex_relations (parsed graph edges — 'who inherits/emits/connects to X'), "
             "cortex_references (blast-radius — graph edges + cross-language grep for a symbol, "
             "including CMake/scripts/configs/docs the parser doesn't index), "
+            "cortex_search_text (full-text body search over indexed file contents — string "
+            "literals, error messages, comments, prose — a grep replacement that reads from "
+            "the index), "
             "cortex_overview (repo orientation). Call cortex_refresh to update a stale index."
         )
         return 0

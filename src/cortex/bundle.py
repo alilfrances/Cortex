@@ -7,6 +7,7 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
+from .fusion import rrf_fuse
 from .gitutils import discover_repo_root
 from .models import BundleItem, GraphEdge, GraphNode, RetrievalBundle
 from .rank import personalized_pagerank
@@ -61,6 +62,20 @@ LANGUAGE_HINT_SUFFIXES: dict[str, frozenset[str]] = {
     'swift': frozenset({'.swift'}),
     'kotlin': frozenset({'.kt', '.kts'}),
 }
+# P0-2: RRF fusion contribution scale. rrf_fuse's per-list max contribution
+# is 1/(k+1) ~= 0.0164 (k=60); with up to four lists fused in
+# generate_bundle the max raw fusion score is well under 0.1, so this
+# multiplier must stay far below NAME_MATCH_BONUS (100) / PATH_MATCH_BONUS
+# (40) and typical keyword scores (~10 per matched term): it should only
+# ever break ties or lift a body-text-only file into the candidate set,
+# never override an exact stem/symbol name hit. Tuned against the eval
+# suite (see evals/run_evals.py) -- retune here, not by changing k, if a
+# regression shows fusion is over/under-weighted.
+FUSION_SCORE_MULTIPLIER = 40.0
+# How many FTS5 body-text hits feed the fusion's ranked list -- generous
+# relative to typical fixture/repo sizes so a real gold file rarely misses
+# the cut before RRF even sees it.
+FTS_CANDIDATE_LIMIT = 50
 
 
 def _language_hint_suffixes(task: str, task_terms: set[str]) -> frozenset[str]:
@@ -208,6 +223,32 @@ def _tokenize_query(task: str) -> set[str]:
     return _tokenize_text(task, drop_stopwords=True)
 
 
+_IDENTIFIER_TOKEN_RE = re.compile(r'[A-Za-z_][A-Za-z0-9_:]*')
+_CAMEL_BOUNDARY_RE = re.compile(r'[a-z0-9][A-Z]')
+
+
+def _looks_like_identifier_query(task: str) -> bool:
+    """True when the task text contains an identifier-shaped token:
+    camelCase, snake_case, or a `::`-qualified name.
+
+    Semble-style adaptive weighting (P0-2 step 5): a query naming a
+    specific symbol -- `MyClass::mySignal`, `deviceConnected`,
+    `device_list_model` -- almost certainly wants that exact definition,
+    not whichever file's body text happens to share the most common
+    sub-words with a natural-language phrasing of the same question.
+    generate_bundle uses this to double-weight the lexical/name ranked
+    list over the FTS body-text list during fusion.
+    """
+    for token in _IDENTIFIER_TOKEN_RE.findall(task):
+        if '::' in token:
+            return True
+        if '_' in token.strip('_'):
+            return True
+        if _CAMEL_BOUNDARY_RE.search(token):
+            return True
+    return False
+
+
 def _score_text(
     task_terms: set[str],
     text: str,
@@ -334,7 +375,7 @@ def generate_bundle(
             )
 
     newest_commit = max((c.authored_at for c in commits), default=0)
-    source_scores: dict[str, float] = {}
+    base_scores: dict[str, float] = {}
     for source in sources:
         recency_weight = 0.0
         if newest_commit:
@@ -343,12 +384,49 @@ def generate_bundle(
         name_bonus = NAME_MATCH_BONUS if task_terms & name_candidates else 0.0
         dir_tokens = _tokenize_text("/".join(Path(source.path).parts[:-1]))
         path_bonus = PATH_MATCH_BONUS if task_terms & dir_tokens else 0.0
-        score = name_bonus + path_bonus + _score_text(
+        base_scores[source.path] = name_bonus + path_bonus + _score_text(
             task_terms,
             f'{source.path}\n{source.content}',
             recency_weight,
             term_weights,
         )
+
+    # P0-2: fuse the existing name/keyword ranking with an FTS5 body-text
+    # ranked list (plus a definition-boost list) via reciprocal rank fusion,
+    # so a file whose only relevance signal is body text -- an error
+    # string, a docstring, Markdown prose -- can surface even when its
+    # keyword-overlap score alone is weak, without having to calibrate
+    # BM25's scale against the hand-tuned NAME_MATCH_BONUS/PATH_MATCH_BONUS
+    # bonuses (RRF only cares about rank position, not raw score
+    # magnitude). Fusion runs on base_scores, *before* the aux-path
+    # demotion and language boost/demotion applied below, so those existing
+    # signals uniformly cover FTS-sourced candidates too instead of needing
+    # a duplicate noise penalty.
+    name_rank_list = [
+        path for path, score in sorted(base_scores.items(), key=lambda kv: (-kv[1], kv[0]))
+        if score > 0
+    ]
+    fts_hits = store.search_fulltext(repo_root, task, limit=FTS_CANDIDATE_LIMIT) if task_terms else []
+    fts_rank_list = [path for path, _bm25, _snippet in fts_hits if path in base_scores]
+    # Definition boost (semble-style, P0-2 step 5): a file that *defines* a
+    # queried identifier (its own symbol names overlap the task terms) gets
+    # extra RRF list membership beyond a plain FTS body-text mention, so it
+    # outranks a file that merely references the identifier in prose.
+    definition_rank_list = sorted(
+        path for path, names in symbol_names_by_path.items()
+        if task_terms & names and path in base_scores
+    )
+    fusion_lists: list[list[str]] = [name_rank_list, fts_rank_list, definition_rank_list]
+    if _looks_like_identifier_query(task):
+        # Adaptive weighting: an identifier-shaped query double-counts the
+        # lexical/name list so exact-symbol relevance outweighs generic FTS
+        # body-text term frequency.
+        fusion_lists.append(name_rank_list)
+    fusion_scores = rrf_fuse(fusion_lists) if any(fusion_lists) else {}
+
+    source_scores: dict[str, float] = {}
+    for source in sources:
+        score = base_scores[source.path] + fusion_scores.get(source.path, 0.0) * FUSION_SCORE_MULTIPLIER
         if demote_aux and _is_aux_path(source.path):
             score *= AUX_PATH_DEMOTION
         if lang_suffixes and score > 0:

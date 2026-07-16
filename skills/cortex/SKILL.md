@@ -17,8 +17,9 @@ Use Cortex when working inside an indexed repository and you need code context, 
    - `cortex_impact` on the containing file to inspect structural and co-change neighbors before editing.
 4. Use `cortex_relations` for parsed graph questions such as imports, contains, inherits, emits, connects, or handles.
 5. Use `cortex_references` when configs, docs, scripts, CMake/QRC, or other parser-missed surfaces may reference a symbol.
-6. Default to `response_format: "concise"`; pass `response_format: "detailed"` only when you need provenance, fingerprints, full metadata, or detailed why-edges.
-7. If a tool reports `stale: true`, call `cortex_refresh` or rerun the read tool after refresh.
+6. Use `cortex_search_text` for body text — string literals, error messages, comments, Markdown prose — that `cortex_search_symbols` can't find because it only matches symbol names/signatures/paths, not file contents.
+7. Default to `response_format: "concise"`; pass `response_format: "detailed"` only when you need provenance, fingerprints, full metadata, or detailed why-edges.
+8. If a tool reports `stale: true`, call `cortex_refresh` or rerun the read tool after refresh.
 
 ## Tools
 
@@ -82,6 +83,16 @@ Example:
 
 ```json
 {"symbol":"_ensure_fresh","budget":2000}
+```
+
+### `cortex_search_text`
+
+Returns line-anchored body-text matches (FTS5 BM25) across indexed file contents — string literals, error messages, comments, Markdown prose. Use as a grep replacement when the target text isn't a symbol name/signature/path (that's `cortex_search_symbols`). Falls back to `fts_available: false` with empty results if this Python's `sqlite3` build lacks FTS5.
+
+Example:
+
+```json
+{"query":"device offline retry","limit":10}
 ```
 
 ### `cortex_overview`

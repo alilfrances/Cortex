@@ -108,6 +108,7 @@ This creates `cortex.db` and `cortex_report.md` under `~/.cortex/data/<repo-path
 | `cortex_read_symbol` | Returns numbered source lines for one indexed symbol span. | "Read the `generate_bundle` symbol with Cortex instead of opening the whole file." |
 | `cortex_relations` | Returns parsed graph edges such as imports, calls, inherits, emits, and connects. | "Show Cortex relations for `generate_bundle` outgoing calls." |
 | `cortex_references` | Returns cross-file references from parsed graph edges plus repo grep, bucketed by file type. | "Find all references to `_ensure_fresh` with Cortex." |
+| `cortex_search_text` | Full-text body search (FTS5 BM25) across indexed file contents, with line-anchored snippets — a grep replacement over string literals, error messages, comments, and prose that symbol search can't see. | "Search Cortex text for the 'device offline' error message." |
 | `cortex_refresh` | Re-ingests the repo and updates freshness metadata. | "Refresh Cortex, then query the checkout flow again." |
 
 Tool results include provenance where available. Read tools keep the index fresh automatically: when the repository fingerprint has changed since ingestion, they run an incremental re-ingest (changed, new, and deleted files only) before answering and report the delta under `auto_refreshed`. Set `CORTEX_AUTO_REFRESH=0` to disable and fall back to stale-state hints plus manual `cortex_refresh`. If no index exists yet, read tools still require an explicit `cortex_refresh` first.
@@ -166,7 +167,7 @@ Interpretation: normal-budget PageRank and BFS both recover all gold files/symbo
 
 ## Token Savings
 
-Every successful call to a read tool (`cortex_query`, `cortex_overview`, `cortex_impact`, `cortex_search_symbols`, `cortex_read_symbol`, `cortex_relations`, `cortex_references`) is logged to a local `tool_usage` ledger with the response's actual token count and a deterministic baseline estimate of what an agent would have spent without Cortex. Run `cortex saved <repo>` to see it:
+Every successful call to a read tool (`cortex_query`, `cortex_overview`, `cortex_impact`, `cortex_search_symbols`, `cortex_read_symbol`, `cortex_relations`, `cortex_references`, `cortex_search_text`) is logged to a local `tool_usage` ledger with the response's actual token count and a deterministic baseline estimate of what an agent would have spent without Cortex. Run `cortex saved <repo>` to see it:
 
 ```bash
 cortex saved . --daily
@@ -175,7 +176,7 @@ cortex saved . --daily
 | Metric | Meaning |
 |---|---|
 | Response tokens | `count_text_tokens(json.dumps(payload))` for the actual MCP response. |
-| Baseline tokens | For file-returning tools: the raw content of every distinct file referenced in the response, read in full (`store.fetch_source_content`) — what an agent would have spent with plain Read/grep. For `cortex_search_symbols`/`cortex_relations`/`cortex_overview`: the token cost of the `detailed` rendering of the same call (the savings the concise format already provides); `cortex_relations` also adds the referenced files' raw content. |
+| Baseline tokens | For file-returning tools (including `cortex_search_text`): the raw content of every distinct file referenced in the response, read in full (`store.fetch_source_content`) — what an agent would have spent with plain Read/grep. For `cortex_search_symbols`/`cortex_relations`/`cortex_overview`: the token cost of the `detailed` rendering of the same call (the savings the concise format already provides); `cortex_relations` also adds the referenced files' raw content. |
 | Saved tokens | `baseline_tokens - response_tokens`, summed per tool, per day, and overall. |
 
 The baseline policy lives in one auditable function, `_estimate_baseline` in `src/cortex/mcp/tools.py`. It is a proxy, not a measured "tokens not spent": for `cortex_search_symbols`/`cortex_overview` it only captures response-format savings (there's no single raw file backing an index/graph summary), and for `cortex_query`/`cortex_impact` it only prices the files Cortex actually returned, not the rest of the corpus an agent would otherwise have had to search through. Ledger writes are best-effort — a locked or missing database never surfaces as an MCP tool error. Add `--price-per-mtok <input>,<output>` to render dollar figures at your model's own rates (no prices are hardcoded); the ledger's baseline/response tokens are both priced at the input rate since they represent context read into an agent's own model, not model-generated output.

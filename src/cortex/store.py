@@ -29,6 +29,47 @@ def _normalized_identifier(text: str) -> str:
     return ''.join(_search_tokens(text))
 
 
+def _fts_identifier_text(content: str) -> str:
+    """Space-joined identifier subtokens for the FTS5 auxiliary `identifiers`
+    column (P0-2 step 6). Reuses the same camelCase/snake_case splitter as
+    `search_nodes` so a split-word query ("device list model") matches a
+    file whose only on-disk spelling is a compound identifier
+    ("DeviceListModel") that the `unicode61` tokenizer would otherwise index
+    as one opaque token indistinguishable from the split-word query."""
+    return ' '.join(_search_tokens(content))
+
+
+def _fts_match_query(query: str) -> str:
+    """Build an FTS5 MATCH expression from free text.
+
+    OR's quoted, escaped tokens (reusing `_search_tokens`, which already
+    lowercases and splits camelCase/snake_case/`::`-qualified identifiers)
+    so punctuation in the raw query (`::`, `(`, `"`, ...) can never produce
+    invalid FTS5 query syntax, while multi-term matches still rank higher
+    than single-term ones via bm25's per-term contribution. Returns '' when
+    the query has no searchable tokens.
+    """
+    tokens = _search_tokens(query)
+    if not tokens:
+        return ''
+    return ' OR '.join('"{}"'.format(token.replace('"', '""')) for token in tokens)
+
+
+def _first_matching_line(content: str, tokens: list[str]) -> int | None:
+    """1-based line number of the first line containing any query token
+    (case-insensitive substring match), used to line-anchor FTS snippets
+    (P0-2 step 7). Best-effort: returns None if no token appears verbatim
+    on any line (possible when a match came only from the auxiliary
+    `identifiers` column's split-word form, not the raw content)."""
+    if not tokens:
+        return None
+    for lineno, line in enumerate(content.splitlines(), start=1):
+        lowered = line.lower()
+        if any(token in lowered for token in tokens):
+            return lineno
+    return None
+
+
 def data_root() -> Path:
     """Base directory for all central per-repo data dirs."""
     override = os.environ.get("CORTEX_DATA_DIR")
@@ -202,6 +243,69 @@ class CortexStore:
         )
         self.connection.commit()
         self._migrate_existing_schema()
+        # P0-2: FTS5 ships with CPython's stdlib sqlite3 module but isn't
+        # guaranteed compiled into every distribution's SQLite build. Guard
+        # independently of the executescript above (which has no per-
+        # statement error handling) so a missing FTS5 module degrades to
+        # the existing LIKE-based search path everywhere instead of
+        # breaking schema init for the whole store.
+        self.fts_enabled = self._init_fts5()
+
+    def _init_fts5(self) -> bool:
+        """Create the `source_fts` virtual table if this sqlite3 build has
+        FTS5 compiled in; return whether full-text search is available.
+
+        `CREATE VIRTUAL TABLE IF NOT EXISTS` is idempotent like the rest of
+        `initialize_schema`, so this can run on every open. `content` and
+        `identifiers` are indexed (searchable) columns; the other three are
+        `UNINDEXED` metadata carried alongside each row. Tests simulate an
+        unavailable FTS5 build by monkeypatching this method to return
+        False before constructing a CortexStore.
+        """
+        try:
+            exists_before = self.connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'source_fts'"
+            ).fetchone() is not None
+            self.connection.execute(
+                '''
+                CREATE VIRTUAL TABLE IF NOT EXISTS source_fts USING fts5(
+                    repo_path UNINDEXED,
+                    path UNINDEXED,
+                    kind UNINDEXED,
+                    content,
+                    identifiers,
+                    tokenize='unicode61'
+                )
+                '''
+            )
+            self.connection.commit()
+        except sqlite3.OperationalError:
+            return False
+        if not exists_before:
+            self._backfill_fts5()
+        return True
+
+    def _backfill_fts5(self) -> None:
+        """One-time backfill when `source_fts` is created against a
+        pre-existing database (the upgrade path): sources ingested before
+        P0-2 have no matching FTS rows yet, since `save_sources` is the
+        only other writer and it only ever touches paths passed to it."""
+        rows = self.connection.execute(
+            "SELECT repo_path, path, kind, content FROM sources"
+        ).fetchall()
+        if not rows:
+            return
+        with self.connection:
+            self.connection.executemany(
+                '''
+                INSERT INTO source_fts(repo_path, path, kind, content, identifiers)
+                VALUES (?, ?, ?, ?, ?)
+                ''',
+                [
+                    (row['repo_path'], row['path'], row['kind'], row['content'], _fts_identifier_text(row['content']))
+                    for row in rows
+                ],
+            )
 
     def _migrate_existing_schema(self) -> None:
         migrations = [
@@ -263,6 +367,8 @@ class CortexStore:
                 self.connection.execute("DELETE FROM bundles WHERE repo_path = ?", (repo_key,))
             for table in ("sources", "commits", "graph_nodes", "graph_edges"):
                 self.connection.execute(f"DELETE FROM {table} WHERE repo_path = ?", (repo_key,))
+            if self.fts_enabled:
+                self.connection.execute("DELETE FROM source_fts WHERE repo_path = ?", (repo_key,))
 
     def set_repo_fingerprint(self, repo_path: Path, fingerprint: str) -> None:
         repo_key = str(repo_path.resolve())
@@ -308,6 +414,24 @@ class CortexStore:
                     for source in sources
                 ],
             )
+            # P0-2: keep source_fts in sync at the same delete+insert-per-path
+            # granularity as the `sources` table it mirrors, so a re-saved
+            # path's old FTS row (and stale identifiers) never lingers.
+            if self.fts_enabled and sources:
+                self.connection.executemany(
+                    'DELETE FROM source_fts WHERE repo_path = ? AND path = ?',
+                    [(repo_key, source.path) for source in sources],
+                )
+                self.connection.executemany(
+                    '''
+                    INSERT INTO source_fts(repo_path, path, kind, content, identifiers)
+                    VALUES (?, ?, ?, ?, ?)
+                    ''',
+                    [
+                        (repo_key, source.path, source.kind, source.content, _fts_identifier_text(source.content))
+                        for source in sources
+                    ],
+                )
 
     def delete_sources(self, repo_path: Path, paths: list[str]) -> None:
         repo_key = str(repo_path.resolve())
@@ -316,6 +440,11 @@ class CortexStore:
                 'DELETE FROM sources WHERE repo_path = ? AND path = ?',
                 [(repo_key, path) for path in paths],
             )
+            if self.fts_enabled and paths:
+                self.connection.executemany(
+                    'DELETE FROM source_fts WHERE repo_path = ? AND path = ?',
+                    [(repo_key, path) for path in paths],
+                )
 
     def fetch_source_stats(self, repo_path: Path) -> dict[str, tuple[int, int, str]]:
         """Lightweight (size_bytes, mtime_ns, content_hash) lookup for the
@@ -757,6 +886,55 @@ class CortexStore:
 
         ranked = sorted(candidates, key=rank)
         return ranked[:limit]
+
+    def search_fulltext(self, repo_path: Path, query: str, limit: int = 20) -> list[tuple[str, float, str]]:
+        """Full-text body search over indexed source content (P0-2 step 3).
+
+        Unlike `search_nodes` (LIKE over symbol labels/signatures/paths
+        only), this searches file *content* -- docstrings, comments, string
+        literals, Markdown prose -- via FTS5, so it is a real grep
+        replacement for text `search_nodes` can never see.
+
+        Returns `(path, bm25_score, line-anchored snippet)` tuples ordered
+        best match first. Note SQLite FTS5's `bm25()` convention: a MORE
+        NEGATIVE score is a BETTER match, so results are `ORDER BY
+        bm25(...)` ascending (not descending) -- callers should not assume
+        higher-is-better.
+
+        Returns `[]` (never raises) when FTS5 is unavailable
+        (`self.fts_enabled` is False -- see `_init_fts5`) or the query has
+        no searchable tokens, so callers get the same graceful fallback the
+        rest of the store gives for a missing FTS5 build.
+        """
+        if not self.fts_enabled:
+            return []
+        repo_key = str(repo_path.resolve())
+        match_query = _fts_match_query(query)
+        if not match_query:
+            return []
+        try:
+            rows = self.connection.execute(
+                '''
+                SELECT path, content, bm25(source_fts) AS rank,
+                       snippet(source_fts, 3, '[', ']', ' ... ', 12) AS snip
+                FROM source_fts
+                WHERE source_fts MATCH ? AND repo_path = ?
+                ORDER BY rank
+                LIMIT ?
+                ''',
+                (match_query, repo_key, limit),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return []
+        query_tokens = [token.lower() for token in _search_tokens(query)]
+        results: list[tuple[str, float, str]] = []
+        for row in rows:
+            content = str(row['content'])
+            line = _first_matching_line(content, query_tokens)
+            snippet_text = ' '.join(str(row['snip']).split())
+            anchored = f'L{line}: {snippet_text}' if line else snippet_text
+            results.append((row['path'], float(row['rank']), anchored))
+        return results
 
     def save_communities(self, repo_path: Path, communities: list[Community]) -> None:
         repo_key = str(repo_path.resolve())
