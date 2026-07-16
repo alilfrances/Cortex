@@ -9,6 +9,7 @@ from ..bundle import _tokenize_query, generate_bundle
 from ..gitutils import discover_repo_root
 from ..impact import UnknownPathError, rank_file_impact
 from ..ingest import compute_repo_fingerprint, ingest_repository
+from ..pathfind import shortest_paths
 from ..references import find_references
 from ..report import generate_report
 from ..store import CortexStore, default_db_path
@@ -89,7 +90,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "repo_path": {"type": "string"},
                 "relation": {
                     "type": "string",
-                    "enum": ["contains", "imports", "inherits", "calls", "emits", "connects", "handles", "instantiates"],
+                    "enum": ["contains", "imports", "inherits", "calls", "emits", "connects", "handles", "instantiates", "builds", "registers"],
                 },
                 "symbol": {"type": "string", "description": "substring match against endpoint node id or label"},
                 "target": {"type": "string", "description": "alias for 'symbol'"},
@@ -103,7 +104,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "name": "cortex_references",
         "description": (
-            "Returns symbol references from graph edges plus repo grep, bucketed by file type. Use for cross-language blast radius; use cortex_relations for parsed-only edges. Example: {\"symbol\":\"_ensure_fresh\"}."
+            "Returns symbol references from graph edges plus repo grep, bucketed by file type. Use for cross-language blast radius; use cortex_relations for parsed-only edges. Pass mode:\"writes\" to answer where a symbol is mutated. Example: {\"symbol\":\"_ensure_fresh\",\"mode\":\"writes\"}."
         ),
         "inputSchema": {
             "type": "object",
@@ -111,19 +112,38 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "repo_path": {"type": "string"},
                 "symbol": {"type": "string"},
                 "budget": {"type": "integer", "default": 2000},
+                "mode": {"type": "string", "enum": ["all", "writes"], "default": "all"},
                 "response_format": {"type": "string", "enum": ["concise", "detailed"], "default": "concise"},
             },
             "required": ["symbol"],
         },
     },
     {
-        "name": "cortex_refresh",
-        "description": "Re-ingest the repository into the local Cortex database.",
+        "name": "cortex_path",
+        "description": (
+            "Returns up to 3 shortest graph paths between two symbols over parsed structural edges. Use to answer how A reaches B (calls/contains/connects wiring); use cortex_relations for one-hop neighbors. Example: {\"symbol_a\":\"generate_bundle\",\"symbol_b\":\"count_text_tokens\"}."
+        ),
         "inputSchema": {
             "type": "object",
             "properties": {
                 "repo_path": {"type": "string"},
-                "commits": {"type": "integer", "default": 50},
+                "symbol_a": {"type": "string"},
+                "symbol_b": {"type": "string"},
+                "max_depth": {"type": "integer", "default": 6},
+                "response_format": {"type": "string", "enum": ["concise", "detailed"], "default": "concise"},
+            },
+            "required": ["symbol_a", "symbol_b"],
+        },
+    },
+    {
+        "name": "cortex_refresh",
+        "description": "Re-ingest the repository into the local Cortex database. Incremental by default; pass mode=\"full\" to rebuild from scratch.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "repo_path": {"type": "string"},
+                "commits": {"type": "integer", "default": 1000},
+                "mode": {"type": "string", "enum": ["incremental", "full"], "default": "incremental"},
             },
         },
     },
@@ -216,10 +236,16 @@ def _bundle_why(
     seed_paths: set[str],
     edges: list,
 ) -> list[dict[str, Any]]:
-    matched = sorted(term for term in terms if term in f"{item.get('path', '')}\n{item.get('content', '')}".lower())
+    node_id = str(item.get("metadata", {}).get("node_id", ""))
+    symbol_name = node_id.split(":", 2)[-1] if node_id else ""
+    haystack = f"{item.get('path', '')}\n{symbol_name}\n{item.get('content', '')}".lower()
+    matched = sorted(term for term in terms if term in haystack)
     why: list[dict[str, Any]] = []
     if matched:
-        why.append({"type": "keyword", "terms": matched[:8], "path": item.get("path", "")})
+        entry: dict[str, Any] = {"type": "keyword", "terms": matched[:8], "path": item.get("path", "")}
+        if node_id:
+            entry["node_id"] = node_id
+        why.append(entry)
 
     item_node = f"file:{item.get('path', '')}"
     seed_nodes = {f"file:{path}" for path in seed_paths}
@@ -277,6 +303,7 @@ def _concise_query_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
         "repo_path": bundle.get("repo_path", ""),
         "budget": bundle.get("budget", 0),
         "total_tokens": bundle.get("total_tokens", 0),
+        "token_stats": bundle.get("token_stats", {}),
         "confidence_notes": bundle.get("confidence_notes", []),
         "open_questions": bundle.get("open_questions", []),
         "items": [],
@@ -319,6 +346,18 @@ def _call_query(arguments: dict[str, Any]) -> dict[str, Any]:
     _nodes, edges = store.fetch_graph(repo_root)
     for item in bundle.get("items", []):
         item["why"] = _bundle_why(item, terms, seed_paths, edges)
+    returned_tokens = int(bundle.get("total_tokens", 0))
+    matched_tokens = sum(
+        int(item.get("token_count", 0))
+        for item in bundle.get("items", [])
+        if any(entry.get("type") == "keyword" for entry in item.get("why", []))
+    )
+    bundle["token_stats"] = {
+        "budget": int(bundle.get("budget", arguments.get("budget", 4000))),
+        "returned_tokens": returned_tokens,
+        "matched_tokens": matched_tokens,
+        "matched_ratio": round(matched_tokens / returned_tokens, 2) if returned_tokens else 0.0,
+    }
     response_format = _response_format(arguments)
     payload = bundle if response_format == "detailed" else _concise_query_bundle(bundle)
     return _content(_format_payload(payload, status, response_format))
@@ -381,6 +420,7 @@ def _call_search(arguments: dict[str, Any]) -> dict[str, Any]:
     status = _ensure_fresh(store, repo_root)
     nodes = [node.to_dict() for node in store.search_nodes(repo_root, str(arguments.get("query", "")), int(arguments.get("limit", 20)))]
     for node in nodes:
+        node["degree"] = node.get("metadata", {}).get("degree", 0)
         node["why"] = [{"type": "like_query", "query": str(arguments.get("query", ""))}]
     response_format = _response_format(arguments)
     if response_format == "concise":
@@ -477,6 +517,48 @@ def _call_read_symbol(arguments: dict[str, Any]) -> dict[str, Any]:
     return _content(_format_payload(payload, status, response_format))
 
 
+def _unresolved_endpoint(node_id: str) -> str:
+    if node_id.startswith("name:"):
+        return node_id.removeprefix("name:") or node_id
+    if node_id.startswith("symbol:"):
+        return node_id.rsplit(":", 1)[-1] or node_id
+    if node_id.startswith("file:"):
+        return node_id.removeprefix("file:") or node_id
+    if node_id.startswith("module:"):
+        return node_id.removeprefix("module:") or node_id
+    return node_id
+
+
+def _endpoint(node_id: str, nodes: dict[str, Any]) -> str:
+    node = nodes.get(node_id)
+    if node is None:
+        return _unresolved_endpoint(node_id)
+    if node.span_start is not None:
+        return f"{node.label} @ {node.source_ref}:{node.span_start}"
+    return f"{node.label} @ {node.source_ref}"
+
+
+_ORIGIN_PREFIXES = {
+    "regex:": "regex-parser",
+    "treesitter:": "treesitter-parser",
+    "ts:": "treesitter-parser",
+    "ast:": "ast-parser",
+    "cochange:": "git-history",
+    "semantic:": "llm",
+}
+
+
+def _edge_origin(edge: Any) -> str:
+    for prefix, origin in _ORIGIN_PREFIXES.items():
+        if edge.edge_id.startswith(prefix):
+            return origin
+    if edge.layer == "COCHANGE":
+        return "git-history"
+    if edge.layer == "HEADING":
+        return "markdown-parser"
+    return "unknown"
+
+
 def _call_relations(arguments: dict[str, Any]) -> dict[str, Any]:
     repo_root = _repo_root(arguments)
     store, error = _store_or_error(repo_root)
@@ -494,31 +576,17 @@ def _call_relations(arguments: dict[str, Any]) -> dict[str, Any]:
     node_ids = sorted({edge.source for edge in edges} | {edge.target for edge in edges})
     nodes = store.get_nodes(repo_root, node_ids)
 
-    def unresolved_endpoint(node_id: str) -> str:
-        if node_id.startswith("name:"):
-            return node_id.removeprefix("name:") or node_id
-        if node_id.startswith("symbol:"):
-            return node_id.rsplit(":", 1)[-1] or node_id
-        if node_id.startswith("file:"):
-            return node_id.removeprefix("file:") or node_id
-        return node_id
-
-    def endpoint(node_id: str) -> str:
-        node = nodes.get(node_id)
-        if node is None:
-            return unresolved_endpoint(node_id)
-        if node.span_start is not None:
-            return f"{node.label} @ {node.source_ref}:{node.span_start}"
-        return f"{node.label} @ {node.source_ref}"
-
     items: list[dict[str, Any]] = []
     budget = int(arguments.get("budget", 2000))
     truncated = False
     for edge in edges:
         item = {
             "relation": edge.relation,
-            "source": endpoint(edge.source),
-            "target": endpoint(edge.target),
+            "source": _endpoint(edge.source, nodes),
+            "target": _endpoint(edge.target, nodes),
+            "layer": edge.layer,
+            "confidence": edge.confidence,
+            "origin": _edge_origin(edge),
         }
         if count_text_tokens(json.dumps([*items, item])) > budget:
             truncated = True
@@ -532,6 +600,83 @@ def _call_relations(arguments: dict[str, Any]) -> dict[str, Any]:
     ))
 
 
+def _call_path(arguments: dict[str, Any]) -> dict[str, Any]:
+    repo_root = _repo_root(arguments)
+    store, error = _store_or_error(repo_root)
+    if error is not None:
+        return _content(error, is_error=True)
+    assert store is not None
+    status = _ensure_fresh(store, repo_root)
+    response_format = _response_format(arguments)
+    symbol_a = str(arguments.get("symbol_a", ""))
+    symbol_b = str(arguments.get("symbol_b", ""))
+    if not symbol_a or not symbol_b:
+        return _content({"error": "missing_symbol", "message": "symbol_a and symbol_b are required"}, is_error=True)
+
+    resolved: dict[str, Any] = {}
+    for key, symbol in (("symbol_a", symbol_a), ("symbol_b", symbol_b)):
+        node, matches = _resolve_symbol(store, repo_root, symbol)
+        if node is None:
+            if matches:
+                return _content(_format_payload(
+                    {
+                        "repo_path": str(repo_root),
+                        "hint": "call again with node_id",
+                        "ambiguous": key,
+                        "matches": [_symbol_match_payload(match) for match in matches],
+                    },
+                    status,
+                    response_format,
+                ))
+            return _content(
+                {
+                    "error": "symbol_not_found",
+                    "message": f"No symbol matched {symbol!r}.",
+                    "hint": "try cortex_search_symbols",
+                    **(status if response_format == "detailed" else _concise_status(status)),
+                },
+                is_error=True,
+            )
+        resolved[key] = node
+
+    graph_nodes, graph_edges = store.fetch_graph(repo_root)
+    node_by_id = {node.node_id: node for node in graph_nodes}
+    edge_by_id = {edge.edge_id: edge for edge in graph_edges}
+    max_depth = int(arguments.get("max_depth", 6))
+    raw_paths = shortest_paths(
+        graph_nodes,
+        graph_edges,
+        resolved["symbol_a"].node_id,
+        resolved["symbol_b"].node_id,
+        max_depth=max_depth,
+    )
+    paths = [
+        [
+            {
+                "node": _endpoint(hop["node"], node_by_id),
+                "node_id": hop["node"],
+                "relation": hop["relation"],
+                "direction": hop["direction"],
+                "layer": hop["layer"],
+                "confidence": hop["confidence"],
+                "origin": _edge_origin(edge_by_id[hop["edge_id"]]),
+            }
+            for hop in path
+        ]
+        for path in raw_paths
+    ]
+    payload: dict[str, Any] = {
+        "repo_path": str(repo_root),
+        "source": _endpoint(resolved["symbol_a"].node_id, node_by_id),
+        "target": _endpoint(resolved["symbol_b"].node_id, node_by_id),
+        "paths": paths,
+        "returned_count": len(paths),
+    }
+    if not paths:
+        payload["note"] = f"No path between the symbols within {max_depth} hops (COCHANGE edges and commit nodes excluded)."
+    return _content(_format_payload(payload, status, response_format))
+
+
 def _call_references(arguments: dict[str, Any]) -> dict[str, Any]:
     repo_root = _repo_root(arguments)
     store, error = _store_or_error(repo_root)
@@ -542,15 +687,28 @@ def _call_references(arguments: dict[str, Any]) -> dict[str, Any]:
     symbol = str(arguments.get("symbol", ""))
     if not symbol:
         return _content({"error": "missing_symbol", "message": "symbol is required"}, is_error=True)
-    result = find_references(store, repo_root, symbol, budget=int(arguments.get("budget", 2000)))
+    result = find_references(
+        store,
+        repo_root,
+        symbol,
+        budget=int(arguments.get("budget", 2000)),
+        mode=str(arguments.get("mode", "all")),
+    )
     response_format = _response_format(arguments)
     return _content(_format_payload({"repo_path": str(repo_root), **result}, status, response_format))
 
 
 def _call_refresh(arguments: dict[str, Any]) -> dict[str, Any]:
     repo_root = _repo_root(arguments)
-    summary = ingest_repository(repo_root, commit_limit=int(arguments.get("commits", 50)))
-    return _content({"summary": summary, "stale": False})
+    mode = str(arguments.get("mode", "incremental"))
+    # Incremental needs an existing database to diff against.
+    incremental = mode != "full" and default_db_path(repo_root).exists()
+    summary = ingest_repository(
+        repo_root,
+        commit_limit=int(arguments.get("commits", 1000)),
+        incremental=incremental,
+    )
+    return _content({"summary": summary, "mode": "incremental" if incremental else "full", "stale": False})
 
 
 def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
@@ -568,6 +726,8 @@ def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
             return _call_read_symbol(args)
         if name == "cortex_relations":
             return _call_relations(args)
+        if name == "cortex_path":
+            return _call_path(args)
         if name == "cortex_references":
             return _call_references(args)
         if name == "cortex_refresh":

@@ -14,8 +14,19 @@ _CODE_SUFFIXES = {
 }
 _SCRIPT_SUFFIXES = {".sh"}
 _DOC_SUFFIXES = {".md", ".txt", ".rst"}
-_CONFIG_SUFFIXES = {".json", ".yaml", ".yml", ".toml", ".qrc", ".cmake"}
+_CONFIG_SUFFIXES = {".json", ".yaml", ".yml", ".toml", ".qrc", ".cmake", ".pro", ".ui"}
 _CONFIG_NAMES = {"cmakelists.txt"}
+_MUTATING_METHODS = (
+    "append",
+    "insert",
+    "push_back",
+    "clear",
+    "remove",
+    "pop",
+    "emplace_back",
+    "erase",
+    "update",
+)
 
 
 def _bucket(path: Path) -> str:
@@ -50,8 +61,28 @@ def _graph_hits(store: CortexStore, repo_root: Path, symbol: str) -> tuple[list[
                 continue
             seen_edge_locations.add(key)
             line_part = f":{node.span_start}" if node.span_start is not None else ""
-            hits.append({"bucket": _bucket(Path(node.source_ref)), "text": f"{node.source_ref}{line_part}"})
+            hits.append({
+                "bucket": _bucket(Path(node.source_ref)),
+                "text": f"{node.source_ref}{line_part}",
+                "origin": "graph",
+                "access": "definition",
+            })
     return hits, covered
+
+
+def _line_access(symbol: str, line: str) -> str:
+    symbol_pattern = r"\b" + re.escape(symbol) + r"\b"
+    if re.search(symbol_pattern + r"\s*(?:<<=|>>=|\+=|-=|\*=|/=|\|=|&=|\^=)", line):
+        return "write"
+    if re.search(r"(?:\+\+|--)\s*" + symbol_pattern, line) or re.search(symbol_pattern + r"\s*(?:\+\+|--)", line):
+        return "write"
+    if re.search(symbol_pattern + r"\s*(?:\.\s*(?:" + "|".join(_MUTATING_METHODS) + r")\s*\(|\[[^\]]*\]\s*=(?!=|>))", line):
+        return "write"
+    if re.search(r"\bdel\s+" + symbol_pattern, line):
+        return "write"
+    if re.search(symbol_pattern + r"\s*=(?!=|>)", line):
+        return "write"
+    return "read"
 
 
 def _grep_hits(repo_root: Path, symbol: str, covered: set[tuple[str, int | None]]) -> list[dict[str, Any]]:
@@ -68,19 +99,33 @@ def _grep_hits(repo_root: Path, symbol: str, covered: set[tuple[str, int | None]
                 continue
             if (rel_path, lineno) in covered:
                 continue
-            hits.append({"bucket": _bucket(path), "text": f"{rel_path}:{lineno}"})
+            hits.append({
+                "bucket": _bucket(path),
+                "text": f"{rel_path}:{lineno}",
+                "origin": "grep",
+                "access": _line_access(symbol, line),
+            })
     return hits
 
 
-def find_references(store: CortexStore, repo_root: Path, symbol: str, budget: int = 2000) -> dict[str, Any]:
+def find_references(
+    store: CortexStore,
+    repo_root: Path,
+    symbol: str,
+    budget: int = 2000,
+    mode: str = "all",
+) -> dict[str, Any]:
     graph_hits, covered = _graph_hits(store, repo_root, symbol)
     grep_hits = _grep_hits(repo_root, symbol, covered)
 
-    items: dict[str, list[str]] = {"code": [], "script": [], "doc": [], "config": [], "other": []}
+    items: dict[str, list[dict[str, str]]] = {"code": [], "script": [], "doc": [], "config": [], "other": []}
     truncated = False
     returned_count = 0
     for hit in [*graph_hits, *grep_hits]:
-        candidate = {**items, hit["bucket"]: [*items[hit["bucket"]], hit["text"]]}
+        if mode == "writes" and hit["access"] not in {"definition", "write"}:
+            continue
+        entry = {"text": hit["text"], "origin": hit["origin"], "access": hit["access"]}
+        candidate = {**items, hit["bucket"]: [*items[hit["bucket"]], entry]}
         if count_text_tokens(str(candidate)) > budget:
             truncated = True
             break

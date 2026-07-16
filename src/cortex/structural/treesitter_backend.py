@@ -277,6 +277,7 @@ def extract_treesitter_edges(
     path: str,
     content: str,
     known_paths: set[str],
+    connect_names: list[str] | None = None,
 ) -> tuple[list[GraphNode], list[GraphEdge]]:
     suffix = PurePosixPath(path).suffix.lower()
     if suffix not in _LANGUAGE_MODULES:
@@ -362,7 +363,7 @@ def extract_treesitter_edges(
             _extract_cpp_inheritance_edges(path, node, source, symbol_id, name, edges)
 
     if suffix in _CPP_SUFFIXES:
-        regex_backend._extract_qt_cpp_edges(path, content, file_node_id, nodes, edges, seen_symbols)
+        regex_backend._extract_qt_cpp_edges(path, content, file_node_id, nodes, edges, seen_symbols, connect_names)
     if suffix == ".qml":
         regex_backend._extract_qml_handlers(path, content, file_node_id, nodes, edges)
 

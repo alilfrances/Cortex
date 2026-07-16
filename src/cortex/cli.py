@@ -163,7 +163,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     ingest_parser = subparsers.add_parser("ingest", help="Ingest a repository into Cortex state")
     ingest_parser.add_argument("repo_path", type=Path)
-    ingest_parser.add_argument("--commits", type=int, default=50)
+    ingest_parser.add_argument("--commits", type=int, default=1000)
     ingest_parser.add_argument("--db", type=Path, default=None)
     ingest_parser.add_argument("--update", action="store_true", help="Incremental: only re-scan changed files")
 
@@ -195,8 +195,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     refresh_parser = subparsers.add_parser("refresh", help="Refresh Cortex state and write the default report")
     refresh_parser.add_argument("repo_path", type=Path, nargs="?", default=Path("."))
-    refresh_parser.add_argument("--commits", type=int, default=50)
+    refresh_parser.add_argument("--commits", type=int, default=1000)
     refresh_parser.add_argument("--db", type=Path, default=None)
+    refresh_parser.add_argument("--full", action="store_true", help="Full re-ingest instead of the default incremental refresh")
 
     gc_parser = subparsers.add_parser("gc", help="List or prune central data dirs whose repo is gone")
     gc_parser.add_argument("--prune", action="store_true", help="Delete orphaned data dirs")
@@ -299,7 +300,15 @@ def main() -> None:
         return
 
     if args.command == "refresh":
-        summary = ingest_repository(repo_path=args.repo_path, commit_limit=args.commits, db_path=args.db)
+        db_path = args.db or default_db_path(discover_repo_root(args.repo_path))
+        # Incremental needs an existing database to diff against.
+        incremental = not args.full and db_path.exists()
+        summary = ingest_repository(
+            repo_path=args.repo_path,
+            commit_limit=args.commits,
+            db_path=args.db,
+            incremental=incremental,
+        )
         report_path = write_report(repo_path=args.repo_path, db_path=args.db)
         print(json.dumps({**summary, "report_path": str(report_path)}, indent=2))
         return

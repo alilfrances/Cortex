@@ -44,6 +44,7 @@ def _relation_graph() -> tuple[list[GraphNode], list[GraphEdge]]:
         GraphEdge("e4", "symbol:controller.hpp:started", "symbol:controller.hpp:start", "connects", layer="STRUCTURAL"),
         GraphEdge("e5", "file:engine.cpp", "symbol:engine.cpp:Runner", "contains", layer="STRUCTURAL"),
         GraphEdge("e6", "symbol:engine.cpp:Runner", "name:ExternalBase", "inherits", layer="STRUCTURAL", confidence="LOW"),
+        GraphEdge("e7", "symbol:engine.cpp:Runner", "module:numpy", "imports", layer="STRUCTURAL"),
     ]
     return nodes, edges
 
@@ -105,7 +106,9 @@ def test_rank_file_impact_prefers_heavier_cochange_and_structural_edges() -> Non
     impact, truncated = rank_file_impact("app.py", nodes, edges)
 
     assert [item["path"] for item in impact] == ["db.py", "ui.py"]
-    assert impact[0]["why"] == [{"relation": "cochange", "weight": 4.0}]
+    assert impact[0]["why"] == [
+        {"relation": "cochange", "weight": 4.0, "layer": "COCHANGE", "confidence": "EXTRACTED"}
+    ]
     assert impact[1]["score"] == 2.0
     assert truncated is False
 
@@ -348,7 +351,7 @@ def test_cortex_relations_filters_resolves_and_limits(tmp_path: Path, monkeypatc
     assert [item["relation"] for item in payload["items"]] == ["inherits"]
     assert payload["items"][0]["source"] == "Runner @ engine.cpp"
     assert payload["items"][0]["target"] == "Base @ engine.hpp"
-    assert set(payload["items"][0]) == {"relation", "source", "target"}
+    assert set(payload["items"][0]) == {"relation", "source", "target", "layer", "confidence", "origin"}
     assert payload["truncated"] is False
 
 
@@ -392,6 +395,8 @@ def test_cortex_relations_direction_and_unresolved_endpoint_fallback(tmp_path: P
     assert both["items"][0]["target"] == "ExternalBase"
     assert isinstance(both["items"][0]["target"], str)
     assert both["items"][0]["target"]
+    imports = _payload(call_tool("cortex_relations", {"repo_path": str(repo), "relation": "imports", "symbol": "numpy", "direction": "in"}))
+    assert imports["items"][0]["target"] == "numpy"
 
 
 def test_cortex_relations_missing_db_uses_existing_error_shape(tmp_path: Path, monkeypatch) -> None:
@@ -540,8 +545,8 @@ def test_cortex_references_unions_graph_and_grep_hits_bucketed(tmp_path: Path, m
 
     payload = _payload(call_tool("cortex_references", {"repo_path": str(repo), "symbol": "Runner"}))
 
-    assert payload["items"]["code"] == ["engine.cpp:1"]
-    assert payload["items"]["config"] == ["CMakeLists.txt:1"]
+    assert payload["items"]["code"] == [{"text": "engine.cpp:1", "origin": "graph", "access": "definition"}]
+    assert payload["items"]["config"] == [{"text": "CMakeLists.txt:1", "origin": "grep", "access": "read"}]
     assert payload["truncated"] is False
 
 
@@ -561,7 +566,7 @@ def test_cortex_references_dedupes_grep_hit_already_covered_by_graph_edge(tmp_pa
 
     payload = _payload(call_tool("cortex_references", {"repo_path": str(repo), "symbol": "Runner"}))
 
-    all_hits = [hit for bucket in payload["items"].values() for hit in bucket]
+    all_hits = [hit["text"] for bucket in payload["items"].values() for hit in bucket]
     assert all_hits.count("engine.cpp:1") == 1
 
 
@@ -604,6 +609,11 @@ def test_cortex_query_defaults_to_concise_and_detailed_preserves_payload(tmp_pat
     assert "metadata" not in concise["items"][0] or "graph_bonus" not in concise["items"][0]["metadata"]
     assert "fingerprint" in detailed
     assert isinstance(detailed["items"][0]["why"], list)
+    for payload in (concise, detailed):
+        stats = payload["token_stats"]
+        assert stats["budget"] == 4000
+        assert 0 <= stats["matched_ratio"] <= 1
+        assert stats["matched_tokens"] <= stats["returned_tokens"]
 
 
 def test_cortex_search_symbols_concise_drops_why(tmp_path: Path, monkeypatch) -> None:
