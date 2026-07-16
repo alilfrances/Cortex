@@ -24,10 +24,19 @@ class TokenizerTests(unittest.TestCase):
         self.assertGreater(count_text_tokens(text), 0)
 
     def test_truncate_text_to_budget_appends_marker(self) -> None:
+        # This assertion targets the stdlib heuristic path promised by the
+        # default install. Keep it deterministic when the optional tiktoken
+        # extra happens to be present in the test runner; the exact path has a
+        # separate test below.
+        tokenizer_mod._tiktoken_encoding = None
+        tokenizer_mod._tiktoken_unavailable = True
         text = "alpha beta gamma delta epsilon zeta"
-        truncated = truncate_text_to_budget(text, 8)
-        self.assertTrue(truncated.endswith("...[truncated]"))
-        self.assertLessEqual(count_text_tokens(truncated), 8)
+        # The stdlib fallback is intentionally exercised even when the
+        # optional `regex` extra is installed in the runner.
+        with mock.patch.dict(sys.modules, {"regex": None}):
+            truncated = truncate_text_to_budget(text, 8)
+            self.assertTrue(truncated.endswith("...[truncated]"))
+            self.assertLessEqual(count_text_tokens(truncated), 8)
 
     def test_heuristic_path_used_when_tiktoken_unavailable(self) -> None:
         """P1-4: with `tiktoken` absent (the default, stdlib-only install),
