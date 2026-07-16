@@ -1,11 +1,17 @@
-# Cortex Improvement Plan: Optimization & Efficiency Gaps vs. rtk and Repowise
+# Cortex Improvement Plan: Optimization & Efficiency Gaps vs. rtk, Repowise, and Semble
 
-Date: 2026-07-16
-Scope: Comparison of Cortex (v0.7.5) against [rtk-ai/rtk](https://github.com/rtk-ai/rtk) and
-[repowise-dev/repowise](https://github.com/repowise-dev/repowise), focused on **optimization and
+Date: 2026-07-16 (revised same day: added MinishLab/semble research and QML/C++/Qt parity
+requirements)
+Scope: Comparison of Cortex (v0.7.5) against [rtk-ai/rtk](https://github.com/rtk-ai/rtk),
+[repowise-dev/repowise](https://github.com/repowise-dev/repowise), and
+[MinishLab/semble](https://github.com/MinishLab/semble), focused on **optimization and
 efficiency features**. Each work item below is written to be delegated independently to an AI
 agent: it names the motivating feature in the reference tool, the current state in Cortex with
 file references, concrete implementation steps, and acceptance criteria.
+
+A cross-cutting constraint applies to every item: Cortex's QML / C++ / Qt support is a
+first-class differentiator and must be preserved and extended, not regressed — see
+[§3 ground rules](#3-work-items) and the per-item Qt requirements.
 
 ---
 
@@ -61,7 +67,37 @@ curated context over MCP). Its efficiency machinery:
 - **Session-aware learning**: mines durable decisions from Claude Code transcripts; wiki
   generation budget tilts toward frequently-queried modules.
 
-### 1.3 What Cortex already does well (no action needed)
+### 1.3 Semble (MinishLab)
+
+Semble is "fast and accurate code search for agents" (~5.6k stars, MIT), the closest
+competitor to Cortex's retrieval core specifically. It claims **~98% fewer tokens than
+grep+read**. Its efficiency machinery:
+
+- **Dual-retriever fusion, fully local**: static embeddings via
+  [Model2Vec](https://github.com/MinishLab/model2vec) (`potion-code-16M` — a static lookup
+  model, no transformer forward pass at query time, CPU-only, no API keys or network) +
+  **BM25** lexical matching on identifiers, fused with **reciprocal rank fusion (RRF)**.
+- **Code-aware ranking signals**: adaptive weighting (symbol-shaped queries get more lexical
+  emphasis), definition boosts (chunks *defining* the queried symbol rank higher), identifier
+  stem matching, file coherence scoring, and noise penalties for test files/boilerplate
+  (Cortex independently arrived at the same aux-path demotion in 0.7.1).
+- **Tree-sitter code-aware chunking** — splits on syntactic structure, not lines.
+- **Performance**: indexes an average repo in ~250 ms, answers queries in ~1.5 ms, NDCG@10
+  0.854 (99% of the quality of a 137M-parameter embedding model, 218× faster indexing);
+  94% recall at only 2k tokens vs. grep+read needing ~100k context for 85%.
+- **Savings tracking**: `semble savings` per-period statistics (same pattern as rtk `gain` /
+  Repowise `saved`); conservative token math `(file chars − snippet chars) / 4`.
+- **Weak incremental story**: mtime comparison triggers a *full* index rebuild (MCP mode adds
+  a file watcher). Cortex's fingerprint + delta ingest is architecturally ahead here — P0-3
+  widens that lead.
+- MCP server + CLI + Python library; `.sembleignore`; agent auto-detecting installer.
+
+**Key lesson for Cortex**: local-first and semantic retrieval are not mutually exclusive.
+Static embeddings run offline on CPU with numpy-sized dependencies, which fits Cortex's
+no-network invariant as an *optional extra* even though the default path stays deterministic
+and dependency-free. See P0-2 (fusion layer) and P1-7 (optional static-embedding retriever).
+
+### 1.4 What Cortex already does well (no action needed)
 
 - Token-budgeted, graph-ranked bundles with skeleton degradation (`src/cortex/bundle.py`) —
   comparable to rtk's aggressive read, but proactive and rank-aware.
@@ -74,26 +110,42 @@ curated context over MCP). Its efficiency machinery:
   `src/cortex/store.py`).
 - `cortex benchmark` (corpus-vs-bundle token comparison) and a 13-task eval harness with
   precision/recall/token/latency reporting.
+- **Qt-native structural extraction none of the three competitors has**: the regex backend
+  parses Qt signals/slots sections, `Q_OBJECT`, `emit`/`Q_EMIT`, both pointer-to-member and
+  `SIGNAL()/SLOT()` macro `connect()` forms, and QML `signal` declarations, `onFoo:` handlers,
+  and component instantiation with local resolution
+  (`src/cortex/structural/regex_backend.py:46-72,177,308-440`); the tree-sitter backend covers
+  C++ (`tree_sitter_cpp`) and QML (via `tree-sitter-language-pack`, `[qml]` extra) including
+  C++ inheritance edges and QML component nodes
+  (`src/cortex/structural/treesitter_backend.py:21-28,144-299`); bundle ranking understands
+  `qml`/`cpp` language hints (`LANGUAGE_HINT_SUFFIXES`, `src/cortex/bundle.py:50`); and
+  `cortex_relations` exposes `emits`/`connects`/`handles` edges. Repowise treats C++ as one of
+  15 generic languages and QML not at all; semble is language-agnostic chunking only; rtk does
+  not parse code.
 
 ---
 
 ## 2. Gap analysis summary
 
-| Capability | rtk | Repowise | Cortex today |
-|---|---|---|---|
-| Token-savings ledger & report | `rtk gain` | `repowise saved` | ❌ only LLM-enrich cost ledger; MCP tool usage untracked |
-| Full-text / hybrid search | n/a | FTS + vectors + RRF | ❌ `LIKE`-based symbol-name search only (`store.search_nodes`) |
-| Incremental update speed | n/a | <30 s, git-aware | ⚠️ re-reads every file, rewrites entire graph table on each incremental pass |
-| Query result caching | n/a | index-side caching | ❌ PageRank + packing recomputed per call |
-| Batched context tool | n/a | `get_context(targets[])` | ❌ one target per `cortex_impact`/`cortex_read_symbol` call |
-| Hotspots (churn × complexity) | n/a | core feature | ❌ co-change edges exist, no churn/complexity scoring |
-| Dead-code detection | n/a | confidence-tiered | ❌ graph has the edges, no report |
-| Diff/PR risk scoring | n/a | Kamei-style + directives | ❌ |
-| Shell-output distill + savings recovery | core feature | `distill`/`expand` | ❌ (README delegates to external `tokenslim`) |
-| Aggressive read modes | `read -l aggressive` | `get_symbol` | ⚠️ skeletons exist in bundles only, not in read tools |
-| Tokenizer accuracy | n/a (measures real) | model-priced | ⚠️ heuristic regex estimate, uncalibrated (`tokenizer.py`) |
-| Staleness metadata envelope | n/a | `_meta` on every response | ⚠️ partial (`auto_refreshed`, stale hints) |
-| Missed-savings discovery | `rtk discover` | demand-weighted docs | ❌ |
+| Capability | rtk | Repowise | Semble | Cortex today |
+|---|---|---|---|---|
+| Token-savings ledger & report | `rtk gain` | `repowise saved` | `semble savings` | ❌ only LLM-enrich cost ledger; MCP tool usage untracked |
+| Full-text / lexical search | n/a | SQLite FTS | BM25 | ❌ `LIKE`-based symbol-name search only (`store.search_nodes`) |
+| Semantic retrieval, local | n/a | vector embeddings (server/Ollama) | static Model2Vec, CPU-only offline | ❌ |
+| Rank fusion (RRF) | n/a | FTS + vectors | BM25 + embeddings + code-aware signals | ⚠️ ad-hoc additive bonuses in `bundle.py` |
+| Incremental update speed | n/a | <30 s, git-aware | ❌ full rebuild on any change | ⚠️ delta detection exists but re-reads every file, rewrites entire graph table |
+| Query result caching | n/a | index-side caching | index cache dir | ❌ PageRank + packing recomputed per call |
+| Query latency | <10 ms overhead | n/a | ~1.5 ms | ⚠️ unmeasured for MCP path; evals report ~14 ms bundle-only on small fixtures |
+| Batched context tool | n/a | `get_context(targets[])` | n/a | ❌ one target per `cortex_impact`/`cortex_read_symbol` call |
+| Hotspots (churn × complexity) | n/a | core feature | n/a | ❌ co-change edges exist, no churn/complexity scoring |
+| Dead-code detection | n/a | confidence-tiered | n/a | ❌ graph has the edges, no report |
+| Diff/PR risk scoring | n/a | Kamei-style + directives | n/a | ❌ |
+| Shell-output distill + savings recovery | core feature | `distill`/`expand` | n/a | ❌ (README delegates to external `tokenslim`) |
+| Aggressive read modes | `read -l aggressive` | `get_symbol` | snippet-only results | ⚠️ skeletons exist in bundles only, not in read tools |
+| Tokenizer accuracy | n/a (measures real) | model-priced | chars/4 heuristic | ⚠️ heuristic regex estimate, uncalibrated (`tokenizer.py`) |
+| Staleness metadata envelope | n/a | `_meta` on every response | mtime auto-invalidate | ⚠️ partial (`auto_refreshed`, stale hints) |
+| Missed-savings discovery | `rtk discover` | demand-weighted docs | n/a | ❌ |
+| QML / C++ Qt awareness | ❌ | C++ generic tier only, no QML | ❌ language-agnostic | ✅ **Cortex's edge — must be preserved by every item below** |
 
 ---
 
@@ -112,14 +164,35 @@ Ground rules for all items (Cortex invariants — do not violate):
   `src/cortex/store.py:188`) for any new tables/columns.
 - Update `README.md`, `CHANGELOG.md`, `skills/cortex/SKILL.md`, and `hooks/session-start.py`
   tool listings whenever the MCP/CLI surface changes (a past bug class — see 0.6.0 changelog).
+- **QML / C++ / Qt parity (applies to every item)**: Qt-aware extraction is Cortex's
+  competitive edge (see §1.4) and its history shows Qt support regresses when features are
+  built Python-first (0.6.2, 0.7.2 changelog entries were all Qt/C++ fixes). Therefore:
+  - Any item that touches ranking, packing, reading, or reporting must include **C++ (`.cpp`/
+    `.hpp` with `Q_OBJECT`, signals/slots sections, `emit`, both `connect()` forms) and QML
+    (`.qml` with `signal`, `onFoo:` handlers, component instantiation) fixtures** in its tests,
+    exercised through **both** the regex backend (always available) and the tree-sitter backend
+    (`[languages]`/`[qml]` extras) when the item's code path differs by backend.
+  - **Prerequisite for Wave 1 (assign first, it unblocks all acceptance tests)**: add a shared
+    Qt fixture repo to the eval harness — a small git fixture with a C++ `QObject` subclass
+    (header + implementation, signals/slots, `emit`, `connect()` wiring), a `.qml` scene that
+    instantiates a local component and defines handlers, a `CMakeLists.txt` and `.qrc`
+    referencing them, and commit history where the `.qml` and its C++ backend change together
+    (feeds COCHANGE-dependent items). Add 2–3 gold-answer eval tasks over it (e.g. "where is
+    the <signal> emitted and which slot receives it"). Wire it into `evals/run_evals.py`
+    alongside the existing fixtures and keep it small enough that the suite still runs in
+    seconds.
+  - Never gate a feature on tree-sitter availability: the stdlib regex backend must produce a
+    usable (if coarser) result for C++/QML, matching the existing fallback philosophy.
 
 ---
 
 ### P0-1. Token-savings ledger and `cortex saved` command
 
-**Motivation**: rtk's `gain` and Repowise's `saved` make savings *visible*, which drives
-adoption and validates the product claim. Cortex computes token counts for every response
-already but throws the numbers away.
+**Motivation**: rtk's `gain`, Repowise's `saved`, and semble's `savings` all ship this — every
+serious tool in the space makes savings *visible*, because it drives adoption and validates the
+product claim. Cortex computes token counts for every response already but throws the numbers
+away. Semble's baseline convention (tokens of what the agent *would* have read minus tokens
+returned) is the model to follow.
 
 **Current state**: `bundles.total_tokens` is persisted per bundle (`store.py`), and a `cost`
 table exists but only records LLM enrichment tokens (`record_cost`, `store.py:715`). MCP tool
@@ -156,12 +229,15 @@ tool family; MCP responses unchanged except optional `_meta.saved_tokens` (see P
 
 ### P0-2. SQLite FTS5 full-text layer with rank fusion
 
-**Motivation**: Repowise's hybrid retrieval (FTS + vectors via RRF) is what lets `get_answer` /
-`search_codebase` replace grep sessions. Cortex's `search_nodes` (`store.py:558`) is
+**Motivation**: Repowise's hybrid retrieval (FTS + vectors via RRF) and semble's BM25 +
+embeddings + RRF are what let their search tools replace grep sessions — semble reports 94%
+recall at 2k tokens where grep+read needs ~100k. Cortex's `search_nodes` (`store.py:558`) is
 `LIKE`-based over node labels/signatures/paths only — body text, docstrings, and Markdown
 content are invisible to search, which forces agents back to raw grep (the exact failure mode
 Cortex exists to prevent). FTS5 is in the stdlib `sqlite3` build, so this preserves the
-zero-dependency invariant. Embeddings stay out of scope (local-first invariant).
+zero-dependency invariant. Transformer embeddings stay out of the default path; the fusion
+layer built here must accept **N ranked lists** so the optional static-embedding retriever
+(P1-7) plugs in without another ranking rewrite.
 
 **Implementation steps**:
 1. In `initialize_schema`, create `CREATE VIRTUAL TABLE IF NOT EXISTS source_fts USING fts5(
@@ -172,20 +248,36 @@ zero-dependency invariant. Embeddings stay out of scope (local-first invariant).
    path — same delta granularity as the `sources` table).
 3. Add `CortexStore.search_fulltext(repo_path, query, limit) -> list[(path, bm25, snippet)]`
    using FTS5 `bm25()` and `snippet()`.
-4. Bundle ranking (`bundle.py::generate_bundle`): add FTS results as a third seed source next
-   to the existing name-match/keyword scoring. Fuse with **RRF** (`score += 1/(60+rank)` per
-   list) rather than raw-score mixing so BM25 and the existing bonuses don't need scale
-   calibration; keep `NAME_MATCH_BONUS` dominance for exact stem/symbol hits (regression risk:
-   the 0.7.x ranking fixes — run the eval suite).
-5. New MCP tool `cortex_search_text(query, limit, budget)` returning path + line-anchored
+4. Bundle ranking (`bundle.py::generate_bundle`): extract a small generic fusion helper
+   (`src/cortex/fusion.py`: `rrf_fuse(ranked_lists: list[list[node_id]], k=60) -> dict[node_id,
+   float]`) and feed it the existing name-match/keyword ranking plus the new FTS list. RRF
+   (`score += 1/(60+rank)` per list) avoids scale calibration between BM25 and the existing
+   bonuses; keep `NAME_MATCH_BONUS` dominance for exact stem/symbol hits (regression risk: the
+   0.7.x ranking fixes — run the eval suite). Design the helper for N lists (P1-7 adds one).
+5. Borrow semble's validated code-aware signals where Cortex lacks them: **definition boost**
+   (a chunk/symbol *defining* a queried identifier outranks ones merely mentioning it — Cortex
+   has this only via `NAME_MATCH_BONUS`; extend to FTS hits) and **adaptive weighting**
+   (queries that look like identifiers — camelCase/snake_case/`::`-qualified — weight the
+   lexical/name lists over FTS body hits). Cortex's aux-path demotion (0.7.1) already matches
+   semble's noise penalty; don't duplicate it.
+6. Identifier-aware indexing for Qt/C++ symbols: FTS5 `unicode61` splits `MyClass::mySignal`
+   and camelCase identifiers unhelpfully. Index an auxiliary normalized column (reuse
+   `_search_tokens` / `_normalized_identifier`, `store.py:21-28`, which already split
+   camel/snake) alongside raw content so both `devicelistmodel` and `device list model` hit.
+7. New MCP tool `cortex_search_text(query, limit, budget)` returning path + line-anchored
    snippets, so agents get a grep replacement that reads from the index instead of the tree.
-6. Add eval tasks where the gold file is findable only via body text (e.g. an error-message
+8. Add eval tasks where the gold file is findable only via body text (e.g. an error-message
    string), and assert precision does not regress on the existing 13 tasks.
 
 **Acceptance criteria**: eval suite passes with new body-text tasks; `cortex_search_text`
 returns snippets under budget; graceful no-FTS5 fallback tested (monkeypatched failure).
+**Qt parity**: on the Qt fixture (see §3 ground rules), searching a signal name, a
+`SIGNAL()/SLOT()` macro string, an `onFoo` QML handler name, and a `Class::method` qualified
+name each surface the right `.cpp`/`.hpp`/`.qml` file; body-text search finds a string literal
+inside a `.qml` file.
 
-**Effort**: M. **Dependencies**: none; do before P1-2 (hotspot ranking) to settle fusion code.
+**Effort**: M. **Dependencies**: Qt fixture; do before P1-2 (hotspot ranking) and P1-7 to
+settle fusion code.
 
 ---
 
@@ -244,7 +336,12 @@ latency.
    2000), `include: list[str]` optional expansions (`"impact"`, `"cochange"`, `"symbols"`).
 2. Per-target card (concise by default): resolved id, kind, signature or heading list, top-3
    structural neighbors, top-3 co-change partners with weights (reuse `rank_file_impact`,
-   `impact.py:25`), span info, and `hotspot` bit once P1-2 lands.
+   `impact.py:25`), span info, and `hotspot` bit once P1-2 lands. For Qt symbols, the card
+   must include the Qt-specific relations already in the graph: signals a class emits, slots
+   it defines, and `connects` wiring (query via the existing `store.query_edges` relation
+   filter, same source as `cortex_relations`), plus QML→C++ instantiation edges for `.qml`
+   targets — this is what makes one `cortex_context` call replace a grep session in a Qt
+   codebase.
 3. Split the budget across targets like `ITEM_BUDGET_SHARE` does in `bundle.py`; report
    `truncated` per card.
 4. Single `_ensure_fresh` call for the whole batch (not per target).
@@ -253,7 +350,9 @@ latency.
 
 **Acceptance criteria**: one call with 5 targets returns 5 cards under budget with correct
 resolution for both paths and symbol names; unit tests for ambiguous-symbol handling (reuse
-non-error disambiguation pattern from `_call_read_symbol`).
+non-error disambiguation pattern from `_call_read_symbol`). **Qt parity**: a card for the Qt
+fixture's `QObject` subclass lists its signals/slots and connect wiring; a card for the `.qml`
+file lists its handlers and the C++ type it instantiates.
 
 **Effort**: S–M. **Dependencies**: better with P1-2, not blocked by it.
 
@@ -268,9 +367,15 @@ ranking can't prefer "frequently changed AND complex" files, and reports can't w
 **Implementation steps**:
 1. New module `src/cortex/hotspots.py`: `compute_churn(commits) -> dict[path, int]` (commit
    touch counts, optionally recency-weighted with exponential decay over `authored_at`);
-   `estimate_complexity(source) -> int` — deterministic proxy: count of branch keywords
-   (`if/for/while/case/catch/&&/||/elif/except`) via the existing structural backends' line
-   scan, normalized per KLOC. No new parser work.
+   `estimate_complexity(source) -> int` — deterministic proxy: count of branch keywords via
+   the existing structural backends' line scan, normalized per KLOC. No new parser work. The
+   keyword table must be **per-language**, not Python-defaults: Python
+   (`if/elif/for/while/except/and/or`), C++ (`if/for/while/switch/case/catch/&&/||/?:` — count
+   `case` so big switch dispatch registers), QML/JS (`if/for/while/switch/case/&&/||/?:` plus
+   one point per `onFoo:` handler and per property binding expression, since QML complexity
+   lives in bindings, not statements). Comment/string stripping before counting must handle
+   `//`, `/* */`, and C++ raw strings — reuse the brace-matcher's skip logic from
+   `regex_backend.py` (0.7.2) rather than writing a new one.
 2. Persist as node metadata (`metadata_json.hotspot = {churn, complexity, score}`) during
    ingest, or a small `file_stats` table if metadata writes complicate the P0-3 delta path.
 3. Surface: (a) `cortex_overview` gains a `top_hotspots` list; (b) `report.py` gains a
@@ -279,7 +384,10 @@ ranking can't prefer "frequently changed AND complex" files, and reports can't w
 4. `cortex_impact` response gains `hotspot` fields on neighbors (cheap join).
 
 **Acceptance criteria**: fixture repo with a deliberately churned file ranks it top hotspot;
-eval metrics unchanged with boost off; report renders the section.
+eval metrics unchanged with boost off; report renders the section. **Qt parity**: on the Qt
+fixture, the C++ file with a fat `switch` and the `.qml` file with many handlers/bindings score
+visibly higher complexity than trivial siblings; churn picks up the co-changing `.qml`+`.cpp`
+pair from the fixture history.
 
 **Effort**: S–M. **Dependencies**: coordinate metadata storage with P0-3.
 
@@ -374,9 +482,56 @@ file.
 3. Record savings for these reads in the P0-1 ledger (baseline = full file tokens).
 
 **Acceptance criteria**: skeleton read of a large Python file returns imports + signatures +
-elision markers under budget; modes covered by tests; SKILL.md guidance updated.
+elision markers under budget; modes covered by tests; SKILL.md guidance updated. **Qt parity**:
+skeleton packing was generalized beyond Python in 0.7.0 but read-mode output must be verified
+on brace languages explicitly — skeleton of the fixture's C++ header keeps `#include` lines,
+the class declaration line, `Q_OBJECT`, `signals:`/`slots:` section markers, and member
+signatures while eliding bodies; skeleton of the `.qml` file keeps `import` lines, component
+ids, `signal` declarations, and `onFoo:` handler names with bound expressions elided. Test
+under both structural backends.
 
 **Effort**: S. **Dependencies**: none (P0-1 for savings attribution).
+
+---
+
+### P1-7. Optional local semantic retriever: static embeddings via a `[semantic]` extra
+
+**Motivation**: Semble proves the assumption behind Cortex's "no embeddings" stance is
+outdated: Model2Vec static embeddings (`potion-code-16M`) run **fully offline, CPU-only, no
+API keys, no transformer at query time**, with numpy-scale dependencies — and semble reaches
+NDCG@10 0.854 with them. Lexical search (P0-2) cannot bridge vocabulary gaps ("auth" vs
+`login_handler`); a static-embedding list fused via RRF can, at near-zero runtime cost.
+
+**Constraints**: strictly an optional extra (like `[languages]`/`[llm]`). The default install
+must remain stdlib-only with byte-identical output; when the extra is absent, the fusion layer
+simply receives one fewer list. Model files must be cached locally (respect `CORTEX_DATA_DIR`)
+and fetched only at explicit install/setup time — never during a query or auto-refresh.
+
+**Implementation steps**:
+1. Add `[semantic]` extra to `pyproject.toml`: `model2vec` (pulls numpy). Document the model
+   download step (`cortex semantic setup`, one-time, ~tens of MB) and the fully-offline
+   posture after setup.
+2. New module `src/cortex/semantic.py`: embed symbol-level chunks (Cortex already chunks by
+   symbol spans — reuse them; embed `signature + docstring/leading comment + first N lines`)
+   at ingest time into a `chunk_embeddings` table (`node_id`, `vector BLOB` float32). Delta
+   updates ride P0-3's per-file delete/insert path.
+3. Query time: embed the task string, brute-force cosine over the repo's vectors (numpy dot —
+   at potion-16M dimensions and typical repo sizes this is single-digit ms; no vector DB), emit
+   a ranked node list into the P0-2 RRF fusion.
+4. Gate everything behind soft imports mirroring the `regex`/`tiktoken` pattern; `cortex
+   doctor`-style status line in `cortex_overview.detailed` showing whether semantic is active.
+5. Evals: run the suite with the extra on and off; semantic-on must improve or match every
+   metric, and a new vocabulary-gap eval task (task words absent from the gold file's
+   identifiers) must pass only with semantic on — that task is tagged optional in the harness.
+
+**Acceptance criteria**: default install untouched (test matrix without the extra stays
+green and byte-identical); with the extra, vocabulary-gap task passes; ingest overhead with
+embeddings < 2× baseline on the eval fixtures; no network after setup (test with sockets
+blocked). **Qt parity**: embeddings must be computed for regex-backend symbols too (C++/QML
+files without tree-sitter), and a Qt-vocabulary task ("where is the button click handled" →
+`onClicked` QML handler) passes with semantic on.
+
+**Effort**: M. **Dependencies**: P0-2 (fusion layer), P0-3 (delta path for embedding updates).
 
 ---
 
@@ -425,13 +580,29 @@ code is pure token waste in every future bundle.
    re-exports, test files, decorated route handlers where detectable). Confidence tiers:
    `high` (no incoming edges anywhere incl. grep via `references.find_references`), `medium`
    (no graph edges, grep hits only in comments/docs), `low` (dynamic-language caveats).
-2. Surface as `cortex report` section + `cortex_dead_code` MCP tool with budget.
-3. Be honest about limits: regex-backend languages get `low` confidence by default.
+2. **Qt meta-object exclusions (correctness-critical, not optional)**: the Qt runtime invokes
+   code with no static call edge, so the following are *never* `high` confidence: slots (the
+   meta-object system calls them via `connect()` — credit `connects` edges as incoming
+   references, both pointer-to-member and string-based `SIGNAL()/SLOT()` forms, which the
+   regex backend already parses); signals (invoked by `emit` — credit `emits` edges);
+   `Q_INVOKABLE` methods and `Q_PROPERTY` accessors (called from QML by name); any C++ type
+   registered via `qmlRegisterType`/`QML_ELEMENT` (instantiated from QML — credit the QML
+   instantiation edges from `treesitter_backend.py:249`); QML `onFoo` handlers (invoked by the
+   engine); and resources referenced only from `.qrc`/`CMakeLists.txt` (covered by the
+   `references` grep tier, which already scans configs — see 0.6.0).
+3. Surface as `cortex report` section + `cortex_dead_code` MCP tool with budget.
+4. Be honest about limits: regex-backend languages get `low` confidence by default; a `.qml`
+   file's connection to C++ via context properties (`setContextProperty`) is string-based and
+   must fall to the grep tier.
 
 **Acceptance criteria**: fixture with a known-unused function flags it `high`; a
 grep-referenced one drops to `medium`; no false `high` on dunder/entry-point symbols.
+**Qt parity**: on the Qt fixture, a connected slot, an emitted signal, and a
+QML-instantiated C++ type are all *not* flagged (assert explicitly — these are the false
+positives that would destroy trust in Qt shops); a genuinely orphaned private helper method
+in the same class still flags.
 
-**Effort**: M. **Dependencies**: none (better after P0-2 for the grep tier).
+**Effort**: M. **Dependencies**: Qt fixture; better after P0-2 for the grep tier.
 
 ---
 
@@ -449,15 +620,23 @@ with Cortex's COCHANGE differentiator.
    documented weights.
 2. Missing-tests heuristic: reuse `_looks_like_src_test_pair` (`report.py:22`) to detect
    changed sources whose paired test file is untouched.
-3. CLI `cortex risk <range>` + MCP `cortex_risk(range?)` (default `HEAD~1..HEAD` /
+3. Qt cross-boundary pairs: the highest-value `missing_cochange` signals in a Qt codebase are
+   cross-language — a changed `.hpp` whose `.cpp` is untouched (or vice versa), a changed C++
+   class whose instantiating `.qml` is untouched, and a renamed signal whose `connect()` sites
+   / QML handlers didn't change. The first comes free from co-change history; the latter two
+   should also consult the STRUCTURAL `connects`/instantiation edges so they fire even without
+   commit history. Also flag `.qml` additions not referenced by any `.qrc`/`CMakeLists.txt`
+   (build-system miss, detectable via the references grep tier).
+4. CLI `cortex risk <range>` + MCP `cortex_risk(range?)` (default `HEAD~1..HEAD` /
    staged), concise directive list: `missing_cochange: [b.py (0.8)]`, `missing_tests: [...]`.
-4. Eval-style fixture: repo where two files always change together; diff touching one flags
-   the other.
+5. Eval-style fixture: repo where two files always change together; diff touching one flags
+   the other; the Qt fixture's `.qml`+`.cpp` pair exercises the cross-language case.
 
 **Acceptance criteria**: fixture assertions above; deterministic scores; runs without network
-on a plain git repo.
+on a plain git repo; a diff touching only the Qt fixture's C++ backend flags its co-changing
+`.qml` as `missing_cochange`.
 
-**Effort**: M. **Dependencies**: P1-2 (hotspots).
+**Effort**: M. **Dependencies**: P1-2 (hotspots), Qt fixture.
 
 ---
 
@@ -486,8 +665,11 @@ exist to be recommended).
 
 ## 4. Explicit non-goals (evaluated and rejected for now)
 
-- **Vector embeddings / semantic search** (Repowise): violates Cortex's no-embedding,
-  no-network invariant; FTS5 + graph fusion (P0-2) captures most of the retrieval win locally.
+- **Transformer/server-side embeddings** (Repowise's vector layer): violates Cortex's
+  no-network default; FTS5 + graph fusion (P0-2) captures most of the retrieval win locally.
+  *Revised after studying semble*: **static** embeddings (Model2Vec) are offline, CPU-only,
+  and dependency-light, so they moved from non-goal to optional extra — see P1-7. Only
+  transformer inference and hosted embedding APIs remain rejected.
 - **LLM-generated wiki/docs layer** (Repowise): outside the optimization/efficiency scope and
   contradicts the deterministic default path; the existing optional `enrich` covers the niche.
 - **Per-command output filters for 100+ CLIs** (rtk): unbounded maintenance surface in Python;
@@ -500,13 +682,18 @@ exist to be recommended).
 
 ## 5. Suggested delegation order
 
-1. **Wave 1 (independent, parallel-safe)**: P0-1 (ledger), P0-2 (FTS), P1-3 (cache), P1-4
-   (tokenizer). P0-3 (incremental) in parallel but by a single agent with the regression tests
-   written first.
+0. **Wave 0 (single small task, unblocks all acceptance tests)**: the shared Qt fixture repo
+   + gold-answer eval tasks described in §3 ground rules.
+1. **Wave 1 (independent, parallel-safe)**: P0-1 (ledger), P0-2 (FTS + fusion layer), P1-3
+   (cache), P1-4 (tokenizer). P0-3 (incremental) in parallel but by a single agent with the
+   regression tests written first.
 2. **Wave 2**: P1-5 (meta envelope, folds in Wave 1 flags), P1-6 (read modes), P1-1 (batched
-   context), P1-2 (hotspots).
-3. **Wave 3**: P2-3 (risk, needs hotspots), P2-2 (dead code), P2-1 (distill — after the
-   tokenslim decision), P2-4 (discover).
+   context), P1-2 (hotspots), P1-7 (static-embedding retriever — needs P0-2's fusion and
+   P0-3's delta path).
+3. **Wave 3**: P2-3 (risk, needs hotspots), P2-2 (dead code — assign to an agent briefed on
+   the Qt meta-object exclusions), P2-1 (distill — after the tokenslim decision), P2-4
+   (discover).
 
 Each wave should end with: `python3 -m pytest tests/ -q`, `python3 evals/run_evals.py` (metrics
-must not regress), CHANGELOG entry, and README/SKILL.md surface updates.
+must not regress, including the Qt fixture tasks from Wave 0), CHANGELOG entry, and
+README/SKILL.md surface updates.
