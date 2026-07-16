@@ -108,6 +108,34 @@ GOLD_TASKS: tuple[GoldTask, ...] = (
         expected_files=("src/cortex/mcp/tools.py",),
         expected_symbols=("src/cortex/mcp/tools.py:_ensure_fresh",),
     ),
+    GoldTask(
+        repo="qt_app",
+        description="Where is the deviceConnected signal emitted and which slot receives it",
+        expected_files=(
+            "include/DeviceManager.hpp",
+            "src/DeviceManager.cpp",
+            "include/DeviceModel.hpp",
+            "src/DeviceModel.cpp",
+        ),
+        expected_symbols=(
+            "include/DeviceManager.hpp:deviceConnected",
+            "include/DeviceModel.hpp:onDeviceConnected",
+        ),
+    ),
+    GoldTask(
+        repo="qt_app",
+        description="Find the QML delegate component and its declared click signal",
+        expected_files=("qml/DeviceDelegate.qml", "qml/Main.qml"),
+        expected_symbols=(
+            "qml/DeviceDelegate.qml:DeviceDelegate",
+            "qml/DeviceDelegate.qml:clicked",
+        ),
+    ),
+    GoldTask(
+        repo="qt_app",
+        description="Find the Qt build files that register the QML scene and delegate for compilation",
+        expected_files=("CMakeLists.txt", "resources.qrc"),
+    ),
 )
 
 
@@ -398,12 +426,153 @@ def helper():
     return repo
 
 
+def _build_qt_app(base: Path) -> Path:
+    """Small Qt/C++/QML fixture: two QObject classes wired via connect(), plus a QML
+    scene that instantiates a local component and defines handlers. Second commit
+    co-changes a .cpp and a .qml so COCHANGE edges form between them."""
+    repo = base / "qt_app"
+    _init_repo(repo)
+    _write(repo / "include/DeviceManager.hpp", """
+#pragma once
+#include <QObject>
+
+class DeviceManager : public QObject {
+    Q_OBJECT
+public:
+    explicit DeviceManager(QObject *parent = nullptr);
+    void scan();
+
+signals:
+    void deviceConnected(int deviceId);
+
+public slots:
+    void onDeviceConnected(int deviceId);
+};
+""")
+    _write(repo / "src/DeviceManager.cpp", """
+#include "DeviceManager.hpp"
+#include "DeviceModel.hpp"
+
+DeviceManager::DeviceManager(QObject *parent) : QObject(parent) {
+    auto *model = new DeviceModel(this);
+    connect(this, &DeviceManager::deviceConnected, model, &DeviceModel::onDeviceConnected);
+}
+
+void DeviceManager::onDeviceConnected(int deviceId) {
+    scan();
+}
+""")
+    _write(repo / "include/DeviceModel.hpp", """
+#pragma once
+#include <QObject>
+
+class DeviceModel : public QObject {
+    Q_OBJECT
+public:
+    explicit DeviceModel(QObject *parent = nullptr);
+
+public slots:
+    void onDeviceConnected(int deviceId);
+
+signals:
+    void modelUpdated();
+};
+""")
+    _write(repo / "src/DeviceModel.cpp", """
+#include "DeviceModel.hpp"
+
+DeviceModel::DeviceModel(QObject *parent) : QObject(parent) {}
+
+void DeviceModel::onDeviceConnected(int deviceId) {
+    emit modelUpdated();
+}
+""")
+    _write(repo / "qml/DeviceDelegate.qml", """
+import QtQuick 2.15
+
+Item {
+    signal deviceConnected(int deviceId)
+    signal clicked()
+
+    MouseArea {
+        anchors.fill: parent
+        onClicked: clicked()
+    }
+}
+""")
+    _write(repo / "qml/Main.qml", """
+import QtQuick 2.15
+import QtQuick.Controls 2.15
+
+ApplicationWindow {
+    signal sceneReady()
+
+    DeviceDelegate {
+        id: delegate
+        onClicked: console.log("delegate clicked")
+        onDeviceConnected: console.log("device", deviceId)
+    }
+}
+""")
+    _write(repo / "CMakeLists.txt", """
+add_executable(qt_app
+    src/DeviceManager.cpp
+    src/DeviceModel.cpp
+)
+target_link_libraries(qt_app PRIVATE Qt6::Core Qt6::Quick)
+qt_add_qml_module(qt_app URI QtApp QML_FILES qml/Main.qml qml/DeviceDelegate.qml)
+""")
+    _write(repo / "resources.qrc", """
+<RCC>
+  <qresource prefix="/">
+    <file>qml/Main.qml</file>
+    <file>qml/DeviceDelegate.qml</file>
+  </qresource>
+</RCC>
+""")
+    _commit_all(repo, "add device manager/model and qml scene")
+    _write(repo / "src/DeviceManager.cpp", """
+#include "DeviceManager.hpp"
+#include "DeviceModel.hpp"
+
+DeviceManager::DeviceManager(QObject *parent) : QObject(parent) {
+    auto *model = new DeviceModel(this);
+    connect(this, &DeviceManager::deviceConnected, model, &DeviceModel::onDeviceConnected);
+}
+
+void DeviceManager::scan() {
+    emit deviceConnected(42);
+}
+
+void DeviceManager::onDeviceConnected(int deviceId) {
+    scan();
+}
+""")
+    _write(repo / "qml/Main.qml", """
+import QtQuick 2.15
+import QtQuick.Controls 2.15
+
+ApplicationWindow {
+    signal sceneReady()
+
+    DeviceDelegate {
+        id: delegate
+        onClicked: console.log("delegate clicked")
+        onDeviceConnected: console.log("device connected", deviceId)
+    }
+}
+""")
+    _commit_all(repo, "wire deviceConnected scan and update qml handler")
+    return repo
+
+
 def build_fixture_repos(base: Path) -> dict[str, Path]:
     return {
         "python_app": _build_python_app(base),
         "web_service": _build_web_service(base),
         "noisy_lib": _build_noisy_lib(base),
         "refresh_distractors": _build_refresh_distractors(base),
+        "qt_app": _build_qt_app(base),
     }
 
 

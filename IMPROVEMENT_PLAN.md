@@ -349,6 +349,53 @@ test suite before refactoring.
 
 ---
 
+### P0-4. Cross-file Qt signal/handler symbol resolution
+
+**Motivation** (surfaced by the Wave 0 fixture build, not speculative): Cortex's structural
+backends resolve `emit`/`handles` edge endpoints only *within the same file*. Confirmed on the
+`qt_app` fixture: `emit deviceConnected(42)` in `src/DeviceManager.cpp` produces an `emits`
+edge to a placeholder `module:deviceConnected` node because the signal is *declared* in
+`include/DeviceManager.hpp`, not the `.cpp`; and QML `onFoo:` handlers (`onClicked:`,
+`onDeviceConnected:`) never become symbol nodes at all — they emit only a `handles` edge to a
+placeholder `module:<name>`. Header/implementation split is the norm in C++, so today the
+`emits`/`handles`/`connects` graph is systematically broken across the exact file boundary Qt
+code lives on. Several later Qt-parity items depend on these edges resolving to real symbols:
+P1-1 (signals a class emits, in the context card), P2-2 (a signal must not be flagged dead
+because it has an incoming `emits`/`connects` edge), and P2-3 (a renamed signal whose
+`connect()`/QML-handler sites didn't change).
+
+**Implementation steps**:
+1. `emit`/`Q_EMIT` resolution: when a signal name isn't a symbol in the current file, resolve
+   it against declared signals in `#include`d headers of the same translation unit first
+   (Cortex already resolves local includes to file nodes — `resolve_local_import`, 0.6.2), then
+   fall back to a unique repo-wide signal-declaration match, then the `module:` placeholder.
+   Do this in the regex backend (`regex_backend.py::_extract_qt_cpp_edges`) and mirror in the
+   tree-sitter backend; the ingest graph-merge must run it after all files are parsed (signal
+   declaration may be ingested after the emitting `.cpp`) — a resolution pass over placeholder
+   endpoints at the end of `build_graph`, not per-file.
+2. QML `onFoo:` handlers: emit a real symbol node for each handler (kind `func`, `qt:handler`
+   metadata) anchored on the handler line, in addition to the existing `handles` edge, so the
+   handler is addressable by `cortex_read_symbol`/dead-code/context like any other symbol.
+   Resolve the `handles` edge target to the declaring `signal`/property where the on-name maps
+   to a known signal in the instantiated component (`onDeviceConnected` → `deviceConnected`
+   signal on the `DeviceDelegate` the file instantiates), else placeholder.
+3. Keep the placeholder path for genuinely external/unresolved names (Qt framework signals) —
+   do not invent symbols for them.
+4. Tighten the Wave 0 gold-task `expected_symbols` to the now-resolved ids once available, and
+   add relation-level assertions (see acceptance).
+
+**Acceptance criteria**: on `qt_app`, `cortex_relations` for `deviceConnected` shows the
+`emits` edge from `DeviceManager::scan` resolving to `include/DeviceManager.hpp:deviceConnected`
+(not `module:deviceConnected`); the `connects` edge resolves both endpoints to real
+signal/slot symbols; each QML `onFoo:` handler is returned as a symbol by
+`cortex_search_symbols`; the `handles` edge for `onDeviceConnected` resolves to the
+`DeviceDelegate` `deviceConnected` signal. Regex and tree-sitter backends both covered;
+existing non-Qt tests and evals unchanged.
+
+**Effort**: M. **Dependencies**: Qt fixture (Wave 0, done). Should land before P1-1/P2-2/P2-3.
+
+---
+
 ### P1-1. Batched triage tool: `cortex_context(targets[])`
 
 **Motivation**: Repowise attributes its "−70% tool calls" largely to `get_context` accepting a
@@ -380,7 +427,8 @@ non-error disambiguation pattern from `_call_read_symbol`). **Qt parity**: a car
 fixture's `QObject` subclass lists its signals/slots and connect wiring; a card for the `.qml`
 file lists its handlers and the C++ type it instantiates.
 
-**Effort**: S–M. **Dependencies**: better with P1-2, not blocked by it.
+**Effort**: S–M. **Dependencies**: better with P1-2, not blocked by it; P0-4 for the Qt
+relations in cards (signals emitted / connect wiring) to resolve to real symbols.
 
 ---
 
@@ -685,7 +733,9 @@ QML-instantiated C++ type are all *not* flagged (assert explicitly — these are
 positives that would destroy trust in Qt shops); a genuinely orphaned private helper method
 in the same class still flags.
 
-**Effort**: M. **Dependencies**: Qt fixture; better after P0-2 for the grep tier.
+**Effort**: M. **Dependencies**: Qt fixture; P0-4 (the meta-object exclusions credit
+`emits`/`connects`/`handles` edges — those must resolve cross-file first, or slots/signals
+get false-flagged); better after P0-2 for the grep tier.
 
 ---
 
@@ -719,7 +769,8 @@ with Cortex's COCHANGE differentiator.
 on a plain git repo; a diff touching only the Qt fixture's C++ backend flags its co-changing
 `.qml` as `missing_cochange`.
 
-**Effort**: M. **Dependencies**: P1-2 (hotspots), Qt fixture.
+**Effort**: M. **Dependencies**: P1-2 (hotspots), Qt fixture, P0-4 (renamed-signal detection
+needs `connects`/`handles` edges resolved to real signal symbols).
 
 ---
 
@@ -814,9 +865,10 @@ cheap); P1-8's advisory hook still applies inside the sub-agent as a safety net.
 1. **Wave 1 (independent, parallel-safe)**: P0-1 (ledger), P0-2 (FTS + fusion layer), P1-3
    (cache), P1-4 (tokenizer). P0-3 (incremental) in parallel but by a single agent with the
    regression tests written first.
-2. **Wave 2**: P1-5 (meta envelope, folds in Wave 1 flags), P1-6 (read modes), P1-1 (batched
-   context), P1-2 (hotspots), P1-7 (static-embedding retriever — needs P0-2's fusion and
-   P0-3's delta path).
+2. **Wave 2**: P0-4 (cross-file Qt signal/handler resolution — surfaced by Wave 0, unblocks the
+   Qt-parity criteria of P1-1/P2-2/P2-3), P1-5 (meta envelope, folds in Wave 1 flags), P1-6
+   (read modes), P1-1 (batched context), P1-2 (hotspots), P1-7 (static-embedding retriever —
+   needs P0-2's fusion and P0-3's delta path).
 3. **Wave 3**: P1-8 (redirect hook, `advise` mode — needs P1-6's skeleton reads to
    recommend), P2-3 (risk, needs hotspots), P2-2 (dead code — assign to an agent briefed on
    the Qt meta-object exclusions), P2-1 (distill — after the tokenslim decision), P2-4
