@@ -8,6 +8,7 @@ import sqlite3
 import time
 from pathlib import Path
 
+from .graph import QtSymbolIndex
 from .models import BundleItem, CommitRecord, Community, GraphEdge, GraphNode, RetrievalBundle, SourceRecord
 
 LEGACY_DIR_NAME = ".cortex"
@@ -709,6 +710,41 @@ class CortexStore:
             for row in edge_rows
         ]
         return nodes, edges
+
+    def fetch_qt_symbol_index(self, repo_path: Path) -> QtSymbolIndex:
+        """Qt signal/slot declarations and class locations already in the
+        store, keyed by declaring file path (P0-4). Used by the incremental
+        ingest path to give `build_file_layer`'s cross-file `emits`/
+        `connects`/`handles` resolution pass visibility into files that
+        aren't part of the current (changed-files-only) batch -- e.g. a
+        signal declared in a header that didn't change when only the
+        emitting .cpp is re-ingested. A targeted query (kind='class' or a
+        'qt' metadata tag) rather than a full `fetch_graph`, since most nodes
+        in a real repo are neither.
+        """
+        repo_key = str(repo_path.resolve())
+        rows = self.connection.execute(
+            """
+            SELECT node_id, kind, label, source_ref, metadata_json
+            FROM graph_nodes
+            WHERE repo_path = ? AND (kind = 'class' OR metadata_json LIKE '%"qt"%')
+            """,
+            (repo_key,),
+        ).fetchall()
+        signals: dict[str, dict[str, str]] = {}
+        slots: dict[str, dict[str, str]] = {}
+        classes: dict[str, str] = {}
+        for row in rows:
+            if row['kind'] == 'class':
+                classes.setdefault(row['label'], row['source_ref'])
+                continue
+            metadata = json.loads(row['metadata_json'])
+            qt_kind = metadata.get('qt')
+            if qt_kind == 'signal':
+                signals.setdefault(row['source_ref'], {})[row['label']] = row['node_id']
+            elif qt_kind == 'slot':
+                slots.setdefault(row['source_ref'], {})[row['label']] = row['node_id']
+        return QtSymbolIndex(signals=signals, slots=slots, classes=classes)
 
     def query_edges(
         self,

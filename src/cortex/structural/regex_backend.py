@@ -12,6 +12,11 @@ class _Pattern:
     regex: re.Pattern[str]
     kind: str
     name_group: str = "name"
+    # Extra symbol-node metadata to merge in for every match of this pattern.
+    # Used to tag QML `signal` declarations `qt: signal` (P0-4) the same way
+    # C++ signals/slots are tagged, so both feed the same cross-file
+    # resolution index in graph.py.
+    metadata: dict[str, str] | None = None
 
 
 _C_SUFFIXES = (".c",)
@@ -48,7 +53,11 @@ _QML_IMPORT_PATTERNS = [
 ]
 _QML_DEF_PATTERNS = [
     _Pattern(re.compile(r"^\s*function\s+(?P<name>[A-Za-z_]\w*)\s*\(", re.MULTILINE), "func"),
-    _Pattern(re.compile(r"^\s*signal\s+(?P<name>[A-Za-z_]\w*)\s*\(", re.MULTILINE), "func"),
+    _Pattern(
+        re.compile(r"^\s*signal\s+(?P<name>[A-Za-z_]\w*)\s*\(", re.MULTILINE),
+        "func",
+        metadata={"qt": "signal"},
+    ),
 ]
 _QML_OBJECT_RE = re.compile(r"^\s*(?P<name>[A-Z][A-Za-z0-9_]*)\s*\{", re.MULTILINE)
 _QT_SECTION_RE = re.compile(r"^\s*(?:(?:public|private|protected)\s+)?(?P<section>signals|slots|Q_SIGNALS|Q_SLOTS)\s*:?\s*$")
@@ -282,9 +291,25 @@ def _symbol_node(
     )
 
 
-def _symbol_ref(path: str, name: str, symbol_ids: set[str]) -> str:
+def _symbol_ref(path: str, name: str, nodes: list[GraphNode]) -> str:
+    """Same-file resolution for an `emit`/`connect()` endpoint name.
+
+    Only matches a node explicitly tagged `qt: signal`/`qt: slot` (i.e. one
+    created via `_upsert_qt_symbol` from a `signals:`/`slots:` section) --
+    *not* just any node that happens to share the name. A `connect()` call
+    references a specific class's member (`&DeviceModel::onDeviceConnected`);
+    matching an unrelated same-named plain method (e.g. a different class's
+    own `onDeviceConnected` implementation living in the same .cpp) would
+    silently produce a wrong-but-resolved edge instead of the correct
+    cross-file one the P0-4 resolution pass in graph.py would otherwise find
+    (via `sender_class`/`receiver_class` metadata -- see
+    `_extract_qt_cpp_edges` below and `graph.py::_resolve_qt_edges`).
+    """
     symbol_id = f"symbol:{path}:{name}"
-    return symbol_id if symbol_id in symbol_ids else _target_id(name)
+    for node in nodes:
+        if node.node_id == symbol_id and node.metadata.get("qt") in ("signal", "slot"):
+            return symbol_id
+    return _target_id(name)
 
 
 def _cpp_base_names(base_clause: str) -> list[str]:
@@ -411,27 +436,30 @@ def _extract_qt_cpp_edges(
         emit_match = _QT_EMIT_RE.match(line)
         if emit_match:
             name = emit_match.group("name")
-            symbol_ids = {node.node_id for node in nodes}
             edges.append(
                 GraphEdge(
                     edge_id=f"regex:{path}:emits:{lineno}:{name}",
                     source=file_node_id,
-                    target=_symbol_ref(path, name, symbol_ids),
+                    target=_symbol_ref(path, name, nodes),
                     relation="emits",
                     layer="STRUCTURAL",
                     confidence="LOW",
                     weight=1.0,
-                    metadata={"lineno": lineno, "source_file": path},
+                    # signal_name lets the P0-4 cross-file resolution pass
+                    # (graph.py::_resolve_qt_edges) recognize a still-unresolved
+                    # `module:<name>` target and try harder once the whole
+                    # ingest batch (and, for incremental re-ingest, the store's
+                    # already-known signals) is available.
+                    metadata={"lineno": lineno, "source_file": path, "signal_name": name},
                 )
             )
 
         for index, match in enumerate(_QT_CONNECT_POINTER_RE.finditer(line), start=1):
-            symbol_ids = {node.node_id for node in nodes}
             edges.append(
                 GraphEdge(
                     edge_id=f"regex:{path}:connects:{lineno}:{index}:{match.group('signal')}:{match.group('slot')}",
-                    source=_symbol_ref(path, match.group("signal"), symbol_ids),
-                    target=_symbol_ref(path, match.group("slot"), symbol_ids),
+                    source=_symbol_ref(path, match.group("signal"), nodes),
+                    target=_symbol_ref(path, match.group("slot"), nodes),
                     relation="connects",
                     layer="STRUCTURAL",
                     confidence="LOW",
@@ -443,16 +471,17 @@ def _extract_qt_cpp_edges(
                         "receiver": match.group("receiver").strip(),
                         "sender_class": match.group("sender_class"),
                         "receiver_class": match.group("receiver_class"),
+                        "signal_name": match.group("signal"),
+                        "slot_name": match.group("slot"),
                     },
                 )
             )
         for index, match in enumerate(_QT_CONNECT_MACRO_RE.finditer(line), start=1):
-            symbol_ids = {node.node_id for node in nodes}
             edges.append(
                 GraphEdge(
                     edge_id=f"regex:{path}:connects:{lineno}:macro:{index}:{match.group('signal')}:{match.group('slot')}",
-                    source=_symbol_ref(path, match.group("signal"), symbol_ids),
-                    target=_symbol_ref(path, match.group("slot"), symbol_ids),
+                    source=_symbol_ref(path, match.group("signal"), nodes),
+                    target=_symbol_ref(path, match.group("slot"), nodes),
                     relation="connects",
                     layer="STRUCTURAL",
                     confidence="LOW",
@@ -462,6 +491,8 @@ def _extract_qt_cpp_edges(
                         "source_file": path,
                         "sender": match.group("sender").strip(),
                         "receiver": match.group("receiver").strip(),
+                        "signal_name": match.group("signal"),
+                        "slot_name": match.group("slot"),
                     },
                 )
             )
@@ -472,25 +503,148 @@ def _extract_qt_cpp_edges(
             section = ""
 
 
-def _extract_qml_handlers(path: str, content: str, file_node_id: str, nodes: list[GraphNode], edges: list[GraphEdge]) -> None:
-    symbol_ids = {node.node_id for node in nodes}
-    for lineno, line in enumerate(content.splitlines(), start=1):
-        match = _QML_HANDLER_RE.match(line)
-        if not match:
+def _qml_handler_signal_name(handler_name: str) -> str:
+    """`onDeviceConnected` -> `deviceConnected`, `onClicked` -> `clicked`."""
+    return handler_name[2].lower() + handler_name[3:]
+
+
+def _extract_qml_signal_symbols(
+    path: str,
+    content: str,
+    file_node_id: str,
+    nodes: list[GraphNode],
+    edges: list[GraphEdge],
+    seen: set[str],
+) -> None:
+    """QML `signal foo(...)` declarations as `qt: signal`-tagged symbol nodes.
+
+    The regex backend's generic `_DEF_PATTERNS` pass already does this (the
+    `signal` pattern in `_QML_DEF_PATTERNS` carries `metadata={"qt": "signal"}`).
+    This standalone entry point exists so the tree-sitter backend -- whose QML
+    grammar node types aren't mapped to a "signal declaration" kind -- can
+    still produce the same qt-tagged symbol via the always-available regex
+    path, exactly like it already reuses `_extract_qt_cpp_edges` for C++
+    signals/slots. Cross-file handler/emit resolution (graph.py) depends on
+    these being tagged identically regardless of which backend ran.
+    """
+    pattern = next(p for p in _QML_DEF_PATTERNS if p.metadata and p.metadata.get("qt") == "signal")
+    for match in pattern.regex.finditer(content):
+        name = match.group(pattern.name_group)
+        if name in seen:
             continue
-        name = match.group("name")
+        seen.add(name)
+        name_start = match.start(pattern.name_group)
+        line_start = content.rfind("\n", 0, name_start) + 1
+        line = _line_number(content, line_start)
+        span_end = _def_span_end(content, match.end(pattern.name_group), line)
+        node = _symbol_node(
+            path, name, pattern.kind, _signature(content, line_start), line, metadata=pattern.metadata, span_end=span_end
+        )
+        nodes.append(node)
         edges.append(
             GraphEdge(
-                edge_id=f"regex:{path}:handles:{lineno}:{name}",
+                edge_id=f"regex:{path}:contains:{name}",
                 source=file_node_id,
-                target=_symbol_ref(path, name, symbol_ids),
-                relation="handles",
+                target=node.node_id,
+                relation="contains",
                 layer="STRUCTURAL",
                 confidence="LOW",
                 weight=1.0,
-                metadata={"lineno": lineno, "source_file": path},
+                metadata={"lineno": line, "source_file": path},
             )
         )
+
+
+def _extract_qml_handlers(
+    path: str,
+    content: str,
+    known_paths: set[str],
+    file_node_id: str,
+    nodes: list[GraphNode],
+    edges: list[GraphEdge],
+) -> None:
+    """QML `onFoo:` handlers (P0-4).
+
+    Each handler becomes a real symbol node (kind `func`, metadata
+    `qt: handler`) in addition to its `handles` edge, so it's addressable by
+    `cortex_read_symbol`/dead-code/context like any other symbol. The
+    `handles` edge target is derived from the on-name (`onDeviceConnected` ->
+    `deviceConnected`); when the handler sits inside a block that instantiates
+    a *locally known* QML component (tracked via a nesting stack, since a
+    handler can sit several objects deep -- e.g. a `MouseArea` inside the
+    instantiated component), the edge is tagged with that component's file
+    path (`component_path`) so the cross-file resolution pass in graph.py can
+    point it at the real signal symbol once that file's signals are known
+    (same batch, or an earlier one via the store -- see QtSymbolIndex). An
+    enclosing type that isn't a locally known component (a Qt Quick framework
+    item such as MouseArea, or no enclosing object at all) keeps the
+    `module:` placeholder rather than guessing.
+    """
+    stack: list[tuple[str, int]] = []
+    brace_depth = 0
+    seen_qualnames: set[str] = set()
+
+    for lineno, line in enumerate(content.splitlines(), start=1):
+        obj_match = _QML_OBJECT_RE.match(line)
+        if obj_match:
+            open_depth = brace_depth + line.count("{") - line.count("}")
+            stack.append((obj_match.group("name"), open_depth))
+
+        handler_match = _QML_HANDLER_RE.match(line)
+        if handler_match:
+            handler_name = handler_match.group("name")
+            enclosing = stack[-1][0] if stack else None
+            component_path = resolve_qml_component(enclosing, known_paths) if enclosing else None
+            signal_name = _qml_handler_signal_name(handler_name)
+
+            qualname = f"{enclosing}.{handler_name}" if enclosing else handler_name
+            if qualname in seen_qualnames:
+                qualname = f"{qualname}:{lineno}"
+            seen_qualnames.add(qualname)
+
+            handler_node = _symbol_node(
+                path,
+                qualname,
+                "func",
+                line.strip(),
+                lineno,
+                metadata={"qt": "handler", "handler_name": handler_name, "signal_name": signal_name},
+            )
+            nodes.append(handler_node)
+            edges.append(
+                GraphEdge(
+                    edge_id=f"regex:{path}:contains:{qualname}",
+                    source=file_node_id,
+                    target=handler_node.node_id,
+                    relation="contains",
+                    layer="STRUCTURAL",
+                    confidence="LOW",
+                    weight=1.0,
+                    metadata={"lineno": lineno, "source_file": path},
+                )
+            )
+            edges.append(
+                GraphEdge(
+                    edge_id=f"regex:{path}:handles:{lineno}:{handler_name}",
+                    source=file_node_id,
+                    target=_target_id(signal_name),
+                    relation="handles",
+                    layer="STRUCTURAL",
+                    confidence="LOW",
+                    weight=1.0,
+                    metadata={
+                        "lineno": lineno,
+                        "source_file": path,
+                        "handler_name": handler_name,
+                        "signal_name": signal_name,
+                        "component_path": component_path or "",
+                    },
+                )
+            )
+
+        brace_depth += line.count("{") - line.count("}")
+        while stack and brace_depth < stack[-1][1]:
+            stack.pop()
 
 
 def _extract_qml_component_definition(
@@ -601,7 +755,9 @@ def extract_regex_edges(
             line_start = content.rfind("\n", 0, name_start) + 1
             line = _line_number(content, line_start)
             span_end = _def_span_end(content, match.end(pattern.name_group), line)
-            node = _symbol_node(path, name, pattern.kind, _signature(content, line_start), line, span_end=span_end)
+            node = _symbol_node(
+                path, name, pattern.kind, _signature(content, line_start), line, metadata=pattern.metadata, span_end=span_end
+            )
             nodes.append(node)
             edges.append(
                 GraphEdge(
@@ -621,6 +777,6 @@ def extract_regex_edges(
         _extract_qt_cpp_edges(path, content, file_node_id, nodes, edges, seen)
     if suffix == ".qml":
         _extract_qml_instantiates(path, content, known_paths, file_node_id, edges)
-        _extract_qml_handlers(path, content, file_node_id, nodes, edges)
+        _extract_qml_handlers(path, content, known_paths, file_node_id, nodes, edges)
 
     return nodes, edges

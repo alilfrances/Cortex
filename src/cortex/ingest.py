@@ -282,7 +282,23 @@ def ingest_repository(
         # files, then append fresh rows for the changed/new files. Rows for
         # every untouched file are never read or rewritten (P0-3 items 1-2).
         if sources_to_process or stale_paths:
-            new_nodes, new_edges = build_file_layer(sources_to_process, scan.current_paths)
+            # P0-4: a signal/slot this batch's emit/connect/handler sites
+            # reference may be declared in a file that isn't part of this
+            # batch (e.g. an unchanged header). Fetch the store's existing
+            # Qt symbol index before the delta delete below removes rows for
+            # `stale_paths`, then strip those paths back out -- otherwise a
+            # changed or deleted file's *old* declarations could leak in as
+            # a stale resolution target for this batch, or a deleted file's
+            # declarations could resolve to a node id that's about to stop
+            # existing. Paths that changed (not deleted) still resolve
+            # correctly: their freshly parsed data lives in `new_nodes` and
+            # wins the per-path merge in build_file_layer.
+            existing_qt_index = None
+            if sources_to_process:
+                existing_qt_index = store.fetch_qt_symbol_index(repo_root).without_paths(set(stale_paths))
+            new_nodes, new_edges = build_file_layer(
+                sources_to_process, scan.current_paths, existing_qt_index=existing_qt_index
+            )
             if stale_paths:
                 store.delete_graph_for_sources(repo_root, stale_paths)
             store.append_graph(repo_root, new_nodes, new_edges)

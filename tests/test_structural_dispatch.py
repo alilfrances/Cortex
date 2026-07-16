@@ -303,10 +303,19 @@ def test_qml_regex_fallback_extracts_handlers(monkeypatch: pytest.MonkeyPatch) -
     nodes, edges = extract_structural_edges("ButtonView.qml", content, set())
 
     assert "symbol:ButtonView.qml:saved" in {node.node_id for node in nodes}
+    # P0-4: the handler itself is now a real, addressable symbol (kind func,
+    # qt:handler metadata), in addition to the handles edge below.
+    handler_nodes = [node for node in nodes if node.metadata.get("qt") == "handler"]
+    assert len(handler_nodes) == 1
+    assert handler_nodes[0].node_id == "symbol:ButtonView.qml:Button.onClicked"
+    assert handler_nodes[0].kind == "func"
     handles = [edge for edge in edges if edge.relation == "handles"]
     assert len(handles) == 1
     assert handles[0].source == "file:ButtonView.qml"
-    assert handles[0].target == "module:onClicked"
+    # "Button" isn't a locally known component (no Button.qml in known_paths),
+    # so the on-name -> signal-name mapping (onClicked -> clicked) is derived
+    # but stays an external placeholder rather than guessing a same-file match.
+    assert handles[0].target == "module:clicked"
     assert handles[0].confidence == "LOW"
 
 

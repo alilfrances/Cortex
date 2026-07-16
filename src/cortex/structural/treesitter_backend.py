@@ -364,6 +364,13 @@ def extract_treesitter_edges(
     if suffix in _CPP_SUFFIXES:
         regex_backend._extract_qt_cpp_edges(path, content, file_node_id, nodes, edges, seen_symbols)
     if suffix == ".qml":
-        regex_backend._extract_qml_handlers(path, content, file_node_id, nodes, edges)
+        # The QML grammar's node types aren't mapped in _DEF_TYPES for a
+        # "signal" declaration, so tree-sitter alone would silently drop
+        # `signal foo(...)` as a symbol -- reuse the regex-based extraction
+        # (P0-4) so the Qt-tagged signal index (graph.py::QtSymbolIndex) sees
+        # the same symbols regardless of backend, exactly like the C++ Qt
+        # edges above already do.
+        regex_backend._extract_qml_signal_symbols(path, content, file_node_id, nodes, edges, seen_symbols)
+        regex_backend._extract_qml_handlers(path, content, known_paths, file_node_id, nodes, edges)
 
     return nodes, edges
