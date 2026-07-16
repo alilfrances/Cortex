@@ -4,10 +4,11 @@ import hashlib
 import os
 import subprocess
 from pathlib import Path
+from typing import NamedTuple
 
 from .gitutils import collect_recent_commits, discover_repo_root
-from .graph import build_graph
-from .models import SourceRecord
+from .graph import build_cochange_layer, build_file_layer, build_graph
+from .models import CommitRecord, SourceRecord
 from .store import CortexStore, default_db_path, write_repo_meta
 
 _TEXT_SUFFIXES = {
@@ -150,9 +151,107 @@ def _scan_sources(repo_root: Path) -> list[SourceRecord]:
                 size_bytes=stat.st_size,
                 modified_at=stat.st_mtime,
                 content_hash=_content_hash(content),
+                mtime_ns=stat.st_mtime_ns,
             )
         )
     return sorted(sources, key=lambda item: item.path)
+
+
+class IncrementalScan(NamedTuple):
+    new_sources: list[SourceRecord]
+    changed_sources: list[SourceRecord]
+    # Stat changed (e.g. touched by a build tool) but content_hash matched the
+    # stored hash — content-identical, so no graph rebuild is needed, but the
+    # new (size, mtime_ns) must still be persisted or every future run would
+    # keep re-reading this file. Counted as "unchanged" in the public result.
+    restat_sources: list[SourceRecord]
+    unchanged_count: int
+    current_paths: set[str]
+    fingerprint: str
+
+
+def _scan_sources_incremental(
+    repo_root: Path,
+    existing_stats: dict[str, tuple[int, int, str]],
+) -> IncrementalScan:
+    """Stat-first scan (P0-3): a file is only opened and hashed when its
+    (size_bytes, mtime_ns) differs from the stored record in `existing_stats`
+    (as returned by CortexStore.fetch_source_stats). This makes an incremental
+    refresh with N changed files do O(N) reads instead of O(repo) reads,
+    while still doing one O(repo) stat() pass — needed regardless, to detect
+    deletions and compute the repo fingerprint.
+
+    Caveat: a file rewritten with identical size within the same mtime_ns
+    tick (same nanosecond) would be missed by this check. That race is
+    accepted here (same tradeoff other stat-first tools such as git/watchman
+    make) — a full (non-incremental) ingest always re-reads and re-hashes
+    everything and is the escape hatch when exact correctness is required.
+    """
+    new_sources: list[SourceRecord] = []
+    changed_sources: list[SourceRecord] = []
+    restat_sources: list[SourceRecord] = []
+    unchanged_count = 0
+    current_paths: set[str] = set()
+    fingerprint_parts: list[str] = []
+
+    for path in _iter_candidate_files(repo_root):
+        if path.suffix.lower() not in _TEXT_SUFFIXES:
+            continue
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        rel_path = path.relative_to(repo_root).as_posix()
+        current_paths.add(rel_path)
+        fingerprint_parts.append(f"{rel_path}\0{stat.st_size}\0{stat.st_mtime_ns}")
+
+        stored = existing_stats.get(rel_path)
+        if stored is not None and stored[0] == stat.st_size and stored[1] == stat.st_mtime_ns:
+            unchanged_count += 1
+            continue
+
+        try:
+            content = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        content_hash = _content_hash(content)
+        record = SourceRecord(
+            path=rel_path,
+            content=content,
+            kind=_classify_path(path),
+            size_bytes=stat.st_size,
+            modified_at=stat.st_mtime,
+            content_hash=content_hash,
+            mtime_ns=stat.st_mtime_ns,
+        )
+        if stored is None:
+            new_sources.append(record)
+        elif stored[2] == content_hash:
+            # Stat moved (e.g. a re-checkout or a touch) but bytes didn't.
+            restat_sources.append(record)
+            unchanged_count += 1
+        else:
+            changed_sources.append(record)
+
+    fingerprint = hashlib.sha256("\n".join(sorted(fingerprint_parts)).encode("utf-8")).hexdigest()
+    return IncrementalScan(
+        new_sources=sorted(new_sources, key=lambda item: item.path),
+        changed_sources=sorted(changed_sources, key=lambda item: item.path),
+        restat_sources=sorted(restat_sources, key=lambda item: item.path),
+        unchanged_count=unchanged_count,
+        current_paths=current_paths,
+        fingerprint=fingerprint,
+    )
+
+
+def _commits_changed(store: CortexStore, repo_root: Path, commits: list[CommitRecord]) -> bool:
+    """True when the freshly-collected commit SHAs differ from what's stored
+    — the signal the incremental path uses to decide whether the COCHANGE
+    layer (which depends only on commit history, not file contents) needs a
+    rebuild at all (P0-3 item 4)."""
+    stored_shas = {c.sha for c in store.fetch_commits(repo_root)}
+    current_shas = {c.sha for c in commits}
+    return stored_shas != current_shas
 
 
 def ingest_repository(
@@ -165,55 +264,67 @@ def ingest_repository(
     repo_root = discover_repo_root(repo_path)
     store = CortexStore(db_path or default_db_path(repo_root))
     write_repo_meta(store.db_path, repo_root)
-    all_sources = _scan_sources(repo_root)
-    fingerprint = compute_repo_fingerprint(repo_root)
-    commits = collect_recent_commits(repo_root, commit_limit)
 
     if incremental:
-        existing = {s.path: s.content_hash for s in store.fetch_sources(repo_root)}
-        current_paths = {s.path for s in all_sources}
-        new_sources = [s for s in all_sources if s.path not in existing]
-        changed_sources = [
-            s for s in all_sources
-            if s.path in existing and s.content_hash != existing[s.path]
-        ]
-        deleted_paths = sorted(set(existing) - current_paths)
-        unchanged_count = len(all_sources) - len(new_sources) - len(changed_sources)
+        # Stat-first: only the changed/new files are opened and hashed. The
+        # full stat() walk (cheap — no file content read) is unavoidable
+        # since it's how deletions and the fingerprint are detected.
+        existing_stats = store.fetch_source_stats(repo_root)
+        scan = _scan_sources_incremental(repo_root, existing_stats)
+        deleted_paths = sorted(set(existing_stats) - scan.current_paths)
+        stale_paths = sorted({s.path for s in scan.changed_sources} | set(deleted_paths))
+        sources_to_process = scan.new_sources + scan.changed_sources
 
-        sources_to_process = new_sources + changed_sources
+        commits = collect_recent_commits(repo_root, commit_limit)
+        commits_changed = _commits_changed(store, repo_root, commits)
 
-        if sources_to_process or deleted_paths:
-            existing_nodes, existing_edges = store.fetch_graph(repo_root)
+        # Delta graph writes: delete only the rows owned by changed/deleted
+        # files, then append fresh rows for the changed/new files. Rows for
+        # every untouched file are never read or rewritten (P0-3 items 1-2).
+        if sources_to_process or stale_paths:
+            new_nodes, new_edges = build_file_layer(sources_to_process, scan.current_paths)
+            if stale_paths:
+                store.delete_graph_for_sources(repo_root, stale_paths)
+            store.append_graph(repo_root, new_nodes, new_edges)
 
-            stale_paths = {s.path for s in changed_sources} | set(deleted_paths)
-            filtered_nodes = [n for n in existing_nodes if n.source_ref not in stale_paths]
-            filtered_edges = [
-                e for e in existing_edges
-                if e.metadata.get("source_file") not in stale_paths
-            ]
-
-            new_nodes, new_edges = build_graph(sources_to_process, commits)
-
-            merged_nodes = filtered_nodes + new_nodes
-            merged_edges = filtered_edges + new_edges
-
+        if scan.restat_sources:
+            # Content identical, but (size, mtime_ns) moved — persist the new
+            # stat so future runs don't keep re-reading this file.
+            store.save_sources(repo_root, scan.restat_sources)
+        if sources_to_process:
             store.save_sources(repo_root, sources_to_process)
+        if deleted_paths:
             store.delete_sources(repo_root, deleted_paths)
+
+        # COCHANGE correctness (P0-3 item 4): co-change edges come from commit
+        # history, not file contents, so they're rebuilt only when commits
+        # actually changed -- or when a file was deleted, since a deleted
+        # file's cochange/touches edges would otherwise dangle forever.
+        if commits_changed or deleted_paths:
+            store.delete_cochange_layer(repo_root)
+            cochange_nodes, cochange_edges = build_cochange_layer(
+                commits, scan.current_paths, filter_cochange_pairs=True
+            )
+            store.append_graph(repo_root, cochange_nodes, cochange_edges)
+        if commits_changed:
             store.save_commits(repo_root, commits)
-            store.replace_graph(repo_root, merged_nodes, merged_edges)
-        store.set_repo_fingerprint(repo_root, fingerprint)
+
+        store.set_repo_fingerprint(repo_root, scan.fingerprint)
 
         return {
             "repo_path": str(repo_root),
-            "source_count": len(all_sources),
-            "new_files": len(new_sources),
-            "updated_files": len(changed_sources),
+            "source_count": len(scan.current_paths),
+            "new_files": len(scan.new_sources),
+            "updated_files": len(scan.changed_sources),
             "deleted_files": len(deleted_paths),
-            "unchanged_files": unchanged_count,
+            "unchanged_files": scan.unchanged_count,
             "commit_count": len(commits),
             "enrichment_enabled": enrich,
         }
 
+    all_sources = _scan_sources(repo_root)
+    fingerprint = compute_repo_fingerprint(repo_root)
+    commits = collect_recent_commits(repo_root, commit_limit)
     nodes, edges = build_graph(all_sources, commits)
 
     store.reset_repo(repo_root, fingerprint=fingerprint)

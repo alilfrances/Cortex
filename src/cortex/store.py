@@ -89,6 +89,7 @@ class CortexStore:
                 modified_at REAL NOT NULL,
                 content TEXT NOT NULL,
                 content_hash TEXT NOT NULL DEFAULT '',
+                mtime_ns INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY (repo_path, path)
             );
 
@@ -126,6 +127,7 @@ class CortexStore:
                 confidence TEXT NOT NULL DEFAULT 'EXTRACTED',
                 weight REAL NOT NULL,
                 metadata_json TEXT NOT NULL,
+                source_file TEXT NOT NULL DEFAULT '',
                 PRIMARY KEY (repo_path, edge_id)
             );
 
@@ -195,6 +197,11 @@ class CortexStore:
             "ALTER TABLE graph_nodes ADD COLUMN span_start INTEGER",
             "ALTER TABLE graph_nodes ADD COLUMN span_end INTEGER",
             "ALTER TABLE repos ADD COLUMN fingerprint TEXT NOT NULL DEFAULT ''",
+            # P0-3 fast-path incremental ingest: nanosecond mtime for stat-first
+            # scans, and a real source_file column on edges so delta deletes
+            # don't need a json_extract() scan.
+            "ALTER TABLE sources ADD COLUMN mtime_ns INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE graph_edges ADD COLUMN source_file TEXT NOT NULL DEFAULT ''",
         ]
         for sql in migrations:
             try:
@@ -202,6 +209,20 @@ class CortexStore:
                 self.connection.commit()
             except Exception:
                 pass  # column already exists
+
+        # Index creation happens after the ALTERs above so it's safe to run
+        # unconditionally on both fresh and upgraded databases (the columns
+        # they reference are guaranteed to exist by this point).
+        indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_nodes_source_ref ON graph_nodes(repo_path, source_ref)",
+            "CREATE INDEX IF NOT EXISTS idx_edges_source_file ON graph_edges(repo_path, source_file)",
+        ]
+        for sql in indexes:
+            try:
+                self.connection.execute(sql)
+                self.connection.commit()
+            except Exception:
+                pass  # index already exists / column not ready in some odd legacy state
 
     def reset_repo(self, repo_path: Path, fingerprint: str = '') -> None:
         repo_key = str(repo_path.resolve())
@@ -253,8 +274,8 @@ class CortexStore:
         with self.connection:
             self.connection.executemany(
                 '''
-                INSERT OR REPLACE INTO sources(repo_path, path, kind, size_bytes, modified_at, content, content_hash)
-                VALUES(?, ?, ?, ?, ?, ?, ?)
+                INSERT OR REPLACE INTO sources(repo_path, path, kind, size_bytes, modified_at, content, content_hash, mtime_ns)
+                VALUES(?, ?, ?, ?, ?, ?, ?, ?)
                 ''',
                 [
                     (
@@ -265,6 +286,7 @@ class CortexStore:
                         source.modified_at,
                         source.content,
                         source.content_hash,
+                        source.mtime_ns,
                     )
                     for source in sources
                 ],
@@ -278,12 +300,69 @@ class CortexStore:
                 [(repo_key, path) for path in paths],
             )
 
+    def fetch_source_stats(self, repo_path: Path) -> dict[str, tuple[int, int, str]]:
+        """Lightweight (size_bytes, mtime_ns, content_hash) lookup for the
+        stat-first incremental scan — does not select the `content` column,
+        so this is cheap even for large repos (P0-3)."""
+        repo_key = str(repo_path.resolve())
+        rows = self.connection.execute(
+            'SELECT path, size_bytes, mtime_ns, content_hash FROM sources WHERE repo_path = ?',
+            (repo_key,),
+        ).fetchall()
+        return {row['path']: (row['size_bytes'], row['mtime_ns'], row['content_hash']) for row in rows}
+
     def replace_graph(self, repo_path: Path, nodes: list[GraphNode], edges: list[GraphEdge]) -> None:
-        """Replace the repo graph wholesale — save_graph upserts, so stale rows survive it."""
+        """Replace the repo graph wholesale — save_graph upserts, so stale rows survive it.
+
+        O(repo) per call: still used by full (non-incremental) ingest. The
+        incremental path uses delete_graph_for_sources + append_graph instead
+        so an unrelated file's rows are never rewritten (P0-3).
+        """
         repo_key = str(repo_path.resolve())
         with self.connection:
             self.connection.execute('DELETE FROM graph_nodes WHERE repo_path = ?', (repo_key,))
             self.connection.execute('DELETE FROM graph_edges WHERE repo_path = ?', (repo_key,))
+        self.save_graph(repo_path, nodes, edges)
+
+    def delete_graph_for_sources(self, repo_path: Path, paths: list[str]) -> None:
+        """Delete graph rows owned by specific source files: nodes by
+        source_ref, edges by their tagged source_file. COCHANGE-layer edges
+        (cochange/touches) are not owned by a single file and are untouched
+        here — see delete_cochange_layer."""
+        if not paths:
+            return
+        repo_key = str(repo_path.resolve())
+        with self.connection:
+            self.connection.executemany(
+                'DELETE FROM graph_nodes WHERE repo_path = ? AND source_ref = ?',
+                [(repo_key, path) for path in paths],
+            )
+            self.connection.executemany(
+                'DELETE FROM graph_edges WHERE repo_path = ? AND source_file = ?',
+                [(repo_key, path) for path in paths],
+            )
+
+    def delete_cochange_layer(self, repo_path: Path) -> None:
+        """Drop the COCHANGE layer (cochange pair edges, commit nodes, and
+        commit->file touches edges) so it can be rebuilt fresh. Used by the
+        incremental path only when commit history changed or a file was
+        deleted, to avoid dangling references (P0-3)."""
+        repo_key = str(repo_path.resolve())
+        with self.connection:
+            self.connection.execute(
+                "DELETE FROM graph_edges WHERE repo_path = ? AND layer = 'COCHANGE'",
+                (repo_key,),
+            )
+            self.connection.execute(
+                "DELETE FROM graph_nodes WHERE repo_path = ? AND kind = 'commit'",
+                (repo_key,),
+            )
+
+    def append_graph(self, repo_path: Path, nodes: list[GraphNode], edges: list[GraphEdge]) -> None:
+        """Write new/updated graph rows without touching unrelated repo rows.
+        This is an upsert (same as save_graph) — the name documents intent at
+        incremental call sites: pair with delete_graph_for_sources /
+        delete_cochange_layer first so this only ever "appends" fresh state."""
         self.save_graph(repo_path, nodes, edges)
 
     def save_commits(self, repo_path: Path, commits: list[CommitRecord]) -> None:
@@ -326,8 +405,8 @@ class CortexStore:
             )
             self.connection.executemany(
                 '''
-                INSERT OR REPLACE INTO graph_edges(repo_path, edge_id, source, target, relation, layer, confidence, weight, metadata_json)
-                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT OR REPLACE INTO graph_edges(repo_path, edge_id, source, target, relation, layer, confidence, weight, metadata_json, source_file)
+                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''',
                 [
                     (
@@ -340,6 +419,7 @@ class CortexStore:
                         edge.confidence,
                         edge.weight,
                         json.dumps(edge.metadata),
+                        edge.metadata.get('source_file', '') or '',
                     )
                     for edge in edges
                 ],
@@ -388,7 +468,7 @@ class CortexStore:
     def fetch_sources(self, repo_path: Path) -> list[SourceRecord]:
         repo_key = str(repo_path.resolve())
         rows = self.connection.execute(
-            'SELECT path, content, kind, size_bytes, modified_at, content_hash FROM sources WHERE repo_path = ? ORDER BY path',
+            'SELECT path, content, kind, size_bytes, modified_at, content_hash, mtime_ns FROM sources WHERE repo_path = ? ORDER BY path',
             (repo_key,),
         ).fetchall()
         return [
@@ -399,6 +479,7 @@ class CortexStore:
                 size_bytes=row['size_bytes'],
                 modified_at=row['modified_at'],
                 content_hash=row['content_hash'],
+                mtime_ns=row['mtime_ns'],
             )
             for row in rows
         ]
