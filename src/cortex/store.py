@@ -239,6 +239,21 @@ class CortexStore:
                 baseline_tokens INTEGER NOT NULL,
                 meta_json TEXT NOT NULL DEFAULT '{}'
             );
+
+            -- P1-3 read-through result cache for cortex_query/cortex_impact/
+            -- cortex_overview: `cache_key` is sha256(fingerprint + tool +
+            -- canonical_json(args)) (see mcp/tools._cache_key), so any repo
+            -- content change (which changes the fingerprint) automatically
+            -- misses every existing key -- no explicit invalidation needed.
+            -- A brand-new table only needs CREATE TABLE IF NOT EXISTS -- no
+            -- ALTER migration required for upgraded databases.
+            CREATE TABLE IF NOT EXISTS query_cache (
+                repo_path TEXT NOT NULL,
+                cache_key TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                payload_json TEXT NOT NULL,
+                PRIMARY KEY (repo_path, cache_key)
+            );
             '''
         )
         self.connection.commit()
@@ -337,6 +352,7 @@ class CortexStore:
             "CREATE INDEX IF NOT EXISTS idx_nodes_source_ref ON graph_nodes(repo_path, source_ref)",
             "CREATE INDEX IF NOT EXISTS idx_edges_source_file ON graph_edges(repo_path, source_file)",
             "CREATE INDEX IF NOT EXISTS idx_tool_usage_repo_time ON tool_usage(repo_path, called_at)",
+            "CREATE INDEX IF NOT EXISTS idx_query_cache_repo_time ON query_cache(repo_path, created_at)",
         ]
         for sql in indexes:
             try:
@@ -1054,6 +1070,82 @@ class CortexStore:
             }
             for row in rows
         ]
+
+    def get_query_cache(self, repo_path: Path, cache_key: str) -> str | None:
+        """Look up one P1-3 cached tool payload (already-serialized JSON
+        string of the full MCP `{"content": [...], "isError": ...}` result).
+        Returns None on a miss -- callers (mcp/tools._cache_get) treat any
+        exception here as a miss too, so a broken cache never blocks a
+        query."""
+        repo_key = str(repo_path.resolve())
+        row = self.connection.execute(
+            "SELECT payload_json FROM query_cache WHERE repo_path = ? AND cache_key = ?",
+            (repo_key, cache_key),
+        ).fetchone()
+        return None if row is None else str(row["payload_json"])
+
+    def set_query_cache(self, repo_path: Path, cache_key: str, payload_json: str) -> None:
+        """Write/refresh one P1-3 cache row. Upsert so a re-write of the same
+        key (e.g. a race between two callers) just bumps created_at instead
+        of erroring on the PRIMARY KEY."""
+        import time as _time
+        repo_key = str(repo_path.resolve())
+        with self.connection:
+            self.connection.execute(
+                """
+                INSERT INTO query_cache(repo_path, cache_key, created_at, payload_json)
+                VALUES(?, ?, ?, ?)
+                ON CONFLICT(repo_path, cache_key) DO UPDATE SET
+                    created_at = excluded.created_at,
+                    payload_json = excluded.payload_json
+                """,
+                (repo_key, cache_key, int(_time.time()), payload_json),
+            )
+
+    def prune_query_cache(self, repo_path: Path, max_age_days: int = 30, max_rows: int = 200) -> int:
+        """Prune the P1-3 query_cache table for one repo (called from
+        `cortex gc` -- see cli.prune_query_caches).
+
+        Two passes, both bounding the table size so it can never grow
+        unbounded across a long-lived MCP session:
+        1. delete rows older than `max_age_days` (default 30d -- long
+           enough that a cache hit is still useful across a typical work
+           week, short enough that abandoned repos don't accumulate rows
+           forever);
+        2. if more than `max_rows` remain for this repo (default 200 -- a
+           few hundred KB of JSON at typical bundle sizes), delete the
+           oldest excess so the table stays small even for a repo queried
+           continuously within the age window.
+
+        Returns the total number of rows deleted.
+        """
+        import time as _time
+        repo_key = str(repo_path.resolve())
+        cutoff = int(_time.time()) - max_age_days * 86400
+        deleted = 0
+        with self.connection:
+            cursor = self.connection.execute(
+                "DELETE FROM query_cache WHERE repo_path = ? AND created_at < ?",
+                (repo_key, cutoff),
+            )
+            deleted += max(cursor.rowcount, 0)
+            row = self.connection.execute(
+                "SELECT COUNT(*) AS n FROM query_cache WHERE repo_path = ?",
+                (repo_key,),
+            ).fetchone()
+            total = row["n"] if row else 0
+            excess = total - max_rows
+            if excess > 0:
+                stale_keys = self.connection.execute(
+                    "SELECT cache_key FROM query_cache WHERE repo_path = ? ORDER BY created_at ASC LIMIT ?",
+                    (repo_key, excess),
+                ).fetchall()
+                self.connection.executemany(
+                    "DELETE FROM query_cache WHERE repo_path = ? AND cache_key = ?",
+                    [(repo_key, r["cache_key"]) for r in stale_keys],
+                )
+                deleted += len(stale_keys)
+        return deleted
 
     def fetch_latest_bundle(self, repo_path: Path) -> RetrievalBundle | None:
         repo_key = str(repo_path.resolve())

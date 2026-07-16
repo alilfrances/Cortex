@@ -76,6 +76,43 @@ def gc_data_dirs(prune: bool = False) -> dict:
     return result
 
 
+def prune_query_caches() -> dict:
+    """Prune the P1-3 `query_cache` table for every active central data dir.
+
+    Unlike orphan-dir deletion (which needs `--prune` since it destroys an
+    entire repo's index), this always runs as part of `cortex gc`: pruning
+    the cache is cheap, bounded, and never loses anything an agent can't
+    just recompute -- see `CortexStore.prune_query_cache` for the default
+    retention (30 days / 200 rows per repo). Best-effort per repo: a
+    corrupt or locked db is skipped rather than failing the whole `gc` run.
+    """
+    result: dict[str, list[dict[str, str | int]]] = {"pruned": []}
+    base = data_root()
+    if not base.is_dir():
+        return result
+    for entry in sorted(base.iterdir()):
+        if not entry.is_dir():
+            continue
+        meta_path = entry / "meta.json"
+        db_path = entry / "cortex.db"
+        if not meta_path.exists() or not db_path.exists():
+            continue
+        try:
+            repo_path = json.loads(meta_path.read_text(encoding="utf-8")).get("repo_path")
+        except (json.JSONDecodeError, OSError):
+            continue
+        if not repo_path:
+            continue
+        try:
+            store = CortexStore(db_path)
+            deleted = store.prune_query_cache(Path(repo_path))
+        except Exception:
+            continue
+        if deleted:
+            result["pruned"].append({"repo_path": repo_path, "rows_deleted": deleted})
+    return result
+
+
 def _watch_root(repo_path: Path) -> Path:
     try:
         return discover_repo_root(repo_path)
@@ -199,7 +236,9 @@ def build_parser() -> argparse.ArgumentParser:
     refresh_parser.add_argument("--commits", type=int, default=50)
     refresh_parser.add_argument("--db", type=Path, default=None)
 
-    gc_parser = subparsers.add_parser("gc", help="List or prune central data dirs whose repo is gone")
+    gc_parser = subparsers.add_parser(
+        "gc", help="List/prune orphaned data dirs and prune the per-repo query cache"
+    )
     gc_parser.add_argument("--prune", action="store_true", help="Delete orphaned data dirs")
 
     benchmark_parser = subparsers.add_parser("benchmark", help="Measure token reduction against full-corpus reading")
@@ -317,7 +356,9 @@ def main() -> None:
         return
 
     if args.command == "gc":
-        print(json.dumps(gc_data_dirs(prune=args.prune), indent=2))
+        output = gc_data_dirs(prune=args.prune)
+        output["query_cache"] = prune_query_caches()
+        print(json.dumps(output, indent=2))
         return
 
     if args.command == "benchmark":

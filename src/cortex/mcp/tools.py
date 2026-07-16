@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -226,6 +227,58 @@ def _ensure_fresh(store: CortexStore, repo_root: Path) -> dict[str, Any]:
     return status
 
 
+def _query_cache_enabled() -> bool:
+    """CORTEX_QUERY_CACHE=0 kill-switch for the P1-3 result cache -- disables
+    both reads and writes, so a suspect cache can be turned off without
+    restarting anything else."""
+    return os.environ.get("CORTEX_QUERY_CACHE", "1") != "0"
+
+
+def _cache_key(fingerprint: str, tool: str, arguments: dict[str, Any]) -> str:
+    """cache_key = sha256(fingerprint + tool + canonical_json(args)) (P1-3).
+
+    `repo_path` is excluded from the hashed args: it already selects which
+    repo's cache rows a lookup can see (CortexStore.get/set_query_cache key
+    on the resolved repo_path column), and its raw string form (relative
+    vs. absolute, trailing slash, ...) isn't canonical -- keying on it would
+    make equivalent calls miss each other for a reason unrelated to what
+    they actually ask for. Every other argument is included, in particular
+    `response_format`: it changes the payload shape, so concise and
+    detailed calls must land on different keys.
+    """
+    cacheable_args = {key: value for key, value in arguments.items() if key != "repo_path"}
+    canonical = json.dumps(cacheable_args, sort_keys=True, default=str)
+    digest_input = f"{fingerprint}\x1e{tool}\x1e{canonical}".encode("utf-8")
+    return hashlib.sha256(digest_input).hexdigest()
+
+
+def _cache_get(store: CortexStore, repo_root: Path, cache_key: str) -> dict[str, Any] | None:
+    """Read-through cache lookup. Any failure (locked DB, corrupt JSON, ...)
+    is treated as a miss -- a broken cache must never break a query."""
+    if not _query_cache_enabled():
+        return None
+    try:
+        raw = store.get_query_cache(repo_root, cache_key)
+        if raw is None:
+            return None
+        return json.loads(raw)
+    except Exception:
+        return None
+
+
+def _cache_set(store: CortexStore, repo_root: Path, cache_key: str, result: dict[str, Any]) -> None:
+    """Write-through cache store. Never caches an error response (a
+    transient failure shouldn't be replayed on the next identical call),
+    and a write failure is swallowed -- caching is an optimization, not a
+    correctness requirement."""
+    if not _query_cache_enabled() or result.get("isError"):
+        return
+    try:
+        store.set_query_cache(repo_root, cache_key, json.dumps(result))
+    except Exception:
+        pass
+
+
 def _bundle_why(
     item: dict[str, Any],
     terms: set[str],
@@ -317,7 +370,15 @@ def _call_query(arguments: dict[str, Any]) -> dict[str, Any]:
     if error is not None:
         return _content(error, is_error=True)
     assert store is not None
+    # P1-3: fingerprint the cache key on the fingerprint _ensure_fresh just
+    # settled on (post auto-refresh), not the pre-refresh one -- otherwise a
+    # stale-then-refreshed call would cache under a fingerprint that's
+    # already wrong and never be hit again.
     status = _ensure_fresh(store, repo_root)
+    cache_key = _cache_key(status["current_fingerprint"], "cortex_query", arguments)
+    cached = _cache_get(store, repo_root, cache_key)
+    if cached is not None:
+        return cached
     task = str(arguments.get("task", ""))
     bundle = generate_bundle(
         repo_path=repo_root,
@@ -337,7 +398,9 @@ def _call_query(arguments: dict[str, Any]) -> dict[str, Any]:
         item["why"] = _bundle_why(item, terms, seed_paths, edges)
     response_format = _response_format(arguments)
     payload = bundle if response_format == "detailed" else _concise_query_bundle(bundle)
-    return _content(_format_payload(payload, status, response_format))
+    result = _content(_format_payload(payload, status, response_format))
+    _cache_set(store, repo_root, cache_key, result)
+    return result
 
 
 def _call_overview(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -347,8 +410,14 @@ def _call_overview(arguments: dict[str, Any]) -> dict[str, Any]:
         return _content(error, is_error=True)
     assert store is not None
     status = _ensure_fresh(store, repo_root)
+    cache_key = _cache_key(status["current_fingerprint"], "cortex_overview", arguments)
+    cached = _cache_get(store, repo_root, cache_key)
+    if cached is not None:
+        return cached
     response_format = _response_format(arguments)
-    return _content(_format_payload({"repo_path": str(repo_root), "report": generate_report(repo_root)}, status, response_format))
+    result = _content(_format_payload({"repo_path": str(repo_root), "report": generate_report(repo_root)}, status, response_format))
+    _cache_set(store, repo_root, cache_key, result)
+    return result
 
 
 def _call_impact(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -358,6 +427,10 @@ def _call_impact(arguments: dict[str, Any]) -> dict[str, Any]:
         return _content(error, is_error=True)
     assert store is not None
     status = _ensure_fresh(store, repo_root)
+    cache_key = _cache_key(status["current_fingerprint"], "cortex_impact", arguments)
+    cached = _cache_get(store, repo_root, cache_key)
+    if cached is not None:
+        return cached
     nodes, edges = store.fetch_graph(repo_root)
     response_format = _response_format(arguments)
     try:
@@ -369,6 +442,9 @@ def _call_impact(arguments: dict[str, Any]) -> dict[str, Any]:
             budget=int(arguments.get("budget", 2000)),
         )
     except UnknownPathError as exc:
+        # Not cached: an unresolved path today may resolve after the next
+        # refresh, and error responses are excluded from the cache anyway
+        # (see _cache_set).
         return _content(
             _format_payload(
                 {
@@ -381,11 +457,13 @@ def _call_impact(arguments: dict[str, Any]) -> dict[str, Any]:
             ),
             is_error=True,
         )
-    return _content(_format_payload(
+    result = _content(_format_payload(
         {"repo_path": str(repo_root), "items": items, "truncated": truncated, "returned_count": len(items)},
         status,
         response_format,
     ))
+    _cache_set(store, repo_root, cache_key, result)
+    return result
 
 
 def _call_search(arguments: dict[str, Any]) -> dict[str, Any]:
