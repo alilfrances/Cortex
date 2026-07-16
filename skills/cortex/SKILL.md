@@ -20,6 +20,7 @@ Use Cortex when working inside an indexed repository and you need code context, 
 6. Use `cortex_search_text` for body text — string literals, error messages, comments, Markdown prose — that `cortex_search_symbols` can't find because it only matches symbol names/signatures/paths, not file contents.
 7. Default to `response_format: "concise"`; pass `response_format: "detailed"` only when you need provenance, fingerprints, full metadata, or detailed why-edges.
 8. If a tool reports `stale: true`, call `cortex_refresh` or rerun the read tool after refresh.
+9. Watch for a `_meta` object on any response (`index_age_seconds`, `indexed_at`, `fingerprint_fresh`, and optionally `auto_refreshed`/`cached`/`saved_tokens`). `detailed` responses always carry it; a `concise` response only carries it when something is worth acting on, so its mere presence is itself a signal — check `fingerprint_fresh`/`auto_refreshed` before trusting a concise result on a repo you suspect just changed.
 
 ## Tools
 

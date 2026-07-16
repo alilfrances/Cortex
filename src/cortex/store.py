@@ -401,6 +401,23 @@ class CortexStore:
                 (repo_key, int(time.time()), fingerprint),
             )
 
+    def get_repo_indexed_at(self, repo_path: Path) -> int:
+        """Epoch seconds `repos.updated_at` was last set for this repo.
+
+        Bumped by `reset_repo`/`set_repo_fingerprint` on every full or
+        incremental ingest, so this is the source of truth for P1-5's
+        `_meta.indexed_at` / `_meta.index_age_seconds` (mcp/tools._staleness).
+        Returns 0 if the repo has no row yet -- shouldn't normally happen
+        once a Cortex database exists for it, but callers must degrade
+        gracefully rather than raise.
+        """
+        repo_key = str(repo_path.resolve())
+        row = self.connection.execute(
+            "SELECT updated_at FROM repos WHERE repo_path = ?",
+            (repo_key,),
+        ).fetchone()
+        return 0 if row is None else int(row["updated_at"])
+
     def get_repo_fingerprint(self, repo_path: Path) -> str:
         repo_key = str(repo_path.resolve())
         row = self.connection.execute(
@@ -1109,10 +1126,18 @@ class CortexStore:
 
     def get_query_cache(self, repo_path: Path, cache_key: str) -> str | None:
         """Look up one P1-3 cached tool payload (already-serialized JSON
-        string of the full MCP `{"content": [...], "isError": ...}` result).
-        Returns None on a miss -- callers (mcp/tools._cache_get) treat any
-        exception here as a miss too, so a broken cache never blocks a
-        query."""
+        string of the tool's bare response DATA -- items/report/etc, *not*
+        the status/`_meta` envelope). Returns None on a miss -- callers
+        (mcp/tools._cache_get) treat any exception here as a miss too, so a
+        broken cache never blocks a query.
+
+        P1-5 note: this used to cache the fully-formatted MCP result
+        (payload + status merged), which meant a cache hit replayed
+        write-time `auto_refreshed`/staleness data verbatim. Callers now
+        strip status/`_meta` before writing and rebuild `_meta` fresh
+        (with `cached: true` and the current index age) after every
+        lookup, hit or miss -- see mcp/tools._format_payload.
+        """
         repo_key = str(repo_path.resolve())
         row = self.connection.execute(
             "SELECT payload_json FROM query_cache WHERE repo_path = ? AND cache_key = ?",

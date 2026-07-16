@@ -191,29 +191,36 @@ def test_estimate_baseline_references_sums_files_stripping_line_numbers(tmp_path
 
 
 def test_estimate_baseline_search_symbols_equals_detailed_rendering(tmp_path, monkeypatch):
+    # P1-5: a `detailed` response always carries a `_meta` envelope now.
+    # `_estimate_baseline`'s internal `_detailed_rendering_tokens` prices
+    # the DATA cost of the detailed rendering only (see that function's
+    # docstring) and excludes `_meta` from the count -- so the expected
+    # value computed here must exclude it too via `_without_meta`, or the
+    # two numbers would diverge by `_meta`'s own (irrelevant) size.
     repo = _repo_with_index(tmp_path, monkeypatch)
     store = CortexStore(default_db_path(repo))
     args = {"repo_path": str(repo), "query": "login"}
 
     concise_payload = _payload(call_tool("cortex_search_symbols", args))
     detailed_payload = _payload(call_tool("cortex_search_symbols", {**args, "response_format": "detailed"}))
-    expected = count_text_tokens(json.dumps(detailed_payload))
+    expected = count_text_tokens(json.dumps(mcp_tools._without_meta(detailed_payload)))
 
     baseline = mcp_tools._estimate_baseline("cortex_search_symbols", args, concise_payload, store, repo)
 
     assert baseline == expected
     # Detailed adds the "why" field per item, so it must cost more than concise.
-    assert expected > count_text_tokens(json.dumps(concise_payload))
+    assert expected > count_text_tokens(json.dumps(mcp_tools._without_meta(concise_payload)))
 
 
 def test_estimate_baseline_overview_equals_detailed_rendering(tmp_path, monkeypatch):
+    # See the P1-5 note in test_estimate_baseline_search_symbols_equals_detailed_rendering.
     repo = _repo_with_index(tmp_path, monkeypatch)
     store = CortexStore(default_db_path(repo))
     args = {"repo_path": str(repo)}
 
     concise_payload = _payload(call_tool("cortex_overview", args))
     detailed_payload = _payload(call_tool("cortex_overview", {**args, "response_format": "detailed"}))
-    expected = count_text_tokens(json.dumps(detailed_payload))
+    expected = count_text_tokens(json.dumps(mcp_tools._without_meta(detailed_payload)))
 
     baseline = mcp_tools._estimate_baseline("cortex_overview", args, concise_payload, store, repo)
 
@@ -221,13 +228,14 @@ def test_estimate_baseline_overview_equals_detailed_rendering(tmp_path, monkeypa
 
 
 def test_estimate_baseline_relations_adds_referenced_file_tokens_to_detailed_render(tmp_path, monkeypatch):
+    # See the P1-5 note in test_estimate_baseline_search_symbols_equals_detailed_rendering.
     repo = _repo_with_index(tmp_path, monkeypatch)
     store = CortexStore(default_db_path(repo))
     args = {"repo_path": str(repo), "relation": "imports"}
 
     payload = _payload(call_tool("cortex_relations", args))
     detailed_payload = _payload(call_tool("cortex_relations", {**args, "response_format": "detailed"}))
-    detailed_tokens = count_text_tokens(json.dumps(detailed_payload))
+    detailed_tokens = count_text_tokens(json.dumps(mcp_tools._without_meta(detailed_payload)))
 
     referenced_paths = set()
     for item in payload["items"]:

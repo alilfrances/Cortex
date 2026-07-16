@@ -151,36 +151,87 @@ def test_file_edit_invalidates_cache_and_recomputes(tmp_path, monkeypatch):
     assert calls["n"] == 2, "edited source changes the fingerprint, so this must be a cache miss"
 
 
-# --- (c) a cache hit is byte-identical to a fresh computation ---
+# --- (c) a cache hit's DATA is byte-identical to a fresh computation ---
+#
+# P1-5 changed what "byte-identical" means here. `_meta` (index age,
+# `cached` flag, folded-in `saved_tokens`) is now rebuilt fresh on every
+# call -- including a cache hit -- specifically so a hit's `_meta` is never
+# a stale replay of whatever was true when the entry was written (the P1-3
+# caveat P1-5 closes; see mcp/tools._cache_get's docstring). That means a
+# miss and a hit are expected to differ in `_meta` (at minimum, `cached`),
+# so these tests now compare the payload with `_meta` excluded via
+# `mcp_tools._without_meta`, and separately assert the `_meta.cached` flag
+# itself on each side.
 
 
 def test_cached_payload_is_byte_identical_to_fresh_recompute(tmp_path, monkeypatch):
     repo = _repo_with_index(tmp_path, monkeypatch)
     args = {"repo_path": str(repo), "task": "login billing"}
 
-    first = call_tool("cortex_query", args)  # cache miss -> fresh compute, writes cache
-    second = call_tool("cortex_query", args)  # cache hit
-    assert first == second
+    first = _payload(call_tool("cortex_query", args))  # cache miss -> fresh compute, writes cache
+    second = _payload(call_tool("cortex_query", args))  # cache hit
+
+    assert mcp_tools._without_meta(first) == mcp_tools._without_meta(second)
+    assert first.get("_meta", {}).get("cached") is not True
+    assert second["_meta"]["cached"] is True
 
     # Confirm the hit matches a genuinely independent fresh computation too,
     # not just the entry it happened to write.
     monkeypatch.setenv("CORTEX_QUERY_CACHE", "0")
-    third = call_tool("cortex_query", args)  # caching disabled -> guaranteed fresh
-    assert third == second
+    third = _payload(call_tool("cortex_query", args))  # caching disabled -> guaranteed fresh
+    assert mcp_tools._without_meta(third) == mcp_tools._without_meta(second)
+    assert third.get("_meta", {}).get("cached") is not True
 
 
 def test_cached_impact_and_overview_are_byte_identical(tmp_path, monkeypatch):
     repo = _repo_with_index(tmp_path, monkeypatch)
 
     impact_args = {"repo_path": str(repo), "path": "auth.py"}
-    first_impact = call_tool("cortex_impact", impact_args)
-    second_impact = call_tool("cortex_impact", impact_args)
-    assert first_impact == second_impact
+    first_impact = _payload(call_tool("cortex_impact", impact_args))
+    second_impact = _payload(call_tool("cortex_impact", impact_args))
+    assert mcp_tools._without_meta(first_impact) == mcp_tools._without_meta(second_impact)
+    assert second_impact["_meta"]["cached"] is True
 
     overview_args = {"repo_path": str(repo)}
-    first_overview = call_tool("cortex_overview", overview_args)
-    second_overview = call_tool("cortex_overview", overview_args)
-    assert first_overview == second_overview
+    first_overview = _payload(call_tool("cortex_overview", overview_args))
+    second_overview = _payload(call_tool("cortex_overview", overview_args))
+    assert mcp_tools._without_meta(first_overview) == mcp_tools._without_meta(second_overview)
+    assert second_overview["_meta"]["cached"] is True
+
+
+# --- (c2) P1-5 fix: a cache hit shows the CURRENT index age, never a
+# frozen write-time snapshot or a replayed auto_refreshed block ---
+
+
+def test_cache_hit_shows_current_index_age_not_frozen_write_time_meta(tmp_path, monkeypatch):
+    """This is the P1-3 caveat P1-5 was written to close: previously the
+    cache stored the fully status-merged result, so a hit echoed whatever
+    `auto_refreshed`/index-age snapshot was true when the entry was first
+    written. `_meta` must now be assembled fresh after every cache lookup,
+    so a hit's `index_age_seconds` reflects the CURRENT wall clock (even
+    though the underlying repo/index content -- and therefore the cache
+    key -- hasn't changed) and never carries a stale `auto_refreshed`.
+    """
+    repo = _repo_with_index(tmp_path, monkeypatch)
+    args = {"repo_path": str(repo), "task": "login billing", "response_format": "detailed"}
+
+    fake_now = {"t": time.time()}
+    monkeypatch.setattr(time, "time", lambda: fake_now["t"])
+
+    first = _payload(call_tool("cortex_query", args))  # cache miss
+    assert first["_meta"]["cached"] is not True
+    assert "auto_refreshed" not in first["_meta"]
+    first_age = first["_meta"]["index_age_seconds"]
+
+    fake_now["t"] += 120  # advance the clock; nothing about the repo/index changes
+
+    second = _payload(call_tool("cortex_query", args))  # cache hit, same fingerprint
+    assert second["_meta"]["cached"] is True
+    assert "auto_refreshed" not in second["_meta"]
+    assert second["_meta"]["index_age_seconds"] == first_age + 120, (
+        "a cache hit must report the CURRENT index age, not the age frozen "
+        "at write time"
+    )
 
 
 # --- (d) CORTEX_QUERY_CACHE=0 disables both read and write ---
