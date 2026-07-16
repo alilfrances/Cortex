@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from ..bundle import _tokenize_query, generate_bundle
+from ..bundle import _render_skeleton, _render_symbol_skeleton, _tokenize_query, generate_bundle
 from ..gitutils import discover_repo_root
 from ..impact import UnknownPathError, rank_file_impact
 from ..ingest import compute_repo_fingerprint, ingest_repository
@@ -69,16 +69,32 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "cortex_read_symbol",
-        "description": "Returns numbered source lines for one symbol span from the index. Use after cortex_search_symbols, instead of reading a whole file. Example: {\"symbol\":\"symbol:src/cortex/bundle.py:generate_bundle\",\"budget\":2000}.",
+        "description": "Returns source for one symbol span from the index. Use after cortex_search_symbols, instead of reading a whole file. mode=\"full\" (default) returns numbered source lines; mode=\"skeleton\" returns the symbol's signature plus nested member signatures with bodies elided; mode=\"signature\" returns just the signature line and span metadata. Example: {\"symbol\":\"symbol:src/cortex/bundle.py:generate_bundle\",\"budget\":2000,\"mode\":\"skeleton\"}.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "repo_path": {"type": "string"},
                 "symbol": {"type": "string"},
+                "mode": {"type": "string", "enum": ["full", "skeleton", "signature"], "default": "full"},
                 "budget": {"type": "integer", "default": 2000},
                 "response_format": {"type": "string", "enum": ["concise", "detailed"], "default": "concise"},
             },
             "required": ["symbol"],
+        },
+    },
+    {
+        "name": "cortex_read_file",
+        "description": "Direct replacement for the built-in Read tool on an INDEXED source file. mode=\"skeleton\" (default) returns import/include lines plus every top-level symbol's signature with bodies elided -- use this instead of raw Read for orientation on a file you haven't inspected yet. mode=\"full\" returns the exact indexed file content. Falls back to full content when the file has no indexed symbols (e.g. prose). Example: {\"path\":\"src/cortex/bundle.py\",\"budget\":4000}.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "repo_path": {"type": "string"},
+                "path": {"type": "string"},
+                "mode": {"type": "string", "enum": ["skeleton", "full"], "default": "skeleton"},
+                "budget": {"type": "integer", "default": 4000},
+                "response_format": {"type": "string", "enum": ["concise", "detailed"], "default": "concise"},
+            },
+            "required": ["path"],
         },
     },
     {
@@ -650,12 +666,43 @@ def _call_read_symbol(arguments: dict[str, Any]) -> dict[str, Any]:
         )
     if node.span_start is None or node.span_end is None:
         return _content({"error": "missing_span", "message": f"Symbol {node.node_id} has no stored span."}, is_error=True)
+
+    # P1-6: mode="full" is the pre-existing, unmodified path below -- kept
+    # byte-identical (no new "mode" key on the payload) so a caller that
+    # omits `mode` sees exactly today's response.
+    mode = str(arguments.get("mode", "full"))
+    if mode not in ("full", "skeleton", "signature"):
+        mode = "full"
+
+    if mode == "signature":
+        payload = {
+            "repo_path": str(repo_root),
+            "node_id": node.node_id,
+            "path": node.source_ref,
+            "span_start": node.span_start,
+            "span_end": node.span_end,
+            "signature": node.signature,
+            "mode": "signature",
+        }
+        return _content(_format_payload(payload, status, response_format))
+
     content = store.fetch_source_content(repo_root, node.source_ref)
     if content is None:
         return _content({"error": "missing_source", "message": f"No stored source content for {node.source_ref}."}, is_error=True)
-    body = _numbered_span(content, node.span_start, node.span_end)
-    truncated = False
+
     budget = int(arguments.get("budget", 2000))
+    if mode == "skeleton":
+        # Scoped to the symbol's own children (P1-6): whole-file symbols are
+        # passed so import-line detection and child discovery see the whole
+        # file, but only `node`'s own entry is rendered.
+        all_symbols = store.fetch_symbols_for_path(repo_root, node.source_ref)
+        body = _render_symbol_skeleton(content, all_symbols, node)
+        body_format = "skeleton"
+    else:
+        body = _numbered_span(content, node.span_start, node.span_end)
+        body_format = "line_number: source"
+
+    truncated = False
     # Symbol spans are always parsed structural code (functions/classes/etc.),
     # never markdown or plain text, so "code" is unconditionally correct here.
     if count_text_tokens(body, kind="code") > budget:
@@ -668,7 +715,74 @@ def _call_read_symbol(arguments: dict[str, Any]) -> dict[str, Any]:
         "span_start": node.span_start,
         "span_end": node.span_end,
         "signature": node.signature,
-        "body_format": "line_number: source",
+        "body_format": body_format,
+        "body": body,
+        "truncated": truncated,
+    }
+    if mode != "full":
+        payload["mode"] = mode
+    return _content(_format_payload(payload, status, response_format))
+
+
+def _call_read_file(arguments: dict[str, Any]) -> dict[str, Any]:
+    """P1-6: direct raw-Read replacement for an indexed file. mode="skeleton"
+    (default) renders imports/includes + every top-level symbol's signature
+    with bodies elided via the same `_render_skeleton` bundle packing already
+    uses; mode="full" returns the exact indexed content. A file with no
+    indexed symbols (prose, an unparsed language) has nothing to skeletonize,
+    so skeleton mode transparently falls back to full content for it --
+    `skeletonized` in the payload says which actually happened.
+    """
+    repo_root = _repo_root(arguments)
+    store, error = _store_or_error(repo_root)
+    if error is not None:
+        return _content(error, is_error=True)
+    assert store is not None
+    status = _ensure_fresh(store, repo_root)
+    response_format = _response_format(arguments)
+    path = str(arguments.get("path", ""))
+    if not path:
+        return _content({"error": "missing_path", "message": "path is required"}, is_error=True)
+    source = store.fetch_source_record(repo_root, path)
+    if source is None:
+        return _content(
+            _format_payload(
+                {
+                    "error": "missing_source",
+                    "message": f"No indexed source content for {path!r}.",
+                    "hint": "Path must match a file node's repo-relative path as stored by cortex_refresh. "
+                    "Call cortex_search_symbols or cortex_overview to list indexed files.",
+                },
+                status,
+                response_format,
+            ),
+            is_error=True,
+        )
+
+    mode = str(arguments.get("mode", "skeleton"))
+    if mode not in ("skeleton", "full"):
+        mode = "skeleton"
+    budget = int(arguments.get("budget", 4000))
+
+    symbols = store.fetch_symbols_for_path(repo_root, path)
+    skeletonized = mode == "skeleton" and bool(symbols)
+    body = _render_skeleton(source.content, symbols, set()) if skeletonized else source.content
+
+    truncated = False
+    tokens = count_text_tokens(body, kind=source.kind)
+    if tokens > budget:
+        body = truncate_text_to_budget(body, budget, kind=source.kind)
+        truncated = True
+        tokens = count_text_tokens(body, kind=source.kind)
+
+    payload = {
+        "repo_path": str(repo_root),
+        "path": path,
+        "kind": source.kind,
+        "mode": mode,
+        "skeletonized": skeletonized,
+        "symbol_count": len(symbols),
+        "token_count": tokens,
         "body": body,
         "truncated": truncated,
     }
@@ -801,6 +915,7 @@ _LEDGER_TOOLS = {
     "cortex_impact",
     "cortex_search_symbols",
     "cortex_read_symbol",
+    "cortex_read_file",
     "cortex_relations",
     "cortex_references",
     "cortex_search_text",
@@ -866,11 +981,20 @@ def _estimate_baseline(
     IMPROVEMENT_PLAN.md):
 
     - File-returning tools (cortex_query, cortex_impact, cortex_read_symbol,
-      cortex_references, cortex_search_text): baseline is the token cost of
-      reading, in full and raw, every DISTINCT file referenced in the
-      actual response -- the tokens an agent would have spent with plain
-      Read/grep instead of this tool. Computed via store.fetch_source_content,
-      so it reflects the exact indexed content Cortex itself read.
+      cortex_read_file, cortex_references, cortex_search_text): baseline is
+      the token cost of reading, in full and raw, every DISTINCT file
+      referenced in the actual response -- the tokens an agent would have
+      spent with plain Read/grep instead of this tool. Computed via
+      store.fetch_source_content, so it reflects the exact indexed content
+      Cortex itself read. This applies uniformly across cortex_read_symbol's
+      full/skeleton/signature modes and cortex_read_file's skeleton/full
+      modes (P1-6): regardless of how much of the file the response actually
+      returns, the counterfactual an agent is spared is always "open the
+      whole file with Read", so the baseline is that file's full raw token
+      count in every mode -- the mode only changes the numerator
+      (response_tokens), which is what makes the ledger credit skeleton/
+      signature reads as bigger savings than a full-span read of the same
+      symbol.
     - Structure-only tools (cortex_search_symbols, cortex_relations,
       cortex_overview): these return an index/graph view with no single
       "raw file" backing them, so there's no direct raw-read baseline. The
@@ -885,13 +1009,14 @@ def _estimate_baseline(
     avoided reading N files" figure -- there often isn't a raw-read
     equivalent for an index/graph summary. cortex_read_symbol's ambiguous
     "which symbol did you mean" response has no single resolved file either,
-    so its baseline is 0 (no content was delivered to compare against).
+    so its baseline is 0 (no content was delivered to compare against); the
+    same applies to a cortex_read_file error payload (unindexed path).
     """
     if tool in ("cortex_query", "cortex_impact", "cortex_search_text"):
         paths = {str(item.get("path", "")) for item in payload.get("items", []) if item.get("path")}
         return _referenced_file_tokens(store, repo_root, paths)
 
-    if tool == "cortex_read_symbol":
+    if tool in ("cortex_read_symbol", "cortex_read_file"):
         path = payload.get("path")
         if not path:
             return 0
@@ -1009,6 +1134,8 @@ def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
             result = _call_search(args)
         elif name == "cortex_read_symbol":
             result = _call_read_symbol(args)
+        elif name == "cortex_read_file":
+            result = _call_read_file(args)
         elif name == "cortex_relations":
             result = _call_relations(args)
         elif name == "cortex_references":

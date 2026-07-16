@@ -76,8 +76,11 @@ def main() -> int:
         connector = "and is" if state == "fresh" else "but is"
         _emit(
             f"Cortex index exists {connector} {state} ({file_count} indexed files). "
-            "Prefer Cortex MCP tools over raw Grep/Glob/Bash-grep exploration: "
+            "Prefer Cortex MCP tools over raw Grep/Glob/Read exploration: "
             "cortex_query (task-focused context bundle), cortex_search_symbols (find a symbol by name), "
+            "cortex_read_symbol (read one symbol's span; mode=skeleton/signature for cheaper partial reads), "
+            "cortex_read_file (direct Read replacement for an indexed file; mode=skeleton by default -- "
+            "imports/includes + top-level signatures, bodies elided), "
             "cortex_impact (co-change/structural neighbors before editing), "
             "cortex_relations (parsed graph edges — 'who inherits/emits/connects to X'), "
             "cortex_references (blast-radius — graph edges + cross-language grep for a symbol, "

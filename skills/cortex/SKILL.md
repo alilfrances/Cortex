@@ -7,20 +7,23 @@ description: Use Cortex MCP tools for repo-first context, graph-aware retrieval,
 
 Use Cortex when working inside an indexed repository and you need code context, symbol lookup, blast-radius checks, or repository orientation. Prefer Cortex before broad grep/Read exploration because it combines source content, symbol spans, graph edges, co-change history, and token-budgeted packing.
 
+**`cortex_read_file` is the direct replacement for the built-in `Read` tool on any indexed source file.** Reach for it instead of `Read` whenever the path is inside an indexed repo; it defaults to a skeleton rendering (imports/includes + every top-level signature, bodies elided) that is almost always enough to orient yourself, at a fraction of the tokens a raw `Read` would cost.
+
 ## Workflow
 
 1. Start with `cortex_overview` for unfamiliar repos or architecture questions.
 2. For a concrete task, call `cortex_query` with the task and a budget.
 3. For named code, use the search -> read -> impact loop:
    - `cortex_search_symbols` to locate candidate functions/classes/methods.
-   - `cortex_read_symbol` with the chosen `node_id` to read only the exact numbered source span.
+   - `cortex_read_symbol` with the chosen `node_id` to read only the exact numbered source span. Pass `mode: "skeleton"` for a signature-plus-nested-members view or `mode: "signature"` for just the signature line when you don't need the full body yet.
    - `cortex_impact` on the containing file to inspect structural and co-change neighbors before editing.
-4. Use `cortex_relations` for parsed graph questions such as imports, contains, inherits, emits, connects, or handles.
-5. Use `cortex_references` when configs, docs, scripts, CMake/QRC, or other parser-missed surfaces may reference a symbol.
-6. Use `cortex_search_text` for body text — string literals, error messages, comments, Markdown prose — that `cortex_search_symbols` can't find because it only matches symbol names/signatures/paths, not file contents.
-7. Default to `response_format: "concise"`; pass `response_format: "detailed"` only when you need provenance, fingerprints, full metadata, or detailed why-edges.
-8. If a tool reports `stale: true`, call `cortex_refresh` or rerun the read tool after refresh.
-9. Watch for a `_meta` object on any response (`index_age_seconds`, `indexed_at`, `fingerprint_fresh`, and optionally `auto_refreshed`/`cached`/`saved_tokens`). `detailed` responses always carry it; a `concise` response only carries it when something is worth acting on, so its mere presence is itself a signal — check `fingerprint_fresh`/`auto_refreshed` before trusting a concise result on a repo you suspect just changed.
+4. Need to look at a whole file instead of one symbol? Use `cortex_read_file` in place of the built-in `Read` tool — it defaults to `mode: "skeleton"` (imports/includes + top-level signatures, bodies elided); pass `mode: "full"` when you actually need every line.
+5. Use `cortex_relations` for parsed graph questions such as imports, contains, inherits, emits, connects, or handles.
+6. Use `cortex_references` when configs, docs, scripts, CMake/QRC, or other parser-missed surfaces may reference a symbol.
+7. Use `cortex_search_text` for body text — string literals, error messages, comments, Markdown prose — that `cortex_search_symbols` can't find because it only matches symbol names/signatures/paths, not file contents.
+8. Default to `response_format: "concise"`; pass `response_format: "detailed"` only when you need provenance, fingerprints, full metadata, or detailed why-edges.
+9. If a tool reports `stale: true`, call `cortex_refresh` or rerun the read tool after refresh.
+10. Watch for a `_meta` object on any response (`index_age_seconds`, `indexed_at`, `fingerprint_fresh`, and optionally `auto_refreshed`/`cached`/`saved_tokens`). `detailed` responses always carry it; a `concise` response only carries it when something is worth acting on, so its mere presence is itself a signal — check `fingerprint_fresh`/`auto_refreshed` before trusting a concise result on a repo you suspect just changed.
 
 ## Tools
 
@@ -48,12 +51,26 @@ Example:
 
 ### `cortex_read_symbol`
 
-Returns exact stored source lines for one symbol span, formatted as `line_number: source`. Use after `cortex_search_symbols`; if the result is ambiguous, call again with the returned `node_id`.
+Returns source for one symbol span, formatted as `line_number: source` by default. Use after `cortex_search_symbols`; if the result is ambiguous, call again with the returned `node_id`. `mode` controls how much of the symbol comes back:
+
+- `"full"` (default) — exact stored source lines, numbered. Unchanged from before `mode` existed.
+- `"skeleton"` — the symbol's own signature plus, for a class/component, its nested members' signatures with bodies elided. Cheaper than `"full"` when you need to see a class's shape before deciding which method to read in full.
+- `"signature"` — just the signature line and span metadata (`span_start`/`span_end`), no body at all. Cheapest option when you only need to confirm a symbol exists or check its location.
 
 Example:
 
 ```json
-{"symbol":"symbol:src/cortex/bundle.py:generate_bundle","budget":2000}
+{"symbol":"symbol:src/cortex/bundle.py:generate_bundle","budget":2000,"mode":"skeleton"}
+```
+
+### `cortex_read_file`
+
+Direct replacement for the built-in `Read` tool on an indexed source file. `mode: "skeleton"` (default) returns import/include lines plus every top-level symbol's signature with bodies elided — enough to orient on a file's shape without paying for every line. `mode: "full"` returns the exact indexed content, equivalent to a raw `Read`. Falls back to full content automatically when the file has no indexed symbols (e.g. prose/Markdown). Respects `budget` like the other read tools.
+
+Example:
+
+```json
+{"path":"src/cortex/bundle.py","budget":4000}
 ```
 
 ### `cortex_impact`

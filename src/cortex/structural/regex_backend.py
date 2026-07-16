@@ -536,9 +536,15 @@ def _extract_qml_signal_symbols(
         name_start = match.start(pattern.name_group)
         line_start = content.rfind("\n", 0, name_start) + 1
         line = _line_number(content, line_start)
-        span_end = _def_span_end(content, match.end(pattern.name_group), line)
+        # A QML `signal foo(...)` declaration is a single statement with no
+        # `{...}` body of its own -- unlike `_def_span_end`'s brace-matching,
+        # which (lacking a `;` terminator to stop at) would otherwise walk
+        # forward to the next unrelated `{` in the file, e.g. a sibling
+        # `MouseArea { ... }` block, and wrongly claim its lines as part of
+        # the signal's span (P1-6 Qt-parity fix). No span_end passed here ->
+        # _symbol_node defaults it to `line` (single-line span).
         node = _symbol_node(
-            path, name, pattern.kind, _signature(content, line_start), line, metadata=pattern.metadata, span_end=span_end
+            path, name, pattern.kind, _signature(content, line_start), line, metadata=pattern.metadata
         )
         nodes.append(node)
         edges.append(
@@ -754,7 +760,11 @@ def extract_regex_edges(
             name_start = match.start(pattern.name_group)
             line_start = content.rfind("\n", 0, name_start) + 1
             line = _line_number(content, line_start)
-            span_end = _def_span_end(content, match.end(pattern.name_group), line)
+            is_qml_signal = suffix == ".qml" and pattern.metadata and pattern.metadata.get("qt") == "signal"
+            # QML `signal foo(...)` has no `{...}` body -- see the matching
+            # comment in _extract_qml_signal_symbols for why _def_span_end
+            # must not run for it (P1-6 Qt-parity fix).
+            span_end = line if is_qml_signal else _def_span_end(content, match.end(pattern.name_group), line)
             node = _symbol_node(
                 path, name, pattern.kind, _signature(content, line_start), line, metadata=pattern.metadata, span_end=span_end
             )

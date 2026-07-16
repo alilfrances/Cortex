@@ -672,6 +672,56 @@ class CortexStore:
         ).fetchone()
         return None if row is None else str(row["content"])
 
+    def fetch_source_record(self, repo_path: Path, path: str) -> SourceRecord | None:
+        """Single-file lookup mirroring `fetch_sources`' row shape (P1-6) --
+        used by `cortex_read_file` so it can report `kind` for tokenizer
+        calibration without pulling every source row in the repo."""
+        repo_key = str(repo_path.resolve())
+        row = self.connection.execute(
+            'SELECT path, content, kind, size_bytes, modified_at, content_hash, mtime_ns '
+            'FROM sources WHERE repo_path = ? AND path = ?',
+            (repo_key, path),
+        ).fetchone()
+        if row is None:
+            return None
+        return SourceRecord(
+            path=row['path'],
+            content=row['content'],
+            kind=row['kind'],
+            size_bytes=row['size_bytes'],
+            modified_at=row['modified_at'],
+            content_hash=row['content_hash'],
+            mtime_ns=row['mtime_ns'],
+        )
+
+    def fetch_symbols_for_path(self, repo_path: Path, path: str) -> list[GraphNode]:
+        """All indexed symbol-granularity nodes declared in one file (P1-6) --
+        used to scope `_render_skeleton`/`_render_symbol_skeleton` to a single
+        file/symbol without a whole-repo `fetch_graph` call."""
+        repo_key = str(repo_path.resolve())
+        rows = self.connection.execute(
+            """
+            SELECT node_id, kind, label, source_ref, granularity, signature, span_start, span_end, metadata_json
+            FROM graph_nodes
+            WHERE repo_path = ? AND source_ref = ? AND granularity = 'symbol'
+            """,
+            (repo_key, path),
+        ).fetchall()
+        return [
+            GraphNode(
+                node_id=row['node_id'],
+                kind=row['kind'],
+                label=row['label'],
+                source_ref=row['source_ref'],
+                granularity=row['granularity'],
+                signature=row['signature'],
+                span_start=row['span_start'],
+                span_end=row['span_end'],
+                metadata=json.loads(row['metadata_json']),
+            )
+            for row in rows
+        ]
+
     def fetch_commits(self, repo_path: Path) -> list[CommitRecord]:
         repo_key = str(repo_path.resolve())
         rows = self.connection.execute(
