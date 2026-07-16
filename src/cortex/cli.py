@@ -25,6 +25,7 @@ from .integrations import (
     uninstall_git_hooks,
 )
 from .report import generate_report, write_report
+from .savings import compute_savings, format_savings
 from .store import CortexStore, data_root, default_db_path
 from .viewer import write_html
 
@@ -208,6 +209,17 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark_parser.add_argument("--db", type=Path, default=None)
     benchmark_parser.add_argument("--format", choices=("text", "json"), default="text")
 
+    saved_parser = subparsers.add_parser("saved", help="Show token savings recorded from MCP tool usage")
+    saved_parser.add_argument("repo_path", type=Path, nargs="?", default=Path("."))
+    saved_parser.add_argument("--daily", action="store_true", help="Include a day-by-day rollup")
+    saved_parser.add_argument("--format", choices=("text", "json"), default="text")
+    saved_parser.add_argument("--db", type=Path, default=None)
+    saved_parser.add_argument(
+        "--price-per-mtok",
+        default=None,
+        help="Render dollar figures: '<input $/Mtok>,<output $/Mtok>' (no prices are hardcoded)",
+    )
+
     subparsers.add_parser("mcp", help="Run the Cortex stdio MCP server")
 
     watch_parser = subparsers.add_parser("watch", help="Watch a repository and refresh Cortex on changes")
@@ -316,6 +328,20 @@ def main() -> None:
             db_path=args.db,
         )
         print(format_benchmark(result, output_format=args.format))
+        return
+
+    if args.command == "saved":
+        price = None
+        if args.price_per_mtok:
+            parts = args.price_per_mtok.split(",")
+            if len(parts) != 2:
+                parser.error("--price-per-mtok must be '<input>,<output>'")
+            try:
+                price = (float(parts[0]), float(parts[1]))
+            except ValueError:
+                parser.error("--price-per-mtok values must be numeric")
+        summary = compute_savings(args.repo_path, db_path=args.db, price_per_mtok=price)
+        print(format_savings(summary, output_format=args.format, daily=args.daily))
         return
 
     if args.command == "mcp":

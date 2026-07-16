@@ -182,6 +182,22 @@ class CortexStore:
                 metadata_json TEXT NOT NULL,
                 PRIMARY KEY (bundle_id, item_id)
             );
+
+            -- P0-1 token-savings ledger: one row per successful MCP tool call.
+            -- `response_tokens` is the actual payload size; `baseline_tokens`
+            -- is the deterministic "what an agent would have spent without
+            -- Cortex" estimate computed by mcp/tools._estimate_baseline. A
+            -- brand-new table only needs CREATE TABLE IF NOT EXISTS -- no
+            -- ALTER migration required for upgraded databases.
+            CREATE TABLE IF NOT EXISTS tool_usage (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                repo_path TEXT NOT NULL,
+                called_at INTEGER NOT NULL,
+                tool TEXT NOT NULL,
+                response_tokens INTEGER NOT NULL,
+                baseline_tokens INTEGER NOT NULL,
+                meta_json TEXT NOT NULL DEFAULT '{}'
+            );
             '''
         )
         self.connection.commit()
@@ -216,6 +232,7 @@ class CortexStore:
         indexes = [
             "CREATE INDEX IF NOT EXISTS idx_nodes_source_ref ON graph_nodes(repo_path, source_ref)",
             "CREATE INDEX IF NOT EXISTS idx_edges_source_file ON graph_edges(repo_path, source_file)",
+            "CREATE INDEX IF NOT EXISTS idx_tool_usage_repo_time ON tool_usage(repo_path, called_at)",
         ]
         for sql in indexes:
             try:
@@ -813,6 +830,52 @@ class CortexStore:
             'total_output_tokens': row['total_out'] or 0,
             'runs': row['runs'] or 0,
         }
+
+    def record_tool_usage(
+        self,
+        repo_path: Path,
+        tool: str,
+        response_tokens: int,
+        baseline_tokens: int,
+        meta: dict | None = None,
+    ) -> None:
+        """Append one row to the token-savings ledger (P0-1).
+
+        Callers (mcp/tools.py) must treat failures here as non-fatal: a
+        locked/busy DB must never surface as an error on the underlying MCP
+        tool response.
+        """
+        import time as _time
+        repo_key = str(repo_path.resolve())
+        with self.connection:
+            self.connection.execute(
+                '''
+                INSERT INTO tool_usage(repo_path, called_at, tool, response_tokens, baseline_tokens, meta_json)
+                VALUES(?, ?, ?, ?, ?, ?)
+                ''',
+                (repo_key, int(_time.time()), tool, response_tokens, baseline_tokens, json.dumps(meta or {})),
+            )
+
+    def fetch_tool_usage(self, repo_path: Path) -> list[dict]:
+        repo_key = str(repo_path.resolve())
+        rows = self.connection.execute(
+            '''
+            SELECT id, called_at, tool, response_tokens, baseline_tokens, meta_json
+            FROM tool_usage WHERE repo_path = ? ORDER BY called_at
+            ''',
+            (repo_key,),
+        ).fetchall()
+        return [
+            {
+                "id": row["id"],
+                "called_at": row["called_at"],
+                "tool": row["tool"],
+                "response_tokens": row["response_tokens"],
+                "baseline_tokens": row["baseline_tokens"],
+                "meta": json.loads(row["meta_json"]) if row["meta_json"] else {},
+            }
+            for row in rows
+        ]
 
     def fetch_latest_bundle(self, repo_path: Path) -> RetrievalBundle | None:
         repo_key = str(repo_path.resolve())

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add a token-savings ledger (P0-1): every successful MCP read-tool call (`cortex_query`, `cortex_overview`, `cortex_impact`, `cortex_search_symbols`, `cortex_read_symbol`, `cortex_relations`, `cortex_references`) now records its actual response tokens and a deterministic baseline estimate to a new `tool_usage` table (`CortexStore.record_tool_usage`/`fetch_tool_usage`), via one auditable `_estimate_baseline` helper in `mcp/tools.py`. File-returning tools baseline against the raw content of every distinct referenced file; `cortex_search_symbols`/`cortex_relations`/`cortex_overview` baseline against their own `detailed`-format rendering (plus referenced files for `cortex_relations`). Ledger writes are wrapped so a failure never breaks or alters the underlying tool response. Add `cortex saved [repo] [--daily] [--format text|json] [--price-per-mtok in,out]` (`src/cortex/savings.py`) to report totals, per-tool and daily rollups, and optional dollar figures at a user-supplied rate. MCP response shapes are unchanged; the `_meta.saved_tokens` envelope is deferred to P1-5.
+
 ## 0.7.5 — 2026-07-09
 
 - Documentation refresh only. Current shipped metadata is `0.7.5` in `pyproject.toml` and `.codex-plugin/plugin.json`; the README and contributor docs now reflect the 8-tool MCP surface, current `evals/RESULTS.md` totals (13 tasks), Codex and Claude `status`/`uninstall` CLI commands, central storage under `~/.cortex/data/` with `CORTEX_DATA_DIR` and `cortex gc --prune`, and the Codex manifest skill root at `./skills/`.

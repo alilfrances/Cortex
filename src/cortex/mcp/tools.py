@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -553,25 +554,172 @@ def _call_refresh(arguments: dict[str, Any]) -> dict[str, Any]:
     return _content({"summary": summary, "stale": False})
 
 
+# Tools covered by the P0-1 token-savings ledger. cortex_refresh is excluded:
+# it doesn't return retrievable content to compare against a raw-read baseline.
+_LEDGER_TOOLS = {
+    "cortex_query",
+    "cortex_overview",
+    "cortex_impact",
+    "cortex_search_symbols",
+    "cortex_read_symbol",
+    "cortex_relations",
+    "cortex_references",
+}
+
+# Matches the "<label> @ <path>[:<line>]" endpoint rendering built by
+# _call_relations' endpoint() closure, to recover referenced file paths from
+# an already-formatted payload.
+_RELATION_ENDPOINT_FILE_RE = re.compile(r" @ (.+?)(?::\d+)?$")
+# Matches the "<path>:<line>" hit rendering built by references._graph_hits /
+# _grep_hits, to recover referenced file paths from an already-formatted
+# cortex_references payload.
+_REFERENCE_LOCATION_RE = re.compile(r"^(.*):\d+$")
+
+
+def _referenced_file_tokens(store: CortexStore, repo_root: Path, paths: set[str]) -> int:
+    total = 0
+    for path in paths:
+        if not path:
+            continue
+        content = store.fetch_source_content(repo_root, path)
+        if content:
+            total += count_text_tokens(content)
+    return total
+
+
+def _detailed_rendering_tokens(tool: str, arguments: dict[str, Any]) -> int:
+    """Re-run a structure-only tool with response_format=detailed and count it.
+
+    Used only as an input to _estimate_baseline's policy for search/relations/
+    overview (see its docstring). Re-dispatching is simple, deterministic, and
+    cheap (local SQLite reads); any failure here is caught by the caller's
+    non-fatal wrapper.
+    """
+    detailed_args = {**arguments, "response_format": "detailed"}
+    if tool == "cortex_search_symbols":
+        detailed_result = _call_search(detailed_args)
+    elif tool == "cortex_relations":
+        detailed_result = _call_relations(detailed_args)
+    else:
+        detailed_result = _call_overview(detailed_args)
+    detailed_payload = json.loads(detailed_result["content"][0]["text"])
+    return count_text_tokens(json.dumps(detailed_payload))
+
+
+def _estimate_baseline(
+    tool: str,
+    arguments: dict[str, Any],
+    payload: dict[str, Any],
+    store: CortexStore,
+    repo_root: Path,
+) -> int:
+    """Deterministic "what would an agent have spent without Cortex" baseline.
+
+    Policy (kept in this one function so it stays auditable -- see P0-1 in
+    IMPROVEMENT_PLAN.md):
+
+    - File-returning tools (cortex_query, cortex_impact, cortex_read_symbol,
+      cortex_references): baseline is the token cost of reading, in full and
+      raw, every DISTINCT file referenced in the actual response -- the
+      tokens an agent would have spent with plain Read/grep instead of this
+      tool. Computed via store.fetch_source_content, so it reflects the
+      exact indexed content Cortex itself read.
+    - Structure-only tools (cortex_search_symbols, cortex_relations,
+      cortex_overview): these return an index/graph view with no single
+      "raw file" backing them, so there's no direct raw-read baseline. The
+      baseline instead is the token cost of the `detailed` rendering of the
+      same call -- the savings Cortex's concise response format already
+      provides over its own verbose format. cortex_relations additionally
+      folds in the referenced files' raw content, since each of its items
+      points at a specific call site a raw-read comparison can still price.
+
+    Caveat for reviewers: for cortex_search_symbols and cortex_overview this
+    is a rough proxy on response-format savings only, not a true "agent
+    avoided reading N files" figure -- there often isn't a raw-read
+    equivalent for an index/graph summary. cortex_read_symbol's ambiguous
+    "which symbol did you mean" response has no single resolved file either,
+    so its baseline is 0 (no content was delivered to compare against).
+    """
+    if tool in ("cortex_query", "cortex_impact"):
+        paths = {str(item.get("path", "")) for item in payload.get("items", []) if item.get("path")}
+        return _referenced_file_tokens(store, repo_root, paths)
+
+    if tool == "cortex_read_symbol":
+        path = payload.get("path")
+        if not path:
+            return 0
+        return _referenced_file_tokens(store, repo_root, {str(path)})
+
+    if tool == "cortex_references":
+        paths: set[str] = set()
+        for bucket in payload.get("items", {}).values():
+            for entry in bucket:
+                match = _REFERENCE_LOCATION_RE.match(str(entry))
+                paths.add(match.group(1) if match else str(entry))
+        return _referenced_file_tokens(store, repo_root, paths)
+
+    if tool in ("cortex_search_symbols", "cortex_overview"):
+        return _detailed_rendering_tokens(tool, arguments)
+
+    if tool == "cortex_relations":
+        detailed_tokens = _detailed_rendering_tokens(tool, arguments)
+        paths = set()
+        for item in payload.get("items", []):
+            for key in ("source", "target"):
+                match = _RELATION_ENDPOINT_FILE_RE.search(str(item.get(key, "")))
+                if match:
+                    paths.add(match.group(1))
+        return detailed_tokens + _referenced_file_tokens(store, repo_root, paths)
+
+    return 0
+
+
+def _record_tool_usage(name: str, arguments: dict[str, Any], result: dict[str, Any]) -> None:
+    """Write one row to the token-savings ledger. Never raises.
+
+    A ledger write must never break or alter the underlying tool response --
+    callers rely on this being safe to call unconditionally after a
+    successful dispatch.
+    """
+    if name not in _LEDGER_TOOLS or result.get("isError"):
+        return
+    try:
+        payload = json.loads(result["content"][0]["text"])
+        repo_root = _repo_root(arguments)
+        db_path = default_db_path(repo_root)
+        if not db_path.exists():
+            return
+        store = CortexStore(db_path)
+        response_tokens = count_text_tokens(json.dumps(payload, sort_keys=True))
+        baseline_tokens = _estimate_baseline(name, arguments, payload, store, repo_root)
+        store.record_tool_usage(repo_root, name, response_tokens, baseline_tokens)
+    except Exception:
+        pass
+
+
 def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
     args = arguments or {}
     try:
         if name == "cortex_query":
-            return _call_query(args)
-        if name == "cortex_overview":
-            return _call_overview(args)
-        if name == "cortex_impact":
-            return _call_impact(args)
-        if name == "cortex_search_symbols":
-            return _call_search(args)
-        if name == "cortex_read_symbol":
-            return _call_read_symbol(args)
-        if name == "cortex_relations":
-            return _call_relations(args)
-        if name == "cortex_references":
-            return _call_references(args)
-        if name == "cortex_refresh":
-            return _call_refresh(args)
-        return _content({"error": "unknown_tool", "message": f"Unknown Cortex tool: {name}"}, is_error=True)
+            result = _call_query(args)
+        elif name == "cortex_overview":
+            result = _call_overview(args)
+        elif name == "cortex_impact":
+            result = _call_impact(args)
+        elif name == "cortex_search_symbols":
+            result = _call_search(args)
+        elif name == "cortex_read_symbol":
+            result = _call_read_symbol(args)
+        elif name == "cortex_relations":
+            result = _call_relations(args)
+        elif name == "cortex_references":
+            result = _call_references(args)
+        elif name == "cortex_refresh":
+            result = _call_refresh(args)
+        else:
+            return _content({"error": "unknown_tool", "message": f"Unknown Cortex tool: {name}"}, is_error=True)
     except Exception as exc:
         return _content({"error": type(exc).__name__, "message": str(exc)}, is_error=True)
+
+    _record_tool_usage(name, args, result)
+    return result

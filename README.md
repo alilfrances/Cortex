@@ -122,6 +122,7 @@ Tool results include provenance where available. Read tools keep the index fresh
 | `cortex gc [--prune]` | List central data dirs; `--prune` deletes ones whose repo is gone. |
 | `cortex enrich <repo> --provider claude\|codex [--force]` | Optional LLM semantic enrichment with local cache. Requires `[llm]`. |
 | `cortex benchmark <repo> [--budget 4000] [--format text\|json]` | Compare bundle token cost against full-corpus reading. |
+| `cortex saved <repo> [--daily] [--format text\|json] [--price-per-mtok in,out]` | Report token savings recorded from MCP tool calls (see Token Savings below). |
 | `cortex mcp` | Run the stdio MCP server. |
 | `cortex migrate [project_dir]` | Remove old injected v0.1 `## cortex` guidance and point users to plugin setup. |
 | `cortex codex status\|uninstall [project_dir]` | Inspect or remove project-local Codex integration files. |
@@ -162,6 +163,22 @@ The harness creates two small git fixture repos at runtime and runs 13 tasks. It
 | skeleton_on | 13 | 0.641 | 0.692 | 0.942 | 176 | 13.7 |
 
 Interpretation: normal-budget PageRank and BFS both recover all gold files/symbols in these small fixtures but include extra files. Tight-budget skeleton packing improves recall versus tight-budget truncation while keeping token cost nearly flat.
+
+## Token Savings
+
+Every successful call to a read tool (`cortex_query`, `cortex_overview`, `cortex_impact`, `cortex_search_symbols`, `cortex_read_symbol`, `cortex_relations`, `cortex_references`) is logged to a local `tool_usage` ledger with the response's actual token count and a deterministic baseline estimate of what an agent would have spent without Cortex. Run `cortex saved <repo>` to see it:
+
+```bash
+cortex saved . --daily
+```
+
+| Metric | Meaning |
+|---|---|
+| Response tokens | `count_text_tokens(json.dumps(payload))` for the actual MCP response. |
+| Baseline tokens | For file-returning tools: the raw content of every distinct file referenced in the response, read in full (`store.fetch_source_content`) — what an agent would have spent with plain Read/grep. For `cortex_search_symbols`/`cortex_relations`/`cortex_overview`: the token cost of the `detailed` rendering of the same call (the savings the concise format already provides); `cortex_relations` also adds the referenced files' raw content. |
+| Saved tokens | `baseline_tokens - response_tokens`, summed per tool, per day, and overall. |
+
+The baseline policy lives in one auditable function, `_estimate_baseline` in `src/cortex/mcp/tools.py`. It is a proxy, not a measured "tokens not spent": for `cortex_search_symbols`/`cortex_overview` it only captures response-format savings (there's no single raw file backing an index/graph summary), and for `cortex_query`/`cortex_impact` it only prices the files Cortex actually returned, not the rest of the corpus an agent would otherwise have had to search through. Ledger writes are best-effort — a locked or missing database never surfaces as an MCP tool error. Add `--price-per-mtok <input>,<output>` to render dollar figures at your model's own rates (no prices are hardcoded); the ledger's baseline/response tokens are both priced at the input rate since they represent context read into an agent's own model, not model-generated output.
 
 ## Cortex vs. The Field
 
