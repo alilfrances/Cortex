@@ -24,11 +24,11 @@ case "$MODE" in
     ;;
   --pip)
     python3 -m pip install -e "$ROOT"
-    echo "cortex CLI installed (extras: pip install -e \"$ROOT[llm,languages,watch,tokens]\")"
+    echo "cortex CLI installed (extras: pip install -e \"$ROOT[llm,languages,watch]\")"
     ;;
   *)
     cat <<MSG
-Claude Code (one-command plugin install; includes SessionStart and fail-open PreToolUse Read/Grep/Glob hooks):
+Claude Code (one-command plugin install):
   claude plugin marketplace add alilfrances/Cortex   # or: claude plugin marketplace add $ROOT
   claude plugin install cortex@cortex
 

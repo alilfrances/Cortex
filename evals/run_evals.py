@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import os
 import shutil
@@ -16,7 +15,6 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
-HOOK_PATH = ROOT / "hooks" / "pre-tool-use.py"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
@@ -1063,166 +1061,6 @@ def measure_query_latency(
             os.environ["CORTEX_SEMANTIC"] = previous_semantic
 
 
-def run_hook_adoption_replay(base: Path | None = None) -> dict[str, Any]:
-    """Replay raw built-in tool events against the packaged PreToolUse hook.
-
-    This is deliberately separate from the retrieval matrix: it measures
-    redirect precision/recall and does not change the historical RESULTS.md
-    rows.  The fixture contains Qt C++ signal/slot and QML handler positives,
-    plus an unindexed identifier and a plain extension glob as negatives.
-    """
-
-    def run_in(base_dir: Path) -> dict[str, Any]:
-        base_dir.mkdir(parents=True, exist_ok=True)
-        data_dir = base_dir / "hook-data"
-        repo = _build_qt_app(base_dir)
-        previous_data = os.environ.get("CORTEX_DATA_DIR")
-        previous_mode = os.environ.get("CORTEX_HOOK_MODE")
-        previous_threshold = os.environ.get("CORTEX_HOOK_READ_THRESHOLD_BYTES")
-        os.environ["CORTEX_DATA_DIR"] = str(data_dir)
-        os.environ["CORTEX_HOOK_MODE"] = "advise"
-        # The small fixture's C++ implementation is intentionally included in
-        # the replay; zero makes the threshold choice explicit rather than
-        # hiding a fixture-size assumption in the adoption metric.
-        os.environ["CORTEX_HOOK_READ_THRESHOLD_BYTES"] = "0"
-        try:
-            ingest_repository(repo, commit_limit=20)
-            cases = [
-                (
-                    "qt-signal-grep",
-                    {"tool_name": "Grep", "tool_input": {"pattern": "deviceConnected"}},
-                    True,
-                ),
-                (
-                    "qml-handler-grep",
-                    {"tool_name": "Grep", "tool_input": {"pattern": "onClicked"}},
-                    True,
-                ),
-                (
-                    "cpp-read",
-                    {"tool_name": "Read", "tool_input": {"file_path": "src/DeviceManager.cpp"}},
-                    True,
-                ),
-                (
-                    "symbol-glob",
-                    {"tool_name": "Glob", "tool_input": {"pattern": "**/*deviceConnected*"}},
-                    True,
-                ),
-                (
-                    "unindexed-grep",
-                    {"tool_name": "Grep", "tool_input": {"pattern": "notIndexedIdentifier"}},
-                    False,
-                ),
-                (
-                    "plain-extension-glob",
-                    {"tool_name": "Glob", "tool_input": {"pattern": "**/*.cpp"}},
-                    False,
-                ),
-                (
-                    "unindexed-read",
-                    {"tool_name": "Read", "tool_input": {"file_path": "missing.cpp"}},
-                    False,
-                ),
-            ]
-            rows: list[dict[str, Any]] = []
-            subprocess_latencies: list[float] = []
-            for name, partial_event, expected_advice in cases:
-                event = {
-                    "hook_event_name": "PreToolUse",
-                    "cwd": str(repo),
-                    **partial_event,
-                }
-                started = time.perf_counter()
-                result = subprocess.run(
-                    [sys.executable, str(HOOK_PATH)],
-                    cwd=repo,
-                    input=json.dumps(event),
-                    capture_output=True,
-                    text=True,
-                    timeout=5,
-                    env=os.environ.copy(),
-                    check=False,
-                )
-                subprocess_latencies.append((time.perf_counter() - started) * 1000.0)
-                if result.returncode != 0 or result.stderr:
-                    raise AssertionError(f"hook replay failed for {name}: {result.stderr}")
-                advised = False
-                payload: dict[str, Any] | None = None
-                if result.stdout.strip():
-                    payload = json.loads(result.stdout)
-                    specific = payload.get("hookSpecificOutput", {})
-                    advised = bool(specific.get("additionalContext"))
-                    if specific.get("hookEventName") != "PreToolUse":
-                        raise AssertionError(f"invalid PreToolUse output for {name}: {payload}")
-                if advised != expected_advice:
-                    raise AssertionError(
-                        f"hook adoption precision fixture mismatch for {name}: "
-                        f"expected advice={expected_advice}, got {advised}"
-                    )
-                rows.append(
-                    {
-                        "case": name,
-                        "expected_advice": expected_advice,
-                        "advised": advised,
-                        "stdout": bool(result.stdout.strip()),
-                    }
-                )
-            positives = sum(1 for row in rows if row["expected_advice"])
-            true_positives = sum(1 for row in rows if row["expected_advice"] and row["advised"])
-            false_positives = sum(1 for row in rows if not row["expected_advice"] and row["advised"])
-
-            # Keep Python startup separate from the warm decision.  The
-            # executable is the honest end-to-end number; process_event is
-            # loaded once and timed only after its import/SQLite path is warm.
-            spec = importlib.util.spec_from_file_location("cortex_hook_replay", HOOK_PATH)
-            if spec is None or spec.loader is None:
-                raise AssertionError("could not load the hook for warm timing")
-            hook_module = importlib.util.module_from_spec(spec)
-            sys.modules[spec.name] = hook_module
-            spec.loader.exec_module(hook_module)
-            warm_event = {
-                "hook_event_name": "PreToolUse",
-                "cwd": str(repo),
-                "tool_name": "Grep",
-                "tool_input": {"pattern": "deviceConnected"},
-            }
-            hook_module.process_event(warm_event)
-            warm_latencies: list[float] = []
-            for _ in range(5):
-                started = time.perf_counter()
-                hook_module.process_event(warm_event)
-                warm_latencies.append((time.perf_counter() - started) * 1000.0)
-            return {
-                "repo": str(repo),
-                "cases": rows,
-                "positives": positives,
-                "true_positives": true_positives,
-                "false_positives": false_positives,
-                "precision": true_positives / (true_positives + false_positives)
-                if true_positives + false_positives
-                else 1.0,
-                "recall": true_positives / positives if positives else 1.0,
-                "subprocess_median_ms": statistics.median(subprocess_latencies),
-                "warm_median_ms": statistics.median(warm_latencies),
-                "warm_under_50ms": statistics.median(warm_latencies) < 50.0,
-            }
-        finally:
-            for name, value in (
-                ("CORTEX_DATA_DIR", previous_data),
-                ("CORTEX_HOOK_MODE", previous_mode),
-                ("CORTEX_HOOK_READ_THRESHOLD_BYTES", previous_threshold),
-            ):
-                if value is None:
-                    os.environ.pop(name, None)
-                else:
-                    os.environ[name] = value
-
-    if base is not None:
-        return run_in(Path(base))
-    with tempfile.TemporaryDirectory(prefix="cortex-hook-replay-") as tmp:
-        return run_in(Path(tmp))
-
-
 def run_evals(
     results_path: Path = ROOT / "evals" / "RESULTS.md",
     *,
@@ -1287,27 +1125,12 @@ def main() -> None:
     parser.add_argument("--json", action="store_true", help="Emit raw rows as JSON instead of Markdown")
     parser.add_argument("--results", type=Path, default=ROOT / "evals" / "RESULTS.md")
     parser.add_argument("--semantic", action="store_true", help="Opt into semantic-on evals when a real local model is ready")
-    parser.add_argument(
-        "--hook-replay",
-        action="store_true",
-        help="Replay indexed Qt/raw-tool positives and unindexed/plain-glob negatives against the PreToolUse hook",
-    )
     args = parser.parse_args()
     markdown, rows = run_evals(args.results, semantic=args.semantic)
-    replay = run_hook_adoption_replay() if args.hook_replay else None
     if args.json:
-        if replay is None:
-            # Preserve the pre-hook-replay CLI contract for callers that use
-            # --json as a plain list of retrieval rows.
-            print(json.dumps(rows, indent=2, default=str))
-        else:
-            payload: Any = {"retrieval": rows, "hook_replay": replay}
-            print(json.dumps(payload, indent=2, default=str))
+        print(json.dumps(rows, indent=2, default=str))
     else:
         print(markdown, end="")
-        if replay is not None:
-            print("Hook adoption replay:")
-            print(json.dumps(replay, indent=2, default=str))
 
 
 if __name__ == "__main__":

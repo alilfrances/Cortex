@@ -93,10 +93,7 @@ def main() -> int:
             "cortex_overview (repo orientation and top churn×complexity hotspots; cortex_query accepts "
             "hotspot_boost=true as an opt-in ranking signal). Optional local semantic retrieval is "
             "managed with `cortex semantic status`/`cortex semantic setup` and never downloads during "
-            "ingest or query. The PreToolUse hook also gives fail-open advice for built-in "
-            "Read/Grep/Glob calls (CORTEX_HOOK_MODE=off|advise|enforce; advise is the default), "
-            "so raw exploration remains available when a target is not indexed. Call cortex_refresh "
-            "to update a stale index."
+            "ingest or query. Call cortex_refresh to update a stale index."
         )
         return 0
     except Exception:

@@ -37,7 +37,7 @@ claude plugin marketplace add alilfrances/Cortex
 claude plugin install cortex@cortex
 ```
 
-That's the full plugin path. It installs the Cortex plugin bundle, which registers the Cortex MCP server (`.mcp.json` launches `bin/cortex-mcp.py`, which self-locates its own `src/`), the `cortex` skill, the session-start hook, and the fail-open `PreToolUse` Read/Grep/Glob hook. In a project, ask Claude to call `cortex_refresh` once to build the index (or run `cortex ingest .` if you installed the CLI).
+That's the full plugin path. It installs the Cortex plugin bundle, which registers the Cortex MCP server (`.mcp.json` launches `bin/cortex-mcp.py`, which self-locates its own `src/`), the `cortex` skill, and the session-start hook. In a project, ask Claude to call `cortex_refresh` once to build the index (or run `cortex ingest .` if you installed the CLI).
 
 > **Note:** Plugins load at session start. After installing or updating, restart Claude Code (or run `/reload-plugins` if available) — sessions that were already open won't see the MCP tools, skill, or hook.
 
@@ -51,9 +51,7 @@ claude --plugin-dir /path/to/Cortex
 
 Cortex ports graphify's agent-context behavior as a native Claude Code `SessionStart` hook. When a project has a Cortex index (legacy `.cortex/cortex.db` in-repo, or the central store under `~/.cortex/data/`), the hook quickly compares the stored repo fingerprint with the current `compute_repo_fingerprint` value and injects short context saying whether the index is fresh or stale, how many files are indexed, and to prefer `cortex_context` (one batch of paths/symbols before editing several files), `cortex_query`, `cortex_search_symbols`, and `cortex_impact` before raw grep-style exploration. If no database exists, it emits a one-line hint that `cortex_refresh` can build it.
 
-The hooks are advisory and fail-open: they never run ingest, read working-tree source content, load a model, or use the network. The `PreToolUse` hook examines indexed SQLite metadata before built-in `Read`, `Grep`, and `Glob` calls. In the default `CORTEX_HOOK_MODE=advise`, it adds nonblocking `additionalContext` with exact alternatives such as `cortex_search_symbols`, `cortex_references`, `cortex_read_file({"mode":"skeleton"})`, and `cortex_read_symbol`. Unknown/unindexed targets, plain directory or extension globs, small reads, malformed events, unreadable/corrupt/locked databases, and directories outside git repositories pass silently. `CORTEX_HOOK_MODE=off` disables it; `enforce` is explicit experimental opt-in and denies a fresh unscoped redirect, while automatically downgrading to advice when `repos.updated_at` is older than `CORTEX_HOOK_STALE_AFTER_SECONDS` (default 24 hours). Path-scoped Grep/Glob calls and other option-rich searches may be advised but are never enforced because the MCP replacement cannot carry every raw-tool filter. `CORTEX_HOOK_READ_THRESHOLD_BYTES` (default 512) controls the large-read advice threshold.
-
-The PreToolUse hook appends metadata-only decisions—including non-advice indexed passes—to `<CORTEX_DATA_DIR>/<repo-hash>/usage.jsonl` for future missed-savings analysis. Logging is best-effort and never changes hook behavior; the log contains no source content or full regular expressions. The hook command and its five-second process timeout are packaged in `hooks/hooks.json`, so no separate install step is needed.
+The hook is advisory and fail-open: it never runs ingest, exits quietly on malformed or unreadable databases, and stays silent entirely when the working directory is not inside a git repository. Staleness resolves itself at query time — the MCP read tools auto-refresh incrementally before answering — so the hook only informs.
 
 ### Codex
 

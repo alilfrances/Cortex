@@ -9,12 +9,6 @@ Use Cortex when working inside an indexed repository and you need code context, 
 
 **`cortex_read_file` is the direct replacement for the built-in `Read` tool on any indexed source file.** Reach for it instead of `Read` whenever the path is inside an indexed repo; it defaults to a skeleton rendering (imports/includes + every top-level signature, bodies elided) that is almost always enough to orient yourself, at a fraction of the tokens a raw `Read` would cost.
 
-## Built-in tool hook
-
-The plugin's `PreToolUse` hook watches built-in `Read`, `Grep`, and `Glob` calls. It consults only the read-only SQLite index and silently passes anything it cannot answer, including unindexed targets, regex-shaped searches, plain directory/extension globs, small/windowed reads, unavailable databases, and non-git directories. Stale metadata can still produce advisory context in the default `advise` mode; only `enforce` downgrades stale redirects to advice. On an indexed positive it gives a nonblocking exact replacement in `additionalContext`; it does not replace Qt-aware symbol resolution, so `deviceConnected`, `onFoo`, C++ signals/slots, and QML handlers use the same `cortex_search_symbols`/`cortex_references` path as other identifiers.
-
-`CORTEX_HOOK_MODE=advise` is the default. Set `CORTEX_HOOK_MODE=off` to disable the hook. `CORTEX_HOOK_MODE=enforce` is experimental and opt-in: it denies only fresh unscoped indexed redirects and automatically downgrades to advice when the `repos.updated_at` age exceeds `CORTEX_HOOK_STALE_AFTER_SECONDS` (default 86400). Path-scoped Grep/Glob and other option-rich searches are never enforced because their filters cannot be represented exactly by the MCP replacement. `CORTEX_HOOK_READ_THRESHOLD_BYTES` (default 512) controls when a whole-file `Read` can be replaced by a skeleton. Indexed decisions are recorded as metadata-only JSONL under the central Cortex data directory for future adoption analysis; logging never blocks a raw tool call.
-
 ## Workflow
 
 1. Start with `cortex_overview` for unfamiliar repos or architecture questions; inspect its `top_hotspots` list before choosing risky files.

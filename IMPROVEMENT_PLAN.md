@@ -1,13 +1,19 @@
-# Cortex Improvement Plan: Optimization & Efficiency Gaps vs. rtk, Repowise, and Semble
+# Cortex Improvement Plan: Optimization & Efficiency Gaps vs. Repowise and Semble
 
 Date: 2026-07-16 (revised same day: added MinishLab/semble research and QML/C++/Qt parity
-requirements)
-Scope: Comparison of Cortex (v0.7.5) against [rtk-ai/rtk](https://github.com/rtk-ai/rtk),
-[repowise-dev/repowise](https://github.com/repowise-dev/repowise), and
+requirements; revised 2026-07-17: rtk-derived items split out to `RTK_PLAN.md` — rtk is a
+shell-output/interception tool, not a codebase-intelligence tool, so its ideas belong in a
+separate plugin rather than in Cortex)
+Scope: Comparison of Cortex (v0.7.5) against
+[repowise-dev/repowise](https://github.com/repowise-dev/repowise) and
 [MinishLab/semble](https://github.com/MinishLab/semble), focused on **optimization and
 efficiency features**. Each work item below is written to be delegated independently to an AI
 agent: it names the motivating feature in the reference tool, the current state in Cortex with
 file references, concrete implementation steps, and acceptance criteria.
+
+Interception/shell-output items originally researched here against
+[rtk-ai/rtk](https://github.com/rtk-ai/rtk) (P1-8 redirect hook, P2-1 distill/expand,
+P2-4 missed-savings discovery) now live in `RTK_PLAN.md`.
 
 A cross-cutting constraint applies to every item: Cortex's QML / C++ / Qt support is a
 first-class differentiator and must be preserved and extended, not regressed — see
@@ -17,27 +23,8 @@ first-class differentiator and must be preserved and extended, not regressed —
 
 ## 1. What the reference tools provide
 
-### 1.1 rtk (Rust Token Killer)
-
-rtk is a CLI proxy that compresses command output *before* it reaches an agent's context window,
-claiming 60–90% token savings. Its efficiency machinery:
-
-- **Output compression filters for 100+ commands** — test runners (jest/pytest/cargo/go),
-  linters, git, package managers, docker/kubectl/aws — using four techniques: smart filtering
-  (strip noise/boilerplate), grouping (errors by rule/file, files by directory), truncation, and
-  deduplication (repeated log lines collapsed with counts).
-- **Failures-only test output** (`rtk pytest`, `rtk test <cmd>`, `rtk err <cmd>`): ~90% reduction.
-- **Signature-only file reading** (`rtk read <file> -l aggressive`) and 2-line heuristic
-  summaries (`rtk smart <file>`).
-- **Token-savings analytics**: `rtk gain` (summary, `--graph`, `--history`, `--daily`,
-  `--format json`), `rtk discover` (finds *missed* savings opportunities in recent sessions),
-  `rtk session` (adoption rate across sessions).
-- **Tee / failure recovery**: when a filtered command fails, the full raw output is saved to
-  `~/.local/share/rtk/tee/…` so the agent can read it without re-running the command.
-  Configurable (`failures` / `always` / `never`).
-- **Hook-based transparent adoption**: PreToolUse hooks for 15+ agents rewrite `git status` →
-  `rtk git status` automatically; `--ultra-compact` global flag for extra squeeze.
-- **<10 ms overhead per command**; single static binary.
+(rtk — the Rust Token Killer shell-output compression proxy — was researched alongside these
+two; its analysis and the work items derived from it moved to `RTK_PLAN.md`.)
 
 ### 1.2 Repowise
 
@@ -127,51 +114,51 @@ and dependency-free. See P0-2 (fusion layer) and P1-7 (optional static-embedding
 
 ## 2. Gap analysis summary
 
-| Capability | rtk | Repowise | Semble | Cortex today |
-|---|---|---|---|---|
-| Token-savings ledger & report | `rtk gain` | `repowise saved` | `semble savings` | ❌ only LLM-enrich cost ledger; MCP tool usage untracked |
-| Full-text / lexical search | n/a | SQLite FTS | BM25 | ❌ `LIKE`-based symbol-name search only (`store.search_nodes`) |
-| Semantic retrieval, local | n/a | vector embeddings (server/Ollama) | static Model2Vec, CPU-only offline | ❌ |
-| Rank fusion (RRF) | n/a | FTS + vectors | BM25 + embeddings + code-aware signals | ⚠️ ad-hoc additive bonuses in `bundle.py` |
-| Incremental update speed | n/a | <30 s, git-aware | ❌ full rebuild on any change | ⚠️ delta detection exists but re-reads every file, rewrites entire graph table |
-| Query result caching | n/a | index-side caching | index cache dir | ❌ PageRank + packing recomputed per call |
-| Query latency | <10 ms overhead | n/a | ~1.5 ms | ⚠️ unmeasured for MCP path; evals report ~14 ms bundle-only on small fixtures |
-| Batched context tool | n/a | `get_context(targets[])` | n/a | ❌ one target per `cortex_impact`/`cortex_read_symbol` call |
-| Hotspots (churn × complexity) | n/a | core feature | n/a | ❌ co-change edges exist, no churn/complexity scoring |
-| Dead-code detection | n/a | confidence-tiered | n/a | ❌ graph has the edges, no report |
-| Diff/PR risk scoring | n/a | Kamei-style + directives | n/a | ❌ |
-| Shell-output distill + savings recovery | core feature | `distill`/`expand` | n/a | ❌ (README delegates to external `tokenslim`) |
-| Aggressive read modes | `read -l aggressive` | `get_symbol` | snippet-only results | ⚠️ skeletons exist in bundles only, not in read tools |
-| Tokenizer accuracy | n/a (measures real) | model-priced | chars/4 heuristic | ⚠️ heuristic regex estimate, uncalibrated (`tokenizer.py`) |
-| Staleness metadata envelope | n/a | `_meta` on every response | mtime auto-invalidate | ⚠️ partial (`auto_refreshed`, stale hints) |
-| Missed-savings discovery | `rtk discover` | demand-weighted docs | n/a | ❌ |
-| QML / C++ Qt awareness | ❌ | C++ generic tier only, no QML | ❌ language-agnostic | ✅ **Cortex's edge — must be preserved by every item below** |
-| Agent adoption enforcement | PreToolUse hook rewrites Bash commands (deterministic); adoption metrics | task-shaped tools + session-start decision injection | installer offers MCP / AGENTS.md / dedicated sub-agent | ⚠️ advisory SessionStart hook + SKILL.md only |
+| Capability | Repowise | Semble | Cortex today |
+|---|---|---|---|
+| Token-savings ledger & report | `repowise saved` | `semble savings` | ❌ only LLM-enrich cost ledger; MCP tool usage untracked |
+| Full-text / lexical search | SQLite FTS | BM25 | ❌ `LIKE`-based symbol-name search only (`store.search_nodes`) |
+| Semantic retrieval, local | vector embeddings (server/Ollama) | static Model2Vec, CPU-only offline | ❌ |
+| Rank fusion (RRF) | FTS + vectors | BM25 + embeddings + code-aware signals | ⚠️ ad-hoc additive bonuses in `bundle.py` |
+| Incremental update speed | <30 s, git-aware | ❌ full rebuild on any change | ⚠️ delta detection exists but re-reads every file, rewrites entire graph table |
+| Query result caching | index-side caching | index cache dir | ❌ PageRank + packing recomputed per call |
+| Query latency | n/a | ~1.5 ms | ⚠️ unmeasured for MCP path; evals report ~14 ms bundle-only on small fixtures |
+| Batched context tool | `get_context(targets[])` | n/a | ❌ one target per `cortex_impact`/`cortex_read_symbol` call |
+| Hotspots (churn × complexity) | core feature | n/a | ❌ co-change edges exist, no churn/complexity scoring |
+| Dead-code detection | confidence-tiered | n/a | ❌ graph has the edges, no report |
+| Diff/PR risk scoring | Kamei-style + directives | n/a | ❌ |
+| Aggressive read modes | `get_symbol` | snippet-only results | ⚠️ skeletons exist in bundles only, not in read tools |
+| Tokenizer accuracy | model-priced | chars/4 heuristic | ⚠️ heuristic regex estimate, uncalibrated (`tokenizer.py`) |
+| Staleness metadata envelope | `_meta` on every response | mtime auto-invalidate | ⚠️ partial (`auto_refreshed`, stale hints) |
+| QML / C++ Qt awareness | C++ generic tier only, no QML | ❌ language-agnostic | ✅ **Cortex's edge — must be preserved by every item below** |
+| Agent adoption enforcement | task-shaped tools + session-start decision injection | installer offers MCP / AGENTS.md / dedicated sub-agent | ⚠️ advisory SessionStart hook + SKILL.md only |
+
+(Shell-output distill + reversible expand, missed-savings discovery, and built-in-tool
+interception rows moved to `RTK_PLAN.md` with their work items.)
 
 ### 2.1 The adoption-consistency problem
 
 Every measured savings number above assumes the agent actually calls the tool instead of its
-built-in `Read`/`Grep`/`Glob` or raw shell. The three projects handle this differently, and
-the difference is a spectrum of enforcement strength:
+built-in `Read`/`Grep`/`Glob` or raw shell. The reference projects handle this differently,
+and the difference is a spectrum of enforcement strength:
 
-1. **Interception (rtk)** — a PreToolUse hook rewrites Bash commands before execution
-   (`git status` → `rtk git status`); the agent never has to remember rtk exists. Ceiling:
-   built-in agent tools bypass Bash entirely, so rtk cannot touch `Read`/`Grep`/`Glob` and
-   falls back to instruction files for those. rtk also *measures* leakage (`rtk session`
-   adoption rate, `rtk discover` missed savings).
-2. **Seduction (Repowise)** — no interception; task-shaped tools that beat the raw
+1. **Seduction (Repowise)** — no interception; task-shaped tools that beat the raw
    alternative on the first try, `_meta` staleness stamps that let agents trust the index
    instead of re-verifying with raw reads, and session-start injection of mined decisions.
-3. **Substitution (semble)** — the installer can register a **dedicated search sub-agent**,
+2. **Substitution (semble)** — the installer can register a **dedicated search sub-agent**,
    so exploration happens inside a delegation boundary where semble is the natural/only
    search path; the main agent's grep habit never gets a chance to fire.
+3. **Interception** — deterministic hook-based rewriting/redirecting of tool calls before
+   they execute. This mechanism (rtk's approach, and the strongest tier) is now out of
+   Cortex's scope: the redirect-hook work item (formerly P1-8) and its measurement companion
+   (formerly P2-4) moved to `RTK_PLAN.md` as the core of a separate interception plugin.
 
-Cortex today sits entirely in the weakest (instruction-only) tier: advisory SessionStart
-context plus SKILL.md guidance. The plan closes this on all three fronts: incentives
-(P0-2/P1-1 make the sanctioned path cheapest), measurement (P2-4), **interception (P1-8 —
-new)**, and **substitution (P2-5 — new)**. Notably, P1-8 targets exactly the gap rtk cannot
-reach: Cortex, as a plugin with an indexed store, *can* intercept the built-in `Read`/`Grep`/
-`Glob` calls that bypass rtk's Bash rewriter.
+Cortex today sits in the instruction-only tier: advisory SessionStart context plus SKILL.md
+guidance. Within its own scope, the plan closes this on two fronts: incentives (P0-2/P1-1
+make the sanctioned path cheapest) and **substitution (P2-5 — new)**. Interception, if
+wanted later, composes from the outside via the separate `RTK_PLAN.md` plugin without
+Cortex changes — Cortex only needs to keep its index readable (`mode=ro`) by external
+tooling, which it already does.
 
 ---
 
@@ -214,7 +201,7 @@ Ground rules for all items (Cortex invariants — do not violate):
 
 ### P0-1. Token-savings ledger and `cortex saved` command
 
-**Motivation**: rtk's `gain`, Repowise's `saved`, and semble's `savings` all ship this — every
+**Motivation**: Repowise's `saved` and semble's `savings` both ship this — every
 serious tool in the space makes savings *visible*, because it drives adoption and validates the
 product claim. Cortex computes token counts for every response already but throws the numbers
 away. Semble's baseline convention (tokens of what the agent *would* have read minus tokens
@@ -469,7 +456,8 @@ pair from the fixture history.
 
 ### P1-3. Query/bundle result cache keyed on fingerprint
 
-**Motivation**: rtk's whole pitch is sub-10 ms overhead; Repowise caches index-side. Cortex
+**Motivation**: Repowise caches index-side, and near-zero repeat-query overhead is table
+stakes in this space. Cortex
 recomputes PageRank over the full graph and re-packs on **every** `cortex_query`, even when
 nothing changed. Repeated queries (common in agent loops) should be near-free.
 
@@ -541,7 +529,8 @@ schema stability; concise responses gain ≤ ~20 tokens in the noteworthy case, 
 
 ### P1-6. Aggressive read modes for read tools
 
-**Motivation**: rtk's `read -l aggressive` (signatures only) and `smart` (2-line summary).
+**Motivation**: Repowise's `get_symbol` and semble's snippet-only results show that agents
+rarely need whole files — signature/skeleton reads cover most orientation needs.
 Cortex builds skeletons (`_render_skeleton`, `bundle.py:109`) but only inside bundle packing —
 `cortex_read_symbol` always returns full span text, and there is no skeleton-read for a whole
 file.
@@ -609,93 +598,19 @@ files without tree-sitter), and a Qt-vocabulary task ("where is the button click
 
 ---
 
-### P1-8. PreToolUse redirect hook for built-in `Read` / `Grep` / `Glob`
+### P1-8. Moved to `RTK_PLAN.md`
 
-**Motivation**: rtk proves interception is the only *deterministic* adoption mechanism — but
-its Bash-rewriting hook explicitly cannot reach the agent's built-in `Read`/`Grep`/`Glob`
-tools, which bypass the shell. Cortex can: it already ships a hook bundle
-(`hooks/hooks.json` registers SessionStart with the `${CLAUDE_PLUGIN_ROOT}` launch pattern)
-and a read-only fast-path against the index (`hooks/session-start.py` opens the SQLite store
-`mode=ro` and compares fingerprints in milliseconds). Intercepting built-in tool calls that
-the index could serve cheaper is a consistency mechanism none of the three reference tools
-has.
-
-**Design stance**: advisory by default, never lossy. The hook must be **fail-open** in every
-path (no index, corrupt DB, timeout, non-git cwd → silent pass-through), mirroring the
-SessionStart hook's philosophy, and must never suppress a tool call the index cannot
-actually answer.
-
-**Implementation steps**:
-1. New `hooks/pre-tool-use.py`, registered in `hooks/hooks.json` under `PreToolUse` with a
-   matcher for `Grep`, `Glob`, and `Read`. Hard latency budget: open the store read-only,
-   answer from indexed metadata only (never run ingest, PageRank, or file I/O beyond the DB),
-   target <50 ms warm / 5 s timeout like the existing hook.
-2. Redirect logic, per tool:
-   - `Grep` with a pattern that case-normalizes to an indexed symbol/identifier (reuse
-     `_normalized_identifier` / `_search_tokens`, `store.py:21-28`): emit advisory context —
-     "`<pattern>` is indexed; `cortex_search_symbols` / `cortex_references` answers this in
-     ~N tokens" (N from the stored node count, not a guess).
-   - `Read` of an indexed source file above a size threshold (from `sources.size_bytes`):
-     suggest `cortex_read_symbol`/skeleton read (P1-6) with the estimated token delta.
-   - `Glob`: suggest `cortex_search_symbols` only when the pattern embeds an identifier-like
-     stem; plain directory globs pass silently.
-3. Modes via env/config `CORTEX_HOOK_MODE = off | advise (default) | enforce`. `advise`
-   returns non-blocking `additionalContext`; `enforce` returns a deny with the redirect
-   message (agent retries with the Cortex tool). Enforce must auto-downgrade to advise when
-   the index is stale beyond a threshold, so a blocked grep can never strand an agent against
-   an outdated index.
-4. Log every interception decision (tool, path/pattern, action, estimated tokens at stake) to
-   the local usage log — this **is** the data source P2-4 (`cortex discover`) reads, so build
-   the JSONL writer here and let P2-4 consume it (updates P2-4 step 1 from "or a new
-   PostToolUse hook" to "the P1-8 hook's log").
-5. Effectiveness measurement: extend the eval harness with a scripted adoption scenario
-   (recorded raw-tool session replayed against the hook) asserting redirect precision — no
-   advice on unindexed targets, correct advice on indexed ones.
-
-**Acceptance criteria**: fail-open verified for missing/corrupt/locked DB and non-git cwd
-(hook exits 0, empty output); warm advisory decision <50 ms on the eval fixtures; `enforce`
-mode denies with a message naming the exact replacement call; stale-index auto-downgrade
-tested; zero advice emitted for files/symbols the index doesn't contain. **Qt parity**: a
-`Grep` for a signal name or `onFoo` handler on the Qt fixture gets redirected to
-`cortex_references`/`cortex_search_symbols`; a `Read` of the fixture's C++ implementation
-file suggests the skeleton read.
-
-**Effort**: M. **Dependencies**: P1-6 (skeleton reads must exist before the hook recommends
-them); feeds P2-4. Ship `advise` first; `enforce` only after P2-4 data shows advice is
-being followed.
+PreToolUse redirect hook for built-in `Read`/`Grep`/`Glob`. Interception is out of Cortex's
+scope; the full item (including its implementation/revert history on this branch) is in
+`RTK_PLAN.md`.
 
 ---
 
-### P2-1. `cortex distill` / `cortex expand`: reversible shell-output compression
+### P2-1. Moved to `RTK_PLAN.md`
 
-**Motivation**: This is rtk's entire product and Repowise ships it too (`distill`, 61–89%
-savings, errors-first, net-positive guard, reversible `expand`). Cortex's README currently
-delegates this to external `tokenslim` ("stacking" section) — that stance is worth revisiting
-because (a) the savings ledger (P0-1) can then cover the whole session, and (b) one tool with
-one install story beats two.
-
-**Decision required before delegation**: keep delegating to tokenslim (do nothing) vs. build a
-minimal distiller. If built, keep it *generic and deterministic* — do not attempt rtk's 100+
-per-command filters.
-
-**Implementation steps (if built)**:
-1. New module `src/cortex/distill.py` with composable passes: (a) exact-duplicate line collapse
-   with `×N` counts; (b) errors-first reordering using a small pattern set
-   (`error|fail|exception|traceback|warning`), original order preserved within groups;
-   (c) run-length truncation of homogeneous middles (keep head/tail); (d) net-positive guard —
-   if compressed ≥ 90% of original tokens, pass through untouched.
-2. CLI `cortex distill -- <command…>`: run the command, print distilled output, save raw output
-   to `~/.cortex/tee/<timestamp>_<slug>.log`, print a final line
-   `[cortex#<ref>] full output: cortex expand <ref>`; `cortex expand <ref>` cats the raw log.
-   Exit code passthrough.
-3. Record raw-vs-distilled tokens in the P0-1 ledger (`tool = "distill"`).
-4. Tee retention handled by `cortex gc`.
-
-**Acceptance criteria**: `cortex distill -- python -m pytest tests/` on a failing fixture shows
-failures first and ≥40% token reduction on noisy output; passthrough on tiny output; `expand`
-restores exact bytes; exit codes preserved.
-
-**Effort**: M. **Dependencies**: P0-1 ledger.
+`cortex distill` / `cortex expand` reversible shell-output compression. Shell-output
+processing is out of Cortex's scope (and the README already delegates it to external
+`tokenslim`); the full item is in `RTK_PLAN.md`.
 
 ---
 
@@ -774,26 +689,10 @@ needs `connects`/`handles` edges resolved to real signal symbols).
 
 ---
 
-### P2-4. Missed-savings discovery (`cortex discover` analogue)
+### P2-4. Moved to `RTK_PLAN.md`
 
-**Motivation**: rtk's `discover` scans recent sessions for commands that *bypassed* rtk and
-quantifies the missed savings — a growth loop. Cortex's equivalent: detect raw `Read`/`grep`
-of files that the index could have served skeletonized or via `cortex_search_text`.
-
-**Implementation steps**:
-1. Consume the interception log written by the P1-8 hook (`(tool, path/pattern, action,
-   estimated tokens)` JSONL under `~/.cortex/data/<repo-hash>/usage.jsonl` — strictly local,
-   opt-in via hook install, no content captured, paths and sizes only). If P1-8 hasn't
-   shipped, fall back to a minimal `PostToolUse` logger with the same schema.
-2. `cortex discover [repo]`: join the JSONL against the index; for each raw read of an indexed
-   file, report tokens spent vs skeleton/`cortex_read_symbol` cost; total the gap.
-3. Keep it out of the MCP surface (CLI-only, human-facing).
-
-**Acceptance criteria**: synthetic usage log produces correct per-file and total missed-savings
-numbers; zero output when log absent; documented privacy posture (local-only, paths+sizes).
-
-**Effort**: M. **Dependencies**: P0-1 (shared token math), P1-6 (the cheaper alternative must
-exist to be recommended), P1-8 (log source).
+Missed-savings discovery (`discover` analogue). Its data source was the P1-8 interception
+log, which moved with it; the full item is in `RTK_PLAN.md`.
 
 ---
 
@@ -801,9 +700,9 @@ exist to be recommended), P1-8 (log source).
 
 **Motivation**: semble's installer can register a **dedicated search sub-agent**, using the
 delegation boundary itself as the adoption mechanism: inside the sub-agent's context, the
-tool is the natural search path and the main agent's raw-grep habit never fires. This is
-complementary to P1-8 — interception corrects individual calls; substitution restructures
-the workflow so exploration is Cortex-native end to end, and the exploration transcript
+tool is the natural search path and the main agent's raw-grep habit never fires.
+Substitution restructures the workflow so exploration is Cortex-native end to end
+(complementary to interception, which now lives in `RTK_PLAN.md`), and the exploration transcript
 (often tens of thousands of tokens of search noise) stays out of the main agent's context
 entirely. That containment is itself a token-efficiency win independent of which search tool
 gets used.
@@ -837,7 +736,7 @@ scenario includes one Qt fixture question ("which slot receives `<signal>`?") an
 `cortex_relations`/`cortex_references` inside the sub-agent.
 
 **Effort**: S–M. **Dependencies**: P1-1 (`cortex_context` makes the sub-agent's answers
-cheap); P1-8's advisory hook still applies inside the sub-agent as a safety net.
+cheap).
 
 ---
 
@@ -850,8 +749,9 @@ cheap); P1-8's advisory hook still applies inside the sub-agent as a safety net.
   transformer inference and hosted embedding APIs remain rejected.
 - **LLM-generated wiki/docs layer** (Repowise): outside the optimization/efficiency scope and
   contradicts the deterministic default path; the existing optional `enrich` covers the niche.
-- **Per-command output filters for 100+ CLIs** (rtk): unbounded maintenance surface in Python;
-  P2-1's generic distiller + tokenslim stacking covers the bulk of the value.
+- **Shell-output compression of any kind** (distill, per-command filters, interception of
+  built-in tool calls): out of Cortex's codebase-intelligence scope entirely — see
+  `RTK_PLAN.md`; external `tokenslim` covers the shell-output niche today.
 - **Code-health marker suite / refactoring plans** (Repowise's 25 markers, Extract-Class
   plans): large scope, not efficiency-focused; hotspots (P1-2) + dead code (P2-2) deliver the
   highest-signal subset first.
@@ -869,13 +769,9 @@ cheap); P1-8's advisory hook still applies inside the sub-agent as a safety net.
    Qt-parity criteria of P1-1/P2-2/P2-3), P1-5 (meta envelope, folds in Wave 1 flags), P1-6
    (read modes), P1-1 (batched context), P1-2 (hotspots), P1-7 (static-embedding retriever —
    needs P0-2's fusion and P0-3's delta path).
-3. **Wave 3**: P1-8 (redirect hook, `advise` mode — needs P1-6's skeleton reads to
-   recommend), P2-3 (risk, needs hotspots), P2-2 (dead code — assign to an agent briefed on
-   the Qt meta-object exclusions), P2-1 (distill — after the tokenslim decision), P2-4
-   (discover — consumes P1-8's log), P2-5 (exploration sub-agent — needs P1-1).
-4. **Post-Wave 3, data-gated**: flip P1-8 to offer `enforce` mode only after `cortex
-   discover` shows advisory redirects are being followed; otherwise iterate on the advice
-   wording first.
+3. **Wave 3**: P2-3 (risk, needs hotspots), P2-2 (dead code — assign to an agent briefed on
+   the Qt meta-object exclusions), P2-5 (exploration sub-agent — needs P1-1).
+   (P1-8/P2-1/P2-4 dropped from this wave — moved to `RTK_PLAN.md`.)
 
 Each wave should end with: `python3 -m pytest tests/ -q`, `python3 evals/run_evals.py` (metrics
 must not regress, including the Qt fixture tasks from Wave 0), CHANGELOG entry, and
