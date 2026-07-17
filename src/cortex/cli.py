@@ -54,7 +54,9 @@ def gc_data_dirs(prune: bool = False) -> dict:
     if not base.is_dir():
         return result
     for entry in sorted(base.iterdir()):
-        if not entry.is_dir():
+        if not entry.is_dir() or entry.name == "semantic":
+            # P1-7's managed model cache lives below CORTEX_DATA_DIR but is
+            # not a repo data dir and must never be classified as orphaned.
             continue
         meta_path = entry / "meta.json"
         if not meta_path.exists():
@@ -91,7 +93,7 @@ def prune_query_caches() -> dict:
     if not base.is_dir():
         return result
     for entry in sorted(base.iterdir()):
-        if not entry.is_dir():
+        if not entry.is_dir() or entry.name == "semantic":
             continue
         meta_path = entry / "meta.json"
         db_path = entry / "cortex.db"
@@ -272,6 +274,18 @@ def build_parser() -> argparse.ArgumentParser:
     enrich_parser.add_argument("--force", action="store_true", help="Re-extract all files, ignore cache")
     enrich_parser.add_argument("--db", type=Path, default=None)
 
+    semantic_parser = subparsers.add_parser(
+        "semantic", help="Manage the optional local Model2Vec semantic retriever"
+    )
+    semantic_subparsers = semantic_parser.add_subparsers(dest="semantic_action", required=True)
+    semantic_setup_parser = semantic_subparsers.add_parser(
+        "setup", help="Download the configured model once into CORTEX_DATA_DIR"
+    )
+    semantic_setup_parser.add_argument("--force", action="store_true", help="Redownload and replace the local model")
+    semantic_subparsers.add_parser(
+        "status", help="Show local semantic dependency/model/index readiness without network access"
+    )
+
     migrate_parser = subparsers.add_parser("migrate", help="Remove old Cortex injected agent guidance")
     migrate_parser.add_argument("project_dir", type=Path, nargs="?", default=Path("."))
 
@@ -385,6 +399,13 @@ def main() -> None:
                 parser.error("--price-per-mtok values must be numeric")
         summary = compute_savings(args.repo_path, db_path=args.db, price_per_mtok=price)
         print(format_savings(summary, output_format=args.format, daily=args.daily))
+        return
+
+    if args.command == "semantic":
+        from .semantic import semantic_status, setup_model
+
+        result = setup_model(force=args.force) if args.semantic_action == "setup" else semantic_status()
+        print(json.dumps(result, indent=2, sort_keys=True))
         return
 
     if args.command == "mcp":

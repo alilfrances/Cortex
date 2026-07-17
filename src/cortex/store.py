@@ -256,6 +256,24 @@ class CortexStore:
                 payload_json TEXT NOT NULL,
                 PRIMARY KEY (repo_path, cache_key)
             );
+
+            -- P1-7 optional local Model2Vec vectors.  Rows are owned by a
+            -- repo/source path and keyed by node plus the exact local model
+            -- artifact version, so changing a file or model cannot reuse an
+            -- unrelated vector.  The vector itself is a float32 BLOB; no
+            -- vector extension or external service is required.
+            CREATE TABLE IF NOT EXISTS chunk_embeddings (
+                repo_path TEXT NOT NULL,
+                node_id TEXT NOT NULL,
+                source_path TEXT NOT NULL,
+                source_hash TEXT NOT NULL,
+                model_id TEXT NOT NULL,
+                model_version TEXT NOT NULL,
+                vector BLOB NOT NULL,
+                dimension INTEGER NOT NULL,
+                created_at INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (repo_path, node_id, model_id, model_version)
+            );
             '''
         )
         self.connection.commit()
@@ -347,6 +365,12 @@ class CortexStore:
             except Exception:
                 pass  # column already exists
 
+        try:
+            self._migrate_chunk_embeddings_schema()
+        except Exception:
+            # The optional table must never make a legacy/core store unusable.
+            pass
+
         # Index creation happens after the ALTERs above so it's safe to run
         # unconditionally on both fresh and upgraded databases (the columns
         # they reference are guaranteed to exist by this point).
@@ -356,12 +380,92 @@ class CortexStore:
             "CREATE INDEX IF NOT EXISTS idx_tool_usage_repo_time ON tool_usage(repo_path, called_at)",
             "CREATE INDEX IF NOT EXISTS idx_query_cache_repo_time ON query_cache(repo_path, created_at)",
         ]
+        indexes.extend(
+            [
+                "CREATE INDEX IF NOT EXISTS idx_chunk_embeddings_repo_path ON chunk_embeddings(repo_path, source_path)",
+                "CREATE INDEX IF NOT EXISTS idx_chunk_embeddings_model ON chunk_embeddings(repo_path, model_id, model_version)",
+            ]
+        )
         for sql in indexes:
             try:
                 self.connection.execute(sql)
                 self.connection.commit()
             except Exception:
                 pass  # index already exists / column not ready in some odd legacy state
+
+    def _migrate_chunk_embeddings_schema(self) -> None:
+        """Rebuild a pre-release/partial embedding table into the P1-7 shape.
+
+        The table did not exist in the shipped schema, but accepting a partial
+        table here makes upgrades idempotent for development databases and
+        protects normal ingest from a malformed optional-feature migration.
+        Legacy rows are retained with a sentinel model version and are ignored
+        by current-model queries until they are explicitly re-indexed.
+        """
+        table = self.connection.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'chunk_embeddings'"
+        ).fetchone()
+        if table is None:
+            return
+        columns = self.connection.execute("PRAGMA table_info(chunk_embeddings)").fetchall()
+        names = {str(row["name"]) for row in columns}
+        required = {
+            "repo_path", "node_id", "source_path", "source_hash", "model_id",
+            "model_version", "vector", "dimension", "created_at",
+        }
+        pk_names = {
+            str(row["name"])
+            for row in columns
+            if int(row["pk"] or 0) > 0
+        }
+        expected_pk = {"repo_path", "node_id", "model_id", "model_version"}
+        if required <= names and pk_names == expected_pk:
+            return
+
+        legacy_name = "chunk_embeddings_legacy"
+        with self.connection:
+            self.connection.execute(f"DROP TABLE IF EXISTS {legacy_name}")
+            self.connection.execute("ALTER TABLE chunk_embeddings RENAME TO chunk_embeddings_legacy")
+            self.connection.execute(
+                """
+                CREATE TABLE chunk_embeddings (
+                    repo_path TEXT NOT NULL,
+                    node_id TEXT NOT NULL,
+                    source_path TEXT NOT NULL,
+                    source_hash TEXT NOT NULL,
+                    model_id TEXT NOT NULL,
+                    model_version TEXT NOT NULL,
+                    vector BLOB NOT NULL,
+                    dimension INTEGER NOT NULL,
+                    created_at INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY (repo_path, node_id, model_id, model_version)
+                )
+                """
+            )
+            legacy_columns = {str(row["name"]) for row in self.connection.execute("PRAGMA table_info(chunk_embeddings_legacy)")}
+            if {"repo_path", "node_id", "vector"} <= legacy_columns:
+                def expression(name: str, fallback: str) -> str:
+                    return name if name in legacy_columns else fallback
+
+                self.connection.execute(
+                    f"""
+                    INSERT OR IGNORE INTO chunk_embeddings(
+                        repo_path, node_id, source_path, source_hash, model_id,
+                        model_version, vector, dimension, created_at
+                    )
+                    SELECT {expression('repo_path', "''")},
+                           {expression('node_id', "''")},
+                           {expression('source_path', "''")},
+                           {expression('source_hash', "''")},
+                           {expression('model_id', "''")},
+                           {expression('model_version', "'legacy'")},
+                           vector,
+                           {expression('dimension', "0")},
+                           {expression('created_at', "0")}
+                    FROM chunk_embeddings_legacy
+                    """
+                )
+            self.connection.execute("DROP TABLE chunk_embeddings_legacy")
 
     def reset_repo(self, repo_path: Path, fingerprint: str = '') -> None:
         repo_key = str(repo_path.resolve())
@@ -383,7 +487,7 @@ class CortexStore:
                     [(bundle_id,) for bundle_id in bundle_ids],
                 )
                 self.connection.execute("DELETE FROM bundles WHERE repo_path = ?", (repo_key,))
-            for table in ("sources", "commits", "graph_nodes", "graph_edges"):
+            for table in ("sources", "commits", "graph_nodes", "graph_edges", "chunk_embeddings"):
                 self.connection.execute(f"DELETE FROM {table} WHERE repo_path = ?", (repo_key,))
             if self.fts_enabled:
                 self.connection.execute("DELETE FROM source_fts WHERE repo_path = ?", (repo_key,))
@@ -491,6 +595,87 @@ class CortexStore:
             (repo_key,),
         ).fetchall()
         return {row['path']: (row['size_bytes'], row['mtime_ns'], row['content_hash']) for row in rows}
+
+    def delete_chunk_embeddings_for_paths(self, repo_path: Path, paths: list[str]) -> None:
+        """Delete only embedding rows owned by the supplied source paths."""
+        if not paths:
+            return
+        repo_key = str(repo_path.resolve())
+        with self.connection:
+            self.connection.executemany(
+                "DELETE FROM chunk_embeddings WHERE repo_path = ? AND source_path = ?",
+                [(repo_key, path) for path in paths],
+            )
+
+    def save_chunk_embeddings(self, repo_path: Path, rows: list[dict[str, object]]) -> None:
+        """Idempotently upsert float32 symbol vectors for one repository."""
+        if not rows:
+            return
+        repo_key = str(repo_path.resolve())
+        now = int(time.time())
+        with self.connection:
+            self.connection.executemany(
+                """
+                INSERT OR REPLACE INTO chunk_embeddings(
+                    repo_path, node_id, source_path, source_hash, model_id,
+                    model_version, vector, dimension, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        repo_key,
+                        str(row["node_id"]),
+                        str(row["source_path"]),
+                        str(row["source_hash"]),
+                        str(row["model_id"]),
+                        str(row["model_version"]),
+                        sqlite3.Binary(bytes(row["vector"])),
+                        int(row["dimension"]),
+                        now,
+                    )
+                    for row in rows
+                ],
+            )
+
+    def fetch_chunk_embeddings(
+        self,
+        repo_path: Path,
+        model_id: str,
+        model_version: str,
+    ) -> list[sqlite3.Row]:
+        """Return current-model vectors in stable node/path order."""
+        repo_key = str(repo_path.resolve())
+        return self.connection.execute(
+            """
+            SELECT node_id, source_path, source_hash, model_id, model_version,
+                   vector, dimension
+            FROM chunk_embeddings
+            WHERE repo_path = ? AND model_id = ? AND model_version = ?
+            ORDER BY source_path, node_id
+            """,
+            (repo_key, model_id, model_version),
+        ).fetchall()
+
+    def count_chunk_embeddings(
+        self,
+        repo_path: Path,
+        model_id: str | None = None,
+        model_version: str | None = None,
+    ) -> int:
+        repo_key = str(repo_path.resolve())
+        clauses = ["repo_path = ?"]
+        params: list[object] = [repo_key]
+        if model_id is not None:
+            clauses.append("model_id = ?")
+            params.append(model_id)
+        if model_version is not None:
+            clauses.append("model_version = ?")
+            params.append(model_version)
+        row = self.connection.execute(
+            f"SELECT COUNT(*) AS count FROM chunk_embeddings WHERE {' AND '.join(clauses)}",
+            tuple(params),
+        ).fetchone()
+        return 0 if row is None else int(row["count"])
 
     def replace_graph(self, repo_path: Path, nodes: list[GraphNode], edges: list[GraphEdge]) -> None:
         """Replace the repo graph wholesale — save_graph upserts, so stale rows survive it.

@@ -126,7 +126,7 @@ Example:
 
 ### `cortex_overview`
 
-Returns repository graph summary, communities, god nodes, top churn×complexity hotspots, and surprising links. Use for orientation rather than precise code reading.
+Returns repository graph summary, communities, god nodes, top churn×complexity hotspots, and surprising links. Use for orientation rather than precise code reading. In `response_format: "detailed"`, the `semantic` field reports optional Model2Vec installation, enabled/active state, local model readiness, indexed chunks, and a no-network reason.
 
 Example:
 
@@ -137,3 +137,7 @@ Example:
 ### `cortex_refresh`
 
 Re-ingests the repo into the local SQLite index. Use when no database exists, after large file changes, or when stale results are reported.
+
+### Optional semantic retrieval
+
+Install `[semantic]` only when desired. Run `cortex semantic setup` explicitly to cache the verified `minishlab/potion-code-16M` model below `CORTEX_DATA_DIR`, then run a full ingest to create symbol chunks. `cortex semantic status` is local-only. Ingest/query never download or contact a provider; set `CORTEX_SEMANTIC=0` to force the normal lexical/graph result even after setup.

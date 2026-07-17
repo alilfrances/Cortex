@@ -37,7 +37,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "cortex_overview",
-        "description": "Returns repo graph size, communities, god nodes, top churn×complexity hotspots, and surprising links. Use for orientation before targeted tools; not for finding one symbol. Example: {\"repo_path\":\".\"}.",
+        "description": "Returns repo graph size, communities, god nodes, top churn×complexity hotspots, and surprising links. Detailed responses also include no-network optional semantic model/index status. Use for orientation before targeted tools; not for finding one symbol. Example: {\"repo_path\":\".\"}.",
         "inputSchema": {"type": "object", "properties": {"repo_path": {"type": "string"}, "response_format": {"type": "string", "enum": ["concise", "detailed"], "default": "concise"}}},
     },
     {
@@ -565,6 +565,30 @@ def _call_overview(arguments: dict[str, Any]) -> dict[str, Any]:
             "top_hotspots": top_hotspots(nodes),
         }
         _cache_set(store, repo_root, cache_key, payload)
+
+    # P1-7 status is deliberately detailed-only: concise overview responses
+    # remain byte-compatible with the stdlib/default path.  Refreshing this
+    # additive field on every detailed cache hit also upgrades old cache rows
+    # and reflects a newly completed setup without a repo fingerprint change.
+    if response_format == "detailed":
+        try:
+            from ..semantic import semantic_status
+
+            semantic_payload = semantic_status(store, repo_root)
+        except Exception:
+            semantic_payload = {
+                "installed": False,
+                "enabled": False,
+                "active": False,
+                "model_ready": False,
+                "indexed_chunks": 0,
+                "reason": "semantic status unavailable",
+                "model_id": None,
+                "model_version": None,
+            }
+        if payload.get("semantic") != semantic_payload:
+            payload = {**payload, "semantic": semantic_payload}
+            _cache_set(store, repo_root, cache_key, payload)
     return _content(_format_payload(payload, status, response_format, cached=cache_hit))
 
 

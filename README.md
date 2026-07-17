@@ -86,6 +86,8 @@ The `cortex` CLI and optional features need a pip install:
 cd /path/to/Cortex
 python3 -m pip install -e .                                 # cortex CLI
 python3 -m pip install -e ".[llm,languages,watch,tokens]"   # enrichment, tree-sitter, watchdog, exact tokenizer
+# Optional static semantic retrieval (does not change the default path):
+python3 -m pip install -e ".[semantic]"
 ```
 
 Initialize a target repo (also available as the `cortex_refresh` MCP tool):
@@ -129,6 +131,8 @@ All 10 read/query tools (everything above except `cortex_refresh`) can carry a `
 | `cortex report <repo> [--out] [--include-test-pairs]` | Write an architecture report with central nodes, hotspots, communities, and connections. |
 | `cortex gc [--prune]` | List central data dirs (`--prune` deletes ones whose repo is gone) and prune each repo's query result cache. |
 | `cortex enrich <repo> --provider claude\|codex [--force]` | Optional LLM semantic enrichment with local cache. Requires `[llm]`. |
+| `cortex semantic setup [--force]` | Explicitly download/cache `minishlab/potion-code-16M` below `CORTEX_DATA_DIR`; this is the only download path. |
+| `cortex semantic status` | Show optional dependency, local-model, and indexed-chunk status without network access. |
 | `cortex benchmark <repo> [--budget 4000] [--format text\|json]` | Compare bundle token cost against full-corpus reading. |
 | `cortex saved <repo> [--daily] [--format text\|json] [--price-per-mtok in,out]` | Report token savings recorded from MCP tool calls (see Token Savings below). |
 | `cortex mcp` | Run the stdio MCP server. |
@@ -151,8 +155,31 @@ All 10 read/query tools (everything above except `cortex_refresh`) can carry a `
 | `[qml]` | `tree-sitter-language-pack` | Adds QML tree-sitter extraction through the bundled qmljs grammar; kept separate because the pack ships many grammars. |
 | `[watch]` | `watchdog` | Improves `cortex watch`; polling fallback is stdlib-only. |
 | `[tokens]` | `tiktoken` | Exact o200k_base BPE token counts everywhere Cortex counts/budgets tokens; without it, `count_text_tokens` uses a calibrated stdlib regex-segment heuristic (see Token Counting below). |
+| `[semantic]` | `model2vec`, `numpy` | Optional local static embeddings using [`minishlab/potion-code-16M`](https://huggingface.co/minishlab/potion-code-16M); no vectors, model download, or network are used unless explicitly set up. |
 
 The regex fallback is Qt-aware for C++/QML signal, slot, emit, connect, Q_OBJECT, and handler patterns.
+
+### Optional local semantic retrieval
+
+Install the strictly optional extra and explicitly cache the verified Model2Vec
+provider model once:
+
+```bash
+python3 -m pip install -e ".[semantic]"
+cortex semantic setup
+cortex semantic status
+cortex ingest .
+```
+
+`cortex semantic setup` is the only Cortex command allowed to fetch a model
+(the verified static model is on the order of tens of MB). It saves the model
+under `CORTEX_DATA_DIR/semantic/potion-code-16M`; ingest and
+query load only that local directory, set offline provider flags, and never
+contact Hugging Face or another network service. If the extra, model, or vector
+index is absent or fails, Cortex silently uses its normal deterministic lexical
+graph path. Set `CORTEX_SEMANTIC=0` to force that inactive/default behavior even
+when a local model is installed. `cortex_overview` detailed responses report `installed`,
+`enabled`, `active`, `model_ready`, `indexed_chunks`, and a non-network `reason` under `semantic`.
 
 ## Token Counting
 
@@ -173,7 +200,7 @@ Regenerated on 2026-07-16 with:
 python3 evals/run_evals.py
 ```
 
-The harness creates three small git fixture repos (including a C++/Qt + QML fixture) at runtime and runs 17 tasks. It reports expected-file precision/recall, expected-symbol recall, token cost, and wall latency. Full per-task output is in `evals/RESULTS.md`.
+The harness creates small git fixture repos (including a C++/Qt + QML fixture) at runtime and runs 17 default/off tasks. It reports expected-file precision/recall, expected-symbol recall, token cost, and wall latency. Isolated optional vocabulary-gap and Qt click tasks run in explicit semantic-off and semantic-on modes only with `python3 evals/run_evals.py --semantic` when a real local model is already ready; no setup/download is attempted by the harness. Full per-task output is in `evals/RESULTS.md`.
 
 | Mode | Tasks | Precision | Precision@3 | Recall | Avg Tokens | Avg Latency ms |
 |---|---:|---:|---:|---:|---:|---:|

@@ -90,7 +90,9 @@ def main() -> int:
             "literals, error messages, comments, prose — a grep replacement that reads from "
             "the index), "
             "cortex_overview (repo orientation and top churn×complexity hotspots; cortex_query accepts "
-            "hotspot_boost=true as an opt-in ranking signal). Call cortex_refresh to update a stale index."
+            "hotspot_boost=true as an opt-in ranking signal). Optional local semantic retrieval is "
+            "managed with `cortex semantic status`/`cortex semantic setup` and never downloads during "
+            "ingest or query. Call cortex_refresh to update a stale index."
         )
         return 0
     except Exception:

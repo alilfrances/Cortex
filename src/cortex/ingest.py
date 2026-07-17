@@ -9,7 +9,7 @@ from typing import NamedTuple
 from .gitutils import collect_recent_commits, discover_repo_root
 from .graph import build_cochange_layer, build_file_layer, build_graph
 from .hotspots import annotate_file_nodes, compute_churn, compute_hotspots
-from .models import CommitRecord, SourceRecord
+from .models import CommitRecord, GraphNode, SourceRecord
 from .store import CortexStore, default_db_path, write_repo_meta
 
 _TEXT_SUFFIXES = {
@@ -255,6 +255,24 @@ def _commits_changed(store: CortexStore, repo_root: Path, commits: list[CommitRe
     return stored_shas != current_shas
 
 
+def _sync_semantic_embeddings(
+    store: CortexStore,
+    repo_root: Path,
+    sources: list[SourceRecord],
+    nodes: list[GraphNode],
+    replace_paths: set[str] | list[str] | tuple[str, ...] = (),
+) -> None:
+    """Best-effort P1-7 indexing, isolated from the default ingest path."""
+    try:
+        from .semantic import index_embeddings
+
+        index_embeddings(store, repo_root, sources, nodes, replace_paths=replace_paths)
+    except Exception:
+        # Optional dependencies, a corrupt local model, or a provider failure
+        # must never turn the normal graph ingest into an error.
+        return
+
+
 def ingest_repository(
     repo_path: Path,
     commit_limit: int = 50,
@@ -315,6 +333,19 @@ def ingest_repository(
         if deleted_paths:
             store.delete_sources(repo_root, deleted_paths)
 
+        # P1-7: changed/deleted files own their embedding rows just like
+        # sources and graph rows.  The helper deletes those rows even when no
+        # local model is available, then returns without slowing the default
+        # path or attempting any network access.
+        if sources_to_process or stale_paths:
+            _sync_semantic_embeddings(
+                store,
+                repo_root,
+                sources_to_process,
+                new_nodes,
+                replace_paths=stale_paths,
+            )
+
         # COCHANGE correctness (P0-3 item 4): co-change edges come from commit
         # history, not file contents, so they're rebuilt only when commits
         # actually changed -- or when a file was deleted, since a deleted
@@ -364,6 +395,7 @@ def ingest_repository(
     store.save_sources(repo_root, all_sources)
     store.save_commits(repo_root, commits)
     store.save_graph(repo_root, nodes, edges)
+    _sync_semantic_embeddings(store, repo_root, all_sources, nodes, replace_paths=[source.path for source in all_sources])
 
     return {
         "repo_path": str(repo_root),

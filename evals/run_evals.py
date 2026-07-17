@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
+import statistics
 import subprocess
 import sys
 import tempfile
@@ -28,6 +30,10 @@ class GoldTask:
     expected_symbols: tuple[str, ...] = ()
     budget: int = 900
     tight_budget: int = 180
+    # Optional tasks are excluded from the default/off matrix so existing
+    # rows and aggregate metrics remain unchanged.  They are eligible only
+    # for an explicitly requested semantic-on run with a real local model.
+    tags: tuple[str, ...] = ()
 
 
 GOLD_TASKS: tuple[GoldTask, ...] = (
@@ -147,6 +153,26 @@ GOLD_TASKS: tuple[GoldTask, ...] = (
         repo="qt_app",
         description="Find the Qt build files that register the QML scene and delegate for compilation",
         expected_files=("CMakeLists.txt", "resources.qrc"),
+    ),
+    GoldTask(
+        repo="semantic_python_gap",
+        description="Where is the credential verification lifecycle implemented?",
+        expected_files=("zz_auth.py", "zz_session.py"),
+        expected_symbols=("zz_auth.py:AuthService.login", "zz_session.py:SessionStore.create"),
+        budget=120,
+        tags=("optional", "semantic", "vocabulary-gap"),
+    ),
+    GoldTask(
+        repo="semantic_qt_gap",
+        description="Where is the button click handled?",
+        expected_files=("zz/Delegate.qml", "zz/Main.qml", "zz/Controls.qml"),
+        expected_symbols=(
+            "zz/Delegate.qml:MouseArea.onClicked",
+            "zz/Main.qml:Delegate.onClicked",
+            "zz/Controls.qml:onClicked",
+        ),
+        budget=100,
+        tags=("optional", "semantic", "qt"),
     ),
 )
 
@@ -639,6 +665,116 @@ ApplicationWindow {
     return repo
 
 
+def _semantic_noise_markdown(title: str) -> str:
+    """Large, vocabulary-neutral prose for controlled semantic-gap evals."""
+
+    return "\n".join(
+        [
+            f"# {title}",
+            "",
+            ("Inventory telemetry scheduling and deterministic storage notes. "
+             "This document is intentionally unrelated to the target behavior. " * 18),
+        ]
+    )
+
+
+def _build_semantic_python_gap(base: Path) -> Path:
+    """Isolated vocabulary-gap fixture: late gold files, early distractors.
+
+    The query words credential/verification/lifecycle do not occur in any
+    path, identifier, body, or prose. A small budget means lexical/off mode
+    selects the alphabetically early markdown distractors; the real local
+    model must bridge to the password/login/session implementation files.
+    """
+
+    repo = base / "semantic_python_gap"
+    _init_repo(repo)
+    # Write gold files first so later distractor mtimes win the otherwise-tied
+    # recency fallback in semantic-off mode.
+    _write(repo / "zz_auth.py", """
+class AuthService:
+    def __init__(self, users):
+        self.users = users
+
+    def login(self, username, password):
+        user = self.users[username]
+        if user["password"] != password:
+            raise ValueError("bad password")
+        return f"token-{user['id']}"
+""")
+    _write(repo / "zz_session.py", """
+class SessionStore:
+    def __init__(self):
+        self.sessions = {}
+
+    def create(self, user_id):
+        token = f"token-{user_id}"
+        self.sessions[token] = {"user_id": user_id, "expires": 999999}
+        return token
+
+    def prune_expired(self, now):
+        return [token for token, row in self.sessions.items() if row["expires"] < now]
+""")
+    for name in ("aa_notes.md", "ab_inventory.md", "ac_telemetry.md", "ad_scheduler.md"):
+        _write(repo / name, _semantic_noise_markdown(name))
+    _commit_all(repo, "add controlled credential vocabulary gap fixture")
+    return repo
+
+
+def _build_semantic_qt_gap(base: Path) -> Path:
+    """Isolated Qt vocabulary-gap fixture for a QML MouseArea handler."""
+
+    repo = base / "semantic_qt_gap"
+    _init_repo(repo)
+    # Keep the target's mtime before distractors so off-mode cannot win by
+    # recency when the task has no lexical overlap.
+    _write(repo / "zz/Delegate.qml", """
+import QtQuick 2.15
+
+Item {
+    id: delegateRoot
+
+    MouseArea {
+        anchors.fill: parent
+        onClicked: console.log("activated")
+    }
+}
+""")
+    _write(repo / "zz/Main.qml", """
+import QtQuick 2.15
+
+Item {
+    Delegate {
+        id: delegate
+        onClicked: console.log("forwarded")
+    }
+}
+""")
+    _write(repo / "zz/Controls.qml", """
+import QtQuick 2.15
+
+Item {
+    MouseArea {
+        anchors.fill: parent
+        onClicked: console.log("confirmed")
+    }
+}
+""")
+    for name in ("aa_catalog.md", "ab_theme.md", "ac_network.md"):
+        _write(repo / name, _semantic_noise_markdown(name))
+    _commit_all(repo, "add controlled qml handler vocabulary gap fixture")
+    return repo
+
+
+def build_semantic_fixture_repos(base: Path) -> dict[str, Path]:
+    """Build only the optional P1-7 fixtures; default rows never see them."""
+
+    return {
+        "semantic_python_gap": _build_semantic_python_gap(base),
+        "semantic_qt_gap": _build_semantic_qt_gap(base),
+    }
+
+
 def build_fixture_repos(base: Path) -> dict[str, Path]:
     return {
         "python_app": _build_python_app(base),
@@ -687,6 +823,11 @@ def _run_bundle(repo: Path, task: GoldTask, mode: str, db_path: Path) -> dict[st
     rank = "bfs" if mode == "bfs" else "pagerank"
     budget = task.tight_budget if mode.startswith("skeleton_") else task.budget
     original_skeleton = bundle_mod._skeleton_item
+    previous_semantic = os.environ.get("CORTEX_SEMANTIC")
+    # The historical modes are explicitly semantic-off even on a machine that
+    # happens to have a local model.  semantic_on is opt-in and is only added
+    # by run_evals after a real local model has been loaded successfully.
+    os.environ["CORTEX_SEMANTIC"] = "1" if mode == "semantic_on" else "0"
     if mode == "skeleton_off":
         bundle_mod._skeleton_item = lambda *args, **kwargs: None
     started = time.perf_counter()
@@ -701,6 +842,10 @@ def _run_bundle(repo: Path, task: GoldTask, mode: str, db_path: Path) -> dict[st
         )
     finally:
         bundle_mod._skeleton_item = original_skeleton
+        if previous_semantic is None:
+            os.environ.pop("CORTEX_SEMANTIC", None)
+        else:
+            os.environ["CORTEX_SEMANTIC"] = previous_semantic
     latency_ms = (time.perf_counter() - started) * 1000.0
     return {"bundle": result, "latency_ms": latency_ms}
 
@@ -792,24 +937,186 @@ def _format_markdown(rows: list[dict[str, Any]]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def run_evals(results_path: Path = ROOT / "evals" / "RESULTS.md") -> tuple[str, list[dict[str, Any]]]:
+def ingest_overhead_ratio(baseline_seconds: float, semantic_seconds: float) -> float | None:
+    """Return the measured semantic/baseline ingest ratio, if meaningful."""
+
+    if baseline_seconds <= 0:
+        return None
+    return semantic_seconds / baseline_seconds
+
+
+def measure_ingest_overhead(
+    repo: Path,
+    *,
+    commit_limit: int = 20,
+    repeats: int = 3,
+) -> dict[str, Any]:
+    """Measure optional semantic ingest cost with repeated isolated runs.
+
+    This helper is intentionally not part of the default eval matrix. It
+    requires a real local model, performs no setup/download, and reports
+    per-run plus median baseline/semantic timings. Median ratio is the P1-7
+    ``<2x`` acceptance signal; one tiny-fixture timing is not treated as proof.
+    """
+
+    from cortex.semantic import semantic_runtime_ready
+
+    previous_semantic = os.environ.get("CORTEX_SEMANTIC")
+    os.environ["CORTEX_SEMANTIC"] = "1"
+    try:
+        if not semantic_runtime_ready():
+            return {"available": False, "reason": "real local semantic model is not ready"}
+        sample_count = max(1, int(repeats))
+        baseline_samples: list[float] = []
+        semantic_samples: list[float] = []
+        with tempfile.TemporaryDirectory(prefix="cortex-ingest-overhead-") as tmp:
+            base = Path(tmp)
+            for index in range(sample_count):
+                baseline_db = base / f"baseline-{index}.db"
+                semantic_db = base / f"semantic-{index}.db"
+                os.environ["CORTEX_SEMANTIC"] = "0"
+                started = time.perf_counter()
+                ingest_repository(repo, commit_limit=commit_limit, db_path=baseline_db)
+                baseline_samples.append(time.perf_counter() - started)
+                os.environ["CORTEX_SEMANTIC"] = "1"
+                started = time.perf_counter()
+                ingest_repository(repo, commit_limit=commit_limit, db_path=semantic_db)
+                semantic_samples.append(time.perf_counter() - started)
+        ratio_samples = [
+            ratio
+            for baseline, semantic in zip(baseline_samples, semantic_samples, strict=True)
+            if (ratio := ingest_overhead_ratio(baseline, semantic)) is not None
+        ]
+        baseline_seconds = statistics.median(baseline_samples)
+        semantic_seconds = statistics.median(semantic_samples)
+        ratio = statistics.median(ratio_samples) if ratio_samples else None
+        return {
+            "available": True,
+            "repeats": sample_count,
+            "baseline_seconds": baseline_seconds,
+            "semantic_seconds": semantic_seconds,
+            "ratio": ratio,
+            "baseline_samples": baseline_samples,
+            "semantic_samples": semantic_samples,
+            "ratio_samples": ratio_samples,
+            "under_two_x": ratio is not None and ratio < 2.0,
+        }
+    finally:
+        if previous_semantic is None:
+            os.environ.pop("CORTEX_SEMANTIC", None)
+        else:
+            os.environ["CORTEX_SEMANTIC"] = previous_semantic
+
+
+def measure_query_latency(
+    repo: Path,
+    task: str,
+    db_path: Path,
+    *,
+    budget: int = 900,
+    repeats: int = 7,
+) -> dict[str, Any]:
+    """Compare repeated off/on query latency with the local model warmed.
+
+    No setup/download is attempted. The semantic side calls
+    ``semantic_runtime_ready`` before timing so model load is excluded from
+    the reported median; this is an evidence helper, not a performance gate.
+    """
+
+    from cortex.semantic import semantic_runtime_ready
+
+    sample_count = max(1, int(repeats))
+    previous_semantic = os.environ.get("CORTEX_SEMANTIC")
+    try:
+        os.environ["CORTEX_SEMANTIC"] = "0"
+        bundle_mod.generate_bundle(repo, task, budget, db_path=db_path, output_format="json")
+        off_samples: list[float] = []
+        for _ in range(sample_count):
+            started = time.perf_counter()
+            bundle_mod.generate_bundle(repo, task, budget, db_path=db_path, output_format="json")
+            off_samples.append((time.perf_counter() - started) * 1000.0)
+
+        os.environ["CORTEX_SEMANTIC"] = "1"
+        if not semantic_runtime_ready():
+            return {"available": False, "reason": "real local semantic model is not ready"}
+        bundle_mod.generate_bundle(repo, task, budget, db_path=db_path, output_format="json")
+        on_samples: list[float] = []
+        for _ in range(sample_count):
+            started = time.perf_counter()
+            bundle_mod.generate_bundle(repo, task, budget, db_path=db_path, output_format="json")
+            on_samples.append((time.perf_counter() - started) * 1000.0)
+        return {
+            "available": True,
+            "repeats": sample_count,
+            "off_median_ms": statistics.median(off_samples),
+            "semantic_on_median_ms": statistics.median(on_samples),
+            "off_samples_ms": off_samples,
+            "semantic_on_samples_ms": on_samples,
+            "model_loaded_before_timing": True,
+        }
+    finally:
+        if previous_semantic is None:
+            os.environ.pop("CORTEX_SEMANTIC", None)
+        else:
+            os.environ["CORTEX_SEMANTIC"] = previous_semantic
+
+
+def run_evals(
+    results_path: Path = ROOT / "evals" / "RESULTS.md",
+    *,
+    semantic: bool = False,
+) -> tuple[str, list[dict[str, Any]]]:
     rows: list[dict[str, Any]] = []
-    with tempfile.TemporaryDirectory(prefix="cortex-evals-") as tmp:
-        base = Path(tmp)
-        repos = build_fixture_repos(base)
-        db_paths: dict[str, Path] = {}
-        for name, repo in repos.items():
-            db_path = base / f"{name}.db"
-            ingest_repository(repo, commit_limit=20, db_path=db_path)
-            db_paths[name] = db_path
-        for task in GOLD_TASKS:
-            repo = repos[task.repo]
-            db_path = db_paths[task.repo]
-            for mode in ("pagerank", "bfs", "skeleton_on", "skeleton_off"):
-                rows.append(_score_task(task, mode, repo, db_path))
+    previous_semantic = os.environ.get("CORTEX_SEMANTIC")
+    os.environ["CORTEX_SEMANTIC"] = "1" if semantic else "0"
+    semantic_ready = False
+    try:
+        if semantic:
+            from cortex.semantic import semantic_runtime_ready
+
+            semantic_ready = semantic_runtime_ready()
+        tasks = [task for task in GOLD_TASKS if not task.tags]
+        default_modes = ("pagerank", "bfs", "skeleton_on", "skeleton_off")
+        modes = default_modes
+        with tempfile.TemporaryDirectory(prefix="cortex-evals-") as tmp:
+            base = Path(tmp)
+            repos = build_fixture_repos(base)
+            if semantic and semantic_ready:
+                tasks.extend(task for task in GOLD_TASKS if task.tags)
+                # Optional tasks are deliberately run against the same
+                # real-model-built DB twice: explicit off proves the gold gap,
+                # explicit on proves semantic recovery. Historical rows stay
+                # on the unchanged four-mode matrix.
+                repos.update(build_semantic_fixture_repos(base))
+                modes = (*default_modes, "semantic_off", "semantic_on")
+            db_paths: dict[str, Path] = {}
+            for name, repo in repos.items():
+                db_path = base / f"{name}.db"
+                ingest_repository(repo, commit_limit=20, db_path=db_path)
+                db_paths[name] = db_path
+            for task in tasks:
+                repo = repos[task.repo]
+                db_path = db_paths[task.repo]
+                for mode in modes:
+                    if task.tags:
+                        if mode not in {"semantic_off", "semantic_on"}:
+                            continue
+                    elif mode not in default_modes and mode != "semantic_on":
+                        continue
+                    rows.append(_score_task(task, mode, repo, db_path))
+    finally:
+        if previous_semantic is None:
+            os.environ.pop("CORTEX_SEMANTIC", None)
+        else:
+            os.environ["CORTEX_SEMANTIC"] = previous_semantic
     markdown = _format_markdown(rows)
     results_path.parent.mkdir(parents=True, exist_ok=True)
     results_path.write_text(markdown, encoding="utf-8")
+    if semantic and not semantic_ready:
+        # Keep this out of the Markdown/JSON rows: a skipped optional task is
+        # not a semantic-on result and must not be reported as a failure or
+        # success claim.
+        print("Semantic eval tasks skipped: no real local model is ready; run `cortex semantic setup` first.", file=sys.stderr)
     return markdown, rows
 
 
@@ -817,8 +1124,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run Cortex gold-task evals")
     parser.add_argument("--json", action="store_true", help="Emit raw rows as JSON instead of Markdown")
     parser.add_argument("--results", type=Path, default=ROOT / "evals" / "RESULTS.md")
+    parser.add_argument("--semantic", action="store_true", help="Opt into semantic-on evals when a real local model is ready")
     args = parser.parse_args()
-    markdown, rows = run_evals(args.results)
+    markdown, rows = run_evals(args.results, semantic=args.semantic)
     if args.json:
         print(json.dumps(rows, indent=2, default=str))
     else:

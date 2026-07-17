@@ -566,7 +566,35 @@ def generate_bundle(
         path for path, names in symbol_names_by_path.items()
         if task_terms & names and path in base_scores
     )
+    # P1-7: an optional local Model2Vec list is appended only when a managed
+    # local model and same-model chunk vectors are available.  The helper is
+    # lazy/soft-imported so an absent extra takes the exact pre-semantic path.
+    semantic_rank_list: list[str] = []
+    lexical_signal_paths: set[str] = set()
+    try:
+        from .semantic import ranked_paths, semantic_enabled
+
+        if semantic_enabled():
+            # Preserve lexical/name rankings exactly for ordinary tasks:
+            # semantic fusion is most valuable when the task vocabulary has no
+            # direct indexed overlap (the P1-7 vocabulary-gap case). Avoiding a
+            # model encode in the ordinary case also keeps optional semantic
+            # latency out of the established path.
+            lexical_signal_paths = {
+                source.path
+                for source in sources
+                if task_terms and task_terms & _tokenize_text(f"{source.path}\n{source.content}")
+            }
+            if not lexical_signal_paths:
+                semantic_rank_list = [
+                    path for path in ranked_paths(store, repo_root, task)
+                    if path in base_scores
+                ]
+    except Exception:
+        semantic_rank_list = []
     fusion_lists: list[list[str]] = [name_rank_list, fts_rank_list, definition_rank_list]
+    if semantic_rank_list and not lexical_signal_paths:
+        fusion_lists.append(semantic_rank_list)
     if _looks_like_identifier_query(task):
         # Adaptive weighting: an identifier-shaped query double-counts the
         # lexical/name list so exact-symbol relevance outweighs generic FTS

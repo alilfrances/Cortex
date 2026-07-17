@@ -41,6 +41,9 @@ languages = [
   "tree-sitter-cpp==0.23.4",
 ]
 qml = ["tree-sitter-language-pack>=1.12"]
+# Optional offline static semantic retrieval. Model2Vec itself depends on numpy;
+# keeping both names here makes the opt-in dependency boundary explicit.
+semantic = ["model2vec>=0.8,<0.9", "numpy>=1.26"]
 
 [project.scripts]
 cortex = "cortex.cli:main"
