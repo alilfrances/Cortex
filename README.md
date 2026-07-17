@@ -110,6 +110,7 @@ This creates `cortex.db` and `cortex_report.md` under `~/.cortex/data/<repo-path
 | `cortex_overview` | Returns a compact repo overview, including `top_hotspots`, from the stored graph and report data. | "Ask Cortex for an overview before we refactor the API layer." |
 | `cortex_impact` | Ranks structural and co-change neighbors for a file or symbol. | "Use Cortex impact on `src/cortex/bundle.py` before changing packing." |
 | `cortex_context` | Batches paths and symbols into one compact triage card per target; default budget 2000, with optional `include: ["impact", "cochange", "symbols"]` expansions. Cards include structural/co-change neighbors, hotspots, spans, and Qt/QML signals, slots, handlers, wiring, and instantiations. If an intentionally tiny budget cannot fit irreducible card metadata, `budget_feasible: false` explains the condition while preserving every original target. | "Before editing several files, call Cortex context once with all their paths and symbols." |
+| `cortex_risk` | Runs a local git diff and returns deterministic 0–10 per-file risk plus missing co-change/test/Qt/build-reference directives; supports `range`, `staged`, and a response budget. | "Check `cortex_risk` before committing this change." |
 | `cortex_search_symbols` | Searches indexed file and symbol nodes by name. | "Search Cortex symbols for `SessionStore` and related methods." |
 | `cortex_read_symbol` | Returns source for one indexed symbol span; `mode` picks `full` (numbered lines, default), `skeleton` (signature + nested member signatures, bodies elided), or `signature` (signature line + span only). | "Read the `generate_bundle` symbol with Cortex instead of opening the whole file." |
 | `cortex_read_file` | Direct replacement for the built-in `Read` tool on an indexed file; `mode: "skeleton"` (default) returns imports/includes + every top-level signature with bodies elided, `mode: "full"` returns the exact indexed content. | "Read `src/cortex/bundle.py` with Cortex instead of the raw file." |
@@ -118,11 +119,11 @@ This creates `cortex.db` and `cortex_report.md` under `~/.cortex/data/<repo-path
 | `cortex_search_text` | Full-text body search (FTS5 BM25) across indexed file contents, with line-anchored snippets — a grep replacement over string literals, error messages, comments, and prose that symbol search can't see. | "Search Cortex text for the 'device offline' error message." |
 | `cortex_refresh` | Re-ingests the repo and updates freshness metadata. | "Refresh Cortex, then query the checkout flow again." |
 
-Tool results include provenance where available. Read tools keep the index fresh automatically: when the repository fingerprint has changed since ingestion, they run an incremental re-ingest (changed, new, and deleted files only) before answering and report the delta under `auto_refreshed`. Set `CORTEX_AUTO_REFRESH=0` to disable and fall back to stale-state hints plus manual `cortex_refresh`. If no index exists yet, read tools still require an explicit `cortex_refresh` first.
+Tool results include provenance where available. Read/query/analysis tools keep the index fresh automatically: when the repository fingerprint has changed since ingestion, they run an incremental re-ingest (changed, new, and deleted files only) before answering and report the delta under `auto_refreshed`. Set `CORTEX_AUTO_REFRESH=0` to disable and fall back to stale-state hints plus manual `cortex_refresh`. If no index exists yet, indexed read/query tools still require an explicit `cortex_refresh` first; `cortex_risk` can run a clearly marked partial git-only analysis.
 
 `cortex_query`, `cortex_impact`, and `cortex_overview` cache their result under a key derived from the (post-refresh) repo fingerprint, tool name, and call arguments, so a repeated identical call skips PageRank/packing entirely and returns the prior response data unchanged — any file change invalidates the cache automatically, since it changes the fingerprint. Set `CORTEX_QUERY_CACHE=0` to disable both reading and writing this cache. `cortex gc` prunes cached rows older than 30 days or beyond 200 rows per repo.
 
-All 10 read/query tools (everything above except `cortex_refresh`) can carry a `_meta` object: `{index_age_seconds, indexed_at, fingerprint_fresh, auto_refreshed?, cached?, saved_tokens?}`. `detailed` responses always include it; `concise` responses include it only when something is worth surfacing — the index is stale, an auto-refresh just ran, the response came from the P1-3 cache (`cached: true`), or the call saved a meaningful number of tokens over a raw file read (`saved_tokens`, exactly the number recorded in the `tool_usage` ledger — see `cortex saved` below) — otherwise it's omitted so a routine concise call costs no extra tokens. A cache hit always reports the *current* index age, never a value frozen from when the cache entry was written.
+The MCP surface has 12 tools: 11 read/query/analysis tools (everything above except `cortex_refresh`) can carry a `_meta` object: `{index_age_seconds, indexed_at, fingerprint_fresh, auto_refreshed?, cached?, saved_tokens?}`. `detailed` responses always include it; `concise` responses include it only when something is worth surfacing — the index is stale, an auto-refresh just ran, the response came from the P1-3 cache (`cached: true`), or the call saved a meaningful number of tokens over a raw file read (`saved_tokens`, exactly the number recorded in the `tool_usage` ledger — see `cortex saved` below) — otherwise it's omitted so a routine concise call costs no extra tokens. A cache hit always reports the *current* index age, never a value frozen from when the cache entry was written.
 
 ## CLI Reference
 
@@ -131,6 +132,7 @@ All 10 read/query tools (everything above except `cortex_refresh`) can carry a `
 | `cortex ingest <repo> [--commits 50] [--update]` | Scan source files, git history, graph layers, symbols, and fingerprints into SQLite. |
 | `cortex bundle <repo> --task "..." [--budget 4000] [--rank pagerank\|bfs] [--hotspot-boost] [--format md\|json]` | Emit a token-budgeted context bundle. |
 | `cortex report <repo> [--out] [--include-test-pairs]` | Write an architecture report with central nodes, hotspots, communities, and connections. |
+| `cortex risk [range] [--staged] [--format text|json] [--db PATH]` | Analyze a committed range (default `HEAD~1..HEAD`) or staged diff with deterministic per-file risk and missing-context directives. It runs local git only; no index is required, but an unindexed/partial result says so explicitly. |
 | `cortex gc [--prune]` | List central data dirs (`--prune` deletes ones whose repo is gone) and prune each repo's query result cache. |
 | `cortex enrich <repo> --provider claude\|codex [--force]` | Optional LLM semantic enrichment with local cache. Requires `[llm]`. |
 | `cortex semantic setup [--force]` | Explicitly download/cache `minishlab/potion-code-16M` below `CORTEX_DATA_DIR`; this is the only download path. |
@@ -147,6 +149,10 @@ All 10 read/query tools (everything above except `cortex_refresh`) can carry a `
 | `cortex hook install\|uninstall\|status [project_dir]` | Manage repo-local git hooks that run `cortex refresh`. |
 
 `cortex refresh <repo>` is also available as a convenience command for ingest plus report generation.
+
+### Risk score policy
+
+`cortex risk` uses fixed normalized components: `min(1, churn/100)`, stored hotspot score `/1000`, structural fan-in `/10`, strongest missing COCHANGE weight, and actionable-directive count `/3`. Their weights are respectively `0.30`, `0.20`, `0.15`, `0.15`, and `0.20`; the deterministic score is `round(10 * sum(weight * component), 2)`. Missing COCHANGE advice uses a documented threshold of `0.50`. Ties sort by descending score, then repository-relative path. Risk never runs network commands.
 
 ## Extras
 
@@ -217,7 +223,7 @@ Token counts reflect Cortex's tokenizer (P1-4): exact `tiktoken` o200k_base coun
 
 ## Token Savings
 
-Every successful call to a read tool (`cortex_query`, `cortex_overview`, `cortex_context`, `cortex_impact`, `cortex_search_symbols`, `cortex_read_symbol`, `cortex_read_file`, `cortex_relations`, `cortex_references`, `cortex_search_text`) is logged to a local `tool_usage` ledger with the response's actual token count and a deterministic baseline estimate of what an agent would have spent without Cortex. Run `cortex saved <repo>` to see it:
+Every successful call to a read/analysis tool (`cortex_query`, `cortex_overview`, `cortex_context`, `cortex_impact`, `cortex_search_symbols`, `cortex_read_symbol`, `cortex_read_file`, `cortex_relations`, `cortex_references`, `cortex_search_text`, `cortex_risk`) is logged to a local `tool_usage` ledger with the response's actual token count and a deterministic baseline estimate of what an agent would have spent without Cortex. Run `cortex saved <repo>` to see it:
 
 ```bash
 cortex saved . --daily

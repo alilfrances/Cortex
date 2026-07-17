@@ -25,6 +25,7 @@ from .integrations import (
     uninstall_git_hooks,
 )
 from .report import generate_report, write_report
+from .risk import analyze_risk
 from .savings import compute_savings, format_savings
 from .store import CortexStore, data_root, default_db_path
 from .viewer import write_html
@@ -222,6 +223,12 @@ def build_parser() -> argparse.ArgumentParser:
     report_parser.add_argument("--out", type=Path, default=None)
     report_parser.add_argument("--include-test-pairs", action="store_true")
 
+    risk_parser = subparsers.add_parser("risk", help="Analyze diff risk and missing impacted context")
+    risk_parser.add_argument("range_spec", nargs="?", default=None, help="Git revision range (default: HEAD~1..HEAD)")
+    risk_parser.add_argument("--staged", action="store_true", help="Analyze the staged index instead of the default commit range")
+    risk_parser.add_argument("--format", choices=("text", "json"), default="text")
+    risk_parser.add_argument("--db", type=Path, default=None)
+
     graph_parser = subparsers.add_parser("graph", help="Export or view the Cortex graph")
     graph_subparsers = graph_parser.add_subparsers(dest="graph_action", required=True)
     graph_export_parser = graph_subparsers.add_parser("export", help="Export a stored Cortex graph")
@@ -348,6 +355,34 @@ def main() -> None:
             include_test_pairs=args.include_test_pairs,
         )
         print(report)
+        return
+
+    if args.command == "risk":
+        result = analyze_risk(
+            Path("."),
+            args.range_spec,
+            staged=args.staged,
+            db_path=args.db,
+        )
+        if args.format == "json":
+            print(json.dumps(result, indent=2, sort_keys=True))
+        else:
+            if result.get("status") == "error":
+                print(f"Risk analysis error ({result.get('error', 'analysis_error')}): {result.get('message', '')}")
+            else:
+                print(f"Risk: {result.get('range')} ({'staged' if result.get('staged') else 'committed range'})")
+                for directive in result.get("directives", []):
+                    print(f"- {directive}")
+                if not result.get("directives"):
+                    print("- No missing context directives.")
+                for item in result.get("files", []):
+                    print(
+                        f"{item.get('path')}: risk={item.get('risk_score', 0):.2f} "
+                        f"(+{item.get('additions', 0)}/-{item.get('deletions', 0)}, "
+                        f"fan-in={item.get('fan_in', 0)})"
+                    )
+                if result.get("unindexed_files"):
+                    print(f"Unindexed files: {', '.join(result['unindexed_files'])}")
         return
 
     if args.command == "graph":

@@ -28,9 +28,10 @@ The plugin's `PreToolUse` hook watches built-in `Read`, `Grep`, and `Glob` calls
 6. Use `cortex_relations` for parsed graph questions such as imports, contains, inherits, emits, connects, handles, or QML `instantiates` wiring.
 7. Use `cortex_references` when configs, docs, scripts, CMake/QRC, or other parser-missed surfaces may reference a symbol.
 8. Use `cortex_search_text` for body text — string literals, error messages, comments, Markdown prose — that `cortex_search_symbols` can't find because it only matches symbol names/signatures/paths, not file contents.
-9. Default to `response_format: "concise"`; pass `response_format: "detailed"` only when you need provenance, fingerprints, full metadata, or detailed why-edges.
-10. If a tool reports `stale: true`, call `cortex_refresh` or rerun the read tool after refresh.
-11. Watch for a `_meta` object on any response (`index_age_seconds`, `indexed_at`, `fingerprint_fresh`, and optionally `auto_refreshed`/`cached`/`saved_tokens`). `detailed` responses always carry it; a `concise` response only carries it when something is worth acting on, so its mere presence is itself a signal — check `fingerprint_fresh`/`auto_refreshed` before trusting a concise result on a repo you suspect just changed.
+9. Before a commit or review, call `cortex_risk` with `range` (or `staged: true`) to get deterministic per-file scores and missing co-change/test/Qt/build-reference directives. It is local-only and can still report a clearly marked partial result when no Cortex index exists.
+10. Default to `response_format: "concise"`; pass `response_format: "detailed"` only when you need provenance, fingerprints, full metadata, or detailed why-edges.
+11. If a tool reports `stale: true`, call `cortex_refresh` or rerun the read tool after refresh.
+12. Watch for a `_meta` object on any response (`index_age_seconds`, `indexed_at`, `fingerprint_fresh`, and optionally `auto_refreshed`/`cached`/`saved_tokens`). `detailed` responses always carry it; a `concise` response only carries it when something is worth acting on, so its mere presence is itself a signal — check `fingerprint_fresh`/`auto_refreshed` before trusting a concise result on a repo you suspect just changed.
 
 ## Tools
 
@@ -88,6 +89,16 @@ Example:
 
 ```json
 {"path":"src/cortex/bundle.py","budget":4000}
+```
+
+### `cortex_risk`
+
+Runs `git diff --numstat --find-renames` plus zero-context change parsing with an argv-only local git invocation. The default is `HEAD~1..HEAD`; pass `staged: true` for the index. Each changed file includes additions/deletions/churn, stored hotspot fields, structural fan-in, normalized components, and a rounded 0–10 score. Directives use only indexed graph edges/metadata for Qt relationships, the shared `_looks_like_src_test_pair` heuristic for tests, and current CMake/QRC text for newly added QML. Unindexed files and shallow/no-commit analysis errors are labeled rather than guessed.
+
+Example:
+
+```json
+{"range":"main..HEAD","budget":2000}
 ```
 
 ### `cortex_impact`

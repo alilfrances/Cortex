@@ -15,6 +15,7 @@ from ..ingest import compute_repo_fingerprint, ingest_repository
 from ..references import find_references
 from ..report import generate_report
 from ..hotspots import top_hotspots
+from ..risk import analyze_risk, truncate_risk_result
 from ..store import CortexStore, default_db_path
 from ..tokenizer import count_text_tokens, truncate_text_to_budget
 
@@ -68,6 +69,20 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "response_format": {"type": "string", "enum": ["concise", "detailed"], "default": "concise"},
             },
             "required": ["path"],
+        },
+    },
+    {
+        "name": "cortex_risk",
+        "description": "Analyzes a local git diff for deterministic 0–10 per-file risk and concise missing-context directives (co-change partners, tests, Qt wiring, and QML build references). No network. Defaults to HEAD~1..HEAD, or use staged=true for the index.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "repo_path": {"type": "string"},
+                "range": {"type": "string", "description": "Git revision range; defaults to HEAD~1..HEAD unless staged=true."},
+                "staged": {"type": "boolean", "default": False},
+                "budget": {"type": "integer", "default": 2000},
+                "response_format": {"type": "string", "enum": ["concise", "detailed"], "default": "concise"},
+            },
         },
     },
     {
@@ -1144,6 +1159,39 @@ def _call_context(arguments: dict[str, Any]) -> dict[str, Any]:
     return _content(_format_payload(payload, status, response_format))
 
 
+def _call_risk(arguments: dict[str, Any]) -> dict[str, Any]:
+    """Run risk with one shared freshness check and no query cache."""
+    repo_root = _repo_root(arguments)
+    db_path = default_db_path(repo_root)
+    store = CortexStore(db_path) if db_path.exists() else None
+    if store is not None:
+        # Exactly one freshness check for the complete risk request.  The risk
+        # engine receives this graph snapshot and never performs its own check.
+        status = _ensure_fresh(store, repo_root)
+        nodes, edges = store.fetch_graph(repo_root)
+        graph_args = {"nodes": nodes, "edges": edges}
+    else:
+        status = {
+            "stale": False,
+            "fingerprint": "",
+            "current_fingerprint": compute_repo_fingerprint(repo_root),
+            "refresh_hint": "Call cortex_refresh to build the index.",
+            "indexed_at": 0,
+            "index_age_seconds": 0,
+        }
+        graph_args = {"nodes": None, "edges": None}
+    result = analyze_risk(
+        repo_root,
+        arguments.get("range"),
+        staged=bool(arguments.get("staged", False)),
+        db_path=db_path,
+        **graph_args,
+    )
+    result = truncate_risk_result(result, int(arguments.get("budget", 2000)))
+    response_format = _response_format(arguments)
+    return _content(_format_payload(result, status, response_format), is_error=result.get("status") == "error")
+
+
 def _call_search(arguments: dict[str, Any]) -> dict[str, Any]:
     repo_root = _repo_root(arguments)
     store, error = _store_or_error(repo_root)
@@ -1483,6 +1531,7 @@ _LEDGER_TOOLS = {
     "cortex_relations",
     "cortex_references",
     "cortex_search_text",
+    "cortex_risk",
 }
 
 # Matches the "<label> @ <path>[:<line>]" endpoint rendering built by
@@ -1546,7 +1595,7 @@ def _estimate_baseline(
 
     - File-returning tools (cortex_query, cortex_context, cortex_impact,
       cortex_read_symbol, cortex_read_file, cortex_references,
-      cortex_search_text): baseline is
+      cortex_search_text, cortex_risk): baseline is
       the token cost of reading, in full and raw, every DISTINCT file
       referenced in the actual response -- the tokens an agent would have
       spent with plain Read/grep instead of this tool. Computed via
@@ -1605,6 +1654,10 @@ def _estimate_baseline(
             for entry in bucket:
                 match = _REFERENCE_LOCATION_RE.match(str(entry))
                 paths.add(match.group(1) if match else str(entry))
+        return _referenced_file_tokens(store, repo_root, paths)
+
+    if tool == "cortex_risk":
+        paths = {str(item.get("path", "")) for item in payload.get("files", []) if item.get("path")}
         return _referenced_file_tokens(store, repo_root, paths)
 
     if tool in ("cortex_search_symbols", "cortex_overview"):
@@ -1721,6 +1774,8 @@ def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
             result = _call_references(args)
         elif name == "cortex_search_text":
             result = _call_search_text(args)
+        elif name == "cortex_risk":
+            result = _call_risk(args)
         elif name == "cortex_refresh":
             result = _call_refresh(args)
         else:
