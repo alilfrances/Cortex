@@ -23,9 +23,10 @@ Use Cortex when working inside an indexed repository and you need code context, 
 7. Use `cortex_references` when configs, docs, scripts, CMake/QRC, or other parser-missed surfaces may reference a symbol.
 8. Use `cortex_search_text` for body text — string literals, error messages, comments, Markdown prose — that `cortex_search_symbols` can't find because it only matches symbol names/signatures/paths, not file contents.
 9. Before a commit or review, call `cortex_risk` with `range` (or `staged: true`) to get deterministic per-file scores and missing co-change/test/Qt/build-reference directives. It is local-only and can still report a clearly marked partial result when no Cortex index exists.
-10. Default to `response_format: "concise"`; pass `response_format: "detailed"` only when you need provenance, fingerprints, full metadata, or detailed why-edges.
-11. If a tool reports `stale: true`, call `cortex_refresh` or rerun the read tool after refresh.
-12. Watch for a `_meta` object on any response (`index_age_seconds`, `indexed_at`, `fingerprint_fresh`, and optionally `auto_refreshed`/`cached`/`saved_tokens`). `detailed` responses always carry it; a `concise` response only carries it when something is worth acting on, so its mere presence is itself a signal — check `fingerprint_fresh`/`auto_refreshed` before trusting a concise result on a repo you suspect just changed.
+10. Use `cortex_dead_code` for deterministic dead-code candidates from graph fan-in plus grep references; treat `high` as the strictest tier, and remember that regex-backend languages and Qt meta-object surfaces are conservatively capped or excluded.
+11. Default to `response_format: "concise"`; pass `response_format: "detailed"` only when you need provenance, fingerprints, full metadata, or detailed why-edges.
+12. If a tool reports `stale: true`, call `cortex_refresh` or rerun the read tool after refresh.
+13. Watch for a `_meta` object on any response (`index_age_seconds`, `indexed_at`, `fingerprint_fresh`, and optionally `auto_refreshed`/`cached`/`saved_tokens`). `detailed` responses always carry it; a `concise` response only carries it when something is worth acting on, so its mere presence is itself a signal — check `fingerprint_fresh`/`auto_refreshed` before trusting a concise result on a repo you suspect just changed.
 
 ## Tools
 
@@ -93,6 +94,16 @@ Example:
 
 ```json
 {"range":"main..HEAD","budget":2000}
+```
+
+### `cortex_dead_code`
+
+Finds symbol-granularity candidates with no incoming calls/imports/inherits/references or Qt runtime edges, then uses local grep references to assign conservative `high`, `medium`, or `low` confidence. Python entry points, tests, re-exports, decorated symbols, and Qt slots/signals/handlers/types with credited runtime edges are excluded; non-Python regex-backend candidates cannot be high confidence. Results include `symbol`, `file`, `line`, `confidence`, and `reason`, and `budget` deterministically truncates the sorted findings.
+
+Example:
+
+```json
+{"budget":2000}
 ```
 
 ### `cortex_impact`

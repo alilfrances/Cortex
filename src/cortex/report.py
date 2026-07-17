@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 
 from .community import detect_communities
+from .deadcode import analyze_dead_code
 from .gitutils import discover_repo_root
 from .hotspots import top_hotspots
 from .models import GraphEdge, GraphNode
@@ -99,6 +100,7 @@ def generate_report(
     god_nodes = _god_nodes(nodes, edges)
     hotspots = top_hotspots(nodes)
     surprises = _surprising_connections(nodes, edges, node_community, include_test_pairs=include_test_pairs)
+    dead_code = analyze_dead_code(repo_root, store=store, nodes=nodes, edges=edges)
     file_node_count = sum(1 for node in nodes if node.kind == "file")
 
     lines = [
@@ -135,6 +137,15 @@ def generate_report(
             lines.append(f"- `{source}` ↔ `{target}` ({note})")
     else:
         lines.append("- None detected yet. Run `cortex enrich .` for deeper semantic analysis.")
+
+    lines.extend(["", "## Dead Code Candidates"])
+    if dead_code["findings"]:
+        lines.extend(
+            f"- `{item['symbol']}` — `{item['file']}:{item['line']}` — {item['confidence']}: {item['reason']}"
+            for item in dead_code["findings"]
+        )
+    else:
+        lines.append("- None detected yet.")
 
     report = "\n".join(lines).strip()
 

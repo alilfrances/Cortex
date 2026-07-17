@@ -83,6 +83,7 @@ def main() -> int:
             "cortex_read_file (direct Read replacement for an indexed file; mode=skeleton by default -- "
             "imports/includes + top-level signatures, bodies elided), "
             "cortex_risk (local diff risk and missing-context directives before a commit), "
+            "cortex_dead_code (budgeted confidence-tiered dead-code candidates with Qt exclusions), "
             "cortex_impact (co-change/structural neighbors before editing), "
             "cortex_relations (parsed graph edges — 'who inherits/emits/connects to X'), "
             "cortex_references (blast-radius — graph edges + cross-language grep for a symbol, "

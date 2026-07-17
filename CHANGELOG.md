@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add the confidence-tiered dead-code report (`cortex_dead_code`): it analyzes persisted symbol-graph fan-in plus local grep references, excludes Python entry points and test/re-exported/decorated symbols, conservatively caps regex-backend languages at low confidence, and credits Qt connects/emits/handles/instantiates edges plus Qt meta-object macros. The `cortex report` output includes deterministic dead-code candidates, and the MCP surface supports budgeted findings.
+
 - Add diff-aware local risk analysis (`cortex risk` / `cortex_risk`): safely parses deterministic numstat, rename/status, and zero-context git diff data for committed ranges or staged changes; reports additions/deletions/churn, stored hotspot metadata, structural fan-in, fixed normalized 0–10 scores, and deterministic missing co-change/test/Qt/build-reference directives. Qt advice is emitted only from resolved graph edges and metadata, while missing-index, shallow-history, no-commit, and non-git cases remain clearly labeled. The MCP tool performs one shared freshness check, uses the standard `_meta` envelope and token ledger, and applies deterministic budget truncation without query caching.
 
 - Remove the P1-8 fail-open `PreToolUse` redirect hook for built-in `Read`/`Grep`/`Glob` calls (added and then reverted on this branch): shell-command/built-in-tool interception is out of scope for Cortex's repo-indexing functionality and now lives in its own plan (`RTK_PLAN.md`) for a possible separate plugin.

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from ..bundle import _render_skeleton, _render_symbol_skeleton, _tokenize_query, generate_bundle
+from ..deadcode import analyze_dead_code, truncate_dead_code_result
 from ..gitutils import discover_repo_root
 from ..impact import UnknownPathError, rank_file_impact
 from ..ingest import compute_repo_fingerprint, ingest_repository
@@ -80,6 +81,18 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "repo_path": {"type": "string"},
                 "range": {"type": "string", "description": "Git revision range; defaults to HEAD~1..HEAD unless staged=true."},
                 "staged": {"type": "boolean", "default": False},
+                "budget": {"type": "integer", "default": 2000},
+                "response_format": {"type": "string", "enum": ["concise", "detailed"], "default": "concise"},
+            },
+        },
+    },
+    {
+        "name": "cortex_dead_code",
+        "description": "Finds deterministic dead-code candidates from the persisted symbol graph plus local grep references, with conservative high/medium/low confidence tiers and Qt meta-object exclusions. No network. Use budget to cap the returned findings.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "repo_path": {"type": "string"},
                 "budget": {"type": "integer", "default": 2000},
                 "response_format": {"type": "string", "enum": ["concise", "detailed"], "default": "concise"},
             },
@@ -1192,6 +1205,27 @@ def _call_risk(arguments: dict[str, Any]) -> dict[str, Any]:
     return _content(_format_payload(result, status, response_format), is_error=result.get("status") == "error")
 
 
+def _call_dead_code(arguments: dict[str, Any]) -> dict[str, Any]:
+    repo_root = _repo_root(arguments)
+    store, error = _store_or_error(repo_root)
+    if error is not None:
+        return _content(error, is_error=True)
+    assert store is not None
+    status = _ensure_fresh(store, repo_root)
+    nodes, edges = store.fetch_graph(repo_root)
+    result = analyze_dead_code(
+        repo_root,
+        db_path=store.db_path,
+        store=store,
+        nodes=nodes,
+        edges=edges,
+        budget=int(arguments.get("budget", 2000)),
+    )
+    result = truncate_dead_code_result(result, int(arguments.get("budget", 2000)))
+    response_format = _response_format(arguments)
+    return _content(_format_payload(result, status, response_format))
+
+
 def _call_search(arguments: dict[str, Any]) -> dict[str, Any]:
     repo_root = _repo_root(arguments)
     store, error = _store_or_error(repo_root)
@@ -1532,6 +1566,7 @@ _LEDGER_TOOLS = {
     "cortex_references",
     "cortex_search_text",
     "cortex_risk",
+    "cortex_dead_code",
 }
 
 # Matches the "<label> @ <path>[:<line>]" endpoint rendering built by
@@ -1595,7 +1630,7 @@ def _estimate_baseline(
 
     - File-returning tools (cortex_query, cortex_context, cortex_impact,
       cortex_read_symbol, cortex_read_file, cortex_references,
-      cortex_search_text, cortex_risk): baseline is
+      cortex_search_text, cortex_risk, cortex_dead_code): baseline is
       the token cost of reading, in full and raw, every DISTINCT file
       referenced in the actual response -- the tokens an agent would have
       spent with plain Read/grep instead of this tool. Computed via
@@ -1658,6 +1693,10 @@ def _estimate_baseline(
 
     if tool == "cortex_risk":
         paths = {str(item.get("path", "")) for item in payload.get("files", []) if item.get("path")}
+        return _referenced_file_tokens(store, repo_root, paths)
+
+    if tool == "cortex_dead_code":
+        paths = {str(item.get("file", "")) for item in payload.get("findings", []) if item.get("file")}
         return _referenced_file_tokens(store, repo_root, paths)
 
     if tool in ("cortex_search_symbols", "cortex_overview"):
@@ -1776,6 +1815,8 @@ def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
             result = _call_search_text(args)
         elif name == "cortex_risk":
             result = _call_risk(args)
+        elif name == "cortex_dead_code":
+            result = _call_dead_code(args)
         elif name == "cortex_refresh":
             result = _call_refresh(args)
         else:
