@@ -5,6 +5,7 @@ from evals.run_evals import (
     _format_markdown,
     _precision_recall,
     _symbol_hit,
+    run_hook_adoption_replay,
 )
 
 
@@ -25,6 +26,16 @@ def test_symbol_hit_accepts_qualname_leaf_in_matching_file():
 
     assert _symbol_hit(items, "app/service.py:AuthService.login")
     assert not _symbol_hit(items, "app/service.py:AuthService.logout")
+
+
+def test_hook_adoption_replay_has_indexed_positives_and_unindexed_negatives(tmp_path):
+    result = run_hook_adoption_replay(tmp_path)
+
+    assert result["positives"] == 4
+    assert result["false_positives"] == 0
+    assert result["precision"] == 1.0
+    assert result["recall"] == 1.0
+    assert result["warm_under_50ms"] is True
 
 
 def test_format_markdown_contains_aggregate_table():

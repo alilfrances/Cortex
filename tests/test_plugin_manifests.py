@@ -67,6 +67,16 @@ class PluginManifestTests(unittest.TestCase):
         command = hook_config["hooks"]["SessionStart"][0]["hooks"][0]["command"]
         self.assertEqual(command, expected_command)
 
+        pre_tool = hook_config["hooks"]["PreToolUse"]
+        self.assertEqual(pre_tool[0]["matcher"], "Read|Grep|Glob")
+        pre_command = pre_tool[0]["hooks"][0]
+        self.assertEqual(
+            pre_command["command"],
+            'python3 "${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-.}}/hooks/pre-tool-use.py"',
+        )
+        self.assertEqual(pre_command["timeout"], 5)
+        self.assertTrue((ROOT / "hooks" / "pre-tool-use.py").stat().st_mode & 0o111)
+
     def test_mcp_launcher_needs_no_pip_install(self) -> None:
         import subprocess
         import sys
