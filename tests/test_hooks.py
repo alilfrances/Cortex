@@ -81,6 +81,8 @@ def test_session_start_hook_emits_fresh_context(tmp_path: Path) -> None:
     assert "cortex_query" in context
     assert "cortex_search_symbols" in context
     assert "cortex_impact" in context
+    assert "cortex-explorer" in context
+    assert "single lookups direct" in context
 
 
 def test_session_start_hook_emits_stale_context(tmp_path: Path) -> None:

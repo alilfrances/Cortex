@@ -67,6 +67,38 @@ class PluginManifestTests(unittest.TestCase):
         command = hook_config["hooks"]["SessionStart"][0]["hooks"][0]["command"]
         self.assertEqual(command, expected_command)
 
+    def test_cortex_explorer_agent_definition(self) -> None:
+        path = ROOT / "agents" / "cortex-explorer.md"
+        self.assertTrue(path.is_file())
+        content = path.read_text(encoding="utf-8")
+        self.assertTrue(content.startswith("---\n"))
+        _, frontmatter, body = content.split("---", 2)
+        fields = {}
+        for line in frontmatter.splitlines():
+            if ":" in line:
+                key, value = line.split(":", 1)
+                fields[key.strip()] = value.strip()
+
+        self.assertEqual(fields["name"], "cortex-explorer")
+        self.assertTrue(fields["description"])
+        tools_line = fields["tools"]
+        for tool in ("Read", "Grep", "Glob"):
+            self.assertIn(tool, tools_line)
+        for tool in ("Edit", "Write", "Bash"):
+            self.assertNotIn(tool, tools_line)
+
+        for required in ("cortex_search_symbols", "cortex_context", "cortex_relations"):
+            self.assertIn(required, body)
+        for required in ("findings", "file/symbol IDs", "line spans", "suggested next Cortex calls"):
+            self.assertIn(required, body)
+        self.assertIn("signal/slot", body)
+        self.assertTrue("cortex_relations" in body or "cortex_references" in body)
+
+    def test_cortex_skill_documents_explorer_boundary(self) -> None:
+        content = (ROOT / "skills" / "cortex" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("cortex-explorer", content)
+        self.assertIn("single lookups direct", content)
+
     def test_mcp_launcher_needs_no_pip_install(self) -> None:
         import subprocess
         import sys

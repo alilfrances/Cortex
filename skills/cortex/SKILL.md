@@ -9,6 +9,10 @@ Use Cortex when working inside an indexed repository and you need code context, 
 
 **`cortex_read_file` is the direct replacement for the built-in `Read` tool on any indexed source file.** Reach for it instead of `Read` whenever the path is inside an indexed repo; it defaults to a skeleton rendering (imports/includes + every top-level signature, bodies elided) that is almost always enough to orient yourself, at a fraction of the tokens a raw `Read` would cost.
 
+## Delegation boundary
+
+Delegate multi-step exploration questions such as “where is X handled” or “how does Y flow” to the `cortex-explorer` agent. Keep single lookups direct: a sub-agent round-trip costs more than one Cortex tool call.
+
 ## Workflow
 
 1. Start with `cortex_overview` for unfamiliar repos or architecture questions; inspect its `top_hotspots` list before choosing risky files.
