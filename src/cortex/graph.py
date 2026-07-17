@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-from collections import defaultdict
+from collections import Counter, defaultdict
 from typing import NamedTuple
 
 from .ast_extract import extract_python_edges
@@ -177,11 +177,68 @@ def _resolve_qt_edges(edges: list[GraphEdge], index: QtSymbolIndex) -> None:
                 edge.target = f"symbol:{class_path}:{type_name}"
 
 
+def resolve_connect_endpoints(
+    nodes: list[GraphNode],
+    edges: list[GraphEdge],
+) -> list[GraphEdge]:
+    """Rewrite `name:Cls::member` connects endpoints to real symbol ids.
+
+    A `name:Cls::member` endpoint resolves when exactly one file defines both
+    the class `Cls` and a symbol `member`. Unresolvable endpoints keep the
+    class-qualified `name:` form. Self-loop connects edges are parse
+    artifacts and are dropped.
+    """
+    class_files: defaultdict[str, set[str]] = defaultdict(set)
+    symbol_by_file_label: dict[tuple[str, str], str] = {}
+    for node in nodes:
+        if node.granularity != 'symbol':
+            continue
+        if node.kind == 'class':
+            class_files[node.label].add(node.source_ref)
+        qualifier = node.metadata.get('qualifier')
+        if isinstance(qualifier, str) and qualifier:
+            class_files[qualifier].add(node.source_ref)
+        symbol_by_file_label[(node.source_ref, node.label)] = node.node_id
+
+    def resolve(endpoint: str) -> str:
+        if not endpoint.startswith('name:') or '::' not in endpoint:
+            return endpoint
+        class_name, _, member = endpoint.removeprefix('name:').partition('::')
+        candidates = {
+            symbol_by_file_label[(file_path, member)]
+            for file_path in class_files.get(class_name, set())
+            if (file_path, member) in symbol_by_file_label
+        }
+        if len(candidates) == 1:
+            return candidates.pop()
+        return endpoint
+
+    resolved: list[GraphEdge] = []
+    for edge in edges:
+        if edge.relation == 'connects':
+            edge.source = resolve(edge.source)
+            edge.target = resolve(edge.target)
+            if edge.source == edge.target:
+                continue
+        resolved.append(edge)
+    return resolved
+
+
+def annotate_degree(nodes: list[GraphNode], edges: list[GraphEdge]) -> None:
+    degree: Counter[str] = Counter()
+    for edge in edges:
+        degree[edge.source] += 1
+        degree[edge.target] += 1
+    for node in nodes:
+        node.metadata['degree'] = degree.get(node.node_id, 0)
+
+
 def build_file_layer(
     sources: list[SourceRecord],
     known_paths: set[str],
     *,
     existing_qt_index: QtSymbolIndex | None = None,
+    connect_names: list[str] | None = None,
 ) -> tuple[list[GraphNode], list[GraphEdge]]:
     """HEADING + STRUCTURAL layer nodes/edges for exactly the given `sources`.
 
@@ -255,7 +312,9 @@ def build_file_layer(
             nodes.extend(ast_nodes)
             source_edges.extend(ast_edges)
         elif source.kind == 'code' and supports_path(source.path):
-            structural_nodes, structural_edges = extract_structural_edges(source.path, source.content, known_paths)
+            structural_nodes, structural_edges = extract_structural_edges(
+                source.path, source.content, known_paths, connect_names
+            )
             nodes.extend(structural_nodes)
             source_edges.extend(structural_edges)
 
@@ -340,13 +399,23 @@ def build_cochange_layer(
 def build_graph(
     sources: list[SourceRecord],
     commits: list[CommitRecord],
+    all_paths: set[str] | None = None,
+    connect_names: list[str] | None = None,
 ) -> tuple[list[GraphNode], list[GraphEdge]]:
-    known_paths = {s.path for s in sources}
+    # On incremental runs `sources` is only the changed subset; `all_paths`
+    # keeps reference resolution and commit linking aware of the whole repo.
+    known_paths = all_paths if all_paths is not None else {s.path for s in sources}
 
-    nodes, edges = build_file_layer(sources, known_paths)
+    nodes, edges = build_file_layer(sources, known_paths, connect_names=connect_names)
+    # Class-qualified `name:Cls::member` connects endpoints resolve here, over
+    # the full node set, not per-file: uniqueness of the defining file is a
+    # repo-wide question. The incremental path re-runs this over the merged
+    # store for the same reason (see ingest_repository).
+    edges = resolve_connect_endpoints(nodes, edges)
     cochange_nodes, cochange_edges = build_cochange_layer(commits, known_paths)
     nodes.extend(cochange_nodes)
     edges.extend(cochange_edges)
     annotate_file_nodes(nodes, compute_hotspots(sources, commits))
+    annotate_degree(nodes, edges)
 
     return nodes, edges

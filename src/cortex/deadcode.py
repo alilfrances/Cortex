@@ -75,8 +75,16 @@ def _reexported_symbols(sources: Sequence[Any]) -> set[str]:
     return exported
 
 
+def _reference_text(value: Any) -> str:
+    """find_references items are dicts ({text, origin, access}); older rows
+    and tests may still hand in plain strings."""
+    if isinstance(value, dict):
+        return str(value.get("text", ""))
+    return str(value)
+
+
 def _line_location(value: Any) -> tuple[str, int | None] | None:
-    text = str(value)
+    text = _reference_text(value)
     path, separator, line = text.rpartition(":")
     if not separator or not line.isdigit():
         return None
@@ -137,7 +145,7 @@ def _reference_tier(
     own_start = node.span_start or 0
     own_end = node.span_end or own_start
     for bucket in sorted(result.get("items", {})):
-        for value in sorted(result["items"].get(bucket, [])):
+        for value in sorted(_reference_text(entry) for entry in result["items"].get(bucket, [])):
             parsed = _line_location(value)
             if parsed is not None and parsed[0] == node.source_ref and own_start <= (parsed[1] or 0) <= own_end:
                 continue

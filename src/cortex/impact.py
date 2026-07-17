@@ -9,6 +9,15 @@ from .tokenizer import count_text_tokens
 
 IMPACT_LAYERS = {"COCHANGE", "STRUCTURAL"}
 
+# Real co-change history is a stronger coupling signal than a bare #include.
+COCHANGE_IMPACT_MULTIPLIER = 2.0
+STRUCTURAL_IMPACT_MULTIPLIER = 1.0
+
+_LAYER_MULTIPLIERS = {
+    "COCHANGE": COCHANGE_IMPACT_MULTIPLIER,
+    "STRUCTURAL": STRUCTURAL_IMPACT_MULTIPLIER,
+}
+
 
 class UnknownPathError(ValueError):
     """Raised when the requested path has no matching file node in the graph."""
@@ -58,8 +67,16 @@ def rank_file_impact(
             continue
         if neighbor == seed_id or neighbor not in file_paths:
             continue
-        scores[neighbor] += edge.weight
-        why[neighbor].append({"relation": edge.relation, "weight": edge.weight})
+        scores[neighbor] += edge.weight * _LAYER_MULTIPLIERS.get(edge.layer, 1.0)
+        entry = {
+            "relation": edge.relation,
+            "weight": edge.weight,
+            "layer": edge.layer,
+            "confidence": edge.confidence,
+        }
+        if edge.relation == "cochange" and "count" in edge.metadata:
+            entry["cochange_count"] = edge.metadata["count"]
+        why[neighbor].append(entry)
 
     ranked = sorted(scores, key=lambda node_id: (-scores[node_id], file_paths[node_id], node_id))
     result = []

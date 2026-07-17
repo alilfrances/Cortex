@@ -126,9 +126,11 @@ def test_qml_handler_on_external_type_stays_placeholder(tmp_path):
     items = _relations(repo, relation="handles")
     delegate_handles = [item for item in items if "DeviceDelegate.qml" in item["source"]]
     assert delegate_handles, items
-    # Unresolved endpoints render as the raw "module:<name>" placeholder id
-    # (see mcp/tools.py::_call_relations.unresolved_endpoint).
-    assert any(item["target"] == "module:clicked" for item in delegate_handles), delegate_handles
+    # Unresolved endpoints render with the "module:" prefix stripped
+    # (see mcp/tools.py::_unresolved_endpoint) -- the edge itself keeps the
+    # placeholder id, so the rendered target is the bare signal name with no
+    # "@ path:line" resolution suffix.
+    assert any(item["target"] == "clicked" for item in delegate_handles), delegate_handles
 
 
 # ---------------------------------------------------------------------------

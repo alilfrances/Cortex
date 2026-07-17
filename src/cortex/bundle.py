@@ -7,6 +7,7 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
+from .config import load_config
 from .fusion import rrf_fuse
 from .gitutils import discover_repo_root
 from .models import BundleItem, GraphEdge, GraphNode, RetrievalBundle
@@ -36,6 +37,9 @@ DOC_BUDGET_SHARE = 0.4
 # of one budget-filling file dump (oversized items degrade to skeleton/truncated
 # form via the existing packing fallbacks).
 ITEM_BUDGET_SHARE = 0.4
+# Symbol spans inherit a small share of their file's keyword score so file
+# context still counts without letting spans outrank the file wholesale.
+SYMBOL_FILE_SCORE_SHARE = 0.25
 # Test/eval/fixture files are demoted unless the task itself is about them.
 AUX_PATH_DEMOTION = 0.5
 AUX_PATH_RE = re.compile(r'(^|/)(tests?|testing|evals?|fixtures?|examples?|benchmarks?|samples?)(/|$)')
@@ -105,7 +109,10 @@ def _is_aux_path(path: str) -> bool:
 
 
 def _symbol_qualname(node: GraphNode) -> str:
-    return node.node_id.split(':', 2)[2]
+    # `symbol:<path>:<name>` ids carry the (possibly dotted) qualname; other
+    # symbol-granularity ids (e.g. a CMake `target:<name>`) fall back to label.
+    parts = node.node_id.split(':', 2)
+    return parts[2] if len(parts) == 3 else node.label
 
 
 def _leading_ws(text: str) -> str:
@@ -149,6 +156,23 @@ def _declaration_lines(lines: list[str], symbol: GraphNode) -> list[str]:
 def _looks_like_import(line: str) -> bool:
     stripped = line.strip()
     return stripped.startswith(('import ', 'from ', '#include ', 'use ', 'require ', 'package '))
+
+
+_COMMENT_PREFIXES = ('#', '//', '/*', '*')
+
+
+def _is_comment_only(line: str) -> bool:
+    stripped = line.strip()
+    return bool(stripped) and stripped.startswith(_COMMENT_PREFIXES)
+
+
+def _strip_boilerplate(content: str) -> str:
+    """Drop import/include and comment-only lines so license headers and
+    include blocks stop being keyword magnets when scoring code."""
+    return '\n'.join(
+        line for line in content.splitlines()
+        if not _looks_like_import(line) and not _is_comment_only(line)
+    )
 
 
 def _import_lines(lines: list[str], spanned: list[GraphNode]) -> list[str]:
@@ -351,8 +375,26 @@ def _tokenize_text(text: str, *, drop_stopwords: bool = False) -> set[str]:
     return terms
 
 
-def _tokenize_query(task: str) -> set[str]:
-    return _tokenize_text(task, drop_stopwords=True)
+def _expand_synonyms(terms: set[str], synonyms: dict[str, list[str]]) -> set[str]:
+    """Two-way task-term expansion: a matched key pulls its values' tokens and
+    a matched value pulls the key's tokens."""
+    expanded = set(terms)
+    for key, values in synonyms.items():
+        key_tokens = _tokenize_text(key)
+        value_token_sets = [_tokenize_text(value) for value in values]
+        if key_tokens and key_tokens <= terms:
+            for value_tokens in value_token_sets:
+                expanded |= value_tokens
+        if any(value_tokens and value_tokens <= terms for value_tokens in value_token_sets):
+            expanded |= key_tokens
+    return expanded
+
+
+def _tokenize_query(task: str, synonyms: dict[str, list[str]] | None = None) -> set[str]:
+    terms = _tokenize_text(task, drop_stopwords=True)
+    if synonyms:
+        terms = _expand_synonyms(terms, synonyms)
+    return terms
 
 
 _IDENTIFIER_TOKEN_RE = re.compile(r'[A-Za-z_][A-Za-z0-9_:]*')
@@ -386,8 +428,9 @@ def _score_text(
     text: str,
     recency_weight: float = 0.0,
     term_weights: dict[str, float] | None = None,
+    noise_terms: frozenset[str] = frozenset(),
 ) -> float:
-    haystack_terms = _tokenize_text(text)
+    haystack_terms = _tokenize_text(text) - noise_terms
     overlap = task_terms & haystack_terms
     if term_weights is None:
         return len(overlap) * 10.0 + recency_weight
@@ -492,7 +535,11 @@ def generate_bundle(
     commits = store.fetch_commits(repo_root)
     nodes, edges = store.fetch_graph(repo_root)
 
-    task_terms = _tokenize_query(task)
+    config = load_config(repo_root)
+    task_terms = _tokenize_query(task, config.synonyms)
+    noise_terms = frozenset(
+        term for identifier in config.noise_identifiers for term in _tokenize_text(identifier)
+    )
     term_weights = _term_weights(task_terms, sources)
     demote_aux = not (task_terms & AUX_INTENT_TERMS)
     hotspot_by_path: dict[str, dict] = {}
@@ -529,11 +576,13 @@ def generate_bundle(
         name_bonus = NAME_MATCH_BONUS if task_terms & name_candidates else 0.0
         dir_tokens = _tokenize_text("/".join(Path(source.path).parts[:-1]))
         path_bonus = PATH_MATCH_BONUS if task_terms & dir_tokens else 0.0
+        haystack = _strip_boilerplate(source.content) if source.kind == 'code' else source.content
         score = name_bonus + path_bonus + _score_text(
             task_terms,
-            f'{source.path}\n{source.content}',
+            f'{source.path}\n{haystack}',
             recency_weight,
             term_weights,
+            noise_terms,
         )
         if hotspot_boost and score > 0 and max_hotspot_score > 0:
             values = hotspot_by_path.get(source.path, {})
@@ -558,6 +607,15 @@ def generate_bundle(
     ]
     fts_hits = store.search_fulltext(repo_root, task, limit=FTS_CANDIDATE_LIMIT) if task_terms else []
     fts_rank_list = [path for path, _bm25, _snippet in fts_hits if path in base_scores]
+    if noise_terms:
+        # Mirror _score_text's noise filtering on the FTS body-text list: a
+        # hit whose only overlap with the task is a configured noise
+        # identifier must not ride into the bundle via rank fusion.
+        content_by_path = {source.path: source.content for source in sources}
+        fts_rank_list = [
+            path for path in fts_rank_list
+            if task_terms & (_tokenize_text(content_by_path.get(path, '')) - noise_terms)
+        ]
     # Definition boost (semble-style, P0-2 step 5): a file that *defines* a
     # queried identifier (its own symbol names overlap the task terms) gets
     # extra RRF list membership beyond a plain FTS body-text mention, so it
@@ -664,52 +722,137 @@ def generate_bundle(
                 path=commit.sha,
                 content=content,
                 token_count=count_text_tokens(content),
-                score=_score_text(task_terms, content, recency_weight=recency_weight, term_weights=term_weights),
+                score=_score_text(task_terms, content, recency_weight=recency_weight, term_weights=term_weights, noise_terms=noise_terms),
                 metadata={'sha': commit.sha, 'files': commit.files, 'authored_at': commit.authored_at},
             )
         )
 
-    candidates.sort(key=lambda item: (-item.score, item.path))
+    source_by_path = {source.path: source for source in sources}
+    symbol_items_by_path: defaultdict[str, list[BundleItem]] = defaultdict(list)
+    for path, path_symbols in symbols_by_path.items():
+        source = source_by_path.get(path)
+        if source is None or source.kind != 'code':
+            continue
+        lines = source.content.splitlines()
+        file_share = SYMBOL_FILE_SCORE_SHARE * source_scores.get(path, 0.0)
+        for symbol in path_symbols:
+            if symbol.span_start is None or symbol.span_end is None:
+                continue
+            span_lines = lines[symbol.span_start - 1:symbol.span_end]
+            if not span_lines:
+                continue
+            span_text = '\n'.join(span_lines)
+            name_bonus = NAME_MATCH_BONUS if task_terms & _tokenize_text(symbol.label) else 0.0
+            span_score = _score_text(task_terms, _strip_boilerplate(span_text), 0.0, term_weights, noise_terms)
+            # The file share is a tiebreaker for spans that match the task
+            # themselves, not a qualifier for spans that match nothing.
+            if name_bonus + span_score <= 0:
+                continue
+            score = name_bonus + span_score + file_share
+            item = BundleItem(
+                item_id=f'symbol-span:{symbol.node_id}',
+                kind='symbol',
+                title=f'{path}:{symbol.label}',
+                path=path,
+                content=span_text,
+                token_count=count_text_tokens(span_text),
+                score=score,
+                metadata={
+                    'node_id': symbol.node_id,
+                    'span_start': symbol.span_start,
+                    'span_end': symbol.span_end,
+                },
+            )
+            candidates.append(item)
+            symbol_items_by_path[path].append(item)
+    for items in symbol_items_by_path.values():
+        items.sort(key=lambda item: (-item.score, item.item_id))
+
+    candidates.sort(key=lambda item: (-item.score, item.path, item.item_id))
 
     has_code_matches = any(item.kind == 'code' and item.score > 0 for item in candidates)
     doc_cap = int(budget * DOC_BUDGET_SHARE) if has_code_matches else budget
-    positive_matches = sum(1 for item in candidates if item.score > 0)
+    positive_matches = sum(1 for item in candidates if item.score > 0 and item.kind != 'symbol')
     # With multiple matches, cap each item so the top file cannot swallow the
     # whole budget; lone matches keep the full budget.
     item_cap = int(budget * ITEM_BUDGET_SHARE) if positive_matches > 1 else budget
 
+    file_item_by_path = {item.path: item for item in candidates if item.item_id.startswith('source:')}
+
     selected: list[BundleItem] = []
+    selected_ids: set[str] = set()
+    files_fully_selected: set[str] = set()
+    paths_with_symbols: set[str] = set()
     total_tokens = 0
     doc_tokens = 0
+
+    def select(item: BundleItem) -> None:
+        nonlocal total_tokens, doc_tokens
+        selected.append(item)
+        selected_ids.add(item.item_id)
+        total_tokens += item.token_count
+        if item.kind == 'markdown':
+            doc_tokens += item.token_count
+
     for item in candidates:
-        if item.score <= 0:
+        if item.score <= 0 or item.item_id in selected_ids:
+            continue
+        allowed = min(budget - total_tokens, item_cap)
+        if item.kind == 'symbol':
+            if item.path in files_fully_selected:
+                continue
+            file_item = file_item_by_path.get(item.path)
+            # Prefer the whole file when it fits outright; symbol spans exist
+            # to surface relevant code from files that cannot be included whole.
+            if (
+                file_item is not None
+                and file_item.item_id not in selected_ids
+                and file_item.token_count <= allowed
+            ):
+                select(file_item)
+                files_fully_selected.add(file_item.path)
+                continue
+            if 0 < item.token_count <= allowed:
+                select(item)
+                paths_with_symbols.add(item.path)
+            continue
+        if item.kind == 'code' and item.path in paths_with_symbols:
             continue
         is_doc = item.kind == 'markdown'
-        allowed = min(budget - total_tokens, item_cap)
         if is_doc:
             allowed = min(allowed, doc_cap - doc_tokens)
         if item.token_count <= allowed:
-            selected.append(item)
-            total_tokens += item.token_count
-            if is_doc:
-                doc_tokens += item.token_count
+            select(item)
+            if item.kind == 'code':
+                files_fully_selected.add(item.path)
             continue
         remaining = allowed
         if remaining <= 16:
             continue
         if item.kind == 'code':
+            picked_symbol = False
+            for symbol_item in symbol_items_by_path.get(item.path, []):
+                if symbol_item.item_id in selected_ids:
+                    continue
+                if 0 < symbol_item.token_count <= remaining:
+                    select(symbol_item)
+                    remaining -= symbol_item.token_count
+                    picked_symbol = True
+            if picked_symbol:
+                paths_with_symbols.add(item.path)
+                continue
             symbols = symbols_by_path.get(item.path, [])
             if symbols:
                 skeleton = _skeleton_item(item, symbols, pagerank_scores, remaining)
                 if skeleton is not None:
-                    selected.append(skeleton)
-                    total_tokens += skeleton.token_count
-                    continue
+                    select(skeleton)
+                # Code files with indexed symbols never degrade to file[0:N].
+                continue
         truncated = truncate_text_to_budget(item.content, remaining, kind=item.kind)
         truncated_tokens = count_text_tokens(truncated, kind=item.kind)
         if truncated_tokens <= 0:
             continue
-        selected.append(
+        select(
             BundleItem(
                 item_id=item.item_id,
                 kind=item.kind,
@@ -721,9 +864,6 @@ def generate_bundle(
                 metadata={**item.metadata, 'truncated': True},
             )
         )
-        total_tokens += truncated_tokens
-        if is_doc:
-            doc_tokens += truncated_tokens
 
     bundle = RetrievalBundle(
         task=task,

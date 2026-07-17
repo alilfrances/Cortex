@@ -1205,8 +1205,12 @@ class CortexStore:
         query_lower = query.lower()
         query_norm = _normalized_identifier(query)
         token_set = set(tokens)
+        # Same-name symbols are common in large codebases; within a match
+        # bucket, definitions (classes, then functions) and well-connected
+        # nodes (graph degree) come first.
+        kind_priority = {'class': 0, 'func': 1}
 
-        def rank(node: GraphNode) -> tuple[int, int, int, str, str]:
+        def rank(node: GraphNode) -> tuple[int, int, int, int, int, str, str]:
             label_lower = node.label.lower()
             label_norm = _normalized_identifier(node.label)
             label_tokens = set(_search_tokens(node.label))
@@ -1239,7 +1243,17 @@ class CortexStore:
                 bucket = 6  # matched only via the file path
             else:
                 bucket = 7
-            return (bucket, -label_overlap, len(node.label), label_lower, node.node_id)
+            degree = node.metadata.get('degree', 0)
+            degree = degree if isinstance(degree, int) else 0
+            return (
+                bucket,
+                -label_overlap,
+                kind_priority.get(node.kind, 2),
+                -degree,
+                len(node.label),
+                label_lower,
+                node.node_id,
+            )
 
         ranked = sorted(candidates, key=rank)
         return ranked[:limit]

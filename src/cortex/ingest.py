@@ -6,8 +6,15 @@ import subprocess
 from pathlib import Path
 from typing import NamedTuple
 
+from .config import load_config
 from .gitutils import collect_recent_commits, discover_repo_root
-from .graph import build_cochange_layer, build_file_layer, build_graph
+from .graph import (
+    annotate_degree,
+    build_cochange_layer,
+    build_file_layer,
+    build_graph,
+    resolve_connect_endpoints,
+)
 from .hotspots import annotate_file_nodes, compute_churn, compute_hotspots
 from .models import CommitRecord, GraphNode, SourceRecord
 from .store import CortexStore, default_db_path, write_repo_meta
@@ -39,6 +46,10 @@ _TEXT_SUFFIXES = {
     ".go",
     ".rs",
     ".sh",
+    ".cmake",
+    ".qrc",
+    ".ui",
+    ".pro",
 }
 
 _SKIP_DIRS = {
@@ -72,16 +83,18 @@ def _git_listed_files(repo_root: Path) -> list[Path] | None:
     return [repo_root / rel for rel in result.stdout.split("\0") if rel]
 
 
-def _iter_candidate_files(repo_root: Path) -> list[Path]:
+def _iter_candidate_files(repo_root: Path, skip_dirs: set[str] | None = None) -> list[Path]:
+    if skip_dirs is None:
+        skip_dirs = _SKIP_DIRS | set(load_config(repo_root).skip_dirs)
     listed = _git_listed_files(repo_root)
     if listed is not None:
         return [
             path for path in listed
-            if not set(path.relative_to(repo_root).parts[:-1]) & _SKIP_DIRS
+            if not set(path.relative_to(repo_root).parts[:-1]) & skip_dirs
         ]
     files: list[Path] = []
     for root, dirs, names in os.walk(repo_root):
-        dirs[:] = [directory for directory in dirs if directory not in _SKIP_DIRS]
+        dirs[:] = [directory for directory in dirs if directory not in skip_dirs]
         files.extend(Path(root) / name for name in names)
     return files
 
@@ -89,6 +102,8 @@ def _iter_candidate_files(repo_root: Path) -> list[Path]:
 def _classify_path(path: Path) -> str:
     if path.suffix == ".md":
         return "markdown"
+    if path.name.lower() == "cmakelists.txt" or path.suffix in {".cmake", ".qrc"}:
+        return "code"
     if path.suffix in {
         ".py",
         ".js",
@@ -119,9 +134,9 @@ def _content_hash(content: str) -> str:
     return hashlib.sha256(content.encode('utf-8', errors='replace')).hexdigest()
 
 
-def compute_repo_fingerprint(repo_root: Path) -> str:
+def compute_repo_fingerprint(repo_root: Path, skip_dirs: set[str] | None = None) -> str:
     parts: list[str] = []
-    for path in _iter_candidate_files(repo_root):
+    for path in _iter_candidate_files(repo_root, skip_dirs):
         if path.suffix.lower() not in _TEXT_SUFFIXES:
             continue
         try:
@@ -133,9 +148,9 @@ def compute_repo_fingerprint(repo_root: Path) -> str:
     return hashlib.sha256("\n".join(sorted(parts)).encode("utf-8")).hexdigest()
 
 
-def _scan_sources(repo_root: Path) -> list[SourceRecord]:
+def _scan_sources(repo_root: Path, skip_dirs: set[str] | None = None) -> list[SourceRecord]:
     sources: list[SourceRecord] = []
-    for path in _iter_candidate_files(repo_root):
+    for path in _iter_candidate_files(repo_root, skip_dirs):
         if path.suffix.lower() not in _TEXT_SUFFIXES:
             continue
         try:
@@ -275,12 +290,13 @@ def _sync_semantic_embeddings(
 
 def ingest_repository(
     repo_path: Path,
-    commit_limit: int = 50,
+    commit_limit: int = 1000,
     db_path: Path | None = None,
-    enrich: bool = False,
     incremental: bool = False,
 ) -> dict[str, int | bool | str]:
     repo_root = discover_repo_root(repo_path)
+    config = load_config(repo_root)
+    skip_dirs = _SKIP_DIRS | set(config.skip_dirs)
     store = CortexStore(db_path or default_db_path(repo_root))
     write_repo_meta(store.db_path, repo_root)
 
@@ -317,7 +333,10 @@ def ingest_repository(
             if sources_to_process:
                 existing_qt_index = store.fetch_qt_symbol_index(repo_root).without_paths(set(stale_paths))
             new_nodes, new_edges = build_file_layer(
-                sources_to_process, scan.current_paths, existing_qt_index=existing_qt_index
+                sources_to_process,
+                scan.current_paths,
+                existing_qt_index=existing_qt_index,
+                connect_names=config.connect_functions,
             )
             annotate_file_nodes(new_nodes, hotspot_overrides)
             if stale_paths:
@@ -373,6 +392,33 @@ def ingest_repository(
                 {path: int(values["complexity"]) for path, values in hotspot_overrides.items()},
             )
 
+        # A `name:Cls::member` connects endpoint from this batch may resolve
+        # against a symbol declared in an unchanged file (and vice versa), and
+        # degree metadata spans the whole graph -- re-run both over the merged
+        # store so an incremental refresh converges to exactly what a full
+        # ingest would write, persisting only the rows that actually changed.
+        if sources_to_process or stale_paths or commits_changed:
+            merged_nodes, merged_edges = store.fetch_graph(repo_root)
+            endpoints_before = {e.edge_id: (e.source, e.target) for e in merged_edges}
+            degrees_before = {n.node_id: n.metadata.get("degree") for n in merged_nodes}
+            resolved_edges = resolve_connect_endpoints(merged_nodes, merged_edges)
+            annotate_degree(merged_nodes, resolved_edges)
+            if len(resolved_edges) != len(endpoints_before):
+                # Resolution dropped self-loop artifacts; an upsert cannot
+                # remove rows, so rewrite the graph outright.
+                store.replace_graph(repo_root, merged_nodes, resolved_edges)
+            else:
+                changed_edges = [
+                    e for e in resolved_edges
+                    if endpoints_before[e.edge_id] != (e.source, e.target)
+                ]
+                changed_nodes = [
+                    n for n in merged_nodes
+                    if degrees_before[n.node_id] != n.metadata.get("degree")
+                ]
+                if changed_nodes or changed_edges:
+                    store.save_graph(repo_root, changed_nodes, changed_edges)
+
         store.set_repo_fingerprint(repo_root, scan.fingerprint)
 
         return {
@@ -383,13 +429,13 @@ def ingest_repository(
             "deleted_files": len(deleted_paths),
             "unchanged_files": scan.unchanged_count,
             "commit_count": len(commits),
-            "enrichment_enabled": enrich,
+            "cochange_commits": len(commits),
         }
 
-    all_sources = _scan_sources(repo_root)
-    fingerprint = compute_repo_fingerprint(repo_root)
+    all_sources = _scan_sources(repo_root, skip_dirs)
+    fingerprint = compute_repo_fingerprint(repo_root, skip_dirs)
     commits = collect_recent_commits(repo_root, commit_limit)
-    nodes, edges = build_graph(all_sources, commits)
+    nodes, edges = build_graph(all_sources, commits, connect_names=config.connect_functions)
 
     store.reset_repo(repo_root, fingerprint=fingerprint)
     store.save_sources(repo_root, all_sources)
@@ -407,5 +453,5 @@ def ingest_repository(
         "commit_count": len(commits),
         "node_count": len(nodes),
         "edge_count": len(edges),
-        "enrichment_enabled": enrich,
+        "cochange_commits": len(commits),
     }

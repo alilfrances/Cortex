@@ -174,7 +174,8 @@ def test_estimate_baseline_references_sums_files_stripping_line_numbers(tmp_path
     referenced_paths = set()
     for bucket in payload["items"].values():
         for entry in bucket:
-            referenced_paths.add(entry.rsplit(":", 1)[0] if ":" in entry else entry)
+            text = entry["text"] if isinstance(entry, dict) else entry
+            referenced_paths.add(text.rsplit(":", 1)[0] if ":" in text else text)
     expected = sum(
         count_text_tokens(content)
         for content in (store.fetch_source_content(repo, p) for p in referenced_paths)
