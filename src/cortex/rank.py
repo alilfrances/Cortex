@@ -21,8 +21,9 @@ LAYER_EDGE_MULTIPLIERS = {
 }
 
 
-def _normalized_personalization(node_ids: set[str], seed_scores: dict[str, float]) -> dict[str, float]:
-    positive = {node_id: score for node_id, score in seed_scores.items() if node_id in node_ids and score > 0}
+def _normalized_personalization(node_ids: list[str], seed_scores: dict[str, float]) -> dict[str, float]:
+    node_id_set = set(node_ids)
+    positive = {node_id: score for node_id, score in seed_scores.items() if node_id in node_id_set and score > 0}
     total = sum(positive.values())
     if total > 0:
         return {node_id: positive.get(node_id, 0.0) / total for node_id in node_ids}
@@ -37,8 +38,10 @@ def _transition_graph(nodes: list[GraphNode], edges: list[GraphEdge]) -> dict[st
     # the PageRank graph. File-to-file COCHANGE edges still carry history signal.
     ranked_node_ids = {node.node_id for node in nodes if node.kind != "commit" and not node.node_id.startswith("commit:")}
     adjacency: defaultdict[str, list[tuple[str, float]]] = defaultdict(list)
-    for node_id in ranked_node_ids:
-        adjacency[node_id]
+    # Preserve node-list order so downstream floating-point accumulation is deterministic.
+    for node in nodes:
+        if node.kind != "commit" and not node.node_id.startswith("commit:"):
+            adjacency[node.node_id]
 
     for edge in edges:
         if edge.source not in ranked_node_ids or edge.target not in ranked_node_ids:
@@ -64,12 +67,12 @@ def personalized_pagerank(
     if not adjacency:
         return {}
 
-    node_ids = set(adjacency)
+    node_ids = list(adjacency)
     personalization = _normalized_personalization(node_ids, seed_scores)
     ranks = dict(personalization)
 
     for _ in range(max_iterations):
-        dangling_mass = sum(ranks[node_id] for node_id, neighbors in adjacency.items() if not neighbors)
+        dangling_mass = sum(ranks[node_id] for node_id in node_ids if not adjacency[node_id])
         next_ranks = {
             node_id: (1.0 - damping) * personalization[node_id] + damping * dangling_mass * personalization[node_id]
             for node_id in node_ids
@@ -90,7 +93,7 @@ def personalized_pagerank(
         if delta < tolerance:
             break
 
-    total = sum(ranks.values())
+    total = sum(ranks[node_id] for node_id in node_ids)
     if total <= 0:
         return ranks
-    return {node_id: rank / total for node_id, rank in ranks.items()}
+    return {node_id: ranks[node_id] / total for node_id in node_ids}

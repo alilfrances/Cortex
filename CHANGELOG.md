@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix PageRank bundle ordering jitter across `PYTHONHASHSEED` by preserving deterministic graph and floating-point accumulation order.
+
 - Add the Claude Code-only `cortex-explorer` read-only agent for multi-step Cortex-native repository exploration, with documented delegation guidance, Qt signal/slot graph tracing, and findings/IDs/spans/next-calls return contract.
 
 - Add the confidence-tiered dead-code report (`cortex_dead_code`): it analyzes persisted symbol-graph fan-in plus local grep references, excludes Python entry points and test/re-exported/decorated symbols, conservatively caps regex-backend languages at low confidence, and credits Qt connects/emits/handles/instantiates edges plus Qt meta-object macros. The `cortex report` output includes deterministic dead-code candidates, and the MCP surface supports budgeted findings.
