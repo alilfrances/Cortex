@@ -11,6 +11,51 @@ uncommitted work described below.
 
 ---
 
+## 2026-07-17 (later): scope-split landed; P2-2 and P2-5 implemented and pushed
+
+The scope-split described below was committed as `89a40ac`. After it, the remaining
+implementation order was completed and pushed:
+
+- **P2-2** landed as `aee7409` (`feat: add confidence-tiered dead-code report`):
+  `src/cortex/deadcode.py`, `cortex_dead_code` MCP tool (13th tool, ledgered),
+  dead-code section in `cortex report`, `tests/test_deadcode.py`. Qt meta-object
+  exclusions credit `connects`/`emits`/`handles`/`instantiates` edges; non-Python
+  regex-backend candidates cap at `low` confidence.
+- **P2-5** landed as `123859c` (`feat: ship cortex-explorer read-only exploration agent`):
+  `agents/cortex-explorer.md` (Read/Grep/Glob only, Cortex-loop-first, findings/IDs+spans/
+  next-calls return contract), SKILL.md delegation boundary, session-start mention,
+  README docs. Claude Code-only — the Codex plugin format has no sub-agent equivalent.
+  Live-session invocability still needs a session restart to confirm (definition was
+  created mid-session; structure matches the installed-plugin convention).
+
+- **Hash-nondeterminism fix** landed as `ae94c09` (`fix: make PageRank bundle ordering
+  deterministic across PYTHONHASHSEED`): `src/cortex/rank.py` seeded its adjacency dict
+  and pagerank float sums from set iteration, so ordering (and tight-budget truncation
+  survival) varied by hash seed. Now iterates node-list / `list(adjacency)` order; same
+  math. `tests/test_rank_determinism.py` proves bit-stability via a subprocess seed
+  sweep and fails on the pre-fix code. Verified: full suite 353/4; eval precision/recall
+  identical to the pre-fix ranking on all 17 pagerank gold tasks (de-jitter only, no
+  re-rank). The old retrieval/eval baseline table below predates a harness change and no
+  longer matches the current `recall` field — treat the fixed-vs-pre-fix diff, not those
+  absolute numbers, as the regression check.
+
+Test baseline at `ae94c09`: **353 passed / 4 skipped**. Implementation was delegated to
+Codex per session direction; the main thread independently verified each item (full
+suite, line-by-line diff review, functional spot-check of `cortex_dead_code` and the
+report section on the Qt fixture, and a pre-fix/post-fix eval comparison for the
+determinism change) before committing.
+
+**All IMPROVEMENT_PLAN.md waves are complete and the hash-nondeterminism follow-up is
+done.** Remaining work is only the tokenizer-calibration follow-up (needs network to run
+`evals/calibrate_tokenizer.py` with tiktoken, then bake measured factors into
+`src/cortex/tokenizer.py`) and anything in `RTK_PLAN.md`, which belongs to a separate
+plugin, not this repo. One open confirmation: `cortex-explorer` live-session
+invocability (restart a session in this repo to see it in the agent list). `plan.md` in
+the tree is an untracked artifact of the `claude/cortex-feedback-fixes` branch — leave
+it alone.
+
+---
+
 ## 2026-07-17 scope split: rtk items removed from Cortex
 
 Decision (user-directed): rtk-style functionality — shell-output compression and
