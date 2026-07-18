@@ -1,6 +1,6 @@
 """Tests for the P1-5 standard `_meta` envelope on MCP responses.
 
-See IMPROVEMENT_PLAN.md's P1-5 section. Covers:
+Covers the P1-5 metadata-envelope contract:
   - `_meta` present (with the base schema fields) in `detailed` mode for
     every read/query/analysis tool.
   - `_meta` completely absent in `concise` mode when nothing is noteworthy.

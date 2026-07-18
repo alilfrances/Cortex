@@ -276,10 +276,18 @@ def build_parser() -> argparse.ArgumentParser:
     watch_parser.add_argument("repo_path", type=Path)
     watch_parser.add_argument("--interval", type=float, default=30.0)
 
-    enrich_parser = subparsers.add_parser("enrich", help="Run LLM semantic enrichment (requires cortex-context-engine[llm])")
+    enrich_parser = subparsers.add_parser(
+        "enrich",
+        help="Upload indexed source snippets for remote LLM enrichment (requires [llm])",
+    )
     enrich_parser.add_argument("repo_path", type=Path)
     enrich_parser.add_argument("--provider", choices=("claude", "codex"), default="claude")
     enrich_parser.add_argument("--force", action="store_true", help="Re-extract all files, ignore cache")
+    enrich_parser.add_argument(
+        "--allow-code-upload",
+        action="store_true",
+        help="Confirm indexed source snippets may be sent to the selected provider",
+    )
     enrich_parser.add_argument("--db", type=Path, default=None)
 
     semantic_parser = subparsers.add_parser(
@@ -468,6 +476,7 @@ def main() -> None:
                 provider_name=args.provider,
                 db_path=args.db,
                 force=args.force,
+                allow_code_upload=args.allow_code_upload,
             )
             print(json.dumps(result, indent=2))
         except RuntimeError as exc:

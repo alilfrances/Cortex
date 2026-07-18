@@ -14,7 +14,7 @@ Covers:
     cortex_read_symbol reads.
   - Both new surfaces route through the P1-5 _meta envelope.
 
-See IMPROVEMENT_PLAN.md's P1-6 section.
+Covers the P1-6 read-mode contract.
 """
 
 from __future__ import annotations

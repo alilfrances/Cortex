@@ -15,6 +15,24 @@ from .models import BundleItem, CommitRecord, Community, GraphEdge, GraphNode, R
 LEGACY_DIR_NAME = ".cortex"
 
 
+def _is_managed_database(db_path: Path) -> bool:
+    if db_path.parent.name == LEGACY_DIR_NAME:
+        return True
+    try:
+        db_path.resolve().relative_to(data_root().resolve())
+    except ValueError:
+        return False
+    return True
+
+
+def _make_private(path: Path, mode: int) -> None:
+    """Best-effort POSIX permissions without breaking unsupported platforms."""
+    try:
+        path.chmod(mode)
+    except OSError:
+        pass
+
+
 def _split_identifier(token: str) -> list[str]:
     normalized = re.sub(r'([a-z0-9])([A-Z])', r'\1 \2', token.replace('_', ' '))
     return [part.lower() for part in re.findall(r'[A-Za-z0-9]+', normalized) if part]
@@ -100,16 +118,23 @@ def write_repo_meta(db_path: Path, repo_root: Path) -> None:
     parent = db_path.parent
     if parent.name == LEGACY_DIR_NAME:
         return
-    parent.mkdir(parents=True, exist_ok=True)
+    parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if _is_managed_database(db_path):
+        _make_private(parent, 0o700)
     meta = {"repo_path": str(repo_root.resolve()), "updated_at": int(time.time())}
-    (parent / "meta.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+    meta_path = parent / "meta.json"
+    meta_path.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+    _make_private(meta_path, 0o600)
 
 
 class CortexStore:
     def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.db_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if _is_managed_database(self.db_path):
+            _make_private(self.db_path.parent, 0o700)
         self.connection = sqlite3.connect(self.db_path)
+        _make_private(self.db_path, 0o600)
         self.connection.row_factory = sqlite3.Row
         self.initialize_schema()
 

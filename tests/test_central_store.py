@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import stat
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-from cortex.store import data_root, default_db_path, repo_data_dir, write_repo_meta
+from cortex.store import CortexStore, data_root, default_db_path, repo_data_dir, write_repo_meta
 
 
 class CentralStorePathTests(unittest.TestCase):
@@ -60,6 +62,18 @@ class CentralStorePathTests(unittest.TestCase):
         legacy_db.parent.mkdir()
         write_repo_meta(legacy_db, self.repo)
         self.assertFalse((legacy_db.parent / "meta.json").exists())
+
+    @unittest.skipIf(os.name == "nt", "POSIX permission bits are not enforced on Windows")
+    def test_managed_database_and_metadata_are_owner_only(self) -> None:
+        db_path = repo_data_dir(self.repo) / "cortex.db"
+        store = CortexStore(db_path)
+        store.connection.close()
+        write_repo_meta(db_path, self.repo)
+
+        self.assertEqual(stat.S_IMODE(db_path.parent.stat().st_mode), 0o700)
+        self.assertEqual(stat.S_IMODE(db_path.stat().st_mode), 0o600)
+        self.assertEqual(stat.S_IMODE((db_path.parent / "meta.json").stat().st_mode), 0o600)
+
 
 class IngestWritesMetaTests(unittest.TestCase):
     def setUp(self) -> None:

@@ -118,11 +118,18 @@ def enrich_repository(
     provider_name: str,
     db_path: Path | None = None,
     force: bool = False,
+    allow_code_upload: bool = False,
 ) -> dict:
+    """Run remote LLM enrichment after explicit source-upload consent.
+
+    Up to 8,000 characters from every uncached indexed source file are sent to
+    the selected provider. Results are cached by content hash.
     """
-    Run LLM semantic enrichment on all source files.
-    Results cached in SQLite by content_hash — skips unchanged files.
-    """
+    if not allow_code_upload:
+        raise RuntimeError(
+            "LLM enrichment uploads indexed source code to the selected provider; "
+            "pass --allow-code-upload only after confirming the repository may be shared"
+        )
     repo_root = discover_repo_root(repo_path)
     store = CortexStore(db_path or default_db_path(repo_root))
     provider = make_provider(provider_name)

@@ -140,7 +140,7 @@ The MCP surface has 14 tools: 13 read/query/analysis tools (everything above exc
 | `cortex report <repo> [--out] [--include-test-pairs]` | Write an architecture report with central nodes, hotspots, communities, connections, and a confidence-tiered dead-code section. |
 | `cortex risk [range] [--staged] [--format text|json] [--db PATH]` | Analyze a committed range (default `HEAD~1..HEAD`) or staged diff with deterministic per-file risk and missing-context directives. It runs local git only; no index is required, but an unindexed/partial result says so explicitly. |
 | `cortex gc [--prune]` | List central data dirs (`--prune` deletes ones whose repo is gone) and prune each repo's query result cache. |
-| `cortex enrich <repo> --provider claude\|codex [--force]` | Optional LLM semantic enrichment with local cache. Requires `[llm]`. |
+| `cortex enrich <repo> --provider claude\|codex --allow-code-upload [--force]` | Remote LLM enrichment. Sends up to 8,000 characters from each uncached indexed source file to the provider; requires explicit consent and `[llm]`. |
 | `cortex semantic setup [--force]` | Explicitly download/cache `minishlab/potion-code-16M` below `CORTEX_DATA_DIR`; this is the only download path. |
 | `cortex semantic status` | Show optional dependency, local-model, and indexed-chunk status without network access. |
 | `cortex benchmark <repo> [--budget 4000] [--format text\|json]` | Compare bundle token cost against full-corpus reading. |
@@ -164,7 +164,7 @@ The MCP surface has 14 tools: 13 read/query/analysis tools (everything above exc
 
 | Extra | Adds | Notes |
 |---|---|---|
-| `[llm]` | `anthropic`, `openai` | Enables `cortex enrich`; never required for core graphing or MCP. |
+| `[llm]` | `anthropic`, `openai` | Enables opt-in remote `cortex enrich`; source upload requires `--allow-code-upload`. Never required for core graphing or MCP. |
 | `[languages]` | tree-sitter and language grammars | Adds structural extraction for JS/TS/Go/Rust/Swift/Java/Ruby/C/C++ where grammars import cleanly; regex fallback remains available. |
 | `[qml]` | `tree-sitter-language-pack` | Adds QML tree-sitter extraction through the bundled qmljs grammar; kept separate because the pack ships many grammars. |
 | `[watch]` | `watchdog` | Improves `cortex watch`; polling fallback is stdlib-only. |

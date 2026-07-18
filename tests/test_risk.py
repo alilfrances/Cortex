@@ -129,6 +129,17 @@ def test_staged_and_explicit_range_and_binary_rename_delete(tmp_path: Path) -> N
     assert paths["blob.bin"]["binary"] is True
 
 
+def test_range_cannot_be_interpreted_as_git_option(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    target = tmp_path / "git-output.txt"
+
+    result = analyze_risk(repo, f"--output={target}")
+
+    assert result["status"] == "error"
+    assert result["error"] == "invalid_range"
+    assert not target.exists()
+
+
 def test_qt_instantiation_header_pair_signal_sites_and_qml_registration(tmp_path: Path) -> None:
     repo = _build_qt_app(tmp_path)
     # Change only the implementation: resolved QML instantiation and the

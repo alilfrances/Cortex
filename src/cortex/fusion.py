@@ -1,6 +1,6 @@
 """Reciprocal Rank Fusion (RRF) for combining ranked-list retrieval signals.
 
-P0-2 (IMPROVEMENT_PLAN.md): Cortex's bundle ranking (`bundle.py::generate_bundle`)
+P0-2: Cortex's bundle ranking (`bundle.py::generate_bundle`)
 combined a name/keyword score with graph proximity/pagerank directly on one
 hand-tuned numeric scale. Adding FTS5 body-text search (`CortexStore.search_fulltext`)
 introduces a second ranking signal -- BM25 -- on a *different* scale that

@@ -427,8 +427,7 @@ def _cache_get(store: CortexStore, repo_root: Path, cache_key: str) -> dict[str,
     (i.e. call `_ensure_fresh` first, as every `_call_*` already does)
     rather than reusing anything from write time -- the cache only ever
     stores payload data, never status/`_meta`, specifically so a hit can't
-    replay a stale `auto_refreshed` block or a frozen index age (see
-    IMPROVEMENT_PLAN.md P1-5 and the P1-3 caveat it fixes).
+    replay a stale `auto_refreshed` block or a frozen index age.
     """
     if not _query_cache_enabled():
         return None
@@ -1816,8 +1815,7 @@ def _estimate_baseline(
 ) -> int:
     """Deterministic "what would an agent have spent without Cortex" baseline.
 
-    Policy (kept in this one function so it stays auditable -- see P0-1 in
-    IMPROVEMENT_PLAN.md):
+    Policy is kept in this one function so it stays auditable:
 
     - File-returning tools (cortex_query, cortex_context, cortex_impact,
       cortex_read_symbol, cortex_read_file, cortex_references,
@@ -1946,9 +1944,8 @@ def _record_tool_usage(name: str, arguments: dict[str, Any], result: dict[str, A
     This is the single place `saved_tokens` is computed, and the number
     folded into `_meta.saved_tokens` is *exactly* `baseline_tokens -
     response_tokens` from the same `_estimate_baseline` call the ledger row
-    records -- deliberately not a second, separate estimate (see P1-5 in
-    IMPROVEMENT_PLAN.md: "reuse this exact computation, not a parallel
-    one"). `_estimate_baseline`/`_detailed_rendering_tokens` may recurse
+    records -- deliberately not a second, separate estimate.
+    `_estimate_baseline`/`_detailed_rendering_tokens` may recurse
     into `_call_search`/`_call_relations`/`_call_overview` directly (never
     through `call_tool`), so those shadow calls never reach this function
     and never write a second ledger row for one real tool call.

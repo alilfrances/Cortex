@@ -124,6 +124,16 @@ def _git(repo_root: Path, args: Sequence[str]) -> bytes:
     return completed.stdout
 
 
+def _validate_range_spec(range_spec: str | None) -> None:
+    if range_spec is None:
+        return
+    if not range_spec or range_spec.startswith("-") or "\0" in range_spec or len(range_spec) > 4096:
+        raise RiskAnalysisError(
+            "invalid_range",
+            "Git range must be a non-option revision or revision range",
+        )
+
+
 def _diff_args(range_spec: str | None, staged: bool, *options: str) -> list[str]:
     # Disable configured external diff/textconv drivers: risk is a local,
     # deterministic parser, not an invitation to execute repository hooks.
@@ -658,6 +668,7 @@ def analyze_risk(
         return {"status": "error", "error": "not_git", "message": str(exc), "files": [], "directives": []}
     requested_range = range_spec or (None if staged else "HEAD~1..HEAD")
     try:
+        _validate_range_spec(requested_range)
         _ensure_diffable(repo_root, requested_range, staged)
         diff = _collect_diff(repo_root, requested_range, staged)
     except RiskAnalysisError as exc:

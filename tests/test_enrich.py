@@ -1,7 +1,16 @@
 # tests/test_enrich.py
 from __future__ import annotations
+
+from pathlib import Path
+
 import pytest
-from cortex.enrich import make_provider, _PROMPT_TEMPLATE
+
+from cortex.enrich import _PROMPT_TEMPLATE, enrich_repository, make_provider
+
+
+def test_enrichment_requires_explicit_code_upload_consent():
+    with pytest.raises(RuntimeError, match="allow-code-upload"):
+        enrich_repository(Path("."), "claude")
 
 
 def test_make_provider_raises_on_unknown():

@@ -52,6 +52,10 @@ _TEXT_SUFFIXES = {
     ".pro",
 }
 
+# Bound source reads to keep one tracked/generated file from exhausting memory
+# or bloating the local source-content database.
+MAX_SOURCE_BYTES = 5 * 1024 * 1024
+
 _SKIP_DIRS = {
     ".git",
     ".cortex",
@@ -68,6 +72,31 @@ _SKIP_DIRS = {
     ".tox",
     ".eggs",
 }
+
+
+def _is_safe_candidate(repo_root: Path, path: Path) -> bool:
+    """Only index regular files physically contained by the repository.
+
+    Tracked and untracked symlinks are excluded so a repository cannot point a
+    text-looking path at credentials elsewhere on the machine and make Cortex
+    copy them into its database or an LLM enrichment request.
+    """
+    try:
+        if path.is_symlink() or not path.is_file():
+            return False
+        path.resolve(strict=True).relative_to(repo_root.resolve(strict=True))
+    except (OSError, RuntimeError, ValueError):
+        return False
+    return True
+
+
+def _read_source_text(path: Path) -> str | None:
+    try:
+        if path.is_symlink() or path.stat().st_size > MAX_SOURCE_BYTES:
+            return None
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
 
 
 def _git_listed_files(repo_root: Path) -> list[Path] | None:
@@ -91,11 +120,16 @@ def _iter_candidate_files(repo_root: Path, skip_dirs: set[str] | None = None) ->
         return [
             path for path in listed
             if not set(path.relative_to(repo_root).parts[:-1]) & skip_dirs
+            and _is_safe_candidate(repo_root, path)
         ]
     files: list[Path] = []
     for root, dirs, names in os.walk(repo_root):
         dirs[:] = [directory for directory in dirs if directory not in skip_dirs]
-        files.extend(Path(root) / name for name in names)
+        files.extend(
+            path
+            for name in names
+            if _is_safe_candidate(repo_root, path := Path(root) / name)
+        )
     return files
 
 
@@ -143,6 +177,8 @@ def compute_repo_fingerprint(repo_root: Path, skip_dirs: set[str] | None = None)
             stat = path.stat()
         except OSError:
             continue
+        if stat.st_size > MAX_SOURCE_BYTES:
+            continue
         rel_path = path.relative_to(repo_root).as_posix()
         parts.append(f"{rel_path}\0{stat.st_size}\0{stat.st_mtime_ns}")
     return hashlib.sha256("\n".join(sorted(parts)).encode("utf-8")).hexdigest()
@@ -154,11 +190,15 @@ def _scan_sources(repo_root: Path, skip_dirs: set[str] | None = None) -> list[So
         if path.suffix.lower() not in _TEXT_SUFFIXES:
             continue
         try:
-            content = path.read_text(encoding="utf-8")
-        except (UnicodeDecodeError, OSError):
+            stat = path.stat()
+        except OSError:
+            continue
+        if stat.st_size > MAX_SOURCE_BYTES:
+            continue
+        content = _read_source_text(path)
+        if content is None:
             continue
         rel_path = path.relative_to(repo_root).as_posix()
-        stat = path.stat()
         sources.append(
             SourceRecord(
                 path=rel_path,
@@ -217,6 +257,8 @@ def _scan_sources_incremental(
             stat = path.stat()
         except OSError:
             continue
+        if stat.st_size > MAX_SOURCE_BYTES:
+            continue
         rel_path = path.relative_to(repo_root).as_posix()
         current_paths.add(rel_path)
         fingerprint_parts.append(f"{rel_path}\0{stat.st_size}\0{stat.st_mtime_ns}")
@@ -226,9 +268,8 @@ def _scan_sources_incremental(
             unchanged_count += 1
             continue
 
-        try:
-            content = path.read_text(encoding="utf-8")
-        except (UnicodeDecodeError, OSError):
+        content = _read_source_text(path)
+        if content is None:
             continue
         content_hash = _content_hash(content)
         record = SourceRecord(

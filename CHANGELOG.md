@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Harden local data handling: indexing now excludes symlinks and text files larger than 5 MiB, managed SQLite data is owner-only on POSIX systems, remote LLM enrichment requires explicit `--allow-code-upload` consent, and `cortex risk` rejects revision values that Git could interpret as command options.
+
 - Complete the post-merge plan audit: tree-sitter C++ out-of-line definitions now retain the bare member label plus class qualifier, class-qualified Qt `connect()` endpoints prefer one real signal/slot declaration over its `.cpp` definition while preserving conservative ambiguity, and QML handlers on known local components are marked `unverified` when the completed graph contains no matching `foo`/`fooChanged` signal.
 
 - Complete P1-4 tokenizer calibration against `tiktoken` `o200k_base` on the Cortex corpus (`code=0.74`, `markdown=0.67`, `text=0.77`), with reproducible measurements in `evals/TOKENIZER_CALIBRATION.md` and a `run_evals.py --stdlib-tokens` mode for default-install baselines; add the 2,000-file incremental-ingest performance harness and preserve SQLite rowids when unchanged graph rows need metadata updates.
@@ -16,7 +18,7 @@
 
 - Add diff-aware local risk analysis (`cortex risk` / `cortex_risk`): safely parses deterministic numstat, rename/status, and zero-context git diff data for committed ranges or staged changes; reports additions/deletions/churn, stored hotspot metadata, structural fan-in, fixed normalized 0–10 scores, and deterministic missing co-change/test/Qt/build-reference directives. Qt advice is emitted only from resolved graph edges and metadata, while missing-index, shallow-history, no-commit, and non-git cases remain clearly labeled. The MCP tool performs one shared freshness check, uses the standard `_meta` envelope and token ledger, and applies deterministic budget truncation without query caching.
 
-- Remove the P1-8 fail-open `PreToolUse` redirect hook for built-in `Read`/`Grep`/`Glob` calls (added and then reverted on this branch): shell-command/built-in-tool interception is out of scope for Cortex's repo-indexing functionality and now lives in its own plan (`RTK_PLAN.md`) for a possible separate plugin.
+- Remove the P1-8 fail-open `PreToolUse` redirect hook for built-in `Read`/`Grep`/`Glob` calls (added and then reverted on this branch): shell-command/built-in-tool interception is out of scope for Cortex's repo-indexing functionality.
 
 - Add the strictly optional `[semantic]` extra for local Model2Vec static retrieval. `cortex semantic setup` is the only download path for the verified `minishlab/potion-code-16M` model; runtime ingest/query load only the managed local cache under `CORTEX_DATA_DIR`, persist float32 symbol-span chunks in `chunk_embeddings`, and fail soft to the unchanged lexical/graph path when unavailable. Semantic vectors participate as one deterministic RRF list, detailed `cortex_overview` reports local semantic status, and the eval harness has opt-in vocabulary-gap/Qt click tasks that never claim semantic-on success without a real local model.
 

@@ -1,5 +1,6 @@
-"""P0-2 Qt/C++/QML search parity (IMPROVEMENT_PLAN.md ground rules + P0-2
-acceptance criteria): on the shared qt_app eval fixture, searching a signal
+"""P0-2 Qt/C++/QML search-parity acceptance criteria.
+
+On the shared qt_app eval fixture, searching a signal
 name, a SIGNAL()/SLOT() macro string, an onFoo QML handler name, and a
 Class::method qualified name must each surface the right .cpp/.hpp/.qml
 file; body-text search must find a string literal inside a .qml file.
