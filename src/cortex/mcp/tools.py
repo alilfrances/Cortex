@@ -146,7 +146,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "name": "cortex_relations",
         "description": (
-            "Returns parsed graph edges like imports/inherits/calls/emits/connects. Use for structural symbol questions; use cortex_references when configs/docs/scripts may mention it. Example: {\"relation\":\"calls\",\"symbol\":\"generate_bundle\",\"direction\":\"out\"}."
+            "Returns parsed graph edges like imports/inherits/calls/emits/connects/builds/registers. Use for structural symbol questions; use cortex_references when configs/docs/scripts may mention it. Example: {\"relation\":\"calls\",\"symbol\":\"generate_bundle\",\"direction\":\"out\"}."
         ),
         "inputSchema": {
             "type": "object",
@@ -436,7 +436,8 @@ def _cache_get(store: CortexStore, repo_root: Path, cache_key: str) -> dict[str,
         raw = store.get_query_cache(repo_root, cache_key)
         if raw is None:
             return None
-        return json.loads(raw)
+        payload = json.loads(raw)
+        return payload if isinstance(payload, dict) else None
     except Exception:
         return None
 
@@ -524,6 +525,40 @@ def _compact_why(why: list[dict[str, Any]]) -> str:
     return "ranked by Cortex"
 
 
+def _query_token_stats(
+    payload: dict[str, Any],
+    arguments: dict[str, Any],
+) -> dict[str, int | float]:
+    returned_tokens = max(0, int(payload.get("total_tokens", 0)))
+
+    def keyword_match(item: dict[str, Any]) -> bool:
+        why = item.get("why", [])
+        if isinstance(why, str):
+            return why == "keyword match" or why.startswith("keyword:")
+        return isinstance(why, list) and any(
+            isinstance(entry, dict) and entry.get("type") == "keyword"
+            for entry in why
+        )
+
+    items = payload.get("items", [])
+    if not isinstance(items, list):
+        items = []
+    matched_tokens = min(
+        returned_tokens,
+        sum(
+            max(0, int(item.get("token_count", 0)))
+            for item in items
+            if isinstance(item, dict) and keyword_match(item)
+        ),
+    )
+    return {
+        "budget": int(payload.get("budget", arguments.get("budget", 4000))),
+        "returned_tokens": returned_tokens,
+        "matched_tokens": matched_tokens,
+        "matched_ratio": round(matched_tokens / returned_tokens, 2) if returned_tokens else 0.0,
+    }
+
+
 def _concise_query_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
     compact = {
         "task": bundle.get("task", ""),
@@ -566,6 +601,11 @@ def _call_query(arguments: dict[str, Any]) -> dict[str, Any]:
     cache_hit = cached_payload is not None
     if cache_hit:
         payload = cached_payload
+        token_stats = payload.get("token_stats")
+        required_stats = {"budget", "returned_tokens", "matched_tokens", "matched_ratio"}
+        if not isinstance(token_stats, dict) or not required_stats.issubset(token_stats):
+            payload["token_stats"] = _query_token_stats(payload, arguments)
+            _cache_set(store, repo_root, cache_key, payload)
     else:
         task = str(arguments.get("task", ""))
         bundle = generate_bundle(
@@ -585,18 +625,7 @@ def _call_query(arguments: dict[str, Any]) -> dict[str, Any]:
         _nodes, edges = store.fetch_graph(repo_root)
         for item in bundle.get("items", []):
             item["why"] = _bundle_why(item, terms, seed_paths, edges)
-        returned_tokens = int(bundle.get("total_tokens", 0))
-        matched_tokens = sum(
-            int(item.get("token_count", 0))
-            for item in bundle.get("items", [])
-            if any(entry.get("type") == "keyword" for entry in item.get("why", []))
-        )
-        bundle["token_stats"] = {
-            "budget": int(bundle.get("budget", arguments.get("budget", 4000))),
-            "returned_tokens": returned_tokens,
-            "matched_tokens": matched_tokens,
-            "matched_ratio": round(matched_tokens / returned_tokens, 2) if returned_tokens else 0.0,
-        }
+        bundle["token_stats"] = _query_token_stats(bundle, arguments)
         payload = bundle if response_format == "detailed" else _concise_query_bundle(bundle)
         # P1-5: cache the bare payload only, not status/`_meta` -- see
         # _cache_set. `_format_payload` (below) rebuilds `_meta` fresh on
@@ -1721,6 +1750,7 @@ _LEDGER_TOOLS = {
     "cortex_read_symbol",
     "cortex_read_file",
     "cortex_relations",
+    "cortex_path",
     "cortex_references",
     "cortex_search_text",
     "cortex_risk",
@@ -1742,9 +1772,10 @@ def _referenced_file_tokens(store: CortexStore, repo_root: Path, paths: set[str]
     for path in paths:
         if not path:
             continue
-        content = store.fetch_source_content(repo_root, path)
-        if content:
-            total += count_text_tokens(content)
+        token_data = store.fetch_source_token_data(repo_root, path)
+        if token_data is not None and token_data[0]:
+            content, kind = token_data
+            total += count_text_tokens(content, kind=kind)
     return total
 
 
@@ -1752,7 +1783,7 @@ def _detailed_rendering_tokens(tool: str, arguments: dict[str, Any]) -> int:
     """Re-run a structure-only tool with response_format=detailed and count it.
 
     Used only as an input to _estimate_baseline's policy for search/relations/
-    overview (see its docstring). Re-dispatching is simple, deterministic, and
+    path/overview (see its docstring). Re-dispatching is simple, deterministic, and
     cheap (local SQLite reads); any failure here is caught by the caller's
     non-fatal wrapper. This calls _call_* directly (not call_tool), so it
     never goes through the P0-1 ledger itself -- only the outer call does.
@@ -1768,6 +1799,8 @@ def _detailed_rendering_tokens(tool: str, arguments: dict[str, Any]) -> int:
         detailed_result = _call_search(detailed_args)
     elif tool == "cortex_relations":
         detailed_result = _call_relations(detailed_args)
+    elif tool == "cortex_path":
+        detailed_result = _call_path(detailed_args)
     else:
         detailed_result = _call_overview(detailed_args)
     detailed_payload = json.loads(detailed_result["content"][0]["text"])
@@ -1792,8 +1825,8 @@ def _estimate_baseline(
       the token cost of reading, in full and raw, every DISTINCT file
       referenced in the actual response -- the tokens an agent would have
       spent with plain Read/grep instead of this tool. Computed via
-      store.fetch_source_content, so it reflects the exact indexed content
-      Cortex itself read. This applies uniformly across cortex_read_symbol's
+      the stored source content and kind, so it reflects the exact indexed
+      input Cortex itself read. This applies uniformly across cortex_read_symbol's
       full/skeleton/signature modes and cortex_read_file's skeleton/full
       modes (P1-6): regardless of how much of the file the response actually
       returns, the counterfactual an agent is spared is always "open the
@@ -1807,13 +1840,13 @@ def _estimate_baseline(
       batch with the same file twice is priced once, and ambiguous/missing
       cards contribute zero).
     - Structure-only tools (cortex_search_symbols, cortex_relations,
-      cortex_overview): these return an index/graph view with no single
-      "raw file" backing them, so there's no direct raw-read baseline. The
-      baseline instead is the token cost of the `detailed` rendering of the
-      same call -- the savings Cortex's concise response format already
-      provides over its own verbose format. cortex_relations additionally
-      folds in the referenced files' raw content, since each of its items
-      points at a specific call site a raw-read comparison can still price.
+      cortex_path, cortex_overview): these return an index/graph view with no
+      single "raw file" backing them, so there's no direct raw-read baseline.
+      The baseline instead is the token cost of the `detailed` rendering of
+      the same call -- the savings Cortex's concise response format already
+      provides over its own verbose format. cortex_relations and cortex_path
+      additionally fold in the referenced files' raw content, since their
+      items point at specific graph locations a raw-read comparison can price.
 
     Caveat for reviewers: for cortex_search_symbols and cortex_overview this
     is a rough proxy on response-format savings only, not a true "agent
@@ -1869,6 +1902,22 @@ def _estimate_baseline(
                 match = _RELATION_ENDPOINT_FILE_RE.search(str(item.get(key, "")))
                 if match:
                     paths.add(match.group(1))
+        return detailed_tokens + _referenced_file_tokens(store, repo_root, paths)
+
+    if tool == "cortex_path":
+        detailed_tokens = _detailed_rendering_tokens(tool, arguments)
+        endpoints = [payload.get("source", ""), payload.get("target", "")]
+        endpoints.extend(
+            hop.get("node", "")
+            for path in payload.get("paths", [])
+            for hop in path
+            if isinstance(hop, dict)
+        )
+        paths = {
+            match.group(1)
+            for endpoint in endpoints
+            if (match := _RELATION_ENDPOINT_FILE_RE.search(str(endpoint)))
+        }
         return detailed_tokens + _referenced_file_tokens(store, repo_root, paths)
 
     return 0

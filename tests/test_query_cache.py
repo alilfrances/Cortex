@@ -187,6 +187,74 @@ def test_file_edit_invalidates_cache_and_recomputes(tmp_path, monkeypatch):
 # itself on each side.
 
 
+def test_non_object_query_cache_payload_degrades_to_recompute(tmp_path, monkeypatch):
+    repo = _repo_with_index(tmp_path, monkeypatch)
+    store = CortexStore(default_db_path(repo))
+    args = {"repo_path": str(repo), "task": "login billing"}
+    cache_key = mcp_tools._cache_key(
+        store.get_repo_fingerprint(repo),
+        "cortex_query",
+        args,
+    )
+    store.set_query_cache(repo, cache_key, "[]")
+
+    result = call_tool("cortex_query", args)
+    payload = _payload(result)
+
+    assert result["isError"] is False
+    assert payload["items"]
+    assert "token_stats" in payload
+
+
+def test_legacy_query_cache_payload_backfills_token_stats(tmp_path, monkeypatch):
+    repo = _repo_with_index(tmp_path, monkeypatch)
+    store = CortexStore(default_db_path(repo))
+    for response_format, why in (
+        ("concise", "keyword: login"),
+        ("detailed", [{"type": "keyword", "terms": ["login"]}]),
+    ):
+        args = {
+            "repo_path": str(repo),
+            "task": "legacy cached login",
+            "response_format": response_format,
+        }
+        cache_key = mcp_tools._cache_key(
+            store.get_repo_fingerprint(repo),
+            "cortex_query",
+            args,
+        )
+        legacy_payload = {
+            "task": args["task"],
+            "repo_path": str(repo),
+            "budget": 4000,
+            "total_tokens": 12,
+            "confidence_notes": [],
+            "open_questions": [],
+            "items": [
+                {
+                    "path": "auth.py",
+                    "kind": "code",
+                    "token_count": 12,
+                    "content": "def login(): pass",
+                    "why": why,
+                }
+            ],
+        }
+        store.set_query_cache(repo, cache_key, json.dumps(legacy_payload))
+
+        payload = _payload(call_tool("cortex_query", args))
+
+        assert payload["token_stats"] == {
+            "budget": 4000,
+            "returned_tokens": 12,
+            "matched_tokens": 12,
+            "matched_ratio": 1.0,
+        }
+        cached = store.get_query_cache(repo, cache_key)
+        assert cached is not None
+        assert json.loads(cached)["token_stats"] == payload["token_stats"]
+
+
 def test_cached_payload_is_byte_identical_to_fresh_recompute(tmp_path, monkeypatch):
     repo = _repo_with_index(tmp_path, monkeypatch)
     args = {"repo_path": str(repo), "task": "login billing"}

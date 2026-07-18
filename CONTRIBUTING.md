@@ -21,7 +21,8 @@ Run the narrowest useful check for your change:
 
 ```bash
 python3 -m pytest tests/ -q
-python3 evals/run_evals.py
+python3 evals/run_evals.py --stdlib-tokens
+python3 evals/perf_ingest.py
 python3 -m build
 ```
 

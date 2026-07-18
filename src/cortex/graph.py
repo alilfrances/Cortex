@@ -157,9 +157,22 @@ def _resolve_qt_edges(edges: list[GraphEdge], index: QtSymbolIndex) -> None:
             component_path = edge.metadata.get("component_path")
             if not signal_name or not component_path or edge.target != f"module:{signal_name}":
                 continue
-            resolved = index.signals.get(component_path, {}).get(signal_name)
+            candidate_names = [signal_name]
+            if signal_name.endswith("Changed"):
+                candidate_names.append(signal_name.removesuffix("Changed"))
+            else:
+                candidate_names.append(signal_name + "Changed")
+            component_signals = index.signals.get(component_path, {})
+            resolved = next(
+                (component_signals[candidate] for candidate in candidate_names if candidate in component_signals),
+                None,
+            )
             if resolved:
                 edge.target = resolved
+                edge.metadata.pop("unverified", None)
+            else:
+                edge.confidence = "LOW"
+                edge.metadata["unverified"] = True
 
         elif edge.relation == "instantiates":
             # QML scenes can instantiate a registered QObject type whose
@@ -183,13 +196,13 @@ def resolve_connect_endpoints(
 ) -> list[GraphEdge]:
     """Rewrite `name:Cls::member` connects endpoints to real symbol ids.
 
-    A `name:Cls::member` endpoint resolves when exactly one file defines both
-    the class `Cls` and a symbol `member`. Unresolvable endpoints keep the
-    class-qualified `name:` form. Self-loop connects edges are parse
-    artifacts and are dropped.
+    A `name:Cls::member` endpoint prefers exactly one Qt-tagged declaration
+    among the eligible class files, then falls back to exactly one ordinary
+    candidate. Unresolvable endpoints keep the class-qualified `name:` form.
+    Self-loop connects edges are parse artifacts and are dropped.
     """
     class_files: defaultdict[str, set[str]] = defaultdict(set)
-    symbol_by_file_label: dict[tuple[str, str], str] = {}
+    symbols_by_file_label: defaultdict[tuple[str, str], list[GraphNode]] = defaultdict(list)
     for node in nodes:
         if node.granularity != 'symbol':
             continue
@@ -198,19 +211,26 @@ def resolve_connect_endpoints(
         qualifier = node.metadata.get('qualifier')
         if isinstance(qualifier, str) and qualifier:
             class_files[qualifier].add(node.source_ref)
-        symbol_by_file_label[(node.source_ref, node.label)] = node.node_id
+        symbols_by_file_label[(node.source_ref, node.label)].append(node)
 
     def resolve(endpoint: str) -> str:
         if not endpoint.startswith('name:') or '::' not in endpoint:
             return endpoint
         class_name, _, member = endpoint.removeprefix('name:').partition('::')
-        candidates = {
-            symbol_by_file_label[(file_path, member)]
+        candidates = [
+            node
             for file_path in class_files.get(class_name, set())
-            if (file_path, member) in symbol_by_file_label
-        }
-        if len(candidates) == 1:
-            return candidates.pop()
+            for node in symbols_by_file_label.get((file_path, member), ())
+        ]
+        declarations = [
+            node
+            for node in candidates
+            if node.metadata.get('qt') in {'signal', 'slot'}
+        ]
+        if len(declarations) == 1:
+            return declarations[0].node_id
+        if not declarations and len(candidates) == 1:
+            return candidates[0].node_id
         return endpoint
 
     resolved: list[GraphEdge] = []

@@ -846,7 +846,6 @@ def _extract_qml_handlers(
     stack: list[tuple[str, int]] = []
     brace_depth = 0
     seen_qualnames: set[str] = set()
-    local_signal_names = {node.label for node in nodes if node.source_ref == path}
 
     for lineno, line in enumerate(content.splitlines(), start=1):
         obj_match = _QML_OBJECT_RE.match(line)
@@ -887,13 +886,6 @@ def _extract_qml_handlers(
                     metadata={"lineno": lineno, "source_file": path},
                 )
             )
-            # An `onFooChanged:` handler can belong to a plain property `foo`
-            # rather than an explicit `signal fooChanged(...)` declaration.
-            candidates = {signal_name}
-            if signal_name.endswith("Changed"):
-                candidates.add(signal_name.removesuffix("Changed"))
-            else:
-                candidates.add(signal_name + "Changed")
             handles_metadata: dict[str, str | int | bool] = {
                 "lineno": lineno,
                 "source_file": path,
@@ -901,9 +893,10 @@ def _extract_qml_handlers(
                 "signal_name": signal_name,
                 "component_path": component_path or "",
             }
-            if component_path is None and not (local_signal_names & candidates):
-                # No local declaration and no known component to resolve
-                # against later -- keep the edge but mark the guess.
+            if component_path is None:
+                # Framework/external objects cannot be verified against the
+                # local graph. Known components are checked after every file
+                # has been parsed by graph._resolve_qt_edges.
                 handles_metadata["unverified"] = True
             edges.append(
                 GraphEdge(

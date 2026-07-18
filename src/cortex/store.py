@@ -802,8 +802,17 @@ class CortexStore:
         with self.connection:
             self.connection.executemany(
                 '''
-                INSERT OR REPLACE INTO graph_nodes(repo_path, node_id, kind, label, source_ref, granularity, signature, span_start, span_end, metadata_json)
+                INSERT INTO graph_nodes(repo_path, node_id, kind, label, source_ref, granularity, signature, span_start, span_end, metadata_json)
                 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(repo_path, node_id) DO UPDATE SET
+                    kind = excluded.kind,
+                    label = excluded.label,
+                    source_ref = excluded.source_ref,
+                    granularity = excluded.granularity,
+                    signature = excluded.signature,
+                    span_start = excluded.span_start,
+                    span_end = excluded.span_end,
+                    metadata_json = excluded.metadata_json
                 ''',
                 [
                     (
@@ -823,8 +832,17 @@ class CortexStore:
             )
             self.connection.executemany(
                 '''
-                INSERT OR REPLACE INTO graph_edges(repo_path, edge_id, source, target, relation, layer, confidence, weight, metadata_json, source_file)
+                INSERT INTO graph_edges(repo_path, edge_id, source, target, relation, layer, confidence, weight, metadata_json, source_file)
                 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(repo_path, edge_id) DO UPDATE SET
+                    source = excluded.source,
+                    target = excluded.target,
+                    relation = excluded.relation,
+                    layer = excluded.layer,
+                    confidence = excluded.confidence,
+                    weight = excluded.weight,
+                    metadata_json = excluded.metadata_json,
+                    source_file = excluded.source_file
                 ''',
                 [
                     (
@@ -909,6 +927,17 @@ class CortexStore:
             (repo_key, path),
         ).fetchone()
         return None if row is None else str(row["content"])
+
+    def fetch_source_token_data(self, repo_path: Path, path: str) -> tuple[str, str] | None:
+        """Return one source's content and tokenizer kind for ledger pricing."""
+        repo_key = str(repo_path.resolve())
+        row = self.connection.execute(
+            "SELECT content, kind FROM sources WHERE repo_path = ? AND path = ?",
+            (repo_key, path),
+        ).fetchone()
+        if row is None:
+            return None
+        return str(row["content"]), str(row["kind"])
 
     def fetch_source_record(self, repo_path: Path, path: str) -> SourceRecord | None:
         """Single-file lookup mirroring `fetch_sources`' row shape (P1-6) --

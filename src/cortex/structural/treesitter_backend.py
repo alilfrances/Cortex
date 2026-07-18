@@ -115,6 +115,27 @@ def _name_for_node(node: Any, source: bytes) -> str:
     return ""
 
 
+def _cpp_member_for_definition(node: Any, source: bytes) -> tuple[str | None, str]:
+    """Return the class qualifier and bare member name for a C++ definition."""
+    declarator = node.child_by_field_name("declarator")
+    first_declarator = declarator
+    while declarator is not None:
+        if declarator.type in {"qualified_identifier", "scoped_identifier"}:
+            scope = declarator.child_by_field_name("scope")
+            name = declarator.child_by_field_name("name")
+            if scope is not None and name is not None:
+                if name.type in {"qualified_identifier", "scoped_identifier"}:
+                    # In A::B::member, the nested name carries the final
+                    # scope (B) and member (member).
+                    declarator = name
+                    continue
+                qualifier = _node_text(scope, source).rstrip(":").split("::")[-1]
+                return qualifier or None, _node_text(name, source)
+        declarator = declarator.child_by_field_name("declarator")
+
+    return None, _identifier_text(first_declarator, source) if first_declarator is not None else ""
+
+
 def _identifier_text(node: Any, source: bytes) -> str:
     if node.type in {
         "identifier",
@@ -339,12 +360,19 @@ def extract_treesitter_edges(
             continue
         if node.type in _BODY_REQUIRED_TYPES and node.child_by_field_name("body") is None:
             continue
-        name = _name_for_node(node, source)
+        qualifier: str | None = None
+        member_name = ""
+        if suffix in _CPP_SUFFIXES and node.type == "function_definition":
+            qualifier, member_name = _cpp_member_for_definition(node, source)
+        name = member_name or _name_for_node(node, source)
         if not name or name in seen_symbols:
             continue
         seen_symbols.add(name)
         line = node.start_point[0] + 1
         symbol_id = f"symbol:{path}:{name}"
+        metadata: dict[str, Any] = {"lineno": line}
+        if qualifier:
+            metadata["qualifier"] = qualifier
         nodes.append(
             GraphNode(
                 node_id=symbol_id,
@@ -355,7 +383,7 @@ def extract_treesitter_edges(
                 signature=_signature(node, source),
                 span_start=line,
                 span_end=node.end_point[0] + 1,
-                metadata={"lineno": line},
+                metadata=metadata,
             )
         )
         edges.append(

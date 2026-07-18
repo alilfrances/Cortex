@@ -369,7 +369,7 @@ def test_estimate_baseline_read_file_uses_full_raw_file(tmp_path, monkeypatch):
     from cortex.tokenizer import count_text_tokens
 
     full_content = (repo / "auth.py").read_text(encoding="utf-8")
-    assert baseline == count_text_tokens(full_content)
+    assert baseline == count_text_tokens(full_content, kind="code")
 
 
 # --- _meta envelope routing (P1-5) ---

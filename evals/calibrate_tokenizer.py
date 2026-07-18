@@ -24,9 +24,9 @@ to a fake ratio.
 The measurement is deliberately taken against the stdlib segmenter
 (`re`), not the optional third-party `regex` package (also a
 `raw_segment_count` soft-import), even if `regex` happens to be installed
-in the dev sandbox running this script: CALIBRATION must be accurate for
-the *default* install, which never has `regex` present. We force that by
-hiding `sys.modules['regex']` for the duration of the measurement.
+in the dev environment running this script: CALIBRATION must be accurate
+for the dependency-free default install. The script enables tokenizer.py's
+dev/eval-only stdlib-segmenter override for the measurement.
 """
 
 from __future__ import annotations
@@ -62,13 +62,11 @@ def main() -> None:
     repo_path = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else ROOT
     encoding = _load_tiktoken()
 
-    # Force the stdlib `re` fallback in raw_segment_count regardless of
-    # whether the optional `regex` package happens to be installed here --
-    # see module docstring. `sys.modules[name] = None` makes `import regex`
-    # raise ImportError deterministically without needing it uninstalled.
-    sys.modules["regex"] = None  # type: ignore[assignment]
+    from cortex import tokenizer as tokenizer_mod  # noqa: E402
     from cortex.ingest import _scan_sources  # noqa: E402
-    from cortex.tokenizer import raw_segment_count  # noqa: E402
+
+    tokenizer_mod._force_stdlib_segments = True
+    raw_segment_count = tokenizer_mod.raw_segment_count
 
     sources = _scan_sources(repo_path)
     if not sources:

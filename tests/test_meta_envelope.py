@@ -2,7 +2,7 @@
 
 See IMPROVEMENT_PLAN.md's P1-5 section. Covers:
   - `_meta` present (with the base schema fields) in `detailed` mode for
-    all 8 read/query tools.
+    every read/query/analysis tool.
   - `_meta` completely absent in `concise` mode when nothing is noteworthy.
   - `saved_tokens` surfaces in `_meta` only when positive, and is exactly
     the same number the P0-1 ledger records (not a parallel estimate).
@@ -69,7 +69,7 @@ def _repo_with_index(tmp_path: Path, monkeypatch) -> Path:
     return repo
 
 
-# --- `_meta` present in detailed mode for all 8 read/query tools ---
+# --- `_meta` present in detailed mode for every read/query/analysis tool ---
 
 
 def test_meta_present_in_detailed_for_all_read_tools(tmp_path, monkeypatch):
@@ -77,13 +77,19 @@ def test_meta_present_in_detailed_for_all_read_tools(tmp_path, monkeypatch):
     calls = [
         ("cortex_query", {"task": "login billing"}),
         ("cortex_overview", {}),
+        ("cortex_context", {"targets": ["auth.py"]}),
         ("cortex_impact", {"path": "auth.py"}),
+        ("cortex_risk", {"staged": True}),
+        ("cortex_dead_code", {}),
         ("cortex_search_symbols", {"query": "login"}),
         ("cortex_read_symbol", {"symbol": "login"}),
+        ("cortex_read_file", {"path": "auth.py"}),
         ("cortex_relations", {"relation": "imports"}),
+        ("cortex_path", {"symbol_a": "charge", "symbol_b": "login"}),
         ("cortex_references", {"symbol": "login"}),
         ("cortex_search_text", {"query": "login"}),
     ]
+    assert {tool for tool, _args in calls} == mcp_tools._LEDGER_TOOLS
     for tool, extra_args in calls:
         args = {"repo_path": str(repo), "response_format": "detailed", **extra_args}
         result = call_tool(tool, args)

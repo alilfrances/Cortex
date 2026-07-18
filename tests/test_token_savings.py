@@ -108,7 +108,11 @@ def test_estimate_baseline_query_sums_distinct_referenced_files(tmp_path, monkey
     payload = _payload(result)
 
     expected_paths = {item["path"] for item in payload["items"]}
-    expected = sum(count_text_tokens(store.fetch_source_content(repo, p)) for p in expected_paths)
+    expected = sum(
+        count_text_tokens(source.content, kind=source.kind)
+        for path in expected_paths
+        if (source := store.fetch_source_record(repo, path)) is not None
+    )
     baseline = mcp_tools._estimate_baseline("cortex_query", {"repo_path": str(repo)}, payload, store, repo)
 
     assert expected_paths, "test setup should surface at least one file"
@@ -124,7 +128,11 @@ def test_estimate_baseline_impact_sums_referenced_files(tmp_path, monkeypatch):
     payload = _payload(result)
 
     expected_paths = {item["path"] for item in payload["items"]}
-    expected = sum(count_text_tokens(store.fetch_source_content(repo, p)) for p in expected_paths)
+    expected = sum(
+        count_text_tokens(source.content, kind=source.kind)
+        for path in expected_paths
+        if (source := store.fetch_source_record(repo, path)) is not None
+    )
     baseline = mcp_tools._estimate_baseline("cortex_impact", {"repo_path": str(repo)}, payload, store, repo)
 
     assert expected_paths
@@ -139,7 +147,9 @@ def test_estimate_baseline_read_symbol_uses_resolved_file(tmp_path, monkeypatch)
     payload = _payload(result)
 
     assert payload["path"] == "auth.py"
-    expected = count_text_tokens(store.fetch_source_content(repo, "auth.py"))
+    source = store.fetch_source_record(repo, "auth.py")
+    assert source is not None
+    expected = count_text_tokens(source.content, kind=source.kind)
     baseline = mcp_tools._estimate_baseline("cortex_read_symbol", {"repo_path": str(repo)}, payload, store, repo)
 
     assert baseline == expected
@@ -177,9 +187,9 @@ def test_estimate_baseline_references_sums_files_stripping_line_numbers(tmp_path
             text = entry["text"] if isinstance(entry, dict) else entry
             referenced_paths.add(text.rsplit(":", 1)[0] if ":" in text else text)
     expected = sum(
-        count_text_tokens(content)
-        for content in (store.fetch_source_content(repo, p) for p in referenced_paths)
-        if content
+        count_text_tokens(source.content, kind=source.kind)
+        for path in referenced_paths
+        if (source := store.fetch_source_record(repo, path)) is not None
     )
     baseline = mcp_tools._estimate_baseline("cortex_references", {"repo_path": str(repo)}, payload, store, repo)
 
@@ -228,6 +238,28 @@ def test_estimate_baseline_overview_equals_detailed_rendering(tmp_path, monkeypa
     assert baseline == expected
 
 
+def test_estimate_baseline_path_adds_referenced_file_tokens_to_detailed_render(tmp_path, monkeypatch):
+    repo = _repo_with_index(tmp_path, monkeypatch)
+    store = CortexStore(default_db_path(repo))
+    args = {"repo_path": str(repo), "symbol_a": "charge", "symbol_b": "login"}
+
+    payload = _payload(call_tool("cortex_path", args))
+    detailed_tokens = mcp_tools._detailed_rendering_tokens("cortex_path", args)
+    file_tokens = sum(
+        count_text_tokens(source.content, kind=source.kind)
+        for path in ("auth.py", "billing.py")
+        if (source := store.fetch_source_record(repo, path)) is not None
+    )
+
+    baseline = mcp_tools._estimate_baseline("cortex_path", args, payload, store, repo)
+
+    assert payload["paths"]
+    assert baseline == detailed_tokens + file_tokens
+    rows = [row for row in store.fetch_tool_usage(repo) if row["tool"] == "cortex_path"]
+    assert len(rows) == 1
+    assert rows[0]["baseline_tokens"] == baseline
+
+
 def test_estimate_baseline_relations_adds_referenced_file_tokens_to_detailed_render(tmp_path, monkeypatch):
     # See the P1-5 note in test_estimate_baseline_search_symbols_equals_detailed_rendering.
     repo = _repo_with_index(tmp_path, monkeypatch)
@@ -246,9 +278,9 @@ def test_estimate_baseline_relations_adds_referenced_file_tokens_to_detailed_ren
                 file_part = endpoint.split(" @ ", 1)[1]
                 referenced_paths.add(file_part.rsplit(":", 1)[0] if ":" in file_part else file_part)
     file_tokens = sum(
-        count_text_tokens(content)
-        for content in (store.fetch_source_content(repo, p) for p in referenced_paths)
-        if content
+        count_text_tokens(source.content, kind=source.kind)
+        for path in referenced_paths
+        if (source := store.fetch_source_record(repo, path)) is not None
     )
 
     baseline = mcp_tools._estimate_baseline("cortex_relations", args, payload, store, repo)
@@ -259,6 +291,15 @@ def test_estimate_baseline_relations_adds_referenced_file_tokens_to_detailed_ren
 
 
 # --- ledger writes are non-fatal and land in the store ---
+
+
+def test_ledger_covers_every_non_refresh_mcp_tool():
+    expected = {
+        tool["name"]
+        for tool in mcp_tools.TOOL_DEFINITIONS
+        if tool["name"] != "cortex_refresh"
+    }
+    assert mcp_tools._LEDGER_TOOLS == expected
 
 
 def test_call_tool_records_ledger_row_after_success(tmp_path, monkeypatch):

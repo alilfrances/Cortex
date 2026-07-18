@@ -755,9 +755,10 @@ def generate_bundle(
                 title=f'{path}:{symbol.label}',
                 path=path,
                 content=span_text,
-                token_count=count_text_tokens(span_text),
+                token_count=count_text_tokens(span_text, kind=source.kind),
                 score=score,
                 metadata={
+                    'source_kind': source.kind,
                     'node_id': symbol.node_id,
                     'span_start': symbol.span_start,
                     'span_end': symbol.span_end,
@@ -848,8 +849,9 @@ def generate_bundle(
                     select(skeleton)
                 # Code files with indexed symbols never degrade to file[0:N].
                 continue
-        truncated = truncate_text_to_budget(item.content, remaining, kind=item.kind)
-        truncated_tokens = count_text_tokens(truncated, kind=item.kind)
+        token_kind = str(item.metadata.get('source_kind', item.kind))
+        truncated = truncate_text_to_budget(item.content, remaining, kind=token_kind)
+        truncated_tokens = count_text_tokens(truncated, kind=token_kind)
         if truncated_tokens <= 0:
             continue
         select(

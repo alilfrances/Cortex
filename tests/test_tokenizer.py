@@ -13,10 +13,12 @@ class TokenizerTests(unittest.TestCase):
         # pip-installed in the environment running the suite.
         self._orig_encoding = tokenizer_mod._tiktoken_encoding
         self._orig_unavailable = tokenizer_mod._tiktoken_unavailable
+        self._orig_force_stdlib = tokenizer_mod._force_stdlib_segments
 
     def tearDown(self) -> None:
         tokenizer_mod._tiktoken_encoding = self._orig_encoding
         tokenizer_mod._tiktoken_unavailable = self._orig_unavailable
+        tokenizer_mod._force_stdlib_segments = self._orig_force_stdlib
 
     def test_count_text_tokens_is_deterministic(self) -> None:
         text = "Cortex tracks files, commits, and sections."
@@ -34,9 +36,9 @@ class TokenizerTests(unittest.TestCase):
         # The stdlib fallback is intentionally exercised even when the
         # optional `regex` extra is installed in the runner.
         with mock.patch.dict(sys.modules, {"regex": None}):
-            truncated = truncate_text_to_budget(text, 8)
+            truncated = truncate_text_to_budget(text, 7)
             self.assertTrue(truncated.endswith("...[truncated]"))
-            self.assertLessEqual(count_text_tokens(truncated), 8)
+            self.assertLessEqual(count_text_tokens(truncated), 7)
 
     def test_heuristic_path_used_when_tiktoken_unavailable(self) -> None:
         """P1-4: with `tiktoken` absent (the default, stdlib-only install),
@@ -60,6 +62,14 @@ class TokenizerTests(unittest.TestCase):
                 tokens, max(1, round(raw_segment_count(text) * CALIBRATION["code"]))
             )
             self.assertTrue(tokenizer_mod._tiktoken_unavailable)
+
+    def test_stdlib_segment_override_ignores_optional_regex_module(self) -> None:
+        fake_regex = mock.Mock()
+        fake_regex.findall.return_value = ["one-fake-token"]
+        tokenizer_mod._force_stdlib_segments = True
+        with mock.patch.dict(sys.modules, {"regex": fake_regex}):
+            self.assertEqual(raw_segment_count("alpha beta"), 3)
+        fake_regex.findall.assert_not_called()
 
     def test_exact_path_used_when_tiktoken_available(self) -> None:
         """When tiktoken *is* importable, count_text_tokens must defer to its
@@ -88,6 +98,12 @@ class TokenizerTests(unittest.TestCase):
         tokenizer_mod._tiktoken_unavailable = True
         text = "alpha beta gamma"
         self.assertEqual(count_text_tokens(text, kind="commit"), count_text_tokens(text, kind="text"))
+
+    def test_checked_in_calibration_factors_are_measured(self) -> None:
+        self.assertEqual(
+            CALIBRATION,
+            {"code": 0.74, "markdown": 0.67, "text": 0.77},
+        )
 
     def test_calibration_factors_are_sane(self) -> None:
         """CALIBRATION should only ever scale segment counts down (or leave

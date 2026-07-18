@@ -319,3 +319,56 @@ def test_incremental_prunes_stale_edges_for_changed_cpp_file(tmp_path, monkeypat
         edge.edge_id for edge in edges_after if edge.metadata.get("source_file") != "engine.cpp"
     }
     assert other_files_edges_after == other_files_edges_before
+
+
+def test_incremental_preserves_rowids_for_unchanged_file_when_degree_changes(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_git_repo(repo)
+    (repo / "a.py").write_text("from b import helper\n\ndef run():\n    return helper()\n")
+    (repo / "b.py").write_text("def helper():\n    return 1\n")
+    _commit_all(repo, "init")
+
+    ingest_repository(repo, commit_limit=0)
+    store = CortexStore(default_db_path(repo))
+    repo_key = str(repo.resolve())
+
+    def rowids() -> tuple[dict[str, int], dict[str, int]]:
+        nodes = {
+            str(row["node_id"]): int(row["rid"])
+            for row in store.connection.execute(
+                "SELECT node_id, rowid AS rid FROM graph_nodes "
+                "WHERE repo_path = ? AND source_ref = 'b.py'",
+                (repo_key,),
+            )
+        }
+        edges = {
+            str(row["edge_id"]): int(row["rid"])
+            for row in store.connection.execute(
+                "SELECT edge_id, rowid AS rid FROM graph_edges "
+                "WHERE repo_path = ? AND source_file = 'b.py'",
+                (repo_key,),
+            )
+        }
+        return nodes, edges
+
+    nodes_before, edges_before = rowids()
+    assert nodes_before and edges_before
+    degree_before = next(
+        node.metadata["degree"]
+        for node in store.fetch_graph(repo)[0]
+        if node.node_id == "file:b.py"
+    )
+
+    (repo / "a.py").write_text("def run():\n    return 1\n")
+    ingest_repository(repo, commit_limit=0, incremental=True)
+
+    nodes_after, edges_after = rowids()
+    degree_after = next(
+        node.metadata["degree"]
+        for node in store.fetch_graph(repo)[0]
+        if node.node_id == "file:b.py"
+    )
+    assert degree_after < degree_before
+    assert nodes_after == nodes_before
+    assert edges_after == edges_before

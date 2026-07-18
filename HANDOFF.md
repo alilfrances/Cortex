@@ -11,6 +11,70 @@ uncommitted work described below.
 
 ---
 
+## 2026-07-17 (latest): full plan audit and integration follow-through
+
+The branch plus working tree was re-audited against every in-scope item in
+`plan.md` and `IMPROVEMENT_PLAN.md`. The existing tree-sitter C++ qualifier work and
+Qt declaration-first connect precedence remain uncommitted. The audit also completed
+the one acknowledged plan gap and the integration gaps exposed by merging PR #9:
+
+- P1-4 now has measured `o200k_base` calibration factors (`code=0.74`,
+  `markdown=0.67`, `text=0.77`) instead of provisional 1.0 placeholders. The
+  measurement table is in `evals/TOKENIZER_CALIBRATION.md`; default/stdlib eval rows and README
+  benchmark numbers were regenerated.
+- `cortex_path` now participates in the P0-1 ledger and P1-5 concise `_meta`
+  lifecycle, and the README, skill, session hook, and explorer agent all document
+  it. The same surfaces now advertise `cortex_references mode="writes"`. The
+  explorer's frontmatter now explicitly allowlists the plugin-scoped Cortex MCP
+  tools; its previous built-in-only `tools:` line unintentionally denied every MCP
+  tool it was instructed to use.
+- P0-3 acceptance evidence now includes a 2,000-file warm-refresh harness
+  (`evals/perf_ingest.py`), an unchanged-rowid regression, and conflict-update graph
+  upserts that preserve rowids when degree metadata changes.
+- QML `handles` verification now waits for the complete cross-file Qt symbol index;
+  a known local component with no matching `foo`/`fooChanged` signal remains in the
+  graph with `confidence="LOW"` and `metadata.unverified=true`.
+- Calibrated truncation now budgets the final text plus truncation marker together,
+  fixing a rounding boundary where the measured factors could otherwise produce an
+  over-budget result.
+- Legacy `cortex_query` cache rows are upgraded on read with Item 3 `token_stats`,
+  so a warm cache created before the merge cannot bypass the required payload field.
+
+Verification at this point: full pytest **413 passed / 4 skipped**; the 2,000-file
+incremental harness read exactly one changed file and completed in **0.1245 s**
+(<1 s); default eval aggregate PageRank/BFS recall is **0.985**; calibrated
+`cortex benchmark . --budget 4000` reports **272,879 → 3,998 average tokens
+(68.3×)**. Real-model semantic-on evals remain environment-gated because no managed
+Model2Vec model is installed; this is optional setup evidence, not missing branch
+code. Claude Code must still be restarted to live-confirm the new explorer agent.
+
+This latest audit batch is the final in-scope plan-completion change set.
+
+### Remaining environment checks after push
+
+These do not represent missing implementation; they require optional dependencies,
+a downloaded local model, or a restarted Claude Code process:
+
+1. **QML tree-sitter extra:** install with `python3 -m pip install -e ".[qml]"`, then
+   rerun the full suite. The four current skips in `test_context_mcp.py`,
+   `test_qt_relations.py`, and `test_structural_dispatch.py` should execute and pass.
+2. **Real semantic model:** run `cortex semantic setup`, perform a fresh ingest, then
+   run `python3 evals/run_evals.py --semantic --stdlib-tokens`. Confirm both optional
+   vocabulary-gap tasks pass, semantic-off still demonstrates the intended gap, and
+   `measure_ingest_overhead(...)` remains below 2× on repeated runs. Normal
+   ingest/query execution must remain network-free after setup.
+3. **Live explorer invocation:** restart Claude Code (or reload plugins), verify the
+   Cortex server in `/mcp`, and invoke `@agent-cortex:cortex-explorer` on the Qt
+   fixture question “which slot receives `deviceConnected`?”. Confirm it answers via
+   Cortex MCP relations/path/references without falling back to raw Grep.
+4. **Hosted CI:** confirm the pushed branch's test/build jobs pass in the repository's
+   configured GitHub Actions environment.
+
+RTK work and the explicitly deferred QML model-role/useful-token items remain out of
+Cortex scope; they are not checks blocking this branch.
+
+---
+
 ## 2026-07-17 (later): scope-split landed; P2-2 and P2-5 implemented and pushed
 
 The scope-split described below was committed as `89a40ac`. After it, the remaining
@@ -111,9 +175,9 @@ P1-8 revert above lands).
 
 ---
 
-## Remaining order and blockers
+## Historical remaining order and blockers (completed)
 
-Continue in this dependency order (rtk items no longer apply):
+This was the dependency order before the later completion entries above:
 
 1. **Land the scope-split commit** described above (user confirmation required).
 2. **P2-2 — dead-code report.** Preserve P0-4 Qt meta-object semantics: emits/connects/
@@ -128,15 +192,13 @@ discovery, P1-8 redirect hook — all now in `RTK_PLAN.md` for a separate plugin
 former data source (`<CORTEX_DATA_DIR>/<repo-hash>/usage.jsonl`) is no longer written by
 anything in this repo.
 
-### Non-blocking follow-ups to retain
+### Follow-up disposition
 
-- **Tokenizer calibration:** P1-4's per-kind mechanism is landed, but stdlib `CALIBRATION`
-  factors remain provisional 1.0 placeholders. Measure with `pip install tiktoken &&
-  python3 evals/calibrate_tokenizer.py` when network egress is available, then bake measured
-  factors into `src/cortex/tokenizer.py`; never fabricate measurements.
-- **Hash nondeterminism:** `PYTHONHASHSEED` can reorder tight-budget/skeleton bundle rows.
-  Find the unstable sort/dict iteration and make ordering deterministic; compare
-  precision/recall rather than incidental file order or latency until fixed.
+- **Tokenizer calibration:** completed in the latest working-tree audit; measured factors and
+  reproducible evidence are in `src/cortex/tokenizer.py` and
+  `evals/TOKENIZER_CALIBRATION.md`.
+- **Hash nondeterminism:** completed in `ae94c09`; `tests/test_rank_determinism.py` locks the
+  cross-`PYTHONHASHSEED` ordering.
 
 ---
 
@@ -184,9 +246,9 @@ Keep commit subjects/bodies operational. Do not create a PR unless the user asks
 
 ---
 
-## Retrieval/eval baselines
+## Historical retrieval/eval baselines
 
-Existing-task pagerank precision/recall baselines (compare these, not token/latency jitter):
+Pre-audit existing-task pagerank precision/recall baselines (compare these, not token/latency jitter):
 
 - `Trace password login token issuance and session audit`: **0.333 / 1.000**
 - `How does rank_nodes score and order graph nodes`: **0.250 / 0.333**
@@ -194,9 +256,9 @@ Existing-task pagerank precision/recall baselines (compare these, not token/late
 - `fix the stale index detection in the auto refresh path`: **0.111 / 0.333**
 - `qt_app — Where is the deviceConnected signal emitted…`: **0.571 / 0.667**
 
-Token/latency columns and tight-budget/skeleton file ordering vary run to run because of the
-known hash/order nondeterminism. Evaluate precision/recall first, and preserve/restore
-`RESULTS.md` after non-retrieval checks.
+Token and latency columns still vary with environment; the hash-order nondeterminism itself
+was fixed in `ae94c09`. Evaluate precision/recall first, and preserve/restore `RESULTS.md`
+after non-retrieval checks.
 
 ---
 
@@ -214,8 +276,8 @@ known hash/order nondeterminism. Evaluate precision/recall first, and preserve/r
 - `src/cortex/ingest.py` — full/incremental ingest and semantic synchronization.
 - `src/cortex/structural/{regex_backend,treesitter_backend}.py` — C++/QML/Qt extraction and
   resolved cross-file relations.
-- `src/cortex/tokenizer.py` — per-kind counting, provisional calibration, optional exact
-  tokenizer path.
+- `src/cortex/tokenizer.py` — per-kind counting, measured stdlib calibration, optional exact
+  tokenizer path; evidence lives in `evals/TOKENIZER_CALIBRATION.md`.
 - `hooks/session-start.py` — the only remaining hook (SessionStart, advisory, fail-open).
 - `evals/run_evals.py` — retrieval matrix, optional semantic-on checks, latency helpers
   (hook adoption replay removed with the P1-8 revert).

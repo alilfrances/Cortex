@@ -81,13 +81,23 @@ class PluginManifestTests(unittest.TestCase):
 
         self.assertEqual(fields["name"], "cortex-explorer")
         self.assertTrue(fields["description"])
-        tools_line = fields["tools"]
+        tools_block = frontmatter
         for tool in ("Read", "Grep", "Glob"):
-            self.assertIn(tool, tools_line)
+            self.assertIn(f"- {tool}", tools_block)
         for tool in ("Edit", "Write", "Bash"):
-            self.assertNotIn(tool, tools_line)
+            self.assertNotIn(f"- {tool}", tools_block)
+        from cortex.mcp.tools import TOOL_DEFINITIONS
 
-        for required in ("cortex_search_symbols", "cortex_context", "cortex_relations"):
+        read_tools = {
+            tool["name"]
+            for tool in TOOL_DEFINITIONS
+            if tool["name"] != "cortex_refresh"
+        }
+        for tool in read_tools:
+            self.assertIn(f"mcp__plugin_cortex_cortex__{tool}", tools_block)
+        self.assertNotIn("mcp__plugin_cortex_cortex__cortex_refresh", tools_block)
+
+        for required in ("cortex_search_symbols", "cortex_context", "cortex_relations", "cortex_path"):
             self.assertIn(required, body)
         for required in ("findings", "file/symbol IDs", "line spans", "suggested next Cortex calls"):
             self.assertIn(required, body)
@@ -95,9 +105,24 @@ class PluginManifestTests(unittest.TestCase):
         self.assertTrue("cortex_relations" in body or "cortex_references" in body)
 
     def test_cortex_skill_documents_explorer_boundary(self) -> None:
+        from cortex.mcp.tools import TOOL_DEFINITIONS
+
         content = (ROOT / "skills" / "cortex" / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn("cortex-explorer", content)
         self.assertIn("single lookups direct", content)
+        for tool in TOOL_DEFINITIONS:
+            self.assertIn(tool["name"], content)
+        self.assertIn('mode: "writes"', content)
+
+    def test_readme_lists_complete_mcp_surface(self) -> None:
+        from cortex.mcp.tools import TOOL_DEFINITIONS
+
+        content = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn(f"The MCP surface has {len(TOOL_DEFINITIONS)} tools", content)
+        self.assertIn("cortex:cortex-explorer", content)
+        for tool in TOOL_DEFINITIONS:
+            self.assertIn(f"`{tool['name']}`", content)
+        self.assertIn('`mode: "writes"`', content)
 
     def test_mcp_launcher_needs_no_pip_install(self) -> None:
         import subprocess

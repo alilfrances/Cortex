@@ -49,9 +49,9 @@ claude --plugin-dir /path/to/Cortex
 
 ### Claude Code exploration agent
 
-The Claude Code plugin ships a read-only `cortex-explorer` agent for multi-step exploration questions such as “where is X handled”, “how does Y flow”, and “what connects to Z”. Use it when the main agent would otherwise need several search, read, and graph calls; keep single lookups direct because a sub-agent round-trip costs more than one Cortex tool call. It uses the Cortex MCP loop and returns findings, consulted file/symbol IDs with line spans, and suggested next Cortex calls. Its Cortex calls are recorded in the existing token-savings ledger like any other MCP tool call, so no extra plumbing is needed.
+The Claude Code plugin ships a read-only `cortex-explorer` agent for multi-step exploration questions such as “where is X handled”, “how does Y flow”, and “what connects to Z”. Use it when the main agent would otherwise need several search, read, and graph calls; keep single lookups direct because a sub-agent round-trip costs more than one Cortex tool call. Its frontmatter explicitly allowlists the plugin-scoped Cortex MCP read/analysis tools plus `Read`, `Grep`, and `Glob` (but no edit, write, shell, or refresh tool). It uses the Cortex MCP loop and returns findings, consulted file/symbol IDs with line spans, and suggested next Cortex calls. Its Cortex calls are recorded in the existing token-savings ledger like any other MCP tool call, so no extra plumbing is needed.
 
-The definition ships in both the marketplace-installed plugin and local `claude --plugin-dir` development mode. The Codex plugin format used by `.codex-plugin/plugin.json` has no equivalent sub-agent concept, so `cortex-explorer` is Claude Code-only.
+The definition ships in both the marketplace-installed plugin and local `claude --plugin-dir` development mode. In Claude Code's agent picker it is plugin-scoped as `cortex:cortex-explorer` (for example, `@agent-cortex:cortex-explorer`). The Codex plugin format used by `.codex-plugin/plugin.json` has no equivalent sub-agent concept, so `cortex-explorer` is Claude Code-only.
 
 ## Hooks
 
@@ -119,8 +119,9 @@ This creates `cortex.db` and `cortex_report.md` under `~/.cortex/data/<repo-path
 | `cortex_search_symbols` | Searches indexed file and symbol nodes by name. | "Search Cortex symbols for `SessionStore` and related methods." |
 | `cortex_read_symbol` | Returns source for one indexed symbol span; `mode` picks `full` (numbered lines, default), `skeleton` (signature + nested member signatures, bodies elided), or `signature` (signature line + span only). | "Read the `generate_bundle` symbol with Cortex instead of opening the whole file." |
 | `cortex_read_file` | Direct replacement for the built-in `Read` tool on an indexed file; `mode: "skeleton"` (default) returns imports/includes + every top-level signature with bodies elided, `mode: "full"` returns the exact indexed content. | "Read `src/cortex/bundle.py` with Cortex instead of the raw file." |
-| `cortex_relations` | Returns parsed graph edges such as imports, calls, inherits, emits, connects, handles, and QML `instantiates` wiring. | "Show Cortex relations for `generate_bundle` outgoing calls." |
-| `cortex_references` | Returns cross-file references from parsed graph edges plus repo grep, bucketed by file type. | "Find all references to `_ensure_fresh` with Cortex." |
+| `cortex_relations` | Returns parsed graph edges such as imports, calls, inherits, emits, connects, handles, QML `instantiates`, and CMake/QRC `builds`/`registers` wiring. | "Show Cortex relations for `generate_bundle` outgoing calls." |
+| `cortex_path` | Returns up to three shortest structural graph paths between two symbols, excluding commit/co-change shortcuts. | "Show how `generate_bundle` reaches `count_text_tokens`." |
+| `cortex_references` | Returns cross-file references from parsed graph edges plus repo grep, bucketed by file type; `mode: "writes"` keeps definitions and mutation sites only. | "Find where `_ensure_fresh` is mutated with Cortex." |
 | `cortex_search_text` | Full-text body search (FTS5 BM25) across indexed file contents, with line-anchored snippets — a grep replacement over string literals, error messages, comments, and prose that symbol search can't see. | "Search Cortex text for the 'device offline' error message." |
 | `cortex_refresh` | Re-ingests the repo and updates freshness metadata. | "Refresh Cortex, then query the checkout flow again." |
 
@@ -128,7 +129,7 @@ Tool results include provenance where available. Read/query/analysis tools keep 
 
 `cortex_query`, `cortex_impact`, and `cortex_overview` cache their result under a key derived from the (post-refresh) repo fingerprint, tool name, and call arguments, so a repeated identical call skips PageRank/packing entirely and returns the prior response data unchanged — any file change invalidates the cache automatically, since it changes the fingerprint. Set `CORTEX_QUERY_CACHE=0` to disable both reading and writing this cache. `cortex gc` prunes cached rows older than 30 days or beyond 200 rows per repo.
 
-The MCP surface has 13 tools: 12 read/query/analysis tools (everything above except `cortex_refresh`) can carry a `_meta` object: `{index_age_seconds, indexed_at, fingerprint_fresh, auto_refreshed?, cached?, saved_tokens?}`. `detailed` responses always include it; `concise` responses include it only when something is worth surfacing — the index is stale, an auto-refresh just ran, the response came from the P1-3 cache (`cached: true`), or the call saved a meaningful number of tokens over a raw file read (`saved_tokens`, exactly the number recorded in the `tool_usage` ledger — see `cortex saved` below) — otherwise it's omitted so a routine concise call costs no extra tokens. A cache hit always reports the *current* index age, never a value frozen from when the cache entry was written.
+The MCP surface has 14 tools: 13 read/query/analysis tools (everything above except `cortex_refresh`) can carry a `_meta` object: `{index_age_seconds, indexed_at, fingerprint_fresh, auto_refreshed?, cached?, saved_tokens?}`. `detailed` responses always include it; `concise` responses include it only when something is worth surfacing — the index is stale, an auto-refresh just ran, the response came from the P1-3 cache (`cached: true`), or the call saved a meaningful number of tokens over a raw file read (`saved_tokens`, exactly the number recorded in the `tool_usage` ledger — see `cortex saved` below) — otherwise it's omitted so a routine concise call costs no extra tokens. A cache hit always reports the *current* index age, never a value frozen from when the cache entry was written.
 
 ## CLI Reference
 
@@ -203,32 +204,36 @@ pip install tiktoken
 python3 evals/calibrate_tokenizer.py [repo_path]
 ```
 
-and paste the printed per-kind factors into `CALIBRATION`. The checked-in factors currently ship as provisional `1.0` (no-op) placeholders — see the CHANGELOG's P1-4 entry for why — so re-running the script in a network-enabled environment and updating those constants is a recommended follow-up.
+The checked-in factors were measured against this repository with `o200k_base` on 2026-07-17: `code=0.74`, `markdown=0.67`, and `text=0.77`. The aggregate estimate for every kind is therefore within 1% of the calibration corpus's exact count; regenerate them when validating against a substantially different corpus. The full measurement table is recorded in `evals/TOKENIZER_CALIBRATION.md`.
 
 ## Eval Numbers
 
-Regenerated on 2026-07-16 with:
+Regenerated on 2026-07-17 with the dependency-free calibrated tokenizer path:
 
 ```bash
-python3 evals/run_evals.py
+python3 evals/run_evals.py --stdlib-tokens
 ```
 
-The harness creates small git fixture repos (including a C++/Qt + QML fixture) at runtime and runs 17 default/off tasks. It reports expected-file precision/recall, expected-symbol recall, token cost, and wall latency. Isolated optional vocabulary-gap and Qt click tasks run in explicit semantic-off and semantic-on modes only with `python3 evals/run_evals.py --semantic` when a real local model is already ready; no setup/download is attempted by the harness. Full per-task output is in `evals/RESULTS.md`.
+`--stdlib-tokens` makes the checked-in default-install rows reproducible even when the developer environment also has the optional `tiktoken` or `regex` packages installed. Omit it to exercise exact token counting when `[tokens]` is active.
+
+The harness creates small git fixture repos (including a C++/Qt + QML fixture) at runtime and runs 17 default/off tasks. Run `python3 evals/perf_ingest.py` separately to enforce the P0-3 warm-refresh contract: one content read and under one second for a single changed file in a synthetic 2,000-file repository. It reports expected-file precision/recall, expected-symbol recall, token cost, and wall latency. Isolated optional vocabulary-gap and Qt click tasks run in explicit semantic-off and semantic-on modes only with `python3 evals/run_evals.py --semantic` when a real local model is already ready; no setup/download is attempted by the harness. Full per-task output is in `evals/RESULTS.md`.
 
 | Mode | Tasks | Precision | Precision@3 | Recall | Avg Tokens | Avg Latency ms |
 |---|---:|---:|---:|---:|---:|---:|
-| bfs | 17 | 0.303 | 0.647 | 0.956 | 630 | 10-15 |
-| pagerank | 17 | 0.304 | 0.647 | 0.956 | 632 | 11-15 |
-| skeleton_off | 17 | 0.618 | 0.627 | 0.853 | 178 | 12-18 |
-| skeleton_on | 17 | 0.588 | 0.627 | 0.853 | 176 | 12-16 |
+| bfs | 17 | 0.291 | 0.608 | 0.985 | 512 | 16-18 |
+| pagerank | 17 | 0.291 | 0.608 | 0.985 | 512 | 17-19 |
+| skeleton_off | 17 | 0.613 | 0.608 | 0.865 | 171 | 17-18 |
+| skeleton_on | 17 | 0.599 | 0.588 | 0.865 | 173 | 17-18 |
 
-Interpretation: normal-budget PageRank and BFS both recover almost all gold files/symbols across these fixtures but include extra files. Tight-budget skeleton packing improves recall versus tight-budget truncation while keeping token cost nearly flat. Latency figures are wall-clock on a shared dev sandbox and fluctuate run to run; treat the ranges as illustrative, not a benchmark result.
+Interpretation: normal-budget PageRank and BFS recover almost all gold files/symbols across these fixtures but include extra files. The tight-budget modes trade some recall for a roughly threefold token reduction. Latency figures are wall-clock on a shared dev machine and fluctuate run to run; treat the ranges as illustrative, not a benchmark result.
 
-Token counts reflect Cortex's tokenizer (P1-4): exact `tiktoken` o200k_base counts when the optional `[tokens]` extra is installed, otherwise the calibrated stdlib heuristic described in Token Counting above (currently shipping with provisional 1.0/no-op calibration factors, so these numbers are unchanged from the pre-P1-4 heuristic until real factors are measured and baked in).
+These checked-in rows use the default stdlib segmenter with the measured P1-4 calibration factors. When the optional `[tokens]` extra is installed, Cortex uses exact `tiktoken` `o200k_base` counts instead; file selection can differ near a tight budget boundary.
+
+On the same checkout, `cortex benchmark . --budget 4000` measured 272,879 calibrated corpus tokens across 138 sources versus 3,998 tokens per query on average, a 68.3× reduction. Regenerate after substantial corpus changes rather than treating this as a fixed product claim.
 
 ## Token Savings
 
-Every successful call to a read/analysis tool (`cortex_query`, `cortex_overview`, `cortex_context`, `cortex_impact`, `cortex_search_symbols`, `cortex_read_symbol`, `cortex_read_file`, `cortex_relations`, `cortex_references`, `cortex_search_text`, `cortex_risk`, `cortex_dead_code`) is logged to a local `tool_usage` ledger with the response's actual token count and a deterministic baseline estimate of what an agent would have spent without Cortex. Run `cortex saved <repo>` to see it:
+Every successful call to a read/analysis tool (`cortex_query`, `cortex_overview`, `cortex_context`, `cortex_impact`, `cortex_search_symbols`, `cortex_read_symbol`, `cortex_read_file`, `cortex_relations`, `cortex_path`, `cortex_references`, `cortex_search_text`, `cortex_risk`, `cortex_dead_code`) is logged to a local `tool_usage` ledger with the response's actual token count and a deterministic baseline estimate of what an agent would have spent without Cortex. Run `cortex saved <repo>` to see it:
 
 ```bash
 cortex saved . --daily
@@ -237,7 +242,7 @@ cortex saved . --daily
 | Metric | Meaning |
 |---|---|
 | Response tokens | `count_text_tokens(json.dumps(payload))` for the actual MCP response. |
-| Baseline tokens | For `cortex_context`, the raw content of every distinct resolved target-card path is counted once (`store.fetch_source_content`); neighbor/co-change/impact expansion paths are intentionally excluded because the counterfactual is reading the requested targets. Other file-returning tools price the distinct files they return, while `cortex_read_symbol`'s `skeleton`/`signature` modes and `cortex_read_file`'s `skeleton` mode use the full-file baseline regardless of response size. For `cortex_search_symbols`/`cortex_relations`/`cortex_overview`: the token cost of the `detailed` rendering; `cortex_relations` also adds referenced raw files. |
+| Baseline tokens | For `cortex_context`, the raw content of every distinct resolved target-card path is counted once (using the stored content and tokenizer kind); neighbor/co-change/impact expansion paths are intentionally excluded because the counterfactual is reading the requested targets. Other file-returning tools price the distinct files they return, while `cortex_read_symbol`'s `skeleton`/`signature` modes and `cortex_read_file`'s `skeleton` mode use the full-file baseline regardless of response size. For `cortex_search_symbols`/`cortex_relations`/`cortex_path`/`cortex_overview`: the token cost of the `detailed` rendering; `cortex_relations` and `cortex_path` also add referenced raw files. |
 | Saved tokens | `baseline_tokens - response_tokens`, summed per tool, per day, and overall. |
 
 The baseline policy lives in one auditable function, `_estimate_baseline` in `src/cortex/mcp/tools.py`. It is a proxy, not a measured "tokens not spent": for `cortex_search_symbols`/`cortex_overview` it only captures response-format savings (there's no single raw file backing an index/graph summary), and for `cortex_query`/`cortex_impact` it only prices the files Cortex actually returned, not the rest of the corpus an agent would otherwise have had to search through. Ledger writes are best-effort — a locked or missing database never surfaces as an MCP tool error. Add `--price-per-mtok <input>,<output>` to render dollar figures at your model's own rates (no prices are hardcoded); the ledger's baseline/response tokens are both priced at the input rate since they represent context read into an agent's own model, not model-generated output.

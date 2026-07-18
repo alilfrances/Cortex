@@ -128,6 +128,9 @@ def test_cortex_path_tool_returns_labeled_hops(tmp_path, monkeypatch):
         assert hop["origin"] == "regex-parser"
         assert "direction" in hop and "node" in hop and "node_id" in hop
 
+    usage = CortexStore(repo / ".cortex" / "cortex.db").fetch_tool_usage(repo)
+    assert [row["tool"] for row in usage] == ["cortex_path"]
+
 
 def test_cortex_path_tool_reports_no_path_with_note(tmp_path, monkeypatch):
     monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
