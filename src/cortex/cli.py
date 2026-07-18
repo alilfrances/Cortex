@@ -484,6 +484,8 @@ def main() -> None:
                 os.environ["CORTEX_RUNTIME_BUNDLE_SHA256"] = args.bundle_sha256
             result = setup(force=args.force, offline_bundle=args.offline_bundle)
         print(json.dumps(result, indent=2, sort_keys=True))
+        if args.runtime_action in {"setup", "repair"} and not result.get("ready", False):
+            raise SystemExit(1)
         return
 
     if args.command == "semantic":

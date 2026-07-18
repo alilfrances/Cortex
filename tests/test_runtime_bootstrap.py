@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import time
 import zipfile
@@ -30,6 +31,11 @@ def test_runtime_lock_has_wheels_and_parser_bundles_for_documented_platforms():
     assert platforms <= set(lock["parser_manifest"]["platforms"])
     for package in lock["packages"]:
         assert platforms <= {artifact["platform"] for artifact in package["artifacts"]}
+    assert runtime.PARSER_PLATFORM_ALIASES == {
+        "linux-glibc-arm64": "linux-aarch64",
+        "linux-glibc-x86_64": "linux-x86_64",
+        "windows-arm64": "windows-aarch64",
+    }
 
 
 def test_runtime_status_is_local_and_has_locked_grammars(tmp_path, monkeypatch):
@@ -40,6 +46,23 @@ def test_runtime_status_is_local_and_has_locked_grammars(tmp_path, monkeypatch):
     assert status["lock_digest"]
     assert set(status["requested_grammars"]) >= {"javascript", "qml"}
     assert not (tmp_path / "ready.json").exists()
+
+
+def test_runtime_setup_cli_exits_nonzero_when_not_ready(tmp_path):
+    env = {
+        **os.environ,
+        "CORTEX_RUNTIME_DIR": str(tmp_path / "cli-runtime"),
+        "CORTEX_RUNTIME_NETWORK": "0",
+    }
+    completed = subprocess.run(
+        [sys.executable, "-m", "cortex", "runtime", "setup", "--force"],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 1
+    assert json.loads(completed.stdout)["ready"] is False
 
 
 def test_network_disabled_setup_degrades_without_outside_writes(tmp_path, monkeypatch):

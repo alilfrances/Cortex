@@ -43,6 +43,11 @@ SUPPORTED_GRAMMARS = (
 )
 # Cortex calls the grammar qml while language-pack 1.12.x calls it qmljs.
 GRAMMAR_ALIASES = {"qml": "qmljs"}
+PARSER_PLATFORM_ALIASES = {
+    "linux-glibc-arm64": "linux-aarch64",
+    "linux-glibc-x86_64": "linux-x86_64",
+    "windows-arm64": "windows-aarch64",
+}
 
 
 @dataclass(frozen=True)
@@ -517,7 +522,8 @@ def _prefetch_and_verify(target: Path, cache: Path, requested: list[str], offlin
         platform_manifest = lock.get("parser_manifest", {}).get("platforms", {}).get(_platform_key(), {}) if lock else {}
         expected_sha = str(platform_manifest.get("sha256", "")).lower()
         expected_size = int(platform_manifest.get("size", 0) or 0)
-        bundle = cache.parent / "bundles" / f"{_platform_key()}-{expected_sha}.tar.zst"
+        parser_platform = PARSER_PLATFORM_ALIASES.get(_platform_key() or "", _platform_key() or "")
+        bundle = cache.parent / "bundles" / f"{parser_platform}-{expected_sha}.tar.zst"
         if not expected_sha or not bundle.is_file():
             raise ValueError("language-pack did not retain the locked parser bundle")
         if expected_size and bundle.stat().st_size != expected_size:
