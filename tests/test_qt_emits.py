@@ -64,5 +64,5 @@ def test_qml_changed_handler_accepts_matching_base_signal():
 
     handles = [edge for edge in edges if edge.relation == "handles"]
     assert len(handles) == 1
-    assert handles[0].target == "symbol:Device.qml:value"
+    assert handles[0].target == "symbol:Device.qml:Device.value"
     assert "unverified" not in handles[0].metadata

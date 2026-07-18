@@ -229,7 +229,13 @@ def _nest_by_span(spanned: list[GraphNode]) -> tuple[list[GraphNode], dict[str, 
     return top_level, children_of
 
 
-def _render_class_body(lines: list[str], symbol: GraphNode, children: list[GraphNode]) -> list[str]:
+def _render_class_body(
+    lines: list[str],
+    symbol: GraphNode,
+    children: list[GraphNode],
+    full_body_ids: set[str],
+    children_of: dict[str, list[GraphNode]] | None = None,
+) -> list[str]:
     """Lines worth keeping from inside a class-like symbol's span in a
     skeleton: each direct child's signature (body elided), plus
     brace-language section scaffolding that has no symbol node of its own --
@@ -237,7 +243,13 @@ def _render_class_body(lines: list[str], symbol: GraphNode, children: list[Graph
     Everything else in the span (statements, prototypes the structural
     backend didn't index) is silently dropped, same as before this symbol
     was reached."""
-    child_at_line = {child.span_start: child for child in children}
+    child_at_line: dict[int, GraphNode] = {}
+    for candidate in children:
+        previous = child_at_line.get(candidate.span_start)
+        # A JavaScript external placeholder can share a line with a QML
+        # handler/binding. Prefer the declaration for a concise skeleton.
+        if previous is None or (previous.metadata.get('qml_kind') == 'external' and candidate.metadata.get('qml_kind') != 'external'):
+            child_at_line[candidate.span_start] = candidate
     out: list[str] = []
     skip_until = symbol.span_start
     for lineno in range(symbol.span_start + 1, symbol.span_end):
@@ -245,13 +257,8 @@ def _render_class_body(lines: list[str], symbol: GraphNode, children: list[Graph
             continue
         child = child_at_line.get(lineno)
         if child is not None:
-            child_lines = _declaration_lines(lines, child)
-            out.extend(child_lines)
-            # A handler's own line already carries its elision inline (see
-            # _declaration_lines) -- a trailing marker would be redundant.
-            if child.span_end > child.span_start and child.metadata.get('qt') != 'handler':
-                indent = _leading_ws(child_lines[-1]) if child_lines else '    '
-                out.append(f'{indent}    {ELISION_MARKER}')
+            nested = sorted((children_of or {}).get(child.node_id, []), key=lambda item: item.span_start)
+            out.extend(_render_symbol_entry(lines, child, nested, full_body_ids, children_of))
             skip_until = child.span_end
             continue
         line = lines[lineno - 1] if 0 < lineno <= len(lines) else ''
@@ -265,6 +272,7 @@ def _render_symbol_entry(
     symbol: GraphNode,
     children: list[GraphNode],
     full_body_ids: set[str],
+    children_of: dict[str, list[GraphNode]] | None = None,
 ) -> list[str]:
     """Render one symbol's skeleton entry: full body if selected via
     full_body_ids, else its signature plus (for a class/component with
@@ -274,8 +282,8 @@ def _render_symbol_entry(
         return list(lines[symbol.span_start - 1:symbol.span_end])
     signature_lines = _declaration_lines(lines, symbol)
     out = list(signature_lines)
-    if symbol.kind == 'class' and children:
-        out.extend(_render_class_body(lines, symbol, children))
+    if (symbol.kind == 'class' or symbol.metadata.get('qml_kind') in {'component', 'object', 'grouped_property', 'inline_component'}) and children:
+        out.extend(_render_class_body(lines, symbol, children, full_body_ids, children_of))
     elif symbol.span_end > symbol.span_start and symbol.metadata.get('qt') != 'handler':
         indent = _leading_ws(signature_lines[-1]) if signature_lines else ''
         out.append(f'{indent}    {ELISION_MARKER}')
@@ -294,7 +302,7 @@ def _render_skeleton(content: str, symbols: list[GraphNode], full_body_ids: set[
     for symbol in top_level:
         out.append('')
         children = sorted(children_of.get(symbol.node_id, []), key=lambda s: s.span_start)
-        out.extend(_render_symbol_entry(lines, symbol, children, full_body_ids))
+        out.extend(_render_symbol_entry(lines, symbol, children, full_body_ids, children_of))
     return '\n'.join(out)
 
 
@@ -313,7 +321,7 @@ def _render_symbol_skeleton(content: str, all_symbols: list[GraphNode], target: 
     out = [SKELETON_MARKER]
     out.extend(_import_lines(lines, spanned))
     out.append('')
-    out.extend(_render_symbol_entry(lines, target, children, set()))
+    out.extend(_render_symbol_entry(lines, target, children, set(), children_of))
     return '\n'.join(out)
 
 

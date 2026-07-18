@@ -1,0 +1,6 @@
+module Demo.Controls
+plugin demo_plugin
+singleton Theme 1.0 Theme.qml
+Card 1.0 Card.qml
+internal Hidden 1.0 Hidden.qml
+depends QtQuick 2.15

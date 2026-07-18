@@ -471,7 +471,7 @@ def _pair_directives(changed: Sequence[DiffFile], all_paths: set[str], nodes: Se
     qt_paths.update(
         str(edge.metadata.get("source_file", ""))
         for edge in edges
-        if edge.relation in {"emits", "connects", "handles", "instantiates"}
+        if edge.relation in {"emits", "connects", "handles", "instantiates", "binds", "reads", "writes", "aliases", "exports"}
         and edge.metadata.get("source_file")
     )
     result: list[dict[str, str]] = []

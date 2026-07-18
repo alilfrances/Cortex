@@ -1,31 +1,16 @@
 from __future__ import annotations
 
-import importlib
 from pathlib import PurePosixPath
 from typing import Any
 
 from ..models import GraphEdge, GraphNode
 from . import regex_backend
 
-_LANGUAGE_MODULES = {
-    ".js": ("tree_sitter_javascript", "language"),
-    ".jsx": ("tree_sitter_javascript", "language"),
-    ".ts": ("tree_sitter_typescript", "language_typescript"),
-    ".tsx": ("tree_sitter_typescript", "language_tsx"),
-    ".go": ("tree_sitter_go", "language"),
-    ".rs": ("tree_sitter_rust", "language"),
-    ".swift": ("tree_sitter_swift", "language"),
-    ".java": ("tree_sitter_java", "language"),
-    ".rb": ("tree_sitter_ruby", "language"),
-    ".c": ("tree_sitter_c", "language"),
-    ".h": ("tree_sitter_cpp", "language"),
-    ".cpp": ("tree_sitter_cpp", "language"),
-    ".cc": ("tree_sitter_cpp", "language"),
-    ".cxx": ("tree_sitter_cpp", "language"),
-    ".hpp": ("tree_sitter_cpp", "language"),
-    ".hh": ("tree_sitter_cpp", "language"),
-    ".hxx": ("tree_sitter_cpp", "language"),
-    ".qml": ("tree_sitter_language_pack", "qml"),
+_PACK_NAMES = {
+    ".js": "javascript", ".jsx": "javascript", ".ts": "typescript", ".tsx": "tsx",
+    ".go": "go", ".rs": "rust", ".swift": "swift", ".java": "java", ".rb": "ruby",
+    ".c": "c", ".h": "cpp", ".cpp": "cpp", ".cc": "cpp", ".cxx": "cpp",
+    ".hpp": "cpp", ".hh": "cpp", ".hxx": "cpp", ".qml": "qmljs",
 }
 
 _IMPORT_TYPES = {
@@ -74,15 +59,21 @@ _CPP_SUFFIXES = {".h", ".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx"}
 
 
 def _language_for_suffix(suffix: str) -> Any:
-    from tree_sitter import Language
-
-    module_name, func_name = _LANGUAGE_MODULES[suffix]
-    if suffix == ".qml":
-        from tree_sitter_language_pack import get_language
-
-        return get_language("qml")
-    grammar = importlib.import_module(module_name)
-    return Language(getattr(grammar, func_name)())
+    # The managed language pack is the single parser source of truth. It
+    # contains every grammar Cortex dispatches, including separate TSX/QMLJS
+    # variants. Parser loading is cache-only; failures select the regex
+    # fallback at the structural dispatcher.
+    import os
+    import tree_sitter_language_pack as pack
+    cache = os.environ.get("CORTEX_PARSER_CACHE")
+    if not cache:
+        from ..runtime import configure_parser_environment
+        verified = configure_parser_environment()
+        cache = str(verified / "parser-cache") if verified else None
+    if not cache:
+        raise RuntimeError("managed parser runtime is not ready")
+    pack.configure(pack.PackConfig(cache_dir=cache, languages=[]))
+    return pack.get_language(_PACK_NAMES[suffix])
 
 
 def _parser_for_language(language: Any) -> Any:
@@ -312,15 +303,16 @@ def extract_treesitter_edges(
     connect_names: list[str] | None = None,
 ) -> tuple[list[GraphNode], list[GraphEdge]]:
     suffix = PurePosixPath(path).suffix.lower()
-    if suffix not in _LANGUAGE_MODULES:
+    if suffix not in _PACK_NAMES:
         return [], []
 
     source = content.encode("utf-8", errors="replace")
     parser = _parser_for_language(_language_for_suffix(suffix))
     tree = parser.parse(source)
     root = tree.root_node
-    if root.has_error:
-        raise ValueError(f"tree-sitter parse error in {path}")
+    # Tree-sitter ERROR nodes are recoverable for supported languages. Keep
+    # unaffected declarations; the dedicated QML backend exposes diagnostics
+    # explicitly and this generic path remains compatible for direct callers.
 
     file_node_id = f"file:{path}"
     nodes: list[GraphNode] = []
@@ -403,6 +395,7 @@ def extract_treesitter_edges(
 
     if suffix in _CPP_SUFFIXES:
         regex_backend._extract_qt_cpp_edges(path, content, file_node_id, nodes, edges, seen_symbols, connect_names)
+        regex_backend._extract_qml_cpp_registration(path, content, file_node_id, nodes, edges, seen_symbols)
     if suffix == ".qml":
         # The QML grammar's node types aren't mapped in _DEF_TYPES for a
         # "signal" declaration, so tree-sitter alone would silently drop

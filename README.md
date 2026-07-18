@@ -2,9 +2,9 @@
 
 Cortex is a graph-aware, local-first context engine for code agents. It ingests a git repository into a deterministic SQLite store, builds STRUCTURAL, COCHANGE, and HEADING graph layers, ranks context with personalized PageRank, and packs task-focused bundles with symbol skeletons when budgets are tight.
 
-The result is a repo-native context service: MCP tools for live agent queries, CLI commands for reports and exports, and no required network, embedding, vector DB, or LLM dependency.
+The result is a repo-native context service: MCP tools for live agent queries, CLI commands for reports and exports, and local parser/runtime state. Parser setup downloads only locked artifacts; repository source is never sent during setup. Normal ingest/query is offline after setup.
 
-Current package and plugin metadata is `0.7.5` (`pyproject.toml` and `.codex-plugin/plugin.json`). Use that as the shipped docs version.
+Current package and plugin metadata is `0.8.0` (`pyproject.toml` and plugin manifests).
 
 ## What Cortex Builds
 
@@ -19,7 +19,7 @@ Current package and plugin metadata is `0.7.5` (`pyproject.toml` and `.codex-plu
 
 ## Install
 
-Requires Python 3.11+ on PATH as `python3`. Nothing else — the core is stdlib-only and the plugin runs straight from its install directory, no `pip install` needed.
+Requires Python 3.11+ on PATH as `python3`. Normal pip wheel/editable installs include the pinned `tree-sitter==0.26.0` and `tree-sitter-language-pack==1.12.5`. Marketplace/plugin launches bootstrap those parsers into a plugin-owned isolated runtime on first MCP launch, without modifying system Python or the repository. A failed setup is visible and fail-open: Cortex continues in regex/degraded mode.
 
 ### Claude Code
 
@@ -37,7 +37,7 @@ claude plugin marketplace add alilfrances/Cortex
 claude plugin install cortex@cortex
 ```
 
-That's the full plugin path. It installs the Cortex plugin bundle, which registers the Cortex MCP server (`.mcp.json` launches `bin/cortex-mcp.py`, which self-locates its own `src/`), the `cortex` skill, and the session-start hook. In a project, ask Claude to call `cortex_refresh` once to build the index (or run `cortex ingest .` if you installed the CLI).
+That's the full plugin path. It installs the Cortex plugin bundle, which registers the Cortex MCP server (`.mcp.json` launches `bin/cortex-mcp.py`, which self-locates its own `src/`), the `cortex` skill, and the session-start hook. The first MCP launch performs bounded parser setup; subsequent launches are cache-only. Inspect the detailed `cortex_overview` response to confirm parser readiness, then ask Claude to call `cortex_refresh` once to build the index. Source/pip users can also run `cortex runtime status`.
 
 > **Note:** Plugins load at session start. After installing or updating, restart Claude Code (or run `/reload-plugins` if available) — sessions that were already open won't see the MCP tools, skill, or hook.
 
@@ -52,6 +52,32 @@ claude --plugin-dir /path/to/Cortex
 The Claude Code plugin ships a read-only `cortex-explorer` agent for multi-step exploration questions such as “where is X handled”, “how does Y flow”, and “what connects to Z”. Use it when the main agent would otherwise need several search, read, and graph calls; keep single lookups direct because a sub-agent round-trip costs more than one Cortex tool call. Its frontmatter explicitly allowlists the plugin-scoped Cortex MCP read/analysis tools plus `Read`, `Grep`, and `Glob` (but no edit, write, shell, or refresh tool). It uses the Cortex MCP loop and returns findings, consulted file/symbol IDs with line spans, and suggested next Cortex calls. Its Cortex calls are recorded in the existing token-savings ledger like any other MCP tool call, so no extra plumbing is needed.
 
 The definition ships in both the marketplace-installed plugin and local `claude --plugin-dir` development mode. In Claude Code's agent picker it is plugin-scoped as `cortex:cortex-explorer` (for example, `@agent-cortex:cortex-explorer`). The Codex plugin format used by `.codex-plugin/plugin.json` has no equivalent sub-agent concept, so `cortex-explorer` is Claude Code-only.
+
+## Parser runtime and air-gapped setup
+
+```bash
+cortex runtime status                 # local/socket-free health
+cortex runtime setup [--force]
+cortex runtime repair
+```
+
+Setup is separate from query latency: expect a one-time download of the
+platform wheel and parser cache. Supported automatic targets are CPython 3.11+
+on macOS Intel/Apple Silicon, Windows x64/ARM64, and glibc Linux x64/ARM64.
+Proxy and custom-CA variables are honored. Corporate mirrors can set
+`CORTEX_RUNTIME_ARTIFACT_MIRROR` for locked wheels and
+`TREE_SITTER_LANGUAGE_PACK_MANIFEST_URL` for the parser manifest; all downloaded
+bytes must still match the committed digests. For an air-gapped rollout, an
+administrator builds `python3 scripts/build_runtime_bundle.py --platform
+current --out runtime-dist`, verifies its `.sha256`/SBOM, distributes the zip,
+and users run `CORTEX_RUNTIME_NETWORK=0 cortex runtime setup --offline-bundle
+/path/to/bundle.zip --bundle-sha256 <trusted-sha256>`. The digest is mandatory
+and must come from the administrator's trusted release channel. Set `CORTEX_RUNTIME_DIR` (or plugin data variables) to
+control cache placement; remove the versioned directory to roll back.
+
+See [`docs/qml-support.md`](docs/qml-support.md) and
+[`docs/runtime-security.md`](docs/runtime-security.md) for syntax coverage,
+resolution boundaries, and the artifact/source-egress distinction.
 
 ## Hooks
 
@@ -68,7 +94,7 @@ codex plugin add cortex@cortex
 
 This is the official Codex marketplace flow: first add the marketplace source (the current repo remote, `alilfrances/Cortex`), then install the `cortex` plugin from the `cortex` marketplace. OpenAI's Codex plugin docs cover [`codex plugin marketplace add`](https://developers.openai.com/codex/plugins/build#add-a-marketplace-from-the-cli) and [`codex plugin add`](https://developers.openai.com/codex/cli/reference#codex-plugin).
 
-Start a new Codex session after installation so the plugin MCP server, skill, and hook are loaded.
+Start a new Codex session after installation so the plugin MCP server and skill are loaded.
 
 Alternative: if you only want MCP server registration in Codex and do not want to install the marketplace plugin bundle, use:
 
@@ -76,7 +102,7 @@ Alternative: if you only want MCP server registration in Codex and do not want t
 /path/to/Cortex/install.sh --codex
 ```
 
-`install.sh --codex` writes an absolute `mcp_servers.cortex` entry to `~/.codex/config.toml` (idempotent; no pip), but it does not install the Codex plugin bundle or add a marketplace source. The Codex plugin manifest in this repo points to `./skills/` and `./.mcp.json`; for manual setup, point Codex at the repo root as a plugin dir or copy `skills/cortex` to `~/.codex/skills/`. Manual MCP registration equivalent:
+`install.sh --codex` writes an absolute `mcp_servers.cortex` entry to `~/.codex/config.toml` (idempotent; no pip), but it does not install the Codex plugin bundle or add a marketplace source. The Codex plugin manifest points to `./skills/` and a Codex-specific `./.codex-mcp.json` whose relative working directory resolves from the installed plugin root. Claude retains its separate `${CLAUDE_PLUGIN_ROOT}` configuration in `.mcp.json`. For manual setup, point Codex at the repo root as a plugin dir or copy `skills/cortex` to `~/.codex/skills/`. Manual MCP registration equivalent:
 
 ```toml
 [mcp_servers.cortex]
@@ -90,8 +116,8 @@ The `cortex` CLI and optional features need a pip install:
 
 ```bash
 cd /path/to/Cortex
-python3 -m pip install -e .                                 # cortex CLI
-python3 -m pip install -e ".[llm,languages,watch,tokens]"   # enrichment, tree-sitter, watchdog, exact tokenizer
+python3 -m pip install -e .                                 # CLI + pinned parser wheels
+python3 -m pip install -e ".[llm,watch,tokens]"             # enrichment, watchdog, exact tokenizer
 # Optional static semantic retrieval (does not change the default path):
 python3 -m pip install -e ".[semantic]"
 ```
@@ -119,7 +145,7 @@ This creates `cortex.db` and `cortex_report.md` under `~/.cortex/data/<repo-path
 | `cortex_search_symbols` | Searches indexed file and symbol nodes by name. | "Search Cortex symbols for `SessionStore` and related methods." |
 | `cortex_read_symbol` | Returns source for one indexed symbol span; `mode` picks `full` (numbered lines, default), `skeleton` (signature + nested member signatures, bodies elided), or `signature` (signature line + span only). | "Read the `generate_bundle` symbol with Cortex instead of opening the whole file." |
 | `cortex_read_file` | Direct replacement for the built-in `Read` tool on an indexed file; `mode: "skeleton"` (default) returns imports/includes + every top-level signature with bodies elided, `mode: "full"` returns the exact indexed content. | "Read `src/cortex/bundle.py` with Cortex instead of the raw file." |
-| `cortex_relations` | Returns parsed graph edges such as imports, calls, inherits, emits, connects, handles, QML `instantiates`, and CMake/QRC `builds`/`registers` wiring. | "Show Cortex relations for `generate_bundle` outgoing calls." |
+| `cortex_relations` | Returns parsed graph edges such as imports, calls, inherits, emits, connects, handles, QML `instantiates`/`binds`/`reads`/`writes`/`aliases`, and CMake/QRC `builds`/`registers`/`exports` wiring. | "Show Cortex relations for `generate_bundle` outgoing calls." |
 | `cortex_path` | Returns up to three shortest structural graph paths between two symbols, excluding commit/co-change shortcuts. | "Show how `generate_bundle` reaches `count_text_tokens`." |
 | `cortex_references` | Returns cross-file references from parsed graph edges plus repo grep, bucketed by file type; `mode: "writes"` keeps definitions and mutation sites only. | "Find where `_ensure_fresh` is mutated with Cortex." |
 | `cortex_search_text` | Full-text body search (FTS5 BM25) across indexed file contents, with line-anchored snippets — a grep replacement over string literals, error messages, comments, and prose that symbol search can't see. | "Search Cortex text for the 'device offline' error message." |
@@ -141,7 +167,7 @@ The MCP surface has 14 tools: 13 read/query/analysis tools (everything above exc
 | `cortex risk [range] [--staged] [--format text|json] [--db PATH]` | Analyze a committed range (default `HEAD~1..HEAD`) or staged diff with deterministic per-file risk and missing-context directives. It runs local git only; no index is required, but an unindexed/partial result says so explicitly. |
 | `cortex gc [--prune]` | List central data dirs (`--prune` deletes ones whose repo is gone) and prune each repo's query result cache. |
 | `cortex enrich <repo> --provider claude\|codex --allow-code-upload [--force]` | Remote LLM enrichment. Sends up to 8,000 characters from each uncached indexed source file to the provider; requires explicit consent and `[llm]`. |
-| `cortex semantic setup [--force]` | Explicitly download/cache `minishlab/potion-code-16M` below `CORTEX_DATA_DIR`; this is the only download path. |
+| `cortex semantic setup [--force]` | Explicitly download/cache `minishlab/potion-code-16M` below `CORTEX_DATA_DIR`; parser artifacts are managed separately by `cortex runtime setup`. |
 | `cortex semantic status` | Show optional dependency, local-model, and indexed-chunk status without network access. |
 | `cortex benchmark <repo> [--budget 4000] [--format text\|json]` | Compare bundle token cost against full-corpus reading. |
 | `cortex saved <repo> [--daily] [--format text\|json] [--price-per-mtok in,out]` | Report token savings recorded from MCP tool calls (see Token Savings below). |

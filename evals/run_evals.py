@@ -36,6 +36,15 @@ class GoldTask:
     tags: tuple[str, ...] = ()
 
 
+# Focused QML acceptance golds are kept separate from the historical default
+# matrix so existing benchmark rows remain comparable across releases.
+QML_GOLD_TASKS: tuple[GoldTask, ...] = (
+    GoldTask("qml_full_repo", "Find QML properties and aliases", ("Main.qml",), ("Main.qml:title", "Main.qml:selected")),
+    GoldTask("qml_full_repo", "Trace the binding dependency for card value", ("Main.qml", "Card.qml"), ("Main.qml:card",)),
+    GoldTask("qml_full_repo", "Find inline component and module exports", ("Main.qml", "qmldir"), ("Main.qml:Header",)),
+)
+
+
 GOLD_TASKS: tuple[GoldTask, ...] = (
     GoldTask(
         repo="python_app",

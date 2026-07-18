@@ -40,20 +40,28 @@ class PluginManifestTests(unittest.TestCase):
 
     def test_codex_manifest_references_skills_and_mcp_config(self) -> None:
         manifest = self._load_json(".codex-plugin/plugin.json")
-        mcp = self._load_json(".mcp.json")
+        mcp = self._load_json(".codex-mcp.json")
 
         self.assertEqual(manifest["skills"], "./skills/")
-        self.assertEqual(manifest["mcpServers"], "./.mcp.json")
+        self.assertEqual(manifest["mcpServers"], "./.codex-mcp.json")
         self.assertEqual(
             mcp,
             {
                 "mcpServers": {
                     "cortex": {
                         "command": "python3",
-                        "args": ["${CLAUDE_PLUGIN_ROOT}/bin/cortex-mcp.py"],
+                        "args": ["bin/cortex-mcp.py"],
+                        "cwd": ".",
                     }
                 }
             },
+        )
+
+    def test_claude_mcp_uses_claude_plugin_root(self) -> None:
+        mcp = self._load_json(".mcp.json")
+        self.assertEqual(
+            mcp["mcpServers"]["cortex"]["args"],
+            ["${CLAUDE_PLUGIN_ROOT}/bin/cortex-mcp.py"],
         )
 
     def test_claude_plugin_wires_session_start_hook(self) -> None:

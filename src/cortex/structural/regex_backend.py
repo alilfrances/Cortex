@@ -787,9 +787,10 @@ def _extract_qml_signal_symbols(
     pattern = next(p for p in _QML_DEF_PATTERNS if p.metadata and p.metadata.get("qt") == "signal")
     for match in pattern.regex.finditer(content):
         name = match.group(pattern.name_group)
-        if name in seen:
+        qualified_name = f"{PurePosixPath(path).stem}.{name}"
+        if qualified_name in seen:
             continue
-        seen.add(name)
+        seen.add(qualified_name)
         name_start = match.start(pattern.name_group)
         line_start = content.rfind("\n", 0, name_start) + 1
         line = _line_number(content, line_start)
@@ -801,12 +802,17 @@ def _extract_qml_signal_symbols(
         # the signal's span (P1-6 Qt-parity fix). No span_end passed here ->
         # _symbol_node defaults it to `line` (single-line span).
         node = _symbol_node(
-            path, name, pattern.kind, _signature(content, line_start), line, metadata=pattern.metadata
+            path,
+            qualified_name,
+            pattern.kind,
+            _signature(content, line_start),
+            line,
+            metadata={**(pattern.metadata or {}), "qml_kind": "signal", "qml_owner": PurePosixPath(path).stem},
         )
         nodes.append(node)
         edges.append(
             GraphEdge(
-                edge_id=f"regex:{path}:contains:{name}",
+                edge_id=f"regex:{path}:contains:{qualified_name}",
                 source=file_node_id,
                 target=node.node_id,
                 relation="contains",
@@ -860,7 +866,10 @@ def _extract_qml_handlers(
             component_path = resolve_qml_component(enclosing, known_paths) if enclosing else None
             signal_name = _qml_handler_signal_name(handler_name)
 
-            qualname = f"{enclosing}.{handler_name}" if enclosing else handler_name
+            component_owner = PurePosixPath(path).stem
+            nested_owners = [name for name, _depth in stack[1:]]
+            owner = ".".join([component_owner, *nested_owners])
+            qualname = f"{owner}.{handler_name}"
             if qualname in seen_qualnames:
                 qualname = f"{qualname}:{lineno}"
             seen_qualnames.add(qualname)
@@ -871,7 +880,7 @@ def _extract_qml_handlers(
                 "func",
                 line.strip(),
                 lineno,
-                metadata={"qt": "handler", "handler_name": handler_name, "signal_name": signal_name},
+                metadata={"qt": "handler", "qml_kind": "handler", "qml_owner": owner, "handler_name": handler_name, "signal_name": signal_name},
             )
             nodes.append(handler_node)
             edges.append(
@@ -901,7 +910,7 @@ def _extract_qml_handlers(
             edges.append(
                 GraphEdge(
                     edge_id=f"regex:{path}:handles:{lineno}:{handler_name}",
-                    source=file_node_id,
+                    source=handler_node.node_id,
                     target=_target_id(signal_name),
                     relation="handles",
                     layer="STRUCTURAL",
@@ -1010,6 +1019,85 @@ def _extract_qml_instantiates(path: str, content: str, known_paths: set[str], fi
         )
 
 
+def _extract_qml_cpp_registration(
+    path: str,
+    content: str,
+    file_node_id: str,
+    nodes: list[GraphNode],
+    edges: list[GraphEdge],
+    seen: set[str],
+) -> None:
+    """Index Qt 5/6 QML registration macros and QObject members."""
+    current_class = ""
+    class_lines: dict[int, str] = {}
+    for lineno, line in enumerate(content.splitlines(), start=1):
+        match = _QT_CLASS_RE.match(line)
+        if match:
+            current_class = match.group("name")
+        if current_class:
+            class_lines[lineno] = current_class
+        if current_class and line.count("}") > line.count("{"):
+            current_class = ""
+
+    def ensure_class(name: str, line: int) -> str:
+        identifier = f"symbol:{path}:{name}"
+        if not any(node.node_id == identifier for node in nodes):
+            _upsert_qt_symbol(path, name, "class", name, line, "qml_element", nodes, edges, seen, file_node_id)
+        return identifier
+
+    macros = re.compile(r"\b(QML_ELEMENT|QML_NAMED_ELEMENT\s*\(\s*([A-Za-z_]\w*)|QML_SINGLETON|QML_UNCREATABLE|QML_ANONYMOUS|QML_FOREIGN|QML_EXTENDED)\b")
+    for match in macros.finditer(content):
+        line = _line_number(content, match.start())
+        owner = class_lines.get(line, "")
+        owner = owner or class_lines.get(max((number for number in class_lines if number <= line), default=line), "")
+        qml_name = match.group(2) or owner
+        if not qml_name:
+            continue
+        owner_id = ensure_class(owner or qml_name, line)
+        node = next((item for item in nodes if item.node_id == owner_id), None)
+        if node is not None:
+            node.metadata.update({"qml_kind": "registered_type", "qml_element": True, "qml_name": qml_name, "registration": match.group(1)})
+        edges.append(GraphEdge(edge_id=f"regex:{path}:registers:{line}:{qml_name}", source=file_node_id, target=f"module:{qml_name}", relation="registers", layer="STRUCTURAL", confidence="EXTRACTED", weight=1.0, metadata={"lineno": line, "source_file": path, "qml_name": qml_name, "class_name": owner, "registration": match.group(1)}))
+
+    # Qt 5/6 runtime registration APIs. Keep URI/version/name metadata even
+    # when the class is external to this repository.
+    register_re = re.compile(r'\b(qmlRegister(?:Type|SingletonType|UncreatableType|AnonymousType))\s*(?:<\s*([^>]+)\s*>)?\s*\(\s*(?:[^,]+,\s*)?"([^"]+)"\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*"([^"]+)")?')
+    for match in register_re.finditer(content):
+        line = _line_number(content, match.start())
+        class_name = (match.group(2) or "").strip().split("::")[-1]
+        qml_name = match.group(6) or class_name
+        target = f"module:{qml_name or match.group(3)}"
+        if class_name:
+            class_id = ensure_class(class_name, line)
+            class_node = next((item for item in nodes if item.node_id == class_id), None)
+            if class_node is not None:
+                class_node.metadata.update({
+                    "qml_kind": "registered_type",
+                    "qml_name": qml_name or class_name,
+                    "uri": match.group(3),
+                    "major": match.group(4),
+                    "minor": match.group(5),
+                    "registration": match.group(1),
+                })
+        edges.append(GraphEdge(edge_id=f"regex:{path}:runtime-register:{line}:{match.group(1)}:{qml_name}", source=file_node_id, target=target, relation="registers", layer="STRUCTURAL", confidence="EXTRACTED", weight=1.0, metadata={"lineno": line, "source_file": path, "registration": match.group(1), "class_name": class_name, "qml_name": qml_name, "uri": match.group(3), "major": match.group(4), "minor": match.group(5)}))
+
+    for lineno, line in enumerate(content.splitlines(), start=1):
+        owner = class_lines.get(lineno, "") or "QObject"
+        if "Q_PROPERTY" in line:
+            match = re.search(r"Q_PROPERTY\s*\(\s*([\w:<>]+)\s+([A-Za-z_]\w*)([^)]*)\)", line)
+            if match:
+                owner_id = ensure_class(owner, lineno)
+                name = f"{owner}.{match.group(2)}"
+                _upsert_qt_symbol(path, name, "property", line.strip(), lineno, "property", nodes, edges, seen, file_node_id)
+                prop = next(item for item in nodes if item.node_id == f"symbol:{path}:{name}")
+                prop.metadata.update({"qml_kind": "property", "qml_owner": owner, "type": match.group(1)})
+                edges.append(GraphEdge(edge_id=f"regex:{path}:contains:{name}:{lineno}", source=owner_id, target=prop.node_id, relation="contains", layer="STRUCTURAL", confidence="EXTRACTED", weight=1.0, metadata={"lineno": lineno, "source_file": path}))
+        if "Q_INVOKABLE" in line:
+            match = re.search(r"Q_INVOKABLE\s+[^()]+?\b([A-Za-z_]\w*)\s*\(", line)
+            if match:
+                _upsert_qt_symbol(path, f"{owner}.{match.group(1)}", "func", line.strip(), lineno, "invokable", nodes, edges, seen, file_node_id)
+
+
 def extract_regex_edges(
     path: str,
     content: str,
@@ -1051,9 +1139,10 @@ def extract_regex_edges(
     for pattern in _DEF_PATTERNS.get(suffix, []):
         for match in pattern.regex.finditer(content):
             name = match.group(pattern.name_group)
-            if name in seen:
+            symbol_name = f"{PurePosixPath(path).stem}.{name}" if suffix == ".qml" else name
+            if symbol_name in seen:
                 continue
-            seen.add(name)
+            seen.add(symbol_name)
             # Anchor on the name, not match.start(): leading `^\s*` and greedy
             # return-type groups can pull the match onto a blank line or a
             # preceding line (e.g. the Q_OBJECT line above a method), which
@@ -1068,15 +1157,17 @@ def extract_regex_edges(
             span_end = line if is_qml_signal else _def_span_end(content, match.end(pattern.name_group), line)
             qualifier = match.groupdict().get("qualifier", "")
             metadata = dict(pattern.metadata) if pattern.metadata else None
+            if suffix == ".qml":
+                metadata = {**(metadata or {}), "qml_kind": "signal" if is_qml_signal else "method", "qml_owner": PurePosixPath(path).stem}
             if qualifier:
                 metadata = {**(metadata or {}), "qualifier": qualifier.rstrip(":").split("::")[-1]}
             node = _symbol_node(
-                path, name, pattern.kind, _signature(content, line_start), line, metadata=metadata, span_end=span_end
+                path, symbol_name, pattern.kind, _signature(content, line_start), line, metadata=metadata, span_end=span_end
             )
             nodes.append(node)
             edges.append(
                 GraphEdge(
-                    edge_id=f"regex:{path}:contains:{name}",
+                    edge_id=f"regex:{path}:contains:{symbol_name}",
                     source=file_node_id,
                     target=node.node_id,
                     relation="contains",
@@ -1090,6 +1181,7 @@ def extract_regex_edges(
     if suffix in _CPP_SUFFIXES:
         _extract_cpp_inheritance_edges(path, content, edges)
         _extract_qt_cpp_edges(path, content, file_node_id, nodes, edges, seen, connect_names)
+        _extract_qml_cpp_registration(path, content, file_node_id, nodes, edges, seen)
     if suffix == ".qml":
         _extract_qml_instantiates(path, content, known_paths, file_node_id, edges)
         _extract_qml_handlers(path, content, known_paths, file_node_id, nodes, edges)

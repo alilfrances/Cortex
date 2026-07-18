@@ -14,9 +14,9 @@ from .store import CortexStore, default_db_path
 from .tokenizer import count_text_tokens
 
 
-_GRAPH_RELATIONS = {"calls", "imports", "inherits", "references"}
-_QT_RELATIONS = {"connects", "emits", "handles", "instantiates"}
-_QT_KINDS = {"signal", "slot", "handler"}
+_GRAPH_RELATIONS = {"calls", "imports", "inherits", "references", "reads", "writes", "aliases", "exports"}
+_QT_RELATIONS = {"connects", "emits", "handles", "instantiates", "binds"}
+_QT_KINDS = {"signal", "slot", "handler", "property", "id", "binding", "enum", "enum_member", "module"}
 _COMMENT_PREFIXES = ("#", "//", "/*", "*", "*/", "<!--", "///")
 
 
@@ -167,8 +167,9 @@ def _candidate_reason(
 ) -> tuple[str, str]:
     content = store.fetch_source_content(repo_root, node.source_ref) or ""
     qt_kind = node.metadata.get("qt") if isinstance(node.metadata, dict) else None
+    qml_kind = node.metadata.get("qml_kind") if isinstance(node.metadata, dict) else None
     qt_macro, qml_registration = _qt_macro_flags(node, content, all_sources)
-    if qt_kind in _QT_KINDS or qt_macro or qml_registration:
+    if qt_kind in _QT_KINDS or qml_kind in _QT_KINDS or qt_macro or qml_registration:
         return "low", "no incoming edges; Qt meta-object or dynamic-language caveat"
     if not node.source_ref.lower().endswith(".py"):
         return "low", "no incoming edges; regex/dynamic-language caveat"

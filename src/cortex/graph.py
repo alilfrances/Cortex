@@ -332,9 +332,20 @@ def build_file_layer(
             nodes.extend(ast_nodes)
             source_edges.extend(ast_edges)
         elif source.kind == 'code' and supports_path(source.path):
-            structural_nodes, structural_edges = extract_structural_edges(
+            structural_result = extract_structural_edges(
                 source.path, source.content, known_paths, connect_names
             )
+            structural_nodes, structural_edges = structural_result
+            file_node = next((node for node in nodes if node.node_id == file_node_id), None)
+            if file_node is not None:
+                file_node.metadata.update({
+                    'parser_backend': structural_result.backend,
+                    'parser_language': structural_result.language,
+                    'parser_version': structural_result.parser_version,
+                    'runtime_version': structural_result.runtime_version,
+                    'parser_diagnostics': list(structural_result.diagnostics),
+                    'degraded_reason': structural_result.degraded_reason or '',
+                })
             nodes.extend(structural_nodes)
             source_edges.extend(structural_edges)
 
@@ -353,6 +364,14 @@ def build_file_layer(
     if existing_qt_index is not None:
         qt_index = existing_qt_index.merged_with(qt_index)
     _resolve_qt_edges(edges, qt_index)
+    # QML endpoints are resolved in a separate index so adding module
+    # metadata never changes the existing Qt signal/slot precedence rules.
+    try:
+        from .structural.qml_resolver import resolve_qml_edges
+        resolve_qml_edges(nodes, edges, known_paths)
+    except Exception:
+        # QML resolution is additive and must never disable a usable graph.
+        pass
 
     return nodes, edges
 

@@ -345,8 +345,6 @@ def test_qt_context_card_exposes_regex_qt_wiring_and_cpp_instantiation(tmp_path,
 
 
 def test_qt_context_tree_sitter_parity_when_installed(tmp_path) -> None:
-    pytest.importorskip("tree_sitter_cpp")
-    pytest.importorskip("tree_sitter_language_pack")
     repo = _build_qt_app(tmp_path)
     ingest_repository(repo, commit_limit=20)
     payload = _payload(

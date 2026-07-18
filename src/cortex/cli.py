@@ -290,6 +290,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     enrich_parser.add_argument("--db", type=Path, default=None)
 
+    runtime_parser = subparsers.add_parser("runtime", help="Manage the isolated Tree-sitter parser runtime")
+    runtime_subparsers = runtime_parser.add_subparsers(dest="runtime_action", required=True)
+    runtime_subparsers.add_parser("status", help="Show local parser/runtime readiness without network access")
+    runtime_setup_parser = runtime_subparsers.add_parser("setup", help="Install or verify the locked parser runtime")
+    runtime_setup_parser.add_argument("--force", action="store_true")
+    runtime_setup_parser.add_argument("--offline-bundle", type=Path, default=None)
+    runtime_setup_parser.add_argument("--bundle-sha256", default=None, help="Expected SHA-256 for --offline-bundle")
+    runtime_subparsers.add_parser("repair", help="Replace a corrupt runtime with a fresh verified install")
+
     semantic_parser = subparsers.add_parser(
         "semantic", help="Manage the optional local Model2Vec semantic retriever"
     )
@@ -329,6 +338,16 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
+
+    if args.command in {"ingest", "refresh", "watch"}:
+        try:
+            from .runtime import configure_parser_environment, ensure_runtime
+            runtime_state = ensure_runtime()
+            if not runtime_state.get("ready", False):
+                os.environ.setdefault("CORTEX_FORCE_REGEX", "1")
+            configure_parser_environment()
+        except Exception:
+            os.environ.setdefault("CORTEX_FORCE_REGEX", "1")
 
     if args.command == "ingest":
         summary = ingest_repository(
@@ -451,6 +470,20 @@ def main() -> None:
                 parser.error("--price-per-mtok values must be numeric")
         summary = compute_savings(args.repo_path, db_path=args.db, price_per_mtok=price)
         print(format_savings(summary, output_format=args.format, daily=args.daily))
+        return
+
+    if args.command == "runtime":
+        from .runtime import repair, setup, status
+
+        if args.runtime_action == "status":
+            result = status()
+        elif args.runtime_action == "repair":
+            result = repair()
+        else:
+            if args.bundle_sha256:
+                os.environ["CORTEX_RUNTIME_BUNDLE_SHA256"] = args.bundle_sha256
+            result = setup(force=args.force, offline_bundle=args.offline_bundle)
+        print(json.dumps(result, indent=2, sort_keys=True))
         return
 
     if args.command == "semantic":

@@ -13,6 +13,10 @@ Use Cortex when working inside an indexed repository and you need code context, 
 
 Delegate multi-step exploration questions such as “where is X handled” or “how does Y flow” to the `cortex-explorer` agent. Keep single lookups direct: a sub-agent round-trip costs more than one Cortex tool call.
 
+## QML and parser runtime
+
+QML declarations and `binds`/`reads`/`writes`/`aliases`/`exports` relations are searchable through the same tools. Check `cortex_overview` detailed `language_runtime` when QML results are unexpectedly sparse. A degraded runtime is fail-open regex mode; run `cortex runtime setup` or `cortex runtime repair`, or provide a verified offline bundle with `CORTEX_RUNTIME_NETWORK=0`. Setup never uploads repository source.
+
 ## Workflow
 
 1. Start with `cortex_overview` for unfamiliar repos or architecture questions; inspect its `top_hotspots` list before choosing risky files.

@@ -146,7 +146,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "name": "cortex_relations",
         "description": (
-            "Returns parsed graph edges like imports/inherits/calls/emits/connects/builds/registers. Use for structural symbol questions; use cortex_references when configs/docs/scripts may mention it. Example: {\"relation\":\"calls\",\"symbol\":\"generate_bundle\",\"direction\":\"out\"}."
+            "Returns parsed graph edges like imports/inherits/calls/emits/connects/builds/registers/binds/reads/writes/aliases/exports. Use for structural symbol questions; use cortex_references when configs/docs/scripts may mention it. Example: {\"relation\":\"calls\",\"symbol\":\"generate_bundle\",\"direction\":\"out\"}."
         ),
         "inputSchema": {
             "type": "object",
@@ -154,7 +154,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "repo_path": {"type": "string"},
                 "relation": {
                     "type": "string",
-                    "enum": ["contains", "imports", "inherits", "calls", "emits", "connects", "handles", "instantiates", "builds", "registers"],
+                    "enum": ["contains", "imports", "inherits", "calls", "emits", "connects", "handles", "instantiates", "builds", "registers", "binds", "reads", "writes", "references", "aliases", "exports"],
                 },
                 "symbol": {"type": "string", "description": "substring match against endpoint node id or label"},
                 "target": {"type": "string", "description": "alias for 'symbol'"},
@@ -681,8 +681,19 @@ def _call_overview(arguments: dict[str, Any]) -> dict[str, Any]:
                 "model_id": None,
                 "model_version": None,
             }
-        if payload.get("semantic") != semantic_payload:
-            payload = {**payload, "semantic": semantic_payload}
+        try:
+            from ..runtime import public_capability
+            runtime_payload = public_capability()
+            runtime_counts = {}
+            for file_node in store.fetch_graph(repo_root)[0]:
+                if file_node.kind == "file" and file_node.metadata.get("parser_backend"):
+                    key = str(file_node.metadata["parser_backend"])
+                    runtime_counts[key] = runtime_counts.get(key, 0) + 1
+            runtime_payload = {**runtime_payload, "backend_counts": dict(sorted(runtime_counts.items()))}
+        except Exception:
+            runtime_payload = {"ready": False, "degraded_reason": "runtime status unavailable"}
+        if payload.get("semantic") != semantic_payload or payload.get("language_runtime") != runtime_payload:
+            payload = {**payload, "semantic": semantic_payload, "language_runtime": runtime_payload}
             _cache_set(store, repo_root, cache_key, payload)
     return _content(_format_payload(payload, status, response_format, cached=cache_hit))
 
@@ -958,6 +969,19 @@ def _context_qt_details(
         instantiates.append(ref)
     instantiates.sort(key=lambda item: (str(item.get("label", "")), str(item.get("node_id", ""))))
 
+    qml_nodes = [item for item in source_nodes if item.metadata.get("qml_kind")]
+    properties = sorted(item.label for item in qml_nodes if item.metadata.get("qml_kind") == "property")
+    ids = sorted(item.label for item in qml_nodes if item.metadata.get("qml_kind") == "id")
+    methods = sorted(item.label for item in qml_nodes if item.metadata.get("qml_kind") in {"method", "invokable"})
+    enums = sorted(item.label for item in qml_nodes if item.metadata.get("qml_kind") in {"enum", "enum_member"})
+    inline_components = sorted(item.label for item in qml_nodes if item.metadata.get("qml_kind") == "inline_component")
+    bindings = []
+    for edge in edges:
+        if edge.relation not in {"binds", "aliases"} or edge.metadata.get("source_file") != file_path:
+            continue
+        bindings.append({"relation": edge.relation, "source": edge.source, "target": edge.target, "name": edge.metadata.get("bound_name", "")})
+    bindings.sort(key=lambda item: (str(item["name"]), str(item["relation"]), str(item["source"])))
+    imports = sorted({str(edge.metadata.get("uri", edge.target.removeprefix("module:"))) for edge in edges if edge.relation == "imports" and edge.metadata.get("source_file") == file_path})
     details = {
         "signals": [item.label for item in signal_nodes],
         "slots": [item.label for item in slot_nodes],
@@ -965,6 +989,14 @@ def _context_qt_details(
         "connects": connects,
         "handlers": handlers,
         "instantiates": instantiates,
+        "properties": properties,
+        "ids": ids,
+        "methods": methods,
+        "enums": enums,
+        "inline_components": inline_components,
+        "bindings": bindings,
+        "imports": imports,
+        "modules": imports,
     }
     has_qt_metadata = bool(node.metadata.get("qt")) or any(
         bool(item.metadata.get("qt")) for item in source_nodes

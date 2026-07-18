@@ -140,8 +140,6 @@ def test_qml_handler_on_external_type_stays_placeholder(tmp_path):
 
 
 def test_emit_and_handles_resolve_cross_file_tree_sitter_backend(tmp_path):
-    pytest.importorskip("tree_sitter_cpp")
-    pytest.importorskip("tree_sitter_language_pack")
 
     repo = _ingest_qt_app(tmp_path)
     emits = _relations(repo, relation="emits", symbol="deviceConnected")

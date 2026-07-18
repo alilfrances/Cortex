@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import subprocess
+from collections import Counter
 from pathlib import Path
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 from .config import load_config
 from .gitutils import collect_recent_commits, discover_repo_root
@@ -43,6 +45,9 @@ _TEXT_SUFFIXES = {
     ".hh",
     ".hxx",
     ".qml",
+    ".qmldir",
+    ".qmltypes",
+    ".qmlproject",
     ".go",
     ".rs",
     ".sh",
@@ -136,7 +141,7 @@ def _iter_candidate_files(repo_root: Path, skip_dirs: set[str] | None = None) ->
 def _classify_path(path: Path) -> str:
     if path.suffix == ".md":
         return "markdown"
-    if path.name.lower() == "cmakelists.txt" or path.suffix in {".cmake", ".qrc"}:
+    if path.name.lower() == "cmakelists.txt" or path.suffix in {".cmake", ".qrc", ".qmldir", ".qmltypes", ".qmlproject"}:
         return "code"
     if path.suffix in {
         ".py",
@@ -156,6 +161,9 @@ def _classify_path(path: Path) -> str:
         ".hh",
         ".hxx",
         ".qml",
+        ".qmldir",
+        ".qmltypes",
+        ".qmlproject",
         ".go",
         ".rs",
         ".sh",
@@ -329,12 +337,28 @@ def _sync_semantic_embeddings(
         return
 
 
+def _parser_summary(nodes: list[GraphNode]) -> dict[str, Any]:
+    counts: Counter[str] = Counter()
+    for node in nodes:
+        if node.kind == "file":
+            backend = node.metadata.get("parser_backend")
+            if backend:
+                counts[str(backend)] += 1
+    try:
+        from .runtime import public_capability
+        runtime = public_capability()
+    except Exception:
+        runtime = {"ready": False, "degraded_reason": "runtime-status-unavailable"}
+    runtime = {**runtime, "backend_counts": dict(sorted(counts.items()))}
+    return {"backend_counts": dict(sorted(counts.items())), "language_runtime": runtime}
+
+
 def ingest_repository(
     repo_path: Path,
     commit_limit: int = 1000,
     db_path: Path | None = None,
     incremental: bool = False,
-) -> dict[str, int | bool | str]:
+) -> dict[str, Any]:
     repo_root = discover_repo_root(repo_path)
     config = load_config(repo_root)
     skip_dirs = _SKIP_DIRS | set(config.skip_dirs)
@@ -440,9 +464,14 @@ def ingest_repository(
         # ingest would write, persisting only the rows that actually changed.
         if sources_to_process or stale_paths or commits_changed:
             merged_nodes, merged_edges = store.fetch_graph(repo_root)
-            endpoints_before = {e.edge_id: (e.source, e.target) for e in merged_edges}
+            endpoints_before = {e.edge_id: (e.source, e.target, json.dumps(e.metadata, sort_keys=True)) for e in merged_edges}
             degrees_before = {n.node_id: n.metadata.get("degree") for n in merged_nodes}
             resolved_edges = resolve_connect_endpoints(merged_nodes, merged_edges)
+            try:
+                from .structural.qml_resolver import resolve_qml_edges
+                resolve_qml_edges(merged_nodes, resolved_edges, scan.current_paths)
+            except Exception:
+                pass
             annotate_degree(merged_nodes, resolved_edges)
             if len(resolved_edges) != len(endpoints_before):
                 # Resolution dropped self-loop artifacts; an upsert cannot
@@ -451,7 +480,7 @@ def ingest_repository(
             else:
                 changed_edges = [
                     e for e in resolved_edges
-                    if endpoints_before[e.edge_id] != (e.source, e.target)
+                    if endpoints_before[e.edge_id] != (e.source, e.target, json.dumps(e.metadata, sort_keys=True))
                 ]
                 changed_nodes = [
                     n for n in merged_nodes
@@ -461,6 +490,7 @@ def ingest_repository(
                     store.save_graph(repo_root, changed_nodes, changed_edges)
 
         store.set_repo_fingerprint(repo_root, scan.fingerprint)
+        parser_summary = _parser_summary(store.fetch_graph(repo_root)[0])
 
         return {
             "repo_path": str(repo_root),
@@ -471,6 +501,8 @@ def ingest_repository(
             "unchanged_files": scan.unchanged_count,
             "commit_count": len(commits),
             "cochange_commits": len(commits),
+            "parser_backend_counts": parser_summary["backend_counts"],
+            "language_runtime": parser_summary["language_runtime"],
         }
 
     all_sources = _scan_sources(repo_root, skip_dirs)
@@ -483,6 +515,7 @@ def ingest_repository(
     store.save_commits(repo_root, commits)
     store.save_graph(repo_root, nodes, edges)
     _sync_semantic_embeddings(store, repo_root, all_sources, nodes, replace_paths=[source.path for source in all_sources])
+    parser_summary = _parser_summary(nodes)
 
     return {
         "repo_path": str(repo_root),
@@ -495,4 +528,6 @@ def ingest_repository(
         "node_count": len(nodes),
         "edge_count": len(edges),
         "cochange_commits": len(commits),
+        "parser_backend_counts": parser_summary["backend_counts"],
+        "language_runtime": parser_summary["language_runtime"],
     }

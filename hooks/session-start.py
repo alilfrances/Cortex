@@ -67,15 +67,24 @@ def main() -> int:
         if status is None:
             return 0
 
+        runtime_warning = ""
+        try:
+            from cortex.runtime import status as runtime_status
+            runtime = runtime_status()
+            if not runtime.get("ready", False):
+                runtime_warning = " Parser runtime degraded; QML and supported-language indexing is using the visible regex fallback. Run `cortex runtime setup` or `cortex runtime repair` when network/offline bundle access is available."
+        except Exception:
+            runtime_warning = " Parser runtime status unavailable; QML indexing may be degraded."
+
         freshness, file_count = status
         if freshness == "missing":
-            _emit("No Cortex index found for this project; cortex_refresh can build it.")
+            _emit("No Cortex index found for this project; cortex_refresh can build it." + runtime_warning)
             return 0
 
         state = "fresh" if freshness == "fresh" else "stale"
         connector = "and is" if state == "fresh" else "but is"
         _emit(
-            f"Cortex index exists {connector} {state} ({file_count} indexed files). "
+            f"Cortex index exists {connector} {state} ({file_count} indexed files).{runtime_warning} "
             "Prefer Cortex MCP tools over raw Grep/Glob/Read exploration: "
             "delegate multi-step exploration to the cortex-explorer agent, while keeping single lookups direct. "
             "cortex_context (batch all paths/symbols once before editing several files), "

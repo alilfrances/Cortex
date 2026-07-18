@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.8.0 — 2026-07-18
+
+- Add a managed, isolated, hash-pinned Tree-sitter runtime with offline bundles, status/repair commands, fail-open parser provenance, and complete local QML structural/module support.
+
 - Harden local data handling: indexing now excludes symlinks and text files larger than 5 MiB, managed SQLite data is owner-only on POSIX systems, remote LLM enrichment requires explicit `--allow-code-upload` consent, and `cortex risk` rejects revision values that Git could interpret as command options.
 
 - Complete the post-merge plan audit: tree-sitter C++ out-of-line definitions now retain the bare member label plus class qualifier, class-qualified Qt `connect()` endpoints prefer one real signal/slot declaration over its `.cpp` definition while preserving conservative ambiguity, and QML handlers on known local components are marked `unverified` when the completed graph contains no matching `foo`/`fooChanged` signal.

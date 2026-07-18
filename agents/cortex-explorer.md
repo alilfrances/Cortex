@@ -34,6 +34,10 @@ For Qt signal/slot questions such as "which slot receives signal X?", use `corte
 
 Use raw `Read`, `Grep`, or `Glob` only as a last-resort fallback for unindexed content, such as files newer than the index. When that happens, tell the parent agent to consider calling `cortex_refresh` before relying on the fallback results.
 
+## QML/runtime guidance
+
+Trace QML with `cortex_relations` using `binds`, `reads`, `writes`, `aliases`, and `exports` in addition to Qt handlers/instantiations. If detailed overview reports a degraded `language_runtime`, report that limitation and do not infer ambiguous module targets; `cortex runtime status/setup/repair` is the recovery path.
+
 ## Return contract
 
 The final answer must contain:

@@ -387,8 +387,8 @@ def test_regex_qt_symbols_are_chunked(fake_local_model, tmp_path):
     rows = store.fetch_chunk_embeddings(repo, MODEL_ID, semantic._model_details().version)
     embedded_ids = {row["node_id"] for row in rows}
     assert {
-        "symbol:qml/DeviceDelegate.qml:MouseArea.onClicked",
-        "symbol:qml/DeviceDelegate.qml:clicked",
+        "symbol:qml/DeviceDelegate.qml:DeviceDelegate.MouseArea.onClicked",
+        "symbol:qml/DeviceDelegate.qml:DeviceDelegate.clicked",
         "symbol:include/DeviceManager.hpp:deviceConnected",
         "symbol:include/DeviceModel.hpp:onDeviceConnected",
     } <= embedded_ids
