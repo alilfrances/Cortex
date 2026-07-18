@@ -31,7 +31,7 @@ def run_benchmark(
     store = CortexStore(db_path or default_db_path(repo_root))
     sources = store.fetch_sources(repo_root)
 
-    corpus_tokens = sum(count_text_tokens(source.content) for source in sources)
+    corpus_tokens = sum(count_text_tokens(source.content, kind=source.kind) for source in sources)
     per_question: list[dict[str, Any]] = []
     prompts = questions or DEFAULT_QUESTIONS
 

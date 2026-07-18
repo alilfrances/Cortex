@@ -8,9 +8,29 @@ import sqlite3
 import time
 from pathlib import Path
 
+from .graph import QtSymbolIndex
+from .hotspots import estimate_complexity, hotspot_stats
 from .models import BundleItem, CommitRecord, Community, GraphEdge, GraphNode, RetrievalBundle, SourceRecord
 
 LEGACY_DIR_NAME = ".cortex"
+
+
+def _is_managed_database(db_path: Path) -> bool:
+    if db_path.parent.name == LEGACY_DIR_NAME:
+        return True
+    try:
+        db_path.resolve().relative_to(data_root().resolve())
+    except ValueError:
+        return False
+    return True
+
+
+def _make_private(path: Path, mode: int) -> None:
+    """Best-effort POSIX permissions without breaking unsupported platforms."""
+    try:
+        path.chmod(mode)
+    except OSError:
+        pass
 
 
 def _split_identifier(token: str) -> list[str]:
@@ -27,6 +47,47 @@ def _search_tokens(text: str) -> list[str]:
 
 def _normalized_identifier(text: str) -> str:
     return ''.join(_search_tokens(text))
+
+
+def _fts_identifier_text(content: str) -> str:
+    """Space-joined identifier subtokens for the FTS5 auxiliary `identifiers`
+    column (P0-2 step 6). Reuses the same camelCase/snake_case splitter as
+    `search_nodes` so a split-word query ("device list model") matches a
+    file whose only on-disk spelling is a compound identifier
+    ("DeviceListModel") that the `unicode61` tokenizer would otherwise index
+    as one opaque token indistinguishable from the split-word query."""
+    return ' '.join(_search_tokens(content))
+
+
+def _fts_match_query(query: str) -> str:
+    """Build an FTS5 MATCH expression from free text.
+
+    OR's quoted, escaped tokens (reusing `_search_tokens`, which already
+    lowercases and splits camelCase/snake_case/`::`-qualified identifiers)
+    so punctuation in the raw query (`::`, `(`, `"`, ...) can never produce
+    invalid FTS5 query syntax, while multi-term matches still rank higher
+    than single-term ones via bm25's per-term contribution. Returns '' when
+    the query has no searchable tokens.
+    """
+    tokens = _search_tokens(query)
+    if not tokens:
+        return ''
+    return ' OR '.join('"{}"'.format(token.replace('"', '""')) for token in tokens)
+
+
+def _first_matching_line(content: str, tokens: list[str]) -> int | None:
+    """1-based line number of the first line containing any query token
+    (case-insensitive substring match), used to line-anchor FTS snippets
+    (P0-2 step 7). Best-effort: returns None if no token appears verbatim
+    on any line (possible when a match came only from the auxiliary
+    `identifiers` column's split-word form, not the raw content)."""
+    if not tokens:
+        return None
+    for lineno, line in enumerate(content.splitlines(), start=1):
+        lowered = line.lower()
+        if any(token in lowered for token in tokens):
+            return lineno
+    return None
 
 
 def data_root() -> Path:
@@ -57,16 +118,23 @@ def write_repo_meta(db_path: Path, repo_root: Path) -> None:
     parent = db_path.parent
     if parent.name == LEGACY_DIR_NAME:
         return
-    parent.mkdir(parents=True, exist_ok=True)
+    parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if _is_managed_database(db_path):
+        _make_private(parent, 0o700)
     meta = {"repo_path": str(repo_root.resolve()), "updated_at": int(time.time())}
-    (parent / "meta.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+    meta_path = parent / "meta.json"
+    meta_path.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+    _make_private(meta_path, 0o600)
 
 
 class CortexStore:
     def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.db_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if _is_managed_database(self.db_path):
+            _make_private(self.db_path.parent, 0o700)
         self.connection = sqlite3.connect(self.db_path)
+        _make_private(self.db_path, 0o600)
         self.connection.row_factory = sqlite3.Row
         self.initialize_schema()
 
@@ -89,6 +157,7 @@ class CortexStore:
                 modified_at REAL NOT NULL,
                 content TEXT NOT NULL,
                 content_hash TEXT NOT NULL DEFAULT '',
+                mtime_ns INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY (repo_path, path)
             );
 
@@ -126,6 +195,7 @@ class CortexStore:
                 confidence TEXT NOT NULL DEFAULT 'EXTRACTED',
                 weight REAL NOT NULL,
                 metadata_json TEXT NOT NULL,
+                source_file TEXT NOT NULL DEFAULT '',
                 PRIMARY KEY (repo_path, edge_id)
             );
 
@@ -180,10 +250,122 @@ class CortexStore:
                 metadata_json TEXT NOT NULL,
                 PRIMARY KEY (bundle_id, item_id)
             );
+
+            -- P0-1 token-savings ledger: one row per successful MCP tool call.
+            -- `response_tokens` is the actual payload size; `baseline_tokens`
+            -- is the deterministic "what an agent would have spent without
+            -- Cortex" estimate computed by mcp/tools._estimate_baseline. A
+            -- brand-new table only needs CREATE TABLE IF NOT EXISTS -- no
+            -- ALTER migration required for upgraded databases.
+            CREATE TABLE IF NOT EXISTS tool_usage (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                repo_path TEXT NOT NULL,
+                called_at INTEGER NOT NULL,
+                tool TEXT NOT NULL,
+                response_tokens INTEGER NOT NULL,
+                baseline_tokens INTEGER NOT NULL,
+                meta_json TEXT NOT NULL DEFAULT '{}'
+            );
+
+            -- P1-3 read-through result cache for cortex_query/cortex_impact/
+            -- cortex_overview: `cache_key` is sha256(fingerprint + tool +
+            -- canonical_json(args)) (see mcp/tools._cache_key), so any repo
+            -- content change (which changes the fingerprint) automatically
+            -- misses every existing key -- no explicit invalidation needed.
+            -- A brand-new table only needs CREATE TABLE IF NOT EXISTS -- no
+            -- ALTER migration required for upgraded databases.
+            CREATE TABLE IF NOT EXISTS query_cache (
+                repo_path TEXT NOT NULL,
+                cache_key TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                payload_json TEXT NOT NULL,
+                PRIMARY KEY (repo_path, cache_key)
+            );
+
+            -- P1-7 optional local Model2Vec vectors.  Rows are owned by a
+            -- repo/source path and keyed by node plus the exact local model
+            -- artifact version, so changing a file or model cannot reuse an
+            -- unrelated vector.  The vector itself is a float32 BLOB; no
+            -- vector extension or external service is required.
+            CREATE TABLE IF NOT EXISTS chunk_embeddings (
+                repo_path TEXT NOT NULL,
+                node_id TEXT NOT NULL,
+                source_path TEXT NOT NULL,
+                source_hash TEXT NOT NULL,
+                model_id TEXT NOT NULL,
+                model_version TEXT NOT NULL,
+                vector BLOB NOT NULL,
+                dimension INTEGER NOT NULL,
+                created_at INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (repo_path, node_id, model_id, model_version)
+            );
             '''
         )
         self.connection.commit()
         self._migrate_existing_schema()
+        # P0-2: FTS5 ships with CPython's stdlib sqlite3 module but isn't
+        # guaranteed compiled into every distribution's SQLite build. Guard
+        # independently of the executescript above (which has no per-
+        # statement error handling) so a missing FTS5 module degrades to
+        # the existing LIKE-based search path everywhere instead of
+        # breaking schema init for the whole store.
+        self.fts_enabled = self._init_fts5()
+
+    def _init_fts5(self) -> bool:
+        """Create the `source_fts` virtual table if this sqlite3 build has
+        FTS5 compiled in; return whether full-text search is available.
+
+        `CREATE VIRTUAL TABLE IF NOT EXISTS` is idempotent like the rest of
+        `initialize_schema`, so this can run on every open. `content` and
+        `identifiers` are indexed (searchable) columns; the other three are
+        `UNINDEXED` metadata carried alongside each row. Tests simulate an
+        unavailable FTS5 build by monkeypatching this method to return
+        False before constructing a CortexStore.
+        """
+        try:
+            exists_before = self.connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'source_fts'"
+            ).fetchone() is not None
+            self.connection.execute(
+                '''
+                CREATE VIRTUAL TABLE IF NOT EXISTS source_fts USING fts5(
+                    repo_path UNINDEXED,
+                    path UNINDEXED,
+                    kind UNINDEXED,
+                    content,
+                    identifiers,
+                    tokenize='unicode61'
+                )
+                '''
+            )
+            self.connection.commit()
+        except sqlite3.OperationalError:
+            return False
+        if not exists_before:
+            self._backfill_fts5()
+        return True
+
+    def _backfill_fts5(self) -> None:
+        """One-time backfill when `source_fts` is created against a
+        pre-existing database (the upgrade path): sources ingested before
+        P0-2 have no matching FTS rows yet, since `save_sources` is the
+        only other writer and it only ever touches paths passed to it."""
+        rows = self.connection.execute(
+            "SELECT repo_path, path, kind, content FROM sources"
+        ).fetchall()
+        if not rows:
+            return
+        with self.connection:
+            self.connection.executemany(
+                '''
+                INSERT INTO source_fts(repo_path, path, kind, content, identifiers)
+                VALUES (?, ?, ?, ?, ?)
+                ''',
+                [
+                    (row['repo_path'], row['path'], row['kind'], row['content'], _fts_identifier_text(row['content']))
+                    for row in rows
+                ],
+            )
 
     def _migrate_existing_schema(self) -> None:
         migrations = [
@@ -195,6 +377,11 @@ class CortexStore:
             "ALTER TABLE graph_nodes ADD COLUMN span_start INTEGER",
             "ALTER TABLE graph_nodes ADD COLUMN span_end INTEGER",
             "ALTER TABLE repos ADD COLUMN fingerprint TEXT NOT NULL DEFAULT ''",
+            # P0-3 fast-path incremental ingest: nanosecond mtime for stat-first
+            # scans, and a real source_file column on edges so delta deletes
+            # don't need a json_extract() scan.
+            "ALTER TABLE sources ADD COLUMN mtime_ns INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE graph_edges ADD COLUMN source_file TEXT NOT NULL DEFAULT ''",
         ]
         for sql in migrations:
             try:
@@ -202,6 +389,108 @@ class CortexStore:
                 self.connection.commit()
             except Exception:
                 pass  # column already exists
+
+        try:
+            self._migrate_chunk_embeddings_schema()
+        except Exception:
+            # The optional table must never make a legacy/core store unusable.
+            pass
+
+        # Index creation happens after the ALTERs above so it's safe to run
+        # unconditionally on both fresh and upgraded databases (the columns
+        # they reference are guaranteed to exist by this point).
+        indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_nodes_source_ref ON graph_nodes(repo_path, source_ref)",
+            "CREATE INDEX IF NOT EXISTS idx_edges_source_file ON graph_edges(repo_path, source_file)",
+            "CREATE INDEX IF NOT EXISTS idx_tool_usage_repo_time ON tool_usage(repo_path, called_at)",
+            "CREATE INDEX IF NOT EXISTS idx_query_cache_repo_time ON query_cache(repo_path, created_at)",
+        ]
+        indexes.extend(
+            [
+                "CREATE INDEX IF NOT EXISTS idx_chunk_embeddings_repo_path ON chunk_embeddings(repo_path, source_path)",
+                "CREATE INDEX IF NOT EXISTS idx_chunk_embeddings_model ON chunk_embeddings(repo_path, model_id, model_version)",
+            ]
+        )
+        for sql in indexes:
+            try:
+                self.connection.execute(sql)
+                self.connection.commit()
+            except Exception:
+                pass  # index already exists / column not ready in some odd legacy state
+
+    def _migrate_chunk_embeddings_schema(self) -> None:
+        """Rebuild a pre-release/partial embedding table into the P1-7 shape.
+
+        The table did not exist in the shipped schema, but accepting a partial
+        table here makes upgrades idempotent for development databases and
+        protects normal ingest from a malformed optional-feature migration.
+        Legacy rows are retained with a sentinel model version and are ignored
+        by current-model queries until they are explicitly re-indexed.
+        """
+        table = self.connection.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'chunk_embeddings'"
+        ).fetchone()
+        if table is None:
+            return
+        columns = self.connection.execute("PRAGMA table_info(chunk_embeddings)").fetchall()
+        names = {str(row["name"]) for row in columns}
+        required = {
+            "repo_path", "node_id", "source_path", "source_hash", "model_id",
+            "model_version", "vector", "dimension", "created_at",
+        }
+        pk_names = {
+            str(row["name"])
+            for row in columns
+            if int(row["pk"] or 0) > 0
+        }
+        expected_pk = {"repo_path", "node_id", "model_id", "model_version"}
+        if required <= names and pk_names == expected_pk:
+            return
+
+        legacy_name = "chunk_embeddings_legacy"
+        with self.connection:
+            self.connection.execute(f"DROP TABLE IF EXISTS {legacy_name}")
+            self.connection.execute("ALTER TABLE chunk_embeddings RENAME TO chunk_embeddings_legacy")
+            self.connection.execute(
+                """
+                CREATE TABLE chunk_embeddings (
+                    repo_path TEXT NOT NULL,
+                    node_id TEXT NOT NULL,
+                    source_path TEXT NOT NULL,
+                    source_hash TEXT NOT NULL,
+                    model_id TEXT NOT NULL,
+                    model_version TEXT NOT NULL,
+                    vector BLOB NOT NULL,
+                    dimension INTEGER NOT NULL,
+                    created_at INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY (repo_path, node_id, model_id, model_version)
+                )
+                """
+            )
+            legacy_columns = {str(row["name"]) for row in self.connection.execute("PRAGMA table_info(chunk_embeddings_legacy)")}
+            if {"repo_path", "node_id", "vector"} <= legacy_columns:
+                def expression(name: str, fallback: str) -> str:
+                    return name if name in legacy_columns else fallback
+
+                self.connection.execute(
+                    f"""
+                    INSERT OR IGNORE INTO chunk_embeddings(
+                        repo_path, node_id, source_path, source_hash, model_id,
+                        model_version, vector, dimension, created_at
+                    )
+                    SELECT {expression('repo_path', "''")},
+                           {expression('node_id', "''")},
+                           {expression('source_path', "''")},
+                           {expression('source_hash', "''")},
+                           {expression('model_id', "''")},
+                           {expression('model_version', "'legacy'")},
+                           vector,
+                           {expression('dimension', "0")},
+                           {expression('created_at', "0")}
+                    FROM chunk_embeddings_legacy
+                    """
+                )
+            self.connection.execute("DROP TABLE chunk_embeddings_legacy")
 
     def reset_repo(self, repo_path: Path, fingerprint: str = '') -> None:
         repo_key = str(repo_path.resolve())
@@ -223,8 +512,10 @@ class CortexStore:
                     [(bundle_id,) for bundle_id in bundle_ids],
                 )
                 self.connection.execute("DELETE FROM bundles WHERE repo_path = ?", (repo_key,))
-            for table in ("sources", "commits", "graph_nodes", "graph_edges"):
+            for table in ("sources", "commits", "graph_nodes", "graph_edges", "chunk_embeddings"):
                 self.connection.execute(f"DELETE FROM {table} WHERE repo_path = ?", (repo_key,))
+            if self.fts_enabled:
+                self.connection.execute("DELETE FROM source_fts WHERE repo_path = ?", (repo_key,))
 
     def set_repo_fingerprint(self, repo_path: Path, fingerprint: str) -> None:
         repo_key = str(repo_path.resolve())
@@ -240,6 +531,23 @@ class CortexStore:
                 (repo_key, int(time.time()), fingerprint),
             )
 
+    def get_repo_indexed_at(self, repo_path: Path) -> int:
+        """Epoch seconds `repos.updated_at` was last set for this repo.
+
+        Bumped by `reset_repo`/`set_repo_fingerprint` on every full or
+        incremental ingest, so this is the source of truth for P1-5's
+        `_meta.indexed_at` / `_meta.index_age_seconds` (mcp/tools._staleness).
+        Returns 0 if the repo has no row yet -- shouldn't normally happen
+        once a Cortex database exists for it, but callers must degrade
+        gracefully rather than raise.
+        """
+        repo_key = str(repo_path.resolve())
+        row = self.connection.execute(
+            "SELECT updated_at FROM repos WHERE repo_path = ?",
+            (repo_key,),
+        ).fetchone()
+        return 0 if row is None else int(row["updated_at"])
+
     def get_repo_fingerprint(self, repo_path: Path) -> str:
         repo_key = str(repo_path.resolve())
         row = self.connection.execute(
@@ -253,8 +561,8 @@ class CortexStore:
         with self.connection:
             self.connection.executemany(
                 '''
-                INSERT OR REPLACE INTO sources(repo_path, path, kind, size_bytes, modified_at, content, content_hash)
-                VALUES(?, ?, ?, ?, ?, ?, ?)
+                INSERT OR REPLACE INTO sources(repo_path, path, kind, size_bytes, modified_at, content, content_hash, mtime_ns)
+                VALUES(?, ?, ?, ?, ?, ?, ?, ?)
                 ''',
                 [
                     (
@@ -265,10 +573,29 @@ class CortexStore:
                         source.modified_at,
                         source.content,
                         source.content_hash,
+                        source.mtime_ns,
                     )
                     for source in sources
                 ],
             )
+            # P0-2: keep source_fts in sync at the same delete+insert-per-path
+            # granularity as the `sources` table it mirrors, so a re-saved
+            # path's old FTS row (and stale identifiers) never lingers.
+            if self.fts_enabled and sources:
+                self.connection.executemany(
+                    'DELETE FROM source_fts WHERE repo_path = ? AND path = ?',
+                    [(repo_key, source.path) for source in sources],
+                )
+                self.connection.executemany(
+                    '''
+                    INSERT INTO source_fts(repo_path, path, kind, content, identifiers)
+                    VALUES (?, ?, ?, ?, ?)
+                    ''',
+                    [
+                        (repo_key, source.path, source.kind, source.content, _fts_identifier_text(source.content))
+                        for source in sources
+                    ],
+                )
 
     def delete_sources(self, repo_path: Path, paths: list[str]) -> None:
         repo_key = str(repo_path.resolve())
@@ -277,14 +604,209 @@ class CortexStore:
                 'DELETE FROM sources WHERE repo_path = ? AND path = ?',
                 [(repo_key, path) for path in paths],
             )
+            if self.fts_enabled and paths:
+                self.connection.executemany(
+                    'DELETE FROM source_fts WHERE repo_path = ? AND path = ?',
+                    [(repo_key, path) for path in paths],
+                )
+
+    def fetch_source_stats(self, repo_path: Path) -> dict[str, tuple[int, int, str]]:
+        """Lightweight (size_bytes, mtime_ns, content_hash) lookup for the
+        stat-first incremental scan — does not select the `content` column,
+        so this is cheap even for large repos (P0-3)."""
+        repo_key = str(repo_path.resolve())
+        rows = self.connection.execute(
+            'SELECT path, size_bytes, mtime_ns, content_hash FROM sources WHERE repo_path = ?',
+            (repo_key,),
+        ).fetchall()
+        return {row['path']: (row['size_bytes'], row['mtime_ns'], row['content_hash']) for row in rows}
+
+    def delete_chunk_embeddings_for_paths(self, repo_path: Path, paths: list[str]) -> None:
+        """Delete only embedding rows owned by the supplied source paths."""
+        if not paths:
+            return
+        repo_key = str(repo_path.resolve())
+        with self.connection:
+            self.connection.executemany(
+                "DELETE FROM chunk_embeddings WHERE repo_path = ? AND source_path = ?",
+                [(repo_key, path) for path in paths],
+            )
+
+    def save_chunk_embeddings(self, repo_path: Path, rows: list[dict[str, object]]) -> None:
+        """Idempotently upsert float32 symbol vectors for one repository."""
+        if not rows:
+            return
+        repo_key = str(repo_path.resolve())
+        now = int(time.time())
+        with self.connection:
+            self.connection.executemany(
+                """
+                INSERT OR REPLACE INTO chunk_embeddings(
+                    repo_path, node_id, source_path, source_hash, model_id,
+                    model_version, vector, dimension, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        repo_key,
+                        str(row["node_id"]),
+                        str(row["source_path"]),
+                        str(row["source_hash"]),
+                        str(row["model_id"]),
+                        str(row["model_version"]),
+                        sqlite3.Binary(bytes(row["vector"])),
+                        int(row["dimension"]),
+                        now,
+                    )
+                    for row in rows
+                ],
+            )
+
+    def fetch_chunk_embeddings(
+        self,
+        repo_path: Path,
+        model_id: str,
+        model_version: str,
+    ) -> list[sqlite3.Row]:
+        """Return current-model vectors in stable node/path order."""
+        repo_key = str(repo_path.resolve())
+        return self.connection.execute(
+            """
+            SELECT node_id, source_path, source_hash, model_id, model_version,
+                   vector, dimension
+            FROM chunk_embeddings
+            WHERE repo_path = ? AND model_id = ? AND model_version = ?
+            ORDER BY source_path, node_id
+            """,
+            (repo_key, model_id, model_version),
+        ).fetchall()
+
+    def count_chunk_embeddings(
+        self,
+        repo_path: Path,
+        model_id: str | None = None,
+        model_version: str | None = None,
+    ) -> int:
+        repo_key = str(repo_path.resolve())
+        clauses = ["repo_path = ?"]
+        params: list[object] = [repo_key]
+        if model_id is not None:
+            clauses.append("model_id = ?")
+            params.append(model_id)
+        if model_version is not None:
+            clauses.append("model_version = ?")
+            params.append(model_version)
+        row = self.connection.execute(
+            f"SELECT COUNT(*) AS count FROM chunk_embeddings WHERE {' AND '.join(clauses)}",
+            tuple(params),
+        ).fetchone()
+        return 0 if row is None else int(row["count"])
 
     def replace_graph(self, repo_path: Path, nodes: list[GraphNode], edges: list[GraphEdge]) -> None:
-        """Replace the repo graph wholesale — save_graph upserts, so stale rows survive it."""
+        """Replace the repo graph wholesale — save_graph upserts, so stale rows survive it.
+
+        O(repo) per call: still used by full (non-incremental) ingest. The
+        incremental path uses delete_graph_for_sources + append_graph instead
+        so an unrelated file's rows are never rewritten (P0-3).
+        """
         repo_key = str(repo_path.resolve())
         with self.connection:
             self.connection.execute('DELETE FROM graph_nodes WHERE repo_path = ?', (repo_key,))
             self.connection.execute('DELETE FROM graph_edges WHERE repo_path = ?', (repo_key,))
         self.save_graph(repo_path, nodes, edges)
+
+    def delete_graph_for_sources(self, repo_path: Path, paths: list[str]) -> None:
+        """Delete graph rows owned by specific source files: nodes by
+        source_ref, edges by their tagged source_file. COCHANGE-layer edges
+        (cochange/touches) are not owned by a single file and are untouched
+        here — see delete_cochange_layer."""
+        if not paths:
+            return
+        repo_key = str(repo_path.resolve())
+        with self.connection:
+            self.connection.executemany(
+                'DELETE FROM graph_nodes WHERE repo_path = ? AND source_ref = ?',
+                [(repo_key, path) for path in paths],
+            )
+            self.connection.executemany(
+                'DELETE FROM graph_edges WHERE repo_path = ? AND source_file = ?',
+                [(repo_key, path) for path in paths],
+            )
+
+    def delete_cochange_layer(self, repo_path: Path) -> None:
+        """Drop the COCHANGE layer (cochange pair edges, commit nodes, and
+        commit->file touches edges) so it can be rebuilt fresh. Used by the
+        incremental path only when commit history changed or a file was
+        deleted, to avoid dangling references (P0-3)."""
+        repo_key = str(repo_path.resolve())
+        with self.connection:
+            self.connection.execute(
+                "DELETE FROM graph_edges WHERE repo_path = ? AND layer = 'COCHANGE'",
+                (repo_key,),
+            )
+            self.connection.execute(
+                "DELETE FROM graph_nodes WHERE repo_path = ? AND kind = 'commit'",
+                (repo_key,),
+            )
+
+    def append_graph(self, repo_path: Path, nodes: list[GraphNode], edges: list[GraphEdge]) -> None:
+        """Write new/updated graph rows without touching unrelated repo rows.
+        This is an upsert (same as save_graph) — the name documents intent at
+        incremental call sites: pair with delete_graph_for_sources /
+        delete_cochange_layer first so this only ever "appends" fresh state."""
+        self.save_graph(repo_path, nodes, edges)
+
+    def update_file_hotspots(
+        self,
+        repo_path: Path,
+        churn: dict[str, int],
+        complexities: dict[str, int] | None = None,
+    ) -> None:
+        """Refresh hotspot metadata without rebuilding the graph.
+
+        ``complexities`` contains freshly parsed changed/new files. Existing
+        nodes retain their stored complexity; legacy nodes without hotspot
+        metadata fall back to their indexed source content once. Churn is
+        updated for every retained file because a changed commit window can
+        affect more than the files re-ingested in this delta.
+        """
+        repo_key = str(repo_path.resolve())
+        rows = self.connection.execute(
+            "SELECT node_id, source_ref, metadata_json FROM graph_nodes "
+            "WHERE repo_path = ? AND kind = 'file'",
+            (repo_key,),
+        ).fetchall()
+        complexity_map = complexities or {}
+        source_content: dict[str, str] = {}
+        updates: list[tuple[str, str, str]] = []
+        for row in rows:
+            path = str(row["source_ref"])
+            metadata = json.loads(row["metadata_json"])
+            previous = metadata.get("hotspot")
+            previous_complexity = previous.get("complexity") if isinstance(previous, dict) else None
+            if path in complexity_map:
+                complexity = int(complexity_map[path])
+            elif previous_complexity is not None:
+                complexity = int(previous_complexity)
+            else:
+                if path not in source_content:
+                    content_row = self.connection.execute(
+                        "SELECT content FROM sources WHERE repo_path = ? AND path = ?",
+                        (repo_key, path),
+                    ).fetchone()
+                    source_content[path] = "" if content_row is None else str(content_row["content"])
+                complexity = estimate_complexity(source_content[path], path)
+            next_hotspot = hotspot_stats(churn.get(path, 0), complexity)
+            if previous == next_hotspot:
+                continue
+            metadata["hotspot"] = next_hotspot
+            updates.append((json.dumps(metadata), repo_key, row["node_id"]))
+        if updates:
+            with self.connection:
+                self.connection.executemany(
+                    "UPDATE graph_nodes SET metadata_json = ? WHERE repo_path = ? AND node_id = ?",
+                    updates,
+                )
 
     def save_commits(self, repo_path: Path, commits: list[CommitRecord]) -> None:
         repo_key = str(repo_path.resolve())
@@ -305,8 +827,17 @@ class CortexStore:
         with self.connection:
             self.connection.executemany(
                 '''
-                INSERT OR REPLACE INTO graph_nodes(repo_path, node_id, kind, label, source_ref, granularity, signature, span_start, span_end, metadata_json)
+                INSERT INTO graph_nodes(repo_path, node_id, kind, label, source_ref, granularity, signature, span_start, span_end, metadata_json)
                 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(repo_path, node_id) DO UPDATE SET
+                    kind = excluded.kind,
+                    label = excluded.label,
+                    source_ref = excluded.source_ref,
+                    granularity = excluded.granularity,
+                    signature = excluded.signature,
+                    span_start = excluded.span_start,
+                    span_end = excluded.span_end,
+                    metadata_json = excluded.metadata_json
                 ''',
                 [
                     (
@@ -326,8 +857,17 @@ class CortexStore:
             )
             self.connection.executemany(
                 '''
-                INSERT OR REPLACE INTO graph_edges(repo_path, edge_id, source, target, relation, layer, confidence, weight, metadata_json)
-                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO graph_edges(repo_path, edge_id, source, target, relation, layer, confidence, weight, metadata_json, source_file)
+                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(repo_path, edge_id) DO UPDATE SET
+                    source = excluded.source,
+                    target = excluded.target,
+                    relation = excluded.relation,
+                    layer = excluded.layer,
+                    confidence = excluded.confidence,
+                    weight = excluded.weight,
+                    metadata_json = excluded.metadata_json,
+                    source_file = excluded.source_file
                 ''',
                 [
                     (
@@ -340,6 +880,7 @@ class CortexStore:
                         edge.confidence,
                         edge.weight,
                         json.dumps(edge.metadata),
+                        edge.metadata.get('source_file', '') or '',
                     )
                     for edge in edges
                 ],
@@ -388,7 +929,7 @@ class CortexStore:
     def fetch_sources(self, repo_path: Path) -> list[SourceRecord]:
         repo_key = str(repo_path.resolve())
         rows = self.connection.execute(
-            'SELECT path, content, kind, size_bytes, modified_at, content_hash FROM sources WHERE repo_path = ? ORDER BY path',
+            'SELECT path, content, kind, size_bytes, modified_at, content_hash, mtime_ns FROM sources WHERE repo_path = ? ORDER BY path',
             (repo_key,),
         ).fetchall()
         return [
@@ -399,6 +940,7 @@ class CortexStore:
                 size_bytes=row['size_bytes'],
                 modified_at=row['modified_at'],
                 content_hash=row['content_hash'],
+                mtime_ns=row['mtime_ns'],
             )
             for row in rows
         ]
@@ -410,6 +952,67 @@ class CortexStore:
             (repo_key, path),
         ).fetchone()
         return None if row is None else str(row["content"])
+
+    def fetch_source_token_data(self, repo_path: Path, path: str) -> tuple[str, str] | None:
+        """Return one source's content and tokenizer kind for ledger pricing."""
+        repo_key = str(repo_path.resolve())
+        row = self.connection.execute(
+            "SELECT content, kind FROM sources WHERE repo_path = ? AND path = ?",
+            (repo_key, path),
+        ).fetchone()
+        if row is None:
+            return None
+        return str(row["content"]), str(row["kind"])
+
+    def fetch_source_record(self, repo_path: Path, path: str) -> SourceRecord | None:
+        """Single-file lookup mirroring `fetch_sources`' row shape (P1-6) --
+        used by `cortex_read_file` so it can report `kind` for tokenizer
+        calibration without pulling every source row in the repo."""
+        repo_key = str(repo_path.resolve())
+        row = self.connection.execute(
+            'SELECT path, content, kind, size_bytes, modified_at, content_hash, mtime_ns '
+            'FROM sources WHERE repo_path = ? AND path = ?',
+            (repo_key, path),
+        ).fetchone()
+        if row is None:
+            return None
+        return SourceRecord(
+            path=row['path'],
+            content=row['content'],
+            kind=row['kind'],
+            size_bytes=row['size_bytes'],
+            modified_at=row['modified_at'],
+            content_hash=row['content_hash'],
+            mtime_ns=row['mtime_ns'],
+        )
+
+    def fetch_symbols_for_path(self, repo_path: Path, path: str) -> list[GraphNode]:
+        """All indexed symbol-granularity nodes declared in one file (P1-6) --
+        used to scope `_render_skeleton`/`_render_symbol_skeleton` to a single
+        file/symbol without a whole-repo `fetch_graph` call."""
+        repo_key = str(repo_path.resolve())
+        rows = self.connection.execute(
+            """
+            SELECT node_id, kind, label, source_ref, granularity, signature, span_start, span_end, metadata_json
+            FROM graph_nodes
+            WHERE repo_path = ? AND source_ref = ? AND granularity = 'symbol'
+            """,
+            (repo_key, path),
+        ).fetchall()
+        return [
+            GraphNode(
+                node_id=row['node_id'],
+                kind=row['kind'],
+                label=row['label'],
+                source_ref=row['source_ref'],
+                granularity=row['granularity'],
+                signature=row['signature'],
+                span_start=row['span_start'],
+                span_end=row['span_end'],
+                metadata=json.loads(row['metadata_json']),
+            )
+            for row in rows
+        ]
 
     def fetch_commits(self, repo_path: Path) -> list[CommitRecord]:
         repo_key = str(repo_path.resolve())
@@ -466,6 +1069,41 @@ class CortexStore:
             for row in edge_rows
         ]
         return nodes, edges
+
+    def fetch_qt_symbol_index(self, repo_path: Path) -> QtSymbolIndex:
+        """Qt signal/slot declarations and class locations already in the
+        store, keyed by declaring file path (P0-4). Used by the incremental
+        ingest path to give `build_file_layer`'s cross-file `emits`/
+        `connects`/`handles` resolution pass visibility into files that
+        aren't part of the current (changed-files-only) batch -- e.g. a
+        signal declared in a header that didn't change when only the
+        emitting .cpp is re-ingested. A targeted query (kind='class' or a
+        'qt' metadata tag) rather than a full `fetch_graph`, since most nodes
+        in a real repo are neither.
+        """
+        repo_key = str(repo_path.resolve())
+        rows = self.connection.execute(
+            """
+            SELECT node_id, kind, label, source_ref, metadata_json
+            FROM graph_nodes
+            WHERE repo_path = ? AND (kind = 'class' OR metadata_json LIKE '%"qt"%')
+            """,
+            (repo_key,),
+        ).fetchall()
+        signals: dict[str, dict[str, str]] = {}
+        slots: dict[str, dict[str, str]] = {}
+        classes: dict[str, str] = {}
+        for row in rows:
+            if row['kind'] == 'class':
+                classes.setdefault(row['label'], row['source_ref'])
+                continue
+            metadata = json.loads(row['metadata_json'])
+            qt_kind = metadata.get('qt')
+            if qt_kind == 'signal':
+                signals.setdefault(row['source_ref'], {})[row['label']] = row['node_id']
+            elif qt_kind == 'slot':
+                slots.setdefault(row['source_ref'], {})[row['label']] = row['node_id']
+        return QtSymbolIndex(signals=signals, slots=slots, classes=classes)
 
     def query_edges(
         self,
@@ -674,6 +1312,55 @@ class CortexStore:
         ranked = sorted(candidates, key=rank)
         return ranked[:limit]
 
+    def search_fulltext(self, repo_path: Path, query: str, limit: int = 20) -> list[tuple[str, float, str]]:
+        """Full-text body search over indexed source content (P0-2 step 3).
+
+        Unlike `search_nodes` (LIKE over symbol labels/signatures/paths
+        only), this searches file *content* -- docstrings, comments, string
+        literals, Markdown prose -- via FTS5, so it is a real grep
+        replacement for text `search_nodes` can never see.
+
+        Returns `(path, bm25_score, line-anchored snippet)` tuples ordered
+        best match first. Note SQLite FTS5's `bm25()` convention: a MORE
+        NEGATIVE score is a BETTER match, so results are `ORDER BY
+        bm25(...)` ascending (not descending) -- callers should not assume
+        higher-is-better.
+
+        Returns `[]` (never raises) when FTS5 is unavailable
+        (`self.fts_enabled` is False -- see `_init_fts5`) or the query has
+        no searchable tokens, so callers get the same graceful fallback the
+        rest of the store gives for a missing FTS5 build.
+        """
+        if not self.fts_enabled:
+            return []
+        repo_key = str(repo_path.resolve())
+        match_query = _fts_match_query(query)
+        if not match_query:
+            return []
+        try:
+            rows = self.connection.execute(
+                '''
+                SELECT path, content, bm25(source_fts) AS rank,
+                       snippet(source_fts, 3, '[', ']', ' ... ', 12) AS snip
+                FROM source_fts
+                WHERE source_fts MATCH ? AND repo_path = ?
+                ORDER BY rank
+                LIMIT ?
+                ''',
+                (match_query, repo_key, limit),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return []
+        query_tokens = [token.lower() for token in _search_tokens(query)]
+        results: list[tuple[str, float, str]] = []
+        for row in rows:
+            content = str(row['content'])
+            line = _first_matching_line(content, query_tokens)
+            snippet_text = ' '.join(str(row['snip']).split())
+            anchored = f'L{line}: {snippet_text}' if line else snippet_text
+            results.append((row['path'], float(row['rank']), anchored))
+        return results
+
     def save_communities(self, repo_path: Path, communities: list[Community]) -> None:
         repo_key = str(repo_path.resolve())
         with self.connection:
@@ -746,6 +1433,136 @@ class CortexStore:
             'total_output_tokens': row['total_out'] or 0,
             'runs': row['runs'] or 0,
         }
+
+    def record_tool_usage(
+        self,
+        repo_path: Path,
+        tool: str,
+        response_tokens: int,
+        baseline_tokens: int,
+        meta: dict | None = None,
+    ) -> None:
+        """Append one row to the token-savings ledger (P0-1).
+
+        Callers (mcp/tools.py) must treat failures here as non-fatal: a
+        locked/busy DB must never surface as an error on the underlying MCP
+        tool response.
+        """
+        import time as _time
+        repo_key = str(repo_path.resolve())
+        with self.connection:
+            self.connection.execute(
+                '''
+                INSERT INTO tool_usage(repo_path, called_at, tool, response_tokens, baseline_tokens, meta_json)
+                VALUES(?, ?, ?, ?, ?, ?)
+                ''',
+                (repo_key, int(_time.time()), tool, response_tokens, baseline_tokens, json.dumps(meta or {})),
+            )
+
+    def fetch_tool_usage(self, repo_path: Path) -> list[dict]:
+        repo_key = str(repo_path.resolve())
+        rows = self.connection.execute(
+            '''
+            SELECT id, called_at, tool, response_tokens, baseline_tokens, meta_json
+            FROM tool_usage WHERE repo_path = ? ORDER BY called_at
+            ''',
+            (repo_key,),
+        ).fetchall()
+        return [
+            {
+                "id": row["id"],
+                "called_at": row["called_at"],
+                "tool": row["tool"],
+                "response_tokens": row["response_tokens"],
+                "baseline_tokens": row["baseline_tokens"],
+                "meta": json.loads(row["meta_json"]) if row["meta_json"] else {},
+            }
+            for row in rows
+        ]
+
+    def get_query_cache(self, repo_path: Path, cache_key: str) -> str | None:
+        """Look up one P1-3 cached tool payload (already-serialized JSON
+        string of the tool's bare response DATA -- items/report/etc, *not*
+        the status/`_meta` envelope). Returns None on a miss -- callers
+        (mcp/tools._cache_get) treat any exception here as a miss too, so a
+        broken cache never blocks a query.
+
+        P1-5 note: this used to cache the fully-formatted MCP result
+        (payload + status merged), which meant a cache hit replayed
+        write-time `auto_refreshed`/staleness data verbatim. Callers now
+        strip status/`_meta` before writing and rebuild `_meta` fresh
+        (with `cached: true` and the current index age) after every
+        lookup, hit or miss -- see mcp/tools._format_payload.
+        """
+        repo_key = str(repo_path.resolve())
+        row = self.connection.execute(
+            "SELECT payload_json FROM query_cache WHERE repo_path = ? AND cache_key = ?",
+            (repo_key, cache_key),
+        ).fetchone()
+        return None if row is None else str(row["payload_json"])
+
+    def set_query_cache(self, repo_path: Path, cache_key: str, payload_json: str) -> None:
+        """Write/refresh one P1-3 cache row. Upsert so a re-write of the same
+        key (e.g. a race between two callers) just bumps created_at instead
+        of erroring on the PRIMARY KEY."""
+        import time as _time
+        repo_key = str(repo_path.resolve())
+        with self.connection:
+            self.connection.execute(
+                """
+                INSERT INTO query_cache(repo_path, cache_key, created_at, payload_json)
+                VALUES(?, ?, ?, ?)
+                ON CONFLICT(repo_path, cache_key) DO UPDATE SET
+                    created_at = excluded.created_at,
+                    payload_json = excluded.payload_json
+                """,
+                (repo_key, cache_key, int(_time.time()), payload_json),
+            )
+
+    def prune_query_cache(self, repo_path: Path, max_age_days: int = 30, max_rows: int = 200) -> int:
+        """Prune the P1-3 query_cache table for one repo (called from
+        `cortex gc` -- see cli.prune_query_caches).
+
+        Two passes, both bounding the table size so it can never grow
+        unbounded across a long-lived MCP session:
+        1. delete rows older than `max_age_days` (default 30d -- long
+           enough that a cache hit is still useful across a typical work
+           week, short enough that abandoned repos don't accumulate rows
+           forever);
+        2. if more than `max_rows` remain for this repo (default 200 -- a
+           few hundred KB of JSON at typical bundle sizes), delete the
+           oldest excess so the table stays small even for a repo queried
+           continuously within the age window.
+
+        Returns the total number of rows deleted.
+        """
+        import time as _time
+        repo_key = str(repo_path.resolve())
+        cutoff = int(_time.time()) - max_age_days * 86400
+        deleted = 0
+        with self.connection:
+            cursor = self.connection.execute(
+                "DELETE FROM query_cache WHERE repo_path = ? AND created_at < ?",
+                (repo_key, cutoff),
+            )
+            deleted += max(cursor.rowcount, 0)
+            row = self.connection.execute(
+                "SELECT COUNT(*) AS n FROM query_cache WHERE repo_path = ?",
+                (repo_key,),
+            ).fetchone()
+            total = row["n"] if row else 0
+            excess = total - max_rows
+            if excess > 0:
+                stale_keys = self.connection.execute(
+                    "SELECT cache_key FROM query_cache WHERE repo_path = ? ORDER BY created_at ASC LIMIT ?",
+                    (repo_key, excess),
+                ).fetchall()
+                self.connection.executemany(
+                    "DELETE FROM query_cache WHERE repo_path = ? AND cache_key = ?",
+                    [(repo_key, r["cache_key"]) for r in stale_keys],
+                )
+                deleted += len(stale_keys)
+        return deleted
 
     def fetch_latest_bundle(self, repo_path: Path) -> RetrievalBundle | None:
         repo_key = str(repo_path.resolve())

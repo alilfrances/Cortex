@@ -9,7 +9,8 @@ Requires Python 3.11+.
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python3 -m pip install -e ".[llm,languages,watch]"
+python3 -m pip install -e ".[llm,watch]"
+python3 -m cortex runtime setup  # or use a verified offline bundle
 python3 -m pip install build
 ```
 
@@ -21,7 +22,8 @@ Run the narrowest useful check for your change:
 
 ```bash
 python3 -m pytest tests/ -q
-python3 evals/run_evals.py
+python3 evals/run_evals.py --stdlib-tokens
+python3 evals/perf_ingest.py
 python3 -m build
 ```
 

@@ -76,11 +76,15 @@ def test_session_start_hook_emits_fresh_context(tmp_path: Path) -> None:
     assert result.returncode == 0
     assert result.stderr == ""
     context = _additional_context(result.stdout)
+    from cortex.mcp.tools import TOOL_DEFINITIONS
+
     assert "Cortex index exists and is fresh" in context
     assert "2 indexed files" in context
-    assert "cortex_query" in context
-    assert "cortex_search_symbols" in context
-    assert "cortex_impact" in context
+    for tool in TOOL_DEFINITIONS:
+        assert tool["name"] in context
+    assert "mode=writes" in context
+    assert "cortex-explorer" in context
+    assert "single lookups direct" in context
 
 
 def test_session_start_hook_emits_stale_context(tmp_path: Path) -> None:

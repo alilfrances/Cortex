@@ -7,7 +7,7 @@ from typing import Any
 from .tools import TOOL_DEFINITIONS, call_tool
 
 PROTOCOL_VERSION = "2024-11-05"
-SERVER_INFO = {"name": "cortex", "version": "0.7.5"}
+SERVER_INFO = {"name": "cortex", "version": "0.8.0"}
 
 
 def _response(request_id: Any, result: dict[str, Any]) -> dict[str, Any]:
@@ -47,6 +47,17 @@ def _handle(frame: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def main() -> int:
+    try:
+        from ..runtime import configure_parser_environment, ensure_runtime
+        state = ensure_runtime()
+        if not state.get("ready", False):
+            import os
+            os.environ.setdefault("CORTEX_FORCE_REGEX", "1")
+        configure_parser_environment()
+    except Exception as exc:  # fail-open: MCP initialize must remain valid
+        print(f"cortex runtime degraded: {exc}", file=sys.stderr)
+        import os
+        os.environ.setdefault("CORTEX_FORCE_REGEX", "1")
     for line in sys.stdin:
         if not line.strip():
             continue

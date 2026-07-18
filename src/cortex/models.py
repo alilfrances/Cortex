@@ -12,6 +12,11 @@ class SourceRecord:
     size_bytes: int
     modified_at: float
     content_hash: str = ''
+    # Nanosecond-precision mtime (os.stat().st_mtime_ns). `modified_at` above is
+    # a float of whole seconds (sqlite REAL) and is too coarse to reliably
+    # detect a same-second edit; the stat-first incremental scan (P0-3) uses
+    # this field instead to decide whether a file needs to be re-read.
+    mtime_ns: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

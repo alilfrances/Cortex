@@ -67,22 +67,45 @@ def main() -> int:
         if status is None:
             return 0
 
+        runtime_warning = ""
+        try:
+            from cortex.runtime import status as runtime_status
+            runtime = runtime_status()
+            if not runtime.get("ready", False):
+                runtime_warning = " Parser runtime degraded; QML and supported-language indexing is using the visible regex fallback. Run `cortex runtime setup` or `cortex runtime repair` when network/offline bundle access is available."
+        except Exception:
+            runtime_warning = " Parser runtime status unavailable; QML indexing may be degraded."
+
         freshness, file_count = status
         if freshness == "missing":
-            _emit("No Cortex index found for this project; cortex_refresh can build it.")
+            _emit("No Cortex index found for this project; cortex_refresh can build it." + runtime_warning)
             return 0
 
         state = "fresh" if freshness == "fresh" else "stale"
         connector = "and is" if state == "fresh" else "but is"
         _emit(
-            f"Cortex index exists {connector} {state} ({file_count} indexed files). "
-            "Prefer Cortex MCP tools over raw Grep/Glob/Bash-grep exploration: "
+            f"Cortex index exists {connector} {state} ({file_count} indexed files).{runtime_warning} "
+            "Prefer Cortex MCP tools over raw Grep/Glob/Read exploration: "
+            "delegate multi-step exploration to the cortex-explorer agent, while keeping single lookups direct. "
+            "cortex_context (batch all paths/symbols once before editing several files), "
             "cortex_query (task-focused context bundle), cortex_search_symbols (find a symbol by name), "
+            "cortex_read_symbol (read one symbol's span; mode=skeleton/signature for cheaper partial reads), "
+            "cortex_read_file (direct Read replacement for an indexed file; mode=skeleton by default -- "
+            "imports/includes + top-level signatures, bodies elided), "
+            "cortex_risk (local diff risk and missing-context directives before a commit), "
+            "cortex_dead_code (budgeted confidence-tiered dead-code candidates with Qt exclusions), "
             "cortex_impact (co-change/structural neighbors before editing), "
-            "cortex_relations (parsed graph edges — 'who inherits/emits/connects to X'), "
-            "cortex_references (blast-radius — graph edges + cross-language grep for a symbol, "
-            "including CMake/scripts/configs/docs the parser doesn't index), "
-            "cortex_overview (repo orientation). Call cortex_refresh to update a stale index."
+            "cortex_relations (one-hop parsed graph edges — 'who inherits/emits/connects to X'), "
+            "cortex_path (multi-hop structural paths between two symbols), "
+            "cortex_references (blast-radius — graph edges + cross-language grep for a symbol; "
+            "mode=writes keeps definitions and mutations only, including CMake/scripts/configs/docs), "
+            "cortex_search_text (full-text body search over indexed file contents — string "
+            "literals, error messages, comments, prose — a grep replacement that reads from "
+            "the index), "
+            "cortex_overview (repo orientation and top churn×complexity hotspots; cortex_query accepts "
+            "hotspot_boost=true as an opt-in ranking signal). Optional local semantic retrieval is "
+            "managed with `cortex semantic status`/`cortex semantic setup` and never downloads during "
+            "ingest or query. Call cortex_refresh to update a stale index."
         )
         return 0
     except Exception:

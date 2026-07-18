@@ -106,8 +106,18 @@ def test_language_hint_absent_leaves_ranking_neutral(tmp_path):
     store, repo = _make_multilang_store(tmp_path)
     result = generate_bundle(repo, task='fix ProcessFlowItem reset', budget=4000, db_path=store.db_path, output_format='json')
     code_scores = {item['path']: item['score'] for item in result['items'] if item['kind'] == 'code'}
-    # No language named: same-name .qml and .cpp keep equal keyword scores.
-    assert code_scores['ui/ProcessFlowItem.qml'] == code_scores['backend/ProcessFlowItem.cpp']
+    # No language named: same-name .qml and .cpp keep near-equal keyword
+    # scores -- neither gets the (guarded-absent-here) LANG_MATCH_BOOST/
+    # LANG_MISMATCH_DEMOTION multiplier. Not asserted bit-exact: the two
+    # files have different bodies ("function reset() {}" vs "int reset() {
+    # return 0; }"), so the P0-2 FTS/RRF fusion signal (bundle.py::
+    # FUSION_SCORE_MULTIPLIER, capped well below a single NAME_MATCH_BONUS
+    # point) legitimately differentiates them by real BM25 content
+    # characteristics -- that's a much smaller, real ranking signal, not a
+    # language-driven skew.
+    qml_score = code_scores['ui/ProcessFlowItem.qml']
+    cpp_score = code_scores['backend/ProcessFlowItem.cpp']
+    assert abs(qml_score - cpp_score) < 1.0
 
 
 def test_path_directory_tokens_boost_matching_file(tmp_path):

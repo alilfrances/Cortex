@@ -61,11 +61,16 @@ def _graph_hits(store: CortexStore, repo_root: Path, symbol: str) -> tuple[list[
                 continue
             seen_edge_locations.add(key)
             line_part = f":{node.span_start}" if node.span_start is not None else ""
+            access = "definition"
+            if edge.relation in {"writes", "binds", "aliases"} or (node_id == edge.target and edge.relation in {"references", "exports"}):
+                access = "write"
+            elif edge.relation in {"reads", "calls"}:
+                access = "read"
             hits.append({
                 "bucket": _bucket(Path(node.source_ref)),
                 "text": f"{node.source_ref}{line_part}",
                 "origin": "graph",
-                "access": "definition",
+                "access": access,
             })
     return hits, covered
 

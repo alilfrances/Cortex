@@ -3,6 +3,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from cortex import bundle as bundle_mod
 from cortex.bundle import generate_bundle
 from cortex.models import GraphNode, SourceRecord
 from cortex.store import CortexStore
@@ -95,7 +96,7 @@ def test_symbol_span_from_lower_ranked_file_surfaces(tmp_path):
         assert not all(line.strip().startswith(("import ", "#include")) for line in body_lines)
 
 
-def test_symbol_item_metadata_and_no_include_block_content(tmp_path):
+def test_symbol_item_metadata_and_no_include_block_content(tmp_path, monkeypatch):
     repo = _make_repo(tmp_path)
     db_path = tmp_path / "cortex.db"
     store = CortexStore(db_path)
@@ -113,6 +114,15 @@ def test_symbol_item_metadata_and_no_include_block_content(tmp_path):
     store.save_sources(repo, sources)
     store.save_graph(repo, nodes, [])
 
+    observed_kinds = []
+    original_count = bundle_mod.count_text_tokens
+
+    def recording_count(text, kind="text"):
+        if text.startswith("def frobnicate_flux"):
+            observed_kinds.append(kind)
+        return original_count(text, kind=kind)
+
+    monkeypatch.setattr(bundle_mod, "count_text_tokens", recording_count)
     bundle = generate_bundle(repo_path=repo, task="fix frobnicate flux", budget=200, db_path=db_path, output_format="json")
     assert isinstance(bundle, dict)
     items = bundle["items"]
@@ -120,11 +130,13 @@ def test_symbol_item_metadata_and_no_include_block_content(tmp_path):
     span_items = [item for item in items if item["kind"] == "symbol"]
     assert len(span_items) == 1
     span = span_items[0]
+    assert span["metadata"]["source_kind"] == "code"
     assert span["metadata"]["node_id"] == "symbol:engine.py:frobnicate_flux"
     assert span["metadata"]["span_start"] == 4
     assert span["metadata"]["span_end"] == 5
     assert "frobnicate_flux" in span["content"]
     assert "import os" not in span["content"]
+    assert observed_kinds and set(observed_kinds) == {"code"}
 
 
 def test_whole_file_still_returned_when_it_fits(tmp_path):

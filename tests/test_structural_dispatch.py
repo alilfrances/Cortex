@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -14,6 +15,10 @@ from cortex.store import CortexStore
 
 
 FIXTURE_REPO = Path(__file__).resolve().parent / "fixtures" / "multilang_repo"
+TREE_SITTER_ONLY = pytest.mark.skipif(
+    os.environ.get("CORTEX_FORCE_REGEX") == "1",
+    reason="full-parser assertion is excluded from the explicit fallback suite",
+)
 
 
 def _source(path: str, content: str) -> SourceRecord:
@@ -196,6 +201,7 @@ def test_regex_backend_signature_not_truncated_on_final_line() -> None:
 
 
 def test_qml_regex_fallback_extracts_imports_and_symbols(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CORTEX_FORCE_REGEX", "1")
     from cortex.structural import extract_structural_edges
     import cortex.structural.treesitter_backend as treesitter_backend
 
@@ -208,7 +214,7 @@ def test_qml_regex_fallback_extracts_imports_and_symbols(monkeypatch: pytest.Mon
     nodes, edges = extract_structural_edges("Main.qml", content, set())
     node_ids = {node.node_id for node in nodes}
 
-    assert {"symbol:Main.qml:Main", "symbol:Main.qml:started", "symbol:Main.qml:launch"}.issubset(node_ids)
+    assert {"symbol:Main.qml:Main", "symbol:Main.qml:Main.started", "symbol:Main.qml:Main.launch"}.issubset(node_ids)
     assert "symbol:Main.qml:Item" not in node_ids
     assert "module:QtQuick.Controls" in {edge.target for edge in edges if edge.relation == "imports"}
     assert {edge.confidence for edge in edges} == {"LOW"}
@@ -291,6 +297,7 @@ void Controller::run() {
 
 
 def test_qml_regex_fallback_extracts_handlers(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CORTEX_FORCE_REGEX", "1")
     from cortex.structural import extract_structural_edges
     import cortex.structural.treesitter_backend as treesitter_backend
 
@@ -302,11 +309,20 @@ def test_qml_regex_fallback_extracts_handlers(monkeypatch: pytest.MonkeyPatch) -
     content = "import QtQuick.Controls 2.15\nButton {\n    signal saved()\n    onClicked: saved()\n}\n"
     nodes, edges = extract_structural_edges("ButtonView.qml", content, set())
 
-    assert "symbol:ButtonView.qml:saved" in {node.node_id for node in nodes}
+    assert "symbol:ButtonView.qml:ButtonView.saved" in {node.node_id for node in nodes}
+    # P0-4: the handler itself is now a real, addressable symbol (kind func,
+    # qt:handler metadata), in addition to the handles edge below.
+    handler_nodes = [node for node in nodes if node.metadata.get("qt") == "handler"]
+    assert len(handler_nodes) == 1
+    assert handler_nodes[0].node_id == "symbol:ButtonView.qml:ButtonView.onClicked"
+    assert handler_nodes[0].kind == "func"
     handles = [edge for edge in edges if edge.relation == "handles"]
     assert len(handles) == 1
-    assert handles[0].source == "file:ButtonView.qml"
-    assert handles[0].target == "module:onClicked"
+    assert handles[0].source == "symbol:ButtonView.qml:ButtonView.onClicked"
+    # "Button" isn't a locally known component (no Button.qml in known_paths),
+    # so the on-name -> signal-name mapping (onClicked -> clicked) is derived
+    # but stays an external placeholder rather than guessing a same-file match.
+    assert handles[0].target == "module:clicked"
     assert handles[0].confidence == "LOW"
 
 
@@ -324,8 +340,8 @@ def test_c_regex_fallback_ignores_prototypes(monkeypatch: pytest.MonkeyPatch) ->
     assert "symbol:engine.h:foo" not in {node.node_id for node in nodes}
 
 
+@TREE_SITTER_ONLY
 def test_c_tree_sitter_extracts_imports_and_symbols() -> None:
-    pytest.importorskip("tree_sitter_c")
     from cortex.structural import extract_structural_edges
 
     content = '#include <stdio.h>\nstruct Counter { int value; };\nint add(int left, int right) {\n    return left + right;\n}\n'
@@ -336,8 +352,8 @@ def test_c_tree_sitter_extracts_imports_and_symbols() -> None:
     assert {edge.confidence for edge in edges} == {"EXTRACTED"}
 
 
+@TREE_SITTER_ONLY
 def test_cpp_tree_sitter_extracts_imports_and_symbols() -> None:
-    pytest.importorskip("tree_sitter_cpp")
     from cortex.structural import extract_structural_edges
 
     content = '#include "engine.hpp"\nnamespace Engine {\nclass Runner { public: void start() {} };\nint compute(int value) {\n    return value + 1;\n}\n}\n'
@@ -350,8 +366,8 @@ def test_cpp_tree_sitter_extracts_imports_and_symbols() -> None:
     assert {edge.confidence for edge in edges} == {"EXTRACTED"}
 
 
+@TREE_SITTER_ONLY
 def test_cpp_tree_sitter_resolves_local_include_to_file_node() -> None:
-    pytest.importorskip("tree_sitter_cpp")
     from cortex.structural import extract_structural_edges
 
     content = '#include "engine.hpp"\nnamespace Engine {\nclass Runner { public: void start() {} };\n}\n'
@@ -360,8 +376,8 @@ def test_cpp_tree_sitter_resolves_local_include_to_file_node() -> None:
     assert "file:engine.hpp" in {edge.target for edge in edges if edge.relation == "imports"}
 
 
+@TREE_SITTER_ONLY
 def test_cpp_tree_sitter_extracts_inherits_edges() -> None:
-    pytest.importorskip("tree_sitter_cpp")
     from cortex.structural import extract_structural_edges
 
     nodes, edges = extract_structural_edges("inherit.cpp", "class Foo : public Bar { public: void run(); };\n", set())
@@ -376,8 +392,8 @@ def test_cpp_tree_sitter_extracts_inherits_edges() -> None:
     )
 
 
+@TREE_SITTER_ONLY
 def test_cpp_tree_sitter_preserves_qt_emit_and_connect_edges() -> None:
-    pytest.importorskip("tree_sitter_cpp")
     from cortex.structural import extract_structural_edges
 
     content = """
@@ -410,22 +426,22 @@ void Controller::run() {
     )
 
 
+@TREE_SITTER_ONLY
 def test_qml_tree_sitter_extracts_imports_and_symbols() -> None:
-    pytest.importorskip("tree_sitter_language_pack")
     from cortex.structural import extract_structural_edges
 
     content = 'import QtQuick.Controls 2.15\nItem {\n    signal started()\n    function launch() {}\n}\n'
     nodes, edges = extract_structural_edges("Main.qml", content, set())
     node_ids = {node.node_id for node in nodes}
 
-    assert {"symbol:Main.qml:Main", "symbol:Main.qml:launch"}.issubset(node_ids)
+    assert {"symbol:Main.qml:Main", "symbol:Main.qml:Main.launch"}.issubset(node_ids)
     assert "symbol:Main.qml:Item" not in node_ids
     assert "module:QtQuick.Controls" in {edge.target for edge in edges if edge.relation == "imports"}
     assert {edge.confidence for edge in edges} == {"EXTRACTED"}
 
 
+@TREE_SITTER_ONLY
 def test_qml_tree_sitter_instantiates_known_component_without_false_definition() -> None:
-    pytest.importorskip("tree_sitter_language_pack")
     from cortex.structural.treesitter_backend import extract_treesitter_edges
 
     known_paths = {"DeviceCardTagSelection.qml", "DeviceCardDisplaySection.qml"}
@@ -444,8 +460,8 @@ def test_qml_tree_sitter_instantiates_known_component_without_false_definition()
     ) in {(edge.source, edge.target, edge.relation) for edge in display_edges}
 
 
+@TREE_SITTER_ONLY
 def test_c_tree_sitter_ignores_struct_usages() -> None:
-    pytest.importorskip("tree_sitter_c")
     from cortex.structural import extract_structural_edges
 
     nodes, _ = extract_structural_edges("usage.c", "struct Foo x;\n", set())

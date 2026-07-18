@@ -19,9 +19,11 @@ Useful report details:
 
 ## Security Model
 
-Cortex is local-first. The core package does not require network access, embeddings, a vector database, or an LLM provider. Optional extras may install provider SDKs or language parsers; those integrations should keep credentials outside the repository and outside generated reports.
+Cortex is local-first. Parser setup is the one automatic artifact-egress path: the isolated runtime downloads only locked, hash-verified parser wheels/artifacts on first setup. It sends no repository path, source, graph, or company metadata. After setup, ingest and query are cache-only; `CORTEX_RUNTIME_NETWORK=0` disables setup/parser network access and an administrator can pre-seed a verified offline bundle. `cortex semantic setup` downloads the optional static model only when explicitly invoked; normal ingest, query, and local semantic retrieval do not use the network.
 
-Generated `.cortex/` databases and reports can contain source-derived metadata from the indexed repository. Do not publish generated `.cortex/` contents from private projects.
+`cortex enrich` is different from parser artifact egress: it sends up to 8,000 characters from each uncached indexed source file to the selected Anthropic or OpenAI provider. It is disabled unless `--allow-code-upload` is passed. Do not use it for repositories whose contents cannot be shared with that provider, and keep API keys outside the repository.
+
+Cortex databases contain full indexed source text, commit-author metadata, query caches, and source-derived graph data. Managed database directories are owner-only on POSIX systems, and generated databases/reports are gitignored here. Do not publish or copy generated Cortex data from private projects. Symlinks and files larger than 5 MiB are excluded from indexing to reduce local-file disclosure and resource-exhaustion risks.
 
 ## Disclosure Handling
 

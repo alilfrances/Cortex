@@ -8,10 +8,12 @@ from collections import defaultdict
 from pathlib import Path
 
 from .config import load_config
+from .fusion import rrf_fuse
 from .gitutils import discover_repo_root
 from .models import BundleItem, GraphEdge, GraphNode, RetrievalBundle
 from .rank import personalized_pagerank
 from .store import CortexStore, default_db_path
+from .structural.regex_backend import _QT_SECTION_RE
 from .tokenizer import count_text_tokens, truncate_text_to_budget
 
 PAGERANK_SCORE_MULTIPLIER = 10.0
@@ -65,6 +67,24 @@ LANGUAGE_HINT_SUFFIXES: dict[str, frozenset[str]] = {
     'swift': frozenset({'.swift'}),
     'kotlin': frozenset({'.kt', '.kts'}),
 }
+# P0-2: RRF fusion contribution scale. rrf_fuse's per-list max contribution
+# is 1/(k+1) ~= 0.0164 (k=60); with up to four lists fused in
+# generate_bundle the max raw fusion score is well under 0.1, so this
+# multiplier must stay far below NAME_MATCH_BONUS (100) / PATH_MATCH_BONUS
+# (40) and typical keyword scores (~10 per matched term): it should only
+# ever break ties or lift a body-text-only file into the candidate set,
+# never override an exact stem/symbol name hit. Tuned against the eval
+# suite (see evals/run_evals.py) -- retune here, not by changing k, if a
+# regression shows fusion is over/under-weighted.
+FUSION_SCORE_MULTIPLIER = 40.0
+# How many FTS5 body-text hits feed the fusion's ranked list -- generous
+# relative to typical fixture/repo sizes so a real gold file rarely misses
+# the cut before RRF even sees it.
+FTS_CANDIDATE_LIMIT = 50
+# Hotspot ranking is deliberately opt-in. A normalized score keeps the signal
+# bounded and the default path byte-for-byte unchanged; even the hottest file
+# gets at most this many extra multiples of its existing relevance score.
+HOTSPOT_BOOST_MAX = 3.0
 
 
 def _language_hint_suffixes(task: str, task_terms: set[str]) -> frozenset[str]:
@@ -89,7 +109,10 @@ def _is_aux_path(path: str) -> bool:
 
 
 def _symbol_qualname(node: GraphNode) -> str:
-    return node.node_id.split(':', 2)[2]
+    # `symbol:<path>:<name>` ids carry the (possibly dotted) qualname; other
+    # symbol-granularity ids (e.g. a CMake `target:<name>`) fall back to label.
+    parts = node.node_id.split(':', 2)
+    return parts[2] if len(parts) == 3 else node.label
 
 
 def _leading_ws(text: str) -> str:
@@ -103,6 +126,31 @@ def _signature_lines(lines: list[str], symbol: GraphNode) -> list[str]:
     if line.strip():
         return [line]
     return [symbol.signature] if symbol.signature else []
+
+
+# A QML `onFoo: <expression>` handler (P0-4's `qt: handler` tag) packs its
+# bound expression onto the same line as its own "signature" -- there's no
+# separate body block to elide the way a `{...}`-bodied function has. Match
+# the `onFoo:` prefix so the expression itself can be swapped for the
+# elision marker (P1-6 Qt parity).
+_QML_HANDLER_LINE_RE = re.compile(r'^(?P<prefix>\s*on[A-Z]\w*\s*:)\s*\S.*$')
+# QML `id: <name>` property -- a component instance's id has no symbol node
+# of its own (only signals/handlers do), so it's kept by this literal
+# pattern match rather than the child-symbol path (P1-6 Qt parity: "keeps
+# ... component ids").
+_QML_ID_LINE_RE = re.compile(r'^\s*id\s*:\s*[A-Za-z_]\w*\s*$')
+
+
+def _declaration_lines(lines: list[str], symbol: GraphNode) -> list[str]:
+    """The line(s) that stand in for a symbol's own declaration in a
+    skeleton: normally just `_signature_lines`, but a single-line QML
+    handler has its bound expression elided too (see _QML_HANDLER_LINE_RE)."""
+    signature_lines = _signature_lines(lines, symbol)
+    if symbol.metadata.get('qt') == 'handler' and len(signature_lines) == 1:
+        match = _QML_HANDLER_LINE_RE.match(signature_lines[0])
+        if match:
+            return [f"{match.group('prefix')} {ELISION_MARKER}"]
+    return signature_lines
 
 
 def _looks_like_import(line: str) -> bool:
@@ -127,43 +175,153 @@ def _strip_boilerplate(content: str) -> str:
     )
 
 
-def _render_skeleton(content: str, symbols: list[GraphNode], full_body_ids: set[str]) -> str:
-    """Import/include lines + symbol signatures; full bodies only for full_body_ids."""
-    lines = content.splitlines()
-    spanned = [s for s in symbols if s.span_start is not None and s.span_end is not None]
-    top_level = sorted(
-        (s for s in spanned if '.' not in _symbol_qualname(s)),
-        key=lambda s: s.span_start,
-    )
-    children_of: defaultdict[str, list[GraphNode]] = defaultdict(list)
-    for symbol in spanned:
-        qualname = _symbol_qualname(symbol)
-        if '.' in qualname:
-            children_of[qualname.rsplit('.', 1)[0]].append(symbol)
-
-    out = [SKELETON_MARKER]
+def _import_lines(lines: list[str], spanned: list[GraphNode]) -> list[str]:
+    """Import/include lines that sit outside every symbol's span."""
+    out = []
     for lineno, line in enumerate(lines, start=1):
         inside_symbol = any(s.span_start <= lineno <= s.span_end for s in spanned)
         if not inside_symbol and _looks_like_import(line):
             out.append(line)
+    return out
+
+
+def _nest_by_span(spanned: list[GraphNode]) -> tuple[list[GraphNode], dict[str, list[GraphNode]]]:
+    """Partition symbols into top-level entries and each one's direct
+    children, purely by span containment.
+
+    Deliberately *not* qualname-based (a `.` in `_symbol_qualname`): that
+    only identifies nesting for backends that dot-qualify child names
+    (Python's `ast_extract.py`, e.g. `Class.method`). The regex/tree-sitter
+    structural backend's C++/QML symbols (`structural/regex_backend.py`) are
+    never dot-qualified -- a Qt header's `signals:`/`slots:` members and a
+    QML component's `signal`/`onFoo:` children all get flat
+    `symbol:<path>:<name>` ids -- so a qualname-only scheme would leave them
+    stranded as spurious extra "top-level" entries instead of nested under
+    their class/component. Span containment recovers the true nesting for
+    both conventions (P1-6 Qt parity), since a child's span is always inside
+    its parent's regardless of naming scheme. The "tightest enclosing span"
+    is chosen so a signal/slot inside a nested block only ever attaches to
+    its immediate container, not an outer ancestor.
+    """
+    def span_size(node: GraphNode) -> int:
+        return node.span_end - node.span_start
+
+    parent: dict[str, GraphNode] = {}
+    for symbol in spanned:
+        best: GraphNode | None = None
+        for other in spanned:
+            if other is symbol:
+                continue
+            if other.span_start <= symbol.span_start and symbol.span_end <= other.span_end and (
+                other.span_start != symbol.span_start or other.span_end != symbol.span_end
+            ):
+                if best is None or span_size(other) < span_size(best):
+                    best = other
+        if best is not None:
+            parent[symbol.node_id] = best
+
+    top_level = sorted((s for s in spanned if s.node_id not in parent), key=lambda s: s.span_start)
+    children_of: defaultdict[str, list[GraphNode]] = defaultdict(list)
+    for symbol in spanned:
+        holder = parent.get(symbol.node_id)
+        if holder is not None:
+            children_of[holder.node_id].append(symbol)
+    return top_level, children_of
+
+
+def _render_class_body(
+    lines: list[str],
+    symbol: GraphNode,
+    children: list[GraphNode],
+    full_body_ids: set[str],
+    children_of: dict[str, list[GraphNode]] | None = None,
+) -> list[str]:
+    """Lines worth keeping from inside a class-like symbol's span in a
+    skeleton: each direct child's signature (body elided), plus
+    brace-language section scaffolding that has no symbol node of its own --
+    `Q_OBJECT` and Qt `signals:`/`slots:` section markers (P1-6 Qt parity).
+    Everything else in the span (statements, prototypes the structural
+    backend didn't index) is silently dropped, same as before this symbol
+    was reached."""
+    child_at_line: dict[int, GraphNode] = {}
+    for candidate in children:
+        previous = child_at_line.get(candidate.span_start)
+        # A JavaScript external placeholder can share a line with a QML
+        # handler/binding. Prefer the declaration for a concise skeleton.
+        if previous is None or (previous.metadata.get('qml_kind') == 'external' and candidate.metadata.get('qml_kind') != 'external'):
+            child_at_line[candidate.span_start] = candidate
+    out: list[str] = []
+    skip_until = symbol.span_start
+    for lineno in range(symbol.span_start + 1, symbol.span_end):
+        if lineno <= skip_until:
+            continue
+        child = child_at_line.get(lineno)
+        if child is not None:
+            nested = sorted((children_of or {}).get(child.node_id, []), key=lambda item: item.span_start)
+            out.extend(_render_symbol_entry(lines, child, nested, full_body_ids, children_of))
+            skip_until = child.span_end
+            continue
+        line = lines[lineno - 1] if 0 < lineno <= len(lines) else ''
+        if line.strip() == 'Q_OBJECT' or _QT_SECTION_RE.match(line) or _QML_ID_LINE_RE.match(line):
+            out.append(line)
+    return out
+
+
+def _render_symbol_entry(
+    lines: list[str],
+    symbol: GraphNode,
+    children: list[GraphNode],
+    full_body_ids: set[str],
+    children_of: dict[str, list[GraphNode]] | None = None,
+) -> list[str]:
+    """Render one symbol's skeleton entry: full body if selected via
+    full_body_ids, else its signature plus (for a class/component with
+    children) each child's own entry, else a single elision marker when the
+    symbol actually has a body to elide."""
+    if symbol.node_id in full_body_ids:
+        return list(lines[symbol.span_start - 1:symbol.span_end])
+    signature_lines = _declaration_lines(lines, symbol)
+    out = list(signature_lines)
+    if (symbol.kind == 'class' or symbol.metadata.get('qml_kind') in {'component', 'object', 'grouped_property', 'inline_component'}) and children:
+        out.extend(_render_class_body(lines, symbol, children, full_body_ids, children_of))
+    elif symbol.span_end > symbol.span_start and symbol.metadata.get('qt') != 'handler':
+        indent = _leading_ws(signature_lines[-1]) if signature_lines else ''
+        out.append(f'{indent}    {ELISION_MARKER}')
+    return out
+
+
+def _render_skeleton(content: str, symbols: list[GraphNode], full_body_ids: set[str]) -> str:
+    """Import/include lines + symbol signatures; full bodies only for full_body_ids."""
+    lines = content.splitlines()
+    spanned = [s for s in symbols if s.span_start is not None and s.span_end is not None]
+    top_level, children_of = _nest_by_span(spanned)
+
+    out = [SKELETON_MARKER]
+    out.extend(_import_lines(lines, spanned))
 
     for symbol in top_level:
         out.append('')
-        if symbol.node_id in full_body_ids:
-            out.extend(lines[symbol.span_start - 1:symbol.span_end])
-            continue
-        signature_lines = _signature_lines(lines, symbol)
-        out.extend(signature_lines)
-        children = sorted(children_of.get(_symbol_qualname(symbol), []), key=lambda s: s.span_start)
-        if symbol.kind == 'class' and children:
-            for child in children:
-                child_lines = _signature_lines(lines, child)
-                out.extend(child_lines)
-                indent = _leading_ws(child_lines[-1]) if child_lines else '    '
-                out.append(f'{indent}    {ELISION_MARKER}')
-        else:
-            indent = _leading_ws(signature_lines[-1]) if signature_lines else ''
-            out.append(f'{indent}    {ELISION_MARKER}')
+        children = sorted(children_of.get(symbol.node_id, []), key=lambda s: s.span_start)
+        out.extend(_render_symbol_entry(lines, symbol, children, full_body_ids, children_of))
+    return '\n'.join(out)
+
+
+def _render_symbol_skeleton(content: str, all_symbols: list[GraphNode], target: GraphNode) -> str:
+    """Skeleton scoped to one symbol (P1-6 `cortex_read_symbol` mode="skeleton"):
+    whole-file import/include lines outside any symbol span, the target's own
+    signature, and -- for a class/component -- its children's signatures with
+    bodies elided. `all_symbols` should be every spanned symbol in the
+    target's file so import-line detection and child discovery see the whole
+    file, not just the target."""
+    lines = content.splitlines()
+    spanned = [s for s in all_symbols if s.span_start is not None and s.span_end is not None]
+    _, children_of = _nest_by_span(spanned)
+    children = sorted(children_of.get(target.node_id, []), key=lambda s: s.span_start)
+
+    out = [SKELETON_MARKER]
+    out.extend(_import_lines(lines, spanned))
+    out.append('')
+    out.extend(_render_symbol_entry(lines, target, children, set(), children_of))
     return '\n'.join(out)
 
 
@@ -175,7 +333,7 @@ def _skeleton_item(
 ) -> BundleItem | None:
     """Skeleton fit under remaining budget, greedily inlining top-scoring bodies. None if even all-signatures overflows."""
     skeleton = _render_skeleton(item.content, symbols, set())
-    tokens = count_text_tokens(skeleton)
+    tokens = count_text_tokens(skeleton, kind=item.kind)
     if tokens <= 0 or tokens > remaining:
         return None
 
@@ -184,7 +342,7 @@ def _skeleton_item(
     for symbol in ordered:
         trial_ids = full_body_ids | {symbol.node_id}
         trial = _render_skeleton(item.content, symbols, trial_ids)
-        trial_tokens = count_text_tokens(trial)
+        trial_tokens = count_text_tokens(trial, kind=item.kind)
         if trial_tokens <= remaining:
             skeleton, tokens, full_body_ids = trial, trial_tokens, trial_ids
 
@@ -245,6 +403,32 @@ def _tokenize_query(task: str, synonyms: dict[str, list[str]] | None = None) -> 
     if synonyms:
         terms = _expand_synonyms(terms, synonyms)
     return terms
+
+
+_IDENTIFIER_TOKEN_RE = re.compile(r'[A-Za-z_][A-Za-z0-9_:]*')
+_CAMEL_BOUNDARY_RE = re.compile(r'[a-z0-9][A-Z]')
+
+
+def _looks_like_identifier_query(task: str) -> bool:
+    """True when the task text contains an identifier-shaped token:
+    camelCase, snake_case, or a `::`-qualified name.
+
+    Semble-style adaptive weighting (P0-2 step 5): a query naming a
+    specific symbol -- `MyClass::mySignal`, `deviceConnected`,
+    `device_list_model` -- almost certainly wants that exact definition,
+    not whichever file's body text happens to share the most common
+    sub-words with a natural-language phrasing of the same question.
+    generate_bundle uses this to double-weight the lexical/name ranked
+    list over the FTS body-text list during fusion.
+    """
+    for token in _IDENTIFIER_TOKEN_RE.findall(task):
+        if '::' in token:
+            return True
+        if '_' in token.strip('_'):
+            return True
+        if _CAMEL_BOUNDARY_RE.search(token):
+            return True
+    return False
 
 
 def _score_text(
@@ -351,6 +535,7 @@ def generate_bundle(
     db_path: Path | None = None,
     output_format: str = 'md',
     rank: str = 'pagerank',
+    hotspot_boost: bool = False,
 ) -> str | dict:
     repo_root = discover_repo_root(repo_path)
     store = CortexStore(db_path or default_db_path(repo_root))
@@ -365,6 +550,18 @@ def generate_bundle(
     )
     term_weights = _term_weights(task_terms, sources)
     demote_aux = not (task_terms & AUX_INTENT_TERMS)
+    hotspot_by_path: dict[str, dict] = {}
+    for node in nodes:
+        if node.kind != 'file' or not isinstance(node.metadata.get('hotspot'), dict):
+            continue
+        hotspot_by_path[node.source_ref] = node.metadata['hotspot']
+    max_hotspot_score = max(
+        (
+            float(values.get('score', values.get('churn', 0) * values.get('complexity', 0)))
+            for values in hotspot_by_path.values()
+        ),
+        default=0.0,
+    )
     lang_suffixes = _language_hint_suffixes(task, task_terms)
     adj = _build_adjacency(edges)
 
@@ -378,7 +575,7 @@ def generate_bundle(
             )
 
     newest_commit = max((c.authored_at for c in commits), default=0)
-    source_scores: dict[str, float] = {}
+    base_scores: dict[str, float] = {}
     for source in sources:
         recency_weight = 0.0
         if newest_commit:
@@ -395,6 +592,85 @@ def generate_bundle(
             term_weights,
             noise_terms,
         )
+        if hotspot_boost and score > 0 and max_hotspot_score > 0:
+            values = hotspot_by_path.get(source.path, {})
+            hotspot_score = float(values.get('score', values.get('churn', 0) * values.get('complexity', 0)))
+            score *= 1.0 + HOTSPOT_BOOST_MAX * (hotspot_score / max_hotspot_score)
+        base_scores[source.path] = score
+
+    # P0-2: fuse the existing name/keyword ranking with an FTS5 body-text
+    # ranked list (plus a definition-boost list) via reciprocal rank fusion,
+    # so a file whose only relevance signal is body text -- an error
+    # string, a docstring, Markdown prose -- can surface even when its
+    # keyword-overlap score alone is weak, without having to calibrate
+    # BM25's scale against the hand-tuned NAME_MATCH_BONUS/PATH_MATCH_BONUS
+    # bonuses (RRF only cares about rank position, not raw score
+    # magnitude). Fusion runs on base_scores, *before* the aux-path
+    # demotion and language boost/demotion applied below, so those existing
+    # signals uniformly cover FTS-sourced candidates too instead of needing
+    # a duplicate noise penalty.
+    name_rank_list = [
+        path for path, score in sorted(base_scores.items(), key=lambda kv: (-kv[1], kv[0]))
+        if score > 0
+    ]
+    fts_hits = store.search_fulltext(repo_root, task, limit=FTS_CANDIDATE_LIMIT) if task_terms else []
+    fts_rank_list = [path for path, _bm25, _snippet in fts_hits if path in base_scores]
+    if noise_terms:
+        # Mirror _score_text's noise filtering on the FTS body-text list: a
+        # hit whose only overlap with the task is a configured noise
+        # identifier must not ride into the bundle via rank fusion.
+        content_by_path = {source.path: source.content for source in sources}
+        fts_rank_list = [
+            path for path in fts_rank_list
+            if task_terms & (_tokenize_text(content_by_path.get(path, '')) - noise_terms)
+        ]
+    # Definition boost (semble-style, P0-2 step 5): a file that *defines* a
+    # queried identifier (its own symbol names overlap the task terms) gets
+    # extra RRF list membership beyond a plain FTS body-text mention, so it
+    # outranks a file that merely references the identifier in prose.
+    definition_rank_list = sorted(
+        path for path, names in symbol_names_by_path.items()
+        if task_terms & names and path in base_scores
+    )
+    # P1-7: an optional local Model2Vec list is appended only when a managed
+    # local model and same-model chunk vectors are available.  The helper is
+    # lazy/soft-imported so an absent extra takes the exact pre-semantic path.
+    semantic_rank_list: list[str] = []
+    lexical_signal_paths: set[str] = set()
+    try:
+        from .semantic import ranked_paths, semantic_enabled
+
+        if semantic_enabled():
+            # Preserve lexical/name rankings exactly for ordinary tasks:
+            # semantic fusion is most valuable when the task vocabulary has no
+            # direct indexed overlap (the P1-7 vocabulary-gap case). Avoiding a
+            # model encode in the ordinary case also keeps optional semantic
+            # latency out of the established path.
+            lexical_signal_paths = {
+                source.path
+                for source in sources
+                if task_terms and task_terms & _tokenize_text(f"{source.path}\n{source.content}")
+            }
+            if not lexical_signal_paths:
+                semantic_rank_list = [
+                    path for path in ranked_paths(store, repo_root, task)
+                    if path in base_scores
+                ]
+    except Exception:
+        semantic_rank_list = []
+    fusion_lists: list[list[str]] = [name_rank_list, fts_rank_list, definition_rank_list]
+    if semantic_rank_list and not lexical_signal_paths:
+        fusion_lists.append(semantic_rank_list)
+    if _looks_like_identifier_query(task):
+        # Adaptive weighting: an identifier-shaped query double-counts the
+        # lexical/name list so exact-symbol relevance outweighs generic FTS
+        # body-text term frequency.
+        fusion_lists.append(name_rank_list)
+    fusion_scores = rrf_fuse(fusion_lists) if any(fusion_lists) else {}
+
+    source_scores: dict[str, float] = {}
+    for source in sources:
+        score = base_scores[source.path] + fusion_scores.get(source.path, 0.0) * FUSION_SCORE_MULTIPLIER
         if demote_aux and _is_aux_path(source.path):
             score *= AUX_PATH_DEMOTION
         if lang_suffixes and score > 0:
@@ -427,7 +703,7 @@ def generate_bundle(
             graph_bonus = pagerank_scores.get(file_node_id, 0.0) * PAGERANK_SCORE_MULTIPLIER
         final_score = keyword_score + graph_bonus
 
-        token_count = count_text_tokens(source.content)
+        token_count = count_text_tokens(source.content, kind=source.kind)
         candidates.append(
             BundleItem(
                 item_id=f'source:{source.path}',
@@ -487,9 +763,10 @@ def generate_bundle(
                 title=f'{path}:{symbol.label}',
                 path=path,
                 content=span_text,
-                token_count=count_text_tokens(span_text),
+                token_count=count_text_tokens(span_text, kind=source.kind),
                 score=score,
                 metadata={
+                    'source_kind': source.kind,
                     'node_id': symbol.node_id,
                     'span_start': symbol.span_start,
                     'span_end': symbol.span_end,
@@ -580,8 +857,9 @@ def generate_bundle(
                     select(skeleton)
                 # Code files with indexed symbols never degrade to file[0:N].
                 continue
-        truncated = truncate_text_to_budget(item.content, remaining)
-        truncated_tokens = count_text_tokens(truncated)
+        token_kind = str(item.metadata.get('source_kind', item.kind))
+        truncated = truncate_text_to_budget(item.content, remaining, kind=token_kind)
+        truncated_tokens = count_text_tokens(truncated, kind=token_kind)
         if truncated_tokens <= 0:
             continue
         select(

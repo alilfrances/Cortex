@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import hashlib
 from collections import Counter, defaultdict
+from typing import NamedTuple
 
 from .ast_extract import extract_python_edges
 from .cochange import build_cochange_edges
+from .hotspots import annotate_file_nodes, compute_hotspots
 from .models import CommitRecord, GraphEdge, GraphNode, SourceRecord
 from .structural import extract_structural_edges, supports_path
 
@@ -13,19 +15,194 @@ def _content_hash(content: str) -> str:
     return hashlib.sha256(content.encode('utf-8', errors='replace')).hexdigest()
 
 
+class QtSymbolIndex(NamedTuple):
+    """Cross-file lookup for Qt signal/slot declarations and class/component
+    locations (P0-4), used to resolve `emits`/`connects`/`handles` edge
+    endpoints that still point at a `module:<name>` placeholder once every
+    file in a `build_file_layer` batch has been parsed -- a signal's
+    declaration (a C++ header, or a QML component file) is often in a
+    *different* file than the site referencing it, so single-file parsing
+    alone can never resolve it.
+
+    `signals` / `slots`: declaring file path -> {member name: symbol node_id}
+    for every symbol tagged metadata['qt'] == 'signal' / 'slot'. C++
+    `signals:`/`slots:` sections and QML top-level `signal` declarations both
+    feed this (queried by `deviceConnected`-style plain names).
+    `classes`: C++ class name / QML component name -> the file path that
+    declares it.
+    """
+
+    signals: dict[str, dict[str, str]]
+    slots: dict[str, dict[str, str]]
+    classes: dict[str, str]
+
+    @staticmethod
+    def empty() -> "QtSymbolIndex":
+        return QtSymbolIndex(signals={}, slots={}, classes={})
+
+    def merged_with(self, other: "QtSymbolIndex") -> "QtSymbolIndex":
+        """Combine two indices; `other`'s per-path data wins where both have
+        an entry for the same path (it's the fresher parse -- e.g. a header
+        reparsed in the same incremental batch that also supplied `self`,
+        the store's prior state). Paths present only in `self` (a header
+        *not* part of this batch, the common incremental case) pass through
+        untouched."""
+        signals = {path: dict(names) for path, names in self.signals.items()}
+        signals.update({path: dict(names) for path, names in other.signals.items()})
+        slots = {path: dict(names) for path, names in self.slots.items()}
+        slots.update({path: dict(names) for path, names in other.slots.items()})
+        classes = dict(self.classes)
+        classes.update(other.classes)
+        return QtSymbolIndex(signals=signals, slots=slots, classes=classes)
+
+    def without_paths(self, paths: set[str]) -> "QtSymbolIndex":
+        """Drop every entry declared by one of `paths` -- used to keep a
+        store-supplied index (fetched before a delta delete) from leaking a
+        dangling reference to a file that's about to be deleted or rewritten
+        in this same incremental run (P0-3 delta writes)."""
+        if not paths:
+            return self
+        return QtSymbolIndex(
+            signals={path: names for path, names in self.signals.items() if path not in paths},
+            slots={path: names for path, names in self.slots.items() if path not in paths},
+            classes={name: path for name, path in self.classes.items() if path not in paths},
+        )
+
+
+def build_qt_symbol_index(nodes: list[GraphNode]) -> QtSymbolIndex:
+    """Derive a `QtSymbolIndex` from a freshly parsed batch of nodes."""
+    signals: dict[str, dict[str, str]] = {}
+    slots: dict[str, dict[str, str]] = {}
+    classes: dict[str, str] = {}
+    for node in nodes:
+        if node.kind == "class":
+            classes.setdefault(node.label, node.source_ref)
+        qt_kind = node.metadata.get("qt") if isinstance(node.metadata, dict) else None
+        if qt_kind == "signal":
+            signals.setdefault(node.source_ref, {})[node.label] = node.node_id
+        elif qt_kind == "slot":
+            slots.setdefault(node.source_ref, {})[node.label] = node.node_id
+    return QtSymbolIndex(signals=signals, slots=slots, classes=classes)
+
+
+def _repo_unique_match(name: str, *member_indices: dict[str, dict[str, str]]) -> str | None:
+    matches = {
+        symbol_id
+        for members in member_indices
+        for by_name in members.values()
+        for member_name, symbol_id in by_name.items()
+        if member_name == name
+    }
+    return next(iter(matches)) if len(matches) == 1 else None
+
+
+def _resolve_class_member(class_name: str | None, member_name: str, index: QtSymbolIndex) -> str | None:
+    if not class_name:
+        return None
+    path = index.classes.get(class_name)
+    if path is None:
+        return None
+    return index.signals.get(path, {}).get(member_name) or index.slots.get(path, {}).get(member_name)
+
+
+def _resolve_qt_edges(edges: list[GraphEdge], index: QtSymbolIndex) -> None:
+    """Second pass (P0-4): resolve `emits`/`connects`/`handles` placeholder
+    endpoints against `index` now that every file in this batch has been
+    parsed (plus, for an incremental re-ingest, whatever the store already
+    knew -- see `QtSymbolIndex.merged_with`). Ordering within the batch never
+    matters here: this scans the finished `edges` list once to build the
+    "file -> included headers" map, then a second time to resolve, so a
+    signal declared in a header parsed *after* the emitting .cpp (or not
+    reparsed in this batch at all) still resolves correctly.
+    """
+    imports_by_file: dict[str, list[str]] = defaultdict(list)
+    for edge in edges:
+        if edge.relation == "imports" and edge.target.startswith("file:"):
+            imports_by_file[edge.source.removeprefix("file:")].append(edge.target.removeprefix("file:"))
+
+    for edge in edges:
+        if edge.relation == "emits":
+            name = edge.metadata.get("signal_name")
+            if not name or edge.target != f"module:{name}":
+                continue
+            source_file = edge.metadata.get("source_file", "")
+            resolved = None
+            for header_path in imports_by_file.get(source_file, ()):
+                resolved = index.signals.get(header_path, {}).get(name)
+                if resolved:
+                    break
+            if resolved is None:
+                resolved = _repo_unique_match(name, index.signals)
+            if resolved:
+                edge.target = resolved
+
+        elif edge.relation == "connects":
+            signal_name = edge.metadata.get("signal_name")
+            if signal_name and edge.source == f"module:{signal_name}":
+                resolved = _resolve_class_member(edge.metadata.get("sender_class"), signal_name, index)
+                if resolved is None:
+                    resolved = _repo_unique_match(signal_name, index.signals, index.slots)
+                if resolved:
+                    edge.source = resolved
+            slot_name = edge.metadata.get("slot_name")
+            if slot_name and edge.target == f"module:{slot_name}":
+                resolved = _resolve_class_member(edge.metadata.get("receiver_class"), slot_name, index)
+                if resolved is None:
+                    resolved = _repo_unique_match(slot_name, index.signals, index.slots)
+                if resolved:
+                    edge.target = resolved
+
+        elif edge.relation == "handles":
+            signal_name = edge.metadata.get("signal_name")
+            component_path = edge.metadata.get("component_path")
+            if not signal_name or not component_path or edge.target != f"module:{signal_name}":
+                continue
+            candidate_names = [signal_name]
+            if signal_name.endswith("Changed"):
+                candidate_names.append(signal_name.removesuffix("Changed"))
+            else:
+                candidate_names.append(signal_name + "Changed")
+            component_signals = index.signals.get(component_path, {})
+            resolved = next(
+                (component_signals[candidate] for candidate in candidate_names if candidate in component_signals),
+                None,
+            )
+            if resolved:
+                edge.target = resolved
+                edge.metadata.pop("unverified", None)
+            else:
+                edge.confidence = "LOW"
+                edge.metadata["unverified"] = True
+
+        elif edge.relation == "instantiates":
+            # QML scenes can instantiate a registered QObject type whose
+            # declaration lives in a C++ header rather than in Type.qml.
+            # The regex/tree-sitter extractors emit a placeholder only for a
+            # local matching C++ path; resolve it here after the complete
+            # batch (or the stored incremental Qt index) has supplied class
+            # symbols.  Unresolved framework/external types remain absent from
+            # the graph rather than being invented.
+            type_name = edge.metadata.get("type_name")
+            if not type_name or edge.target != f"module:{type_name}":
+                continue
+            class_path = index.classes.get(type_name)
+            if class_path:
+                edge.target = f"symbol:{class_path}:{type_name}"
+
+
 def resolve_connect_endpoints(
     nodes: list[GraphNode],
     edges: list[GraphEdge],
 ) -> list[GraphEdge]:
     """Rewrite `name:Cls::member` connects endpoints to real symbol ids.
 
-    A `name:Cls::member` endpoint resolves when exactly one file defines both
-    the class `Cls` and a symbol `member`. Unresolvable endpoints keep the
-    class-qualified `name:` form. Self-loop connects edges are parse
-    artifacts and are dropped.
+    A `name:Cls::member` endpoint prefers exactly one Qt-tagged declaration
+    among the eligible class files, then falls back to exactly one ordinary
+    candidate. Unresolvable endpoints keep the class-qualified `name:` form.
+    Self-loop connects edges are parse artifacts and are dropped.
     """
     class_files: defaultdict[str, set[str]] = defaultdict(set)
-    symbol_by_file_label: dict[tuple[str, str], str] = {}
+    symbols_by_file_label: defaultdict[tuple[str, str], list[GraphNode]] = defaultdict(list)
     for node in nodes:
         if node.granularity != 'symbol':
             continue
@@ -34,19 +211,26 @@ def resolve_connect_endpoints(
         qualifier = node.metadata.get('qualifier')
         if isinstance(qualifier, str) and qualifier:
             class_files[qualifier].add(node.source_ref)
-        symbol_by_file_label[(node.source_ref, node.label)] = node.node_id
+        symbols_by_file_label[(node.source_ref, node.label)].append(node)
 
     def resolve(endpoint: str) -> str:
         if not endpoint.startswith('name:') or '::' not in endpoint:
             return endpoint
         class_name, _, member = endpoint.removeprefix('name:').partition('::')
-        candidates = {
-            symbol_by_file_label[(file_path, member)]
+        candidates = [
+            node
             for file_path in class_files.get(class_name, set())
-            if (file_path, member) in symbol_by_file_label
-        }
-        if len(candidates) == 1:
-            return candidates.pop()
+            for node in symbols_by_file_label.get((file_path, member), ())
+        ]
+        declarations = [
+            node
+            for node in candidates
+            if node.metadata.get('qt') in {'signal', 'slot'}
+        ]
+        if len(declarations) == 1:
+            return declarations[0].node_id
+        if not declarations and len(candidates) == 1:
+            return candidates[0].node_id
         return endpoint
 
     resolved: list[GraphEdge] = []
@@ -69,23 +253,37 @@ def annotate_degree(nodes: list[GraphNode], edges: list[GraphEdge]) -> None:
         node.metadata['degree'] = degree.get(node.node_id, 0)
 
 
-def build_graph(
+def build_file_layer(
     sources: list[SourceRecord],
-    commits: list[CommitRecord],
-    all_paths: set[str] | None = None,
+    known_paths: set[str],
+    *,
+    existing_qt_index: QtSymbolIndex | None = None,
     connect_names: list[str] | None = None,
 ) -> tuple[list[GraphNode], list[GraphEdge]]:
+    """HEADING + STRUCTURAL layer nodes/edges for exactly the given `sources`.
+
+    Every edge produced here is stamped with metadata['source_file'] set to
+    the owning source path, so CortexStore.delete_graph_for_sources can prune
+    it later without touching any other file's rows (P0-3 delta writes).
+    `known_paths` is only used to resolve cross-file references (e.g. Python
+    imports to a local module) and may be a superset of `sources` — callers
+    doing a partial (incremental) rebuild should pass the full current repo
+    path set even though `sources` itself is just the changed/new files.
+
+    `existing_qt_index` (P0-4) supplies Qt signal/slot declarations and class
+    locations from files *outside* this batch -- the incremental ingest path
+    (P0-3) reparses only the changed/new files, so a signal declared in an
+    unchanged header (or an unchanged QML component) wouldn't otherwise be
+    visible to the cross-file `emits`/`connects`/`handles` resolution pass
+    run at the end of this function. Full ingest passes nothing here: a
+    single batch containing every source file is already self-sufficient.
+    """
     nodes: list[GraphNode] = []
     edges: list[GraphEdge] = []
-    file_nodes: dict[str, str] = {}
     section_index: defaultdict[str, int] = defaultdict(int)
-    # On incremental runs `sources` is only the changed subset; `all_paths`
-    # keeps reference resolution and commit linking aware of the whole repo.
-    known_paths = all_paths if all_paths is not None else {s.path for s in sources}
 
     for source in sources:
         file_node_id = f'file:{source.path}'
-        file_nodes[source.path] = file_node_id
         nodes.append(
             GraphNode(
                 node_id=file_node_id,
@@ -95,6 +293,8 @@ def build_graph(
                 metadata={'kind': source.kind, 'size_bytes': source.size_bytes},
             )
         )
+
+        source_edges: list[GraphEdge] = []
 
         # Heading edges (HEADING layer)
         if source.kind == 'markdown':
@@ -114,7 +314,7 @@ def build_graph(
                             metadata={'path': source.path},
                         )
                     )
-                    edges.append(
+                    source_edges.append(
                         GraphEdge(
                             edge_id=f'edge:{file_node_id}:{section_id}',
                             source=file_node_id,
@@ -130,18 +330,80 @@ def build_graph(
         if source.kind == 'code' and source.path.endswith('.py'):
             ast_nodes, ast_edges = extract_python_edges(source.path, source.content, known_paths)
             nodes.extend(ast_nodes)
-            edges.extend(ast_edges)
+            source_edges.extend(ast_edges)
         elif source.kind == 'code' and supports_path(source.path):
-            structural_nodes, structural_edges = extract_structural_edges(
+            structural_result = extract_structural_edges(
                 source.path, source.content, known_paths, connect_names
             )
+            structural_nodes, structural_edges = structural_result
+            file_node = next((node for node in nodes if node.node_id == file_node_id), None)
+            if file_node is not None:
+                file_node.metadata.update({
+                    'parser_backend': structural_result.backend,
+                    'parser_language': structural_result.language,
+                    'parser_version': structural_result.parser_version,
+                    'runtime_version': structural_result.runtime_version,
+                    'parser_diagnostics': list(structural_result.diagnostics),
+                    'degraded_reason': structural_result.degraded_reason or '',
+                })
             nodes.extend(structural_nodes)
-            edges.extend(structural_edges)
+            source_edges.extend(structural_edges)
 
-    edges = resolve_connect_endpoints(nodes, edges)
+        # Regex/tree-sitter structural edges already carry metadata['source_file']
+        # (see structural/regex_backend.py, structural/treesitter_backend.py);
+        # stamping it here too (idempotent overwrite with the same value) makes
+        # every file-layer edge -- Python AST and Markdown headings included --
+        # uniformly attributable to one file for delta deletes.
+        for edge in source_edges:
+            edge.metadata['source_file'] = source.path
+        edges.extend(source_edges)
 
-    # Co-change edges from git history (COCHANGE layer)
-    edges.extend(build_cochange_edges(commits))
+    # P0-4: resolve Qt emit/connect/handle placeholders across file
+    # boundaries now that every file in this batch has produced its nodes.
+    qt_index = build_qt_symbol_index(nodes)
+    if existing_qt_index is not None:
+        qt_index = existing_qt_index.merged_with(qt_index)
+    _resolve_qt_edges(edges, qt_index)
+    # QML endpoints are resolved in a separate index so adding module
+    # metadata never changes the existing Qt signal/slot precedence rules.
+    try:
+        from .structural.qml_resolver import resolve_qml_edges
+        resolve_qml_edges(nodes, edges, known_paths)
+    except Exception:
+        # QML resolution is additive and must never disable a usable graph.
+        pass
+
+    return nodes, edges
+
+
+def build_cochange_layer(
+    commits: list[CommitRecord],
+    known_paths: set[str],
+    *,
+    filter_cochange_pairs: bool = False,
+) -> tuple[list[GraphNode], list[GraphEdge]]:
+    """COCHANGE layer: file-pair co-change edges plus commit -> file
+    provenance ("touches") edges, both derived purely from `commits`.
+
+    Touches edges have always been restricted to `known_paths` (a commit that
+    mentions a file we never ingested produces no node to point at). Cochange
+    *pair* edges historically were not restricted, so a file deleted from the
+    tree could keep a `cochange:` edge referencing it forever. Full ingest
+    preserves that historical (unfiltered) behavior for compatibility;
+    `filter_cochange_pairs=True` is used by the incremental refresh path to
+    also drop pair edges whose file no longer exists (P0-3 COCHANGE
+    correctness).
+    """
+    nodes: list[GraphNode] = []
+
+    cochange_edges = build_cochange_edges(commits)
+    if filter_cochange_pairs:
+        cochange_edges = [
+            e for e in cochange_edges
+            if e.source.removeprefix('file:') in known_paths
+            and e.target.removeprefix('file:') in known_paths
+        ]
+    edges: list[GraphEdge] = list(cochange_edges)
 
     # Commit -> file edges (provenance)
     for commit in commits:
@@ -170,6 +432,29 @@ def build_graph(
                 )
             )
 
+    return nodes, edges
+
+
+def build_graph(
+    sources: list[SourceRecord],
+    commits: list[CommitRecord],
+    all_paths: set[str] | None = None,
+    connect_names: list[str] | None = None,
+) -> tuple[list[GraphNode], list[GraphEdge]]:
+    # On incremental runs `sources` is only the changed subset; `all_paths`
+    # keeps reference resolution and commit linking aware of the whole repo.
+    known_paths = all_paths if all_paths is not None else {s.path for s in sources}
+
+    nodes, edges = build_file_layer(sources, known_paths, connect_names=connect_names)
+    # Class-qualified `name:Cls::member` connects endpoints resolve here, over
+    # the full node set, not per-file: uniqueness of the defining file is a
+    # repo-wide question. The incremental path re-runs this over the merged
+    # store for the same reason (see ingest_repository).
+    edges = resolve_connect_endpoints(nodes, edges)
+    cochange_nodes, cochange_edges = build_cochange_layer(commits, known_paths)
+    nodes.extend(cochange_nodes)
+    edges.extend(cochange_edges)
+    annotate_file_nodes(nodes, compute_hotspots(sources, commits))
     annotate_degree(nodes, edges)
 
     return nodes, edges

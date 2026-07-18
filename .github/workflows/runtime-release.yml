@@ -1,0 +1,46 @@
+name: Runtime bundle
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  bundle:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-glibc-x86_64
+          - os: macos-15-intel
+            platform: macos-x86_64
+          - os: macos-14
+            platform: macos-arm64
+          - os: windows-latest
+            platform: windows-x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -e . build
+      - run: python scripts/build_runtime_bundle.py --platform current --out dist/runtime
+      - uses: actions/upload-artifact@v4
+        id: upload
+        with:
+          name: cortex-runtime-${{ matrix.platform }}
+          path: dist/runtime/*
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/runtime/*.zip
+      - name: Attach bundle and checksum to release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/runtime/* --clobber

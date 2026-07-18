@@ -1,0 +1,11 @@
+import QtQuick.tooling 1.2
+Module {
+ Component {
+  name: "Card"
+  exports: ["Demo.Controls/Card 1.0"]
+  Property { name: "value" type: "int" }
+  Method { name: "update" }
+  Signal { name: "selected" }
+  Enumeration { name: "Mode" }
+ }
+}

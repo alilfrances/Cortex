@@ -5,7 +5,9 @@ from pathlib import Path
 import re
 
 from .community import detect_communities
+from .deadcode import analyze_dead_code
 from .gitutils import discover_repo_root
+from .hotspots import top_hotspots
 from .models import GraphEdge, GraphNode
 from .store import CortexStore, default_db_path
 
@@ -96,7 +98,9 @@ def generate_report(
     store.save_communities(repo_root, communities)
 
     god_nodes = _god_nodes(nodes, edges)
+    hotspots = top_hotspots(nodes)
     surprises = _surprising_connections(nodes, edges, node_community, include_test_pairs=include_test_pairs)
+    dead_code = analyze_dead_code(repo_root, store=store, nodes=nodes, edges=edges)
     file_node_count = sum(1 for node in nodes if node.kind == "file")
 
     lines = [
@@ -111,6 +115,15 @@ def generate_report(
     ]
     lines.extend(f"- `{node.label}` — {degree} connections" for node, degree in god_nodes)
 
+    lines.extend(["", "## Hotspots"])
+    if hotspots:
+        lines.extend(
+            f"- `{item['path']}` — score={item['score']} (churn={item['churn']}, complexity={item['complexity']})"
+            for item in hotspots
+        )
+    else:
+        lines.append("- None detected yet.")
+
     lines.extend(["", "## Communities"])
     for community in sorted(communities, key=lambda item: (-len(item.node_ids), item.community_id))[:10]:
         file_members = [node_id for node_id in community.node_ids if node_id.startswith("file:")][:5]
@@ -124,6 +137,15 @@ def generate_report(
             lines.append(f"- `{source}` ↔ `{target}` ({note})")
     else:
         lines.append("- None detected yet. Run `cortex enrich .` for deeper semantic analysis.")
+
+    lines.extend(["", "## Dead Code Candidates"])
+    if dead_code["findings"]:
+        lines.extend(
+            f"- `{item['symbol']}` — `{item['file']}:{item['line']}` — {item['confidence']}: {item['reason']}"
+            for item in dead_code["findings"]
+        )
+    else:
+        lines.append("- None detected yet.")
 
     report = "\n".join(lines).strip()
 

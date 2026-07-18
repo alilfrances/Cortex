@@ -25,6 +25,8 @@ from .integrations import (
     uninstall_git_hooks,
 )
 from .report import generate_report, write_report
+from .risk import analyze_risk
+from .savings import compute_savings, format_savings
 from .store import CortexStore, data_root, default_db_path
 from .viewer import write_html
 
@@ -53,7 +55,9 @@ def gc_data_dirs(prune: bool = False) -> dict:
     if not base.is_dir():
         return result
     for entry in sorted(base.iterdir()):
-        if not entry.is_dir():
+        if not entry.is_dir() or entry.name == "semantic":
+            # P1-7's managed model cache lives below CORTEX_DATA_DIR but is
+            # not a repo data dir and must never be classified as orphaned.
             continue
         meta_path = entry / "meta.json"
         if not meta_path.exists():
@@ -72,6 +76,43 @@ def gc_data_dirs(prune: bool = False) -> dict:
             if prune:
                 shutil.rmtree(entry)
                 result["pruned"].append(record)
+    return result
+
+
+def prune_query_caches() -> dict:
+    """Prune the P1-3 `query_cache` table for every active central data dir.
+
+    Unlike orphan-dir deletion (which needs `--prune` since it destroys an
+    entire repo's index), this always runs as part of `cortex gc`: pruning
+    the cache is cheap, bounded, and never loses anything an agent can't
+    just recompute -- see `CortexStore.prune_query_cache` for the default
+    retention (30 days / 200 rows per repo). Best-effort per repo: a
+    corrupt or locked db is skipped rather than failing the whole `gc` run.
+    """
+    result: dict[str, list[dict[str, str | int]]] = {"pruned": []}
+    base = data_root()
+    if not base.is_dir():
+        return result
+    for entry in sorted(base.iterdir()):
+        if not entry.is_dir() or entry.name == "semantic":
+            continue
+        meta_path = entry / "meta.json"
+        db_path = entry / "cortex.db"
+        if not meta_path.exists() or not db_path.exists():
+            continue
+        try:
+            repo_path = json.loads(meta_path.read_text(encoding="utf-8")).get("repo_path")
+        except (json.JSONDecodeError, OSError):
+            continue
+        if not repo_path:
+            continue
+        try:
+            store = CortexStore(db_path)
+            deleted = store.prune_query_cache(Path(repo_path))
+        except Exception:
+            continue
+        if deleted:
+            result["pruned"].append({"repo_path": repo_path, "rows_deleted": deleted})
     return result
 
 
@@ -174,12 +215,19 @@ def build_parser() -> argparse.ArgumentParser:
     bundle_parser.add_argument("--db", type=Path, default=None)
     bundle_parser.add_argument("--format", choices=("json", "md"), default="md")
     bundle_parser.add_argument("--rank", choices=("pagerank", "bfs"), default="pagerank")
+    bundle_parser.add_argument("--hotspot-boost", action="store_true", help="Opt into churn×complexity ranking boost")
 
     report_parser = subparsers.add_parser("report", help="Generate a graph report")
     report_parser.add_argument("repo_path", type=Path)
     report_parser.add_argument("--db", type=Path, default=None)
     report_parser.add_argument("--out", type=Path, default=None)
     report_parser.add_argument("--include-test-pairs", action="store_true")
+
+    risk_parser = subparsers.add_parser("risk", help="Analyze diff risk and missing impacted context")
+    risk_parser.add_argument("range_spec", nargs="?", default=None, help="Git revision range (default: HEAD~1..HEAD)")
+    risk_parser.add_argument("--staged", action="store_true", help="Analyze the staged index instead of the default commit range")
+    risk_parser.add_argument("--format", choices=("text", "json"), default="text")
+    risk_parser.add_argument("--db", type=Path, default=None)
 
     graph_parser = subparsers.add_parser("graph", help="Export or view the Cortex graph")
     graph_subparsers = graph_parser.add_subparsers(dest="graph_action", required=True)
@@ -199,7 +247,9 @@ def build_parser() -> argparse.ArgumentParser:
     refresh_parser.add_argument("--db", type=Path, default=None)
     refresh_parser.add_argument("--full", action="store_true", help="Full re-ingest instead of the default incremental refresh")
 
-    gc_parser = subparsers.add_parser("gc", help="List or prune central data dirs whose repo is gone")
+    gc_parser = subparsers.add_parser(
+        "gc", help="List/prune orphaned data dirs and prune the per-repo query cache"
+    )
     gc_parser.add_argument("--prune", action="store_true", help="Delete orphaned data dirs")
 
     benchmark_parser = subparsers.add_parser("benchmark", help="Measure token reduction against full-corpus reading")
@@ -209,17 +259,57 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark_parser.add_argument("--db", type=Path, default=None)
     benchmark_parser.add_argument("--format", choices=("text", "json"), default="text")
 
+    saved_parser = subparsers.add_parser("saved", help="Show token savings recorded from MCP tool usage")
+    saved_parser.add_argument("repo_path", type=Path, nargs="?", default=Path("."))
+    saved_parser.add_argument("--daily", action="store_true", help="Include a day-by-day rollup")
+    saved_parser.add_argument("--format", choices=("text", "json"), default="text")
+    saved_parser.add_argument("--db", type=Path, default=None)
+    saved_parser.add_argument(
+        "--price-per-mtok",
+        default=None,
+        help="Render dollar figures: '<input $/Mtok>,<output $/Mtok>' (no prices are hardcoded)",
+    )
+
     subparsers.add_parser("mcp", help="Run the Cortex stdio MCP server")
 
     watch_parser = subparsers.add_parser("watch", help="Watch a repository and refresh Cortex on changes")
     watch_parser.add_argument("repo_path", type=Path)
     watch_parser.add_argument("--interval", type=float, default=30.0)
 
-    enrich_parser = subparsers.add_parser("enrich", help="Run LLM semantic enrichment (requires cortex-context-engine[llm])")
+    enrich_parser = subparsers.add_parser(
+        "enrich",
+        help="Upload indexed source snippets for remote LLM enrichment (requires [llm])",
+    )
     enrich_parser.add_argument("repo_path", type=Path)
     enrich_parser.add_argument("--provider", choices=("claude", "codex"), default="claude")
     enrich_parser.add_argument("--force", action="store_true", help="Re-extract all files, ignore cache")
+    enrich_parser.add_argument(
+        "--allow-code-upload",
+        action="store_true",
+        help="Confirm indexed source snippets may be sent to the selected provider",
+    )
     enrich_parser.add_argument("--db", type=Path, default=None)
+
+    runtime_parser = subparsers.add_parser("runtime", help="Manage the isolated Tree-sitter parser runtime")
+    runtime_subparsers = runtime_parser.add_subparsers(dest="runtime_action", required=True)
+    runtime_subparsers.add_parser("status", help="Show local parser/runtime readiness without network access")
+    runtime_setup_parser = runtime_subparsers.add_parser("setup", help="Install or verify the locked parser runtime")
+    runtime_setup_parser.add_argument("--force", action="store_true")
+    runtime_setup_parser.add_argument("--offline-bundle", type=Path, default=None)
+    runtime_setup_parser.add_argument("--bundle-sha256", default=None, help="Expected SHA-256 for --offline-bundle")
+    runtime_subparsers.add_parser("repair", help="Replace a corrupt runtime with a fresh verified install")
+
+    semantic_parser = subparsers.add_parser(
+        "semantic", help="Manage the optional local Model2Vec semantic retriever"
+    )
+    semantic_subparsers = semantic_parser.add_subparsers(dest="semantic_action", required=True)
+    semantic_setup_parser = semantic_subparsers.add_parser(
+        "setup", help="Download the configured model once into CORTEX_DATA_DIR"
+    )
+    semantic_setup_parser.add_argument("--force", action="store_true", help="Redownload and replace the local model")
+    semantic_subparsers.add_parser(
+        "status", help="Show local semantic dependency/model/index readiness without network access"
+    )
 
     migrate_parser = subparsers.add_parser("migrate", help="Remove old Cortex injected agent guidance")
     migrate_parser.add_argument("project_dir", type=Path, nargs="?", default=Path("."))
@@ -249,6 +339,16 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
 
+    if args.command in {"ingest", "refresh", "watch"}:
+        try:
+            from .runtime import configure_parser_environment, ensure_runtime
+            runtime_state = ensure_runtime()
+            if not runtime_state.get("ready", False):
+                os.environ.setdefault("CORTEX_FORCE_REGEX", "1")
+            configure_parser_environment()
+        except Exception:
+            os.environ.setdefault("CORTEX_FORCE_REGEX", "1")
+
     if args.command == "ingest":
         summary = ingest_repository(
             repo_path=args.repo_path,
@@ -267,6 +367,7 @@ def main() -> None:
             db_path=args.db,
             output_format=args.format,
             rank=args.rank,
+            hotspot_boost=args.hotspot_boost,
         )
         if args.format == "json":
             print(json.dumps(bundle, indent=2))
@@ -282,6 +383,34 @@ def main() -> None:
             include_test_pairs=args.include_test_pairs,
         )
         print(report)
+        return
+
+    if args.command == "risk":
+        result = analyze_risk(
+            Path("."),
+            args.range_spec,
+            staged=args.staged,
+            db_path=args.db,
+        )
+        if args.format == "json":
+            print(json.dumps(result, indent=2, sort_keys=True))
+        else:
+            if result.get("status") == "error":
+                print(f"Risk analysis error ({result.get('error', 'analysis_error')}): {result.get('message', '')}")
+            else:
+                print(f"Risk: {result.get('range')} ({'staged' if result.get('staged') else 'committed range'})")
+                for directive in result.get("directives", []):
+                    print(f"- {directive}")
+                if not result.get("directives"):
+                    print("- No missing context directives.")
+                for item in result.get("files", []):
+                    print(
+                        f"{item.get('path')}: risk={item.get('risk_score', 0):.2f} "
+                        f"(+{item.get('additions', 0)}/-{item.get('deletions', 0)}, "
+                        f"fan-in={item.get('fan_in', 0)})"
+                    )
+                if result.get("unindexed_files"):
+                    print(f"Unindexed files: {', '.join(result['unindexed_files'])}")
         return
 
     if args.command == "graph":
@@ -314,7 +443,9 @@ def main() -> None:
         return
 
     if args.command == "gc":
-        print(json.dumps(gc_data_dirs(prune=args.prune), indent=2))
+        output = gc_data_dirs(prune=args.prune)
+        output["query_cache"] = prune_query_caches()
+        print(json.dumps(output, indent=2))
         return
 
     if args.command == "benchmark":
@@ -325,6 +456,43 @@ def main() -> None:
             db_path=args.db,
         )
         print(format_benchmark(result, output_format=args.format))
+        return
+
+    if args.command == "saved":
+        price = None
+        if args.price_per_mtok:
+            parts = args.price_per_mtok.split(",")
+            if len(parts) != 2:
+                parser.error("--price-per-mtok must be '<input>,<output>'")
+            try:
+                price = (float(parts[0]), float(parts[1]))
+            except ValueError:
+                parser.error("--price-per-mtok values must be numeric")
+        summary = compute_savings(args.repo_path, db_path=args.db, price_per_mtok=price)
+        print(format_savings(summary, output_format=args.format, daily=args.daily))
+        return
+
+    if args.command == "runtime":
+        from .runtime import repair, setup, status
+
+        if args.runtime_action == "status":
+            result = status()
+        elif args.runtime_action == "repair":
+            result = repair()
+        else:
+            if args.bundle_sha256:
+                os.environ["CORTEX_RUNTIME_BUNDLE_SHA256"] = args.bundle_sha256
+            result = setup(force=args.force, offline_bundle=args.offline_bundle)
+        print(json.dumps(result, indent=2, sort_keys=True))
+        if args.runtime_action in {"setup", "repair"} and not result.get("ready", False):
+            raise SystemExit(1)
+        return
+
+    if args.command == "semantic":
+        from .semantic import semantic_status, setup_model
+
+        result = setup_model(force=args.force) if args.semantic_action == "setup" else semantic_status()
+        print(json.dumps(result, indent=2, sort_keys=True))
         return
 
     if args.command == "mcp":
@@ -343,6 +511,7 @@ def main() -> None:
                 provider_name=args.provider,
                 db_path=args.db,
                 force=args.force,
+                allow_code_upload=args.allow_code_upload,
             )
             print(json.dumps(result, indent=2))
         except RuntimeError as exc:
