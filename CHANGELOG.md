@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.9.1 — 2026-07-19
+
 - Make `cortex_overview` budget-aware (default 2000 tokens): prevent dead-code overflow by retaining candidates in high/medium/low confidence order, reporting omissions and an honest infeasible-budget boundary rather than silently exceeding it.
 - Replace overview response caching with versioned analysis caching. Legacy overview cache rows are bypassed, while each response reconstructs current detailed capability metadata; existing CLI report behavior remains exhaustive and unbudgeted.
 

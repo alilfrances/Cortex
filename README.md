@@ -4,7 +4,7 @@ Cortex is a graph-aware, local-first context engine for code agents. It ingests 
 
 The result is a repo-native context service: MCP tools for live agent queries, CLI commands for reports and exports, and local parser/runtime state. Parser setup downloads only locked artifacts; repository source is never sent during setup. Normal ingest/query is offline after setup.
 
-Current package and plugin metadata is `0.9.0` (`pyproject.toml` and plugin manifests).
+Current package and plugin metadata is `0.9.1` (`pyproject.toml` and plugin manifests).
 
 ## What Cortex Builds
 
