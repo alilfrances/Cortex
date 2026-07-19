@@ -25,7 +25,7 @@ from ..tokenizer import count_text_tokens, truncate_text_to_budget
 TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "name": "cortex_query",
-        "description": "Returns ranked files/snippets for a concrete coding task. Use before grep/Read to get graph-aware context; use cortex_search_symbols for a named function first. Example: {\"task\":\"fix stale auto refresh\",\"budget\":4000}.",
+        "description": "Ranked, graph-aware files and snippets for a concrete coding task. Use before broad search or reads.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -40,12 +40,12 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "cortex_overview",
-        "description": "Returns repo graph size, communities, god nodes, top churn×complexity hotspots, and surprising links. Detailed responses also include no-network optional semantic model/index status. Use for orientation before targeted tools; not for finding one symbol. Example: {\"repo_path\":\".\"}.",
+        "description": "Repository graph summary, communities, hotspots, and surprising links. Use for orientation before targeted tools.",
         "inputSchema": {"type": "object", "properties": {"repo_path": {"type": "string"}, "response_format": {"type": "string", "enum": ["concise", "detailed"], "default": "concise"}}},
     },
     {
         "name": "cortex_context",
-        "description": "Returns one compact triage card per path or symbol in a single call. Resolves exact file paths/node ids before symbol names, includes structural neighbors, co-change partners, hotspots, and Qt/QML wiring; optional include expansions are impact, cochange, and symbols. Use once before editing several files. Example: {\"targets\":[\"src/app.py\",\"symbol:src/app.py:run\"],\"budget\":2000}.",
+        "description": "Compact triage cards for paths or symbols, including neighbors, co-change, hotspots, and Qt/QML wiring.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -60,7 +60,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "cortex_impact",
-        "description": "Returns files structurally or historically coupled to one path. Use after editing/reading a file to assess blast radius; use cortex_references for symbol wiring. Example: {\"path\":\"src/cortex/store.py\"}.",
+        "description": "Files structurally or historically coupled to a path. Use to assess a file's blast radius.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -75,7 +75,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "cortex_risk",
-        "description": "Analyzes a local git diff for deterministic 0–10 per-file risk and concise missing-context directives (co-change partners, tests, Qt wiring, and QML build references). No network. Defaults to HEAD~1..HEAD, or use staged=true for the index.",
+        "description": "Deterministic per-file risk for a local git diff, with missing-context guidance. Defaults to HEAD~1..HEAD.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -89,7 +89,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "cortex_dead_code",
-        "description": "Finds deterministic dead-code candidates from the persisted symbol graph plus local grep references, with conservative high/medium/low confidence tiers and Qt meta-object exclusions. No network. Use budget to cap the returned findings.",
+        "description": "Conservative dead-code candidates from the symbol graph and local references, with confidence tiers and Qt exclusions.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -101,7 +101,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "cortex_search_symbols",
-        "description": "Returns matching indexed symbols without file bodies. Use when you know a function/class/identifier, then call cortex_read_symbol or cortex_impact. Example: {\"query\":\"generate bundle\"}.",
+        "description": "Matching indexed symbols without file bodies. Use when you know a function, class, or identifier.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -115,7 +115,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "cortex_read_symbol",
-        "description": "Returns source for one symbol span from the index. Use after cortex_search_symbols, instead of reading a whole file. mode=\"full\" (default) returns numbered source lines; mode=\"skeleton\" returns the symbol's signature plus nested member signatures with bodies elided; mode=\"signature\" returns just the signature line and span metadata. Example: {\"symbol\":\"symbol:src/cortex/bundle.py:generate_bundle\",\"budget\":2000,\"mode\":\"skeleton\"}.",
+        "description": "Indexed source for one symbol span, available as full source, skeleton, or signature.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -130,7 +130,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "cortex_read_file",
-        "description": "Direct replacement for the built-in Read tool on an INDEXED source file. mode=\"skeleton\" (default) returns import/include lines plus every top-level symbol's signature with bodies elided -- use this instead of raw Read for orientation on a file you haven't inspected yet. mode=\"full\" returns the exact indexed file content. Falls back to full content when the file has no indexed symbols (e.g. prose). Example: {\"path\":\"src/cortex/bundle.py\",\"budget\":4000}.",
+        "description": "Indexed file content as a compact symbol skeleton or full source. Prefer it to raw reads.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -145,9 +145,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "cortex_relations",
-        "description": (
-            "Returns parsed graph edges like imports/inherits/calls/emits/connects/builds/registers/binds/reads/writes/aliases/exports. Use for structural symbol questions; use cortex_references when configs/docs/scripts may mention it. Example: {\"relation\":\"calls\",\"symbol\":\"generate_bundle\",\"direction\":\"out\"}."
-        ),
+        "description": "Parsed structural graph edges for symbol relationships such as calls, imports, connects, reads, and writes.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -167,9 +165,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "cortex_references",
-        "description": (
-            "Returns symbol references from graph edges plus repo grep, bucketed by file type. Use for cross-language blast radius; use cortex_relations for parsed-only edges. Pass mode:\"writes\" to answer where a symbol is mutated. Example: {\"symbol\":\"_ensure_fresh\",\"mode\":\"writes\"}."
-        ),
+        "description": "Cross-language symbol references from graph edges and repository search. Use writes mode to find mutations.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -184,7 +180,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "cortex_search_text",
-        "description": "Full-text body search (FTS5 BM25) across indexed file contents, with line-anchored snippets -- a grep replacement that reads from the index instead of the tree. Use for string literals, error messages, comments, or prose that cortex_search_symbols (name/signature only, not body text) can't find. Returns empty results with fts_available:false if this Python's sqlite3 build lacks FTS5. Example: {\"query\":\"device offline retry\",\"limit\":10}.",
+        "description": "Full-text search across indexed file bodies. Use for literals, messages, comments, or prose rather than symbol names.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -199,9 +195,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "cortex_path",
-        "description": (
-            "Returns up to 3 shortest graph paths between two symbols over parsed structural edges. Use to answer how A reaches B (calls/contains/connects wiring); use cortex_relations for one-hop neighbors. Example: {\"symbol_a\":\"generate_bundle\",\"symbol_b\":\"count_text_tokens\"}."
-        ),
+        "description": "Up to three shortest structural graph paths between two symbols. Use to explain how one reaches another.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -216,7 +210,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "cortex_refresh",
-        "description": "Re-ingest the repository into the local Cortex database. Incremental by default; pass mode=\"full\" to rebuild from scratch.",
+        "description": "Refresh the local repository index incrementally, or rebuild it in full.",
         "inputSchema": {
             "type": "object",
             "properties": {

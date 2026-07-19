@@ -71,8 +71,10 @@ class PluginManifestTests(unittest.TestCase):
         self.assertNotIn("hooks", manifest)
 
         hook_config = self._load_json("hooks/hooks.json")
+        session_start = hook_config["hooks"]["SessionStart"][0]
+        self.assertEqual(session_start["matcher"], "startup|resume|clear")
         expected_command = 'python3 "${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-.}}/hooks/session-start.py"'
-        command = hook_config["hooks"]["SessionStart"][0]["hooks"][0]["command"]
+        command = session_start["hooks"][0]["command"]
         self.assertEqual(command, expected_command)
 
     def test_cortex_explorer_agent_definition(self) -> None:
@@ -112,15 +114,45 @@ class PluginManifestTests(unittest.TestCase):
         self.assertIn("signal/slot", body)
         self.assertTrue("cortex_relations" in body or "cortex_references" in body)
 
-    def test_cortex_skill_documents_explorer_boundary(self) -> None:
-        from cortex.mcp.tools import TOOL_DEFINITIONS
+    def test_three_narrow_cortex_skills_replace_old_catch_all_skill(self) -> None:
+        expected_skills = {
+            "cortex-exploration": (
+                "cortex_query",
+                "cortex_search_symbols",
+                "cortex_search_text",
+                "cortex-explorer",
+            ),
+            "cortex-pre-modification": (
+                "cortex_context",
+                "cortex_impact",
+                "cortex_references",
+                'mode: "writes"',
+            ),
+            "cortex-change-review": (
+                "cortex_risk",
+                "cortex_dead_code",
+                "confidence tiers",
+            ),
+        }
 
-        content = (ROOT / "skills" / "cortex" / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("cortex-explorer", content)
-        self.assertIn("single lookups direct", content)
-        for tool in TOOL_DEFINITIONS:
-            self.assertIn(tool["name"], content)
-        self.assertIn('mode: "writes"', content)
+        self.assertFalse((ROOT / "skills" / "cortex").exists())
+        skill_files = {path.parent.name for path in (ROOT / "skills").glob("*/SKILL.md")}
+        self.assertEqual(skill_files, set(expected_skills))
+        for name, required in expected_skills.items():
+            content = (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
+            self.assertTrue(content.startswith("---\n"))
+            _, frontmatter, body = content.split("---", 2)
+            fields = {}
+            for line in frontmatter.splitlines():
+                if ":" in line:
+                    key, value = line.split(":", 1)
+                    fields[key.strip()] = value.strip()
+            self.assertEqual(fields["name"], name)
+            self.assertTrue(fields["description"])
+            self.assertEqual(fields["user-invocable"], "false")
+            self.assertLessEqual(len(body), 3200)
+            for phrase in required:
+                self.assertIn(phrase, body)
 
     def test_readme_lists_complete_mcp_surface(self) -> None:
         from cortex.mcp.tools import TOOL_DEFINITIONS
@@ -128,6 +160,13 @@ class PluginManifestTests(unittest.TestCase):
         content = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn(f"The MCP surface has {len(TOOL_DEFINITIONS)} tools", content)
         self.assertIn("cortex:cortex-explorer", content)
+        self.assertIn("server instructions", content)
+        for skill in (
+            "cortex-exploration",
+            "cortex-pre-modification",
+            "cortex-change-review",
+        ):
+            self.assertIn(f"`{skill}`", content)
         for tool in TOOL_DEFINITIONS:
             self.assertIn(f"`{tool['name']}`", content)
         self.assertIn('`mode: "writes"`', content)

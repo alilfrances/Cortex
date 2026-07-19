@@ -8,9 +8,11 @@ from typing import Any
 
 _GLOBAL_CLAUDE_REGISTRATION = (
     "\n# cortex\n"
-    "- **cortex** (`~/.claude/skills/cortex/SKILL.md`) "
-    "- Cortex repo context workflow. Trigger: `/cortex`\n"
-    "When the user types `/cortex`, invoke the skill before broader repo exploration.\n"
+    "- **cortex** (`~/.claude/skills/"
+    "cortex/SKILL.md`) "
+    "- Model-invoked Cortex workflows: `cortex-exploration`, `cortex-pre-modification`, "
+    "and `cortex-change-review`.\n"
+    "Use the matching workflow automatically; no slash command is required.\n"
 )
 
 _AGENTS_MARKER = "## cortex"

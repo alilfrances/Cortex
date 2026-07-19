@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.9.0 — 2026-07-19
+
+- Add concise MCP initialization instructions and tighten all 14 tool descriptions around when an agent should use each Cortex route.
+- Replace the broad catch-all Cortex skill with three narrow, model-invoked workflows: `cortex-exploration`, `cortex-pre-modification`, and `cortex-change-review`, covering discovery, pre-edit blast-radius checks, and deterministic diff/dead-code review.
+- Keep SessionStart guidance lean and fail-open, and match it only on `startup|resume|clear` so compaction does not repeatedly inject context.
+- Align package, plugin, marketplace, and MCP server release metadata at 0.9.0; refresh install and workflow documentation for Claude Code and Codex.
+
 ## 0.8.0 — 2026-07-18
 
 - Add a managed, isolated, hash-pinned Tree-sitter runtime with offline bundles, status/repair commands, fail-open parser provenance, and complete local QML structural/module support.
