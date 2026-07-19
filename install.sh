@@ -25,7 +25,7 @@ case "$MODE" in
     echo "registered cortex MCP server in $CONFIG"
     echo "bootstrapping the isolated parser runtime (degraded completion is allowed)"
     CORTEX_RUNTIME_DIR="$RUNTIME_DIR" PYTHONPATH="$ROOT/src${PYTHONPATH:+:$PYTHONPATH}" python3 -m cortex runtime setup 2>/dev/null || true
-    echo "skills: point Codex at $ROOT (plugin dir) or copy skills/cortex to ~/.codex/skills/"
+    echo "skills: point Codex at $ROOT (plugin dir) or copy skills/* to ~/.codex/skills/"
     ;;
   --pip)
     python3 -m pip install -e "$ROOT"

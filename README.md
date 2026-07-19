@@ -4,7 +4,7 @@ Cortex is a graph-aware, local-first context engine for code agents. It ingests 
 
 The result is a repo-native context service: MCP tools for live agent queries, CLI commands for reports and exports, and local parser/runtime state. Parser setup downloads only locked artifacts; repository source is never sent during setup. Normal ingest/query is offline after setup.
 
-Current package and plugin metadata is `0.8.0` (`pyproject.toml` and plugin manifests).
+Current package and plugin metadata is `0.9.0` (`pyproject.toml` and plugin manifests).
 
 ## What Cortex Builds
 
@@ -37,9 +37,9 @@ claude plugin marketplace add alilfrances/Cortex
 claude plugin install cortex@cortex
 ```
 
-That's the full plugin path. It installs the Cortex plugin bundle, which registers the Cortex MCP server (`.mcp.json` launches `bin/cortex-mcp.py`, which self-locates its own `src/`), the `cortex` skill, and the session-start hook. The first MCP launch performs bounded parser setup; subsequent launches are cache-only. Inspect the detailed `cortex_overview` response to confirm parser readiness, then ask Claude to call `cortex_refresh` once to build the index. Source/pip users can also run `cortex runtime status`.
+That's the full plugin path. It installs the Cortex plugin bundle, which registers the Cortex MCP server (`.mcp.json` launches `bin/cortex-mcp.py`, which self-locates its own `src/`), three narrow model-invoked skills, and the session-start hook. The first MCP launch performs bounded parser setup; subsequent launches are cache-only. Inspect the detailed `cortex_overview` response to confirm parser readiness, then ask Claude to call `cortex_refresh` once to build the index. Source/pip users can also run `cortex runtime status`.
 
-> **Note:** Plugins load at session start. After installing or updating, restart Claude Code (or run `/reload-plugins` if available) — sessions that were already open won't see the MCP tools, skill, or hook.
+> **Note:** Plugins load at session start. After installing or updating, restart Claude Code (or run `/reload-plugins` if available) — sessions that were already open won't see the MCP tools, skills, or hook.
 
 For local development of the plugin itself:
 
@@ -52,6 +52,18 @@ claude --plugin-dir /path/to/Cortex
 The Claude Code plugin ships a read-only `cortex-explorer` agent for multi-step exploration questions such as “where is X handled”, “how does Y flow”, and “what connects to Z”. Use it when the main agent would otherwise need several search, read, and graph calls; keep single lookups direct because a sub-agent round-trip costs more than one Cortex tool call. Its frontmatter explicitly allowlists the plugin-scoped Cortex MCP read/analysis tools plus `Read`, `Grep`, and `Glob` (but no edit, write, shell, or refresh tool). It uses the Cortex MCP loop and returns findings, consulted file/symbol IDs with line spans, and suggested next Cortex calls. Its Cortex calls are recorded in the existing token-savings ledger like any other MCP tool call, so no extra plumbing is needed.
 
 The definition ships in both the marketplace-installed plugin and local `claude --plugin-dir` development mode. In Claude Code's agent picker it is plugin-scoped as `cortex:cortex-explorer` (for example, `@agent-cortex:cortex-explorer`). The Codex plugin format used by `.codex-plugin/plugin.json` has no equivalent sub-agent concept, so `cortex-explorer` is Claude Code-only.
+
+### Server instructions and workflow skills
+
+On MCP initialization, Cortex returns concise server instructions that route agents to overview, symbol search, task retrieval, indexed reads, pre-edit context and impact checks, risk review, and `cortex_refresh` when an index is missing or stale. This baseline guidance works in any MCP client, independently of host-specific hooks or skills.
+
+The plugin also ships three narrow, model-invoked skills (`user-invocable: false`) instead of the old catch-all Cortex skill:
+
+- `cortex-exploration` routes “how/where/find” questions to task, symbol, text, indexed-read, relation, and path tools, with multi-step Claude exploration delegated to `cortex-explorer`.
+- `cortex-pre-modification` batches known targets through `cortex_context`, then checks impact, references, graph wiring, exact spans, and freshness before edits, refactors, renames, or deletion.
+- `cortex-change-review` uses diff risk and conservative dead-code analysis before committing or when reviewing and cleaning up a change.
+
+They are selected automatically from their descriptions; no slash command is required. Plugin installs expose all three from `skills/`. For a manual Codex setup, point Codex at the repository as a plugin directory or copy the three directories under `skills/` to `~/.codex/skills/`.
 
 ## Parser runtime and air-gapped setup
 
@@ -81,7 +93,7 @@ resolution boundaries, and the artifact/source-egress distinction.
 
 ## Hooks
 
-Cortex ports graphify's agent-context behavior as a native Claude Code `SessionStart` hook. When a project has a Cortex index (legacy `.cortex/cortex.db` in-repo, or the central store under `~/.cortex/data/`), the hook quickly compares the stored repo fingerprint with the current `compute_repo_fingerprint` value and injects short context saying whether the index is fresh or stale, how many files are indexed, and to prefer `cortex_context` (one batch of paths/symbols before editing several files), `cortex_query`, `cortex_search_symbols`, and `cortex_impact` before raw grep-style exploration. If no database exists, it emits a one-line hint that `cortex_refresh` can build it.
+Cortex provides a lean native Claude Code `SessionStart` hook matched only for `startup|resume|clear`, so context compaction does not repeatedly inject guidance. In a git repository it reports only index freshness, indexed-file count, four common entry tools (`cortex_query`, `cortex_context`, `cortex_search_symbols`, and `cortex_read_file`), and the `cortex-explorer` delegation boundary. If no database exists, it emits a one-line hint that `cortex_refresh` can build it. Detailed routing stays in the MCP server instructions and three workflow skills rather than the hook.
 
 The hook is advisory and fail-open: it never runs ingest, exits quietly on malformed or unreadable databases, and stays silent entirely when the working directory is not inside a git repository. Staleness resolves itself at query time — the MCP read tools auto-refresh incrementally before answering — so the hook only informs.
 
@@ -102,7 +114,7 @@ Alternative: if you only want MCP server registration in Codex and do not want t
 /path/to/Cortex/install.sh --codex
 ```
 
-`install.sh --codex` writes an absolute `mcp_servers.cortex` entry to `~/.codex/config.toml` (idempotent; no pip), but it does not install the Codex plugin bundle or add a marketplace source. The Codex plugin manifest points to `./skills/` and a Codex-specific `./.codex-mcp.json` whose relative working directory resolves from the installed plugin root. Claude retains its separate `${CLAUDE_PLUGIN_ROOT}` configuration in `.mcp.json`. For manual setup, point Codex at the repo root as a plugin dir or copy `skills/cortex` to `~/.codex/skills/`. Manual MCP registration equivalent:
+`install.sh --codex` writes an absolute `mcp_servers.cortex` entry to `~/.codex/config.toml` (idempotent; no pip), but it does not install the Codex plugin bundle or add a marketplace source. The Codex plugin manifest points to `./skills/` and a Codex-specific `./.codex-mcp.json` whose relative working directory resolves from the installed plugin root. Claude retains its separate `${CLAUDE_PLUGIN_ROOT}` configuration in `.mcp.json`. For manual setup, point Codex at the repo root as a plugin dir or copy the three directories under `skills/` to `~/.codex/skills/`. Manual MCP registration equivalent:
 
 ```toml
 [mcp_servers.cortex]

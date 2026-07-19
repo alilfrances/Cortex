@@ -7,7 +7,16 @@ from typing import Any
 from .tools import TOOL_DEFINITIONS, call_tool
 
 PROTOCOL_VERSION = "2024-11-05"
-SERVER_INFO = {"name": "cortex", "version": "0.8.0"}
+SERVER_INFO = {"name": "cortex", "version": "0.9.0"}
+SERVER_INSTRUCTIONS = (
+    "Use Cortex before Grep or raw file reads. Start with cortex_query for a coding task "
+    "and cortex_context before multi-file edits. Search with cortex_search_symbols for "
+    "named identifiers or cortex_search_text for body text and literals. Read indexed "
+    "source with cortex_read_symbol or cortex_read_file. Check blast radius with "
+    "cortex_impact and cortex_references, and run cortex_risk before finishing. Fall back "
+    "to raw Grep or Read only when the index is missing or Cortex coverage is insufficient; "
+    "call cortex_refresh for a missing or stale index."
+)
 
 
 def _response(request_id: Any, result: dict[str, Any]) -> dict[str, Any]:
@@ -33,6 +42,7 @@ def _handle(frame: dict[str, Any]) -> dict[str, Any] | None:
                 "protocolVersion": client_version or PROTOCOL_VERSION,
                 "capabilities": {"tools": {}},
                 "serverInfo": SERVER_INFO,
+                "instructions": SERVER_INSTRUCTIONS,
             },
         )
     if method == "tools/list":

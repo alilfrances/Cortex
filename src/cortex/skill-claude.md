@@ -1,5 +1,9 @@
+---
+name: cortex
+description: Use Cortex MCP tools for indexed repository exploration, pre-modification impact checks, and change review.
+user-invocable: false
+---
+
 # Cortex
 
-This legacy packaged Claude skill is kept for one release.
-
-Use the shared plugin skill at `skills/cortex/SKILL.md`.
+Use the plugin skills `cortex-exploration`, `cortex-pre-modification`, and `cortex-change-review` under `skills/`. They route exploration, pre-edit blast-radius checks, and diff review to the appropriate Cortex MCP tools.

@@ -76,15 +76,21 @@ def test_session_start_hook_emits_fresh_context(tmp_path: Path) -> None:
     assert result.returncode == 0
     assert result.stderr == ""
     context = _additional_context(result.stdout)
-    from cortex.mcp.tools import TOOL_DEFINITIONS
 
-    assert "Cortex index exists and is fresh" in context
+    assert "Cortex index is fresh" in context
     assert "2 indexed files" in context
-    for tool in TOOL_DEFINITIONS:
-        assert tool["name"] in context
-    assert "mode=writes" in context
+    for tool_name in (
+        "cortex_query",
+        "cortex_context",
+        "cortex_search_symbols",
+        "cortex_read_file",
+    ):
+        assert tool_name in context
     assert "cortex-explorer" in context
+    assert "Grep" in context
     assert "single lookups direct" in context
+    context_without_runtime_warning = context.split(" Parser runtime", maxsplit=1)[0]
+    assert len(context_without_runtime_warning) <= 500
 
 
 def test_session_start_hook_emits_stale_context(tmp_path: Path) -> None:
@@ -96,9 +102,16 @@ def test_session_start_hook_emits_stale_context(tmp_path: Path) -> None:
     assert result.returncode == 0
     assert result.stderr == ""
     context = _additional_context(result.stdout)
-    assert "Cortex index exists but is stale" in context
+    assert "Cortex index is stale" in context
     assert "2 indexed files" in context
+    assert "auto-refresh incrementally" in context
     assert "cortex_refresh" in context
+
+
+def test_session_start_hook_matcher_excludes_compaction() -> None:
+    hook_config = json.loads((ROOT / "hooks" / "hooks.json").read_text(encoding="utf-8"))
+
+    assert hook_config["hooks"]["SessionStart"][0]["matcher"] == "startup|resume|clear"
 
 
 def test_session_start_hook_emits_missing_db_context(tmp_path: Path) -> None:
