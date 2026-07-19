@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from cortex import bundle as bundle_mod
+from cortex.mcp import tools as mcp_tools
 from cortex.fusion import rrf_fuse
 from cortex.ingest import ingest_repository
 from cortex.mcp.tools import _cache_key, call_tool
@@ -348,7 +349,7 @@ def test_status_distinguishes_enabled_ready_and_indexed(fake_local_model, monkey
     assert missing_numpy["active"] is False
 
 
-def test_detailed_overview_reports_semantic_and_upgrades_old_cache(fake_local_model, tmp_path):
+def test_detailed_overview_reports_semantic_and_bypasses_legacy_render_cache(fake_local_model, tmp_path):
     repo = tmp_path / "repo"
     _git_init(repo)
     (repo / "a.py").write_text("def alpha():\n    return 1\n", encoding="utf-8")
@@ -369,8 +370,18 @@ def test_detailed_overview_reports_semantic_and_upgrades_old_cache(fake_local_mo
     payload = json.loads(result["content"][0]["text"])
     assert {"installed", "model_ready", "indexed_chunks", "reason"} <= set(payload["semantic"])
 
-    cached = json.loads(store.get_query_cache(repo, key))
-    assert "semantic" in cached
+    # Overview caches reusable analysis under its own versioned key. A legacy
+    # response-render cache entry must not be trusted, because capabilities
+    # are volatile detailed-only data.
+    assert json.loads(store.get_query_cache(repo, key))["report"] == "old"
+    analysis_key = _cache_key(
+        fingerprint,
+        "cortex_overview_analysis",
+        {"version": mcp_tools._OVERVIEW_ANALYSIS_CACHE_VERSION},
+    )
+    cached = json.loads(store.get_query_cache(repo, analysis_key))
+    assert cached["version"] == mcp_tools._OVERVIEW_ANALYSIS_CACHE_VERSION
+    assert "analysis" in cached
 
 
 def test_regex_qt_symbols_are_chunked(fake_local_model, tmp_path):

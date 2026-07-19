@@ -4,7 +4,7 @@ Cortex is a graph-aware, local-first context engine for code agents. It ingests 
 
 The result is a repo-native context service: MCP tools for live agent queries, CLI commands for reports and exports, and local parser/runtime state. Parser setup downloads only locked artifacts; repository source is never sent during setup. Normal ingest/query is offline after setup.
 
-Current package and plugin metadata is `0.9.0` (`pyproject.toml` and plugin manifests).
+Current package and plugin metadata is `0.9.1` (`pyproject.toml` and plugin manifests).
 
 ## What Cortex Builds
 
@@ -149,7 +149,7 @@ This creates `cortex.db` and `cortex_report.md` under `~/.cortex/data/<repo-path
 | Tool | What it does | Example prompt |
 |---|---|---|
 | `cortex_query` | Builds a task-focused retrieval bundle under a token budget; pass `hotspot_boost: true` only when churn×complexity should influence ranking. | "Use Cortex to find the files and symbols for adding password reset." |
-| `cortex_overview` | Returns a compact repo overview, including `top_hotspots`, from the stored graph and report data. | "Ask Cortex for an overview before we refactor the API layer." |
+| `cortex_overview` | Returns a compact repo overview, including `top_hotspots`, from stored report analysis. Its `budget` defaults to 2000 tokens; use `response_format: "detailed"` when current semantic/parser capability status is also needed. | "Ask Cortex for an overview before we refactor the API layer." |
 | `cortex_impact` | Ranks structural and co-change neighbors for a file or symbol. | "Use Cortex impact on `src/cortex/bundle.py` before changing packing." |
 | `cortex_context` | Batches paths and symbols into one compact triage card per target; default budget 2000, with optional `include: ["impact", "cochange", "symbols"]` expansions. Cards include structural/co-change neighbors, hotspots, spans, and Qt/QML signals, slots, handlers, wiring, and instantiations. If an intentionally tiny budget cannot fit irreducible card metadata, `budget_feasible: false` explains the condition while preserving every original target. | "Before editing several files, call Cortex context once with all their paths and symbols." |
 | `cortex_risk` | Runs a local git diff and returns deterministic 0–10 per-file risk plus missing co-change/test/Qt/build-reference directives; supports `range`, `staged`, and a response budget. | "Check `cortex_risk` before committing this change." |
@@ -165,9 +165,17 @@ This creates `cortex.db` and `cortex_report.md` under `~/.cortex/data/<repo-path
 
 Tool results include provenance where available. Read/query/analysis tools keep the index fresh automatically: when the repository fingerprint has changed since ingestion, they run an incremental re-ingest (changed, new, and deleted files only) before answering and report the delta under `auto_refreshed`. Set `CORTEX_AUTO_REFRESH=0` to disable and fall back to stale-state hints plus manual `cortex_refresh`. If no index exists yet, indexed read/query tools still require an explicit `cortex_refresh` first; `cortex_risk` can run a clearly marked partial git-only analysis.
 
-`cortex_query`, `cortex_impact`, and `cortex_overview` cache their result under a key derived from the (post-refresh) repo fingerprint, tool name, and call arguments, so a repeated identical call skips PageRank/packing entirely and returns the prior response data unchanged — any file change invalidates the cache automatically, since it changes the fingerprint. Set `CORTEX_QUERY_CACHE=0` to disable both reading and writing this cache. `cortex gc` prunes cached rows older than 30 days or beyond 200 rows per repo.
+`cortex_query` and `cortex_impact` cache their result under a key derived from the (post-refresh) repo fingerprint, tool name, and call arguments, so a repeated identical call skips PageRank/packing entirely — any file change invalidates the cache automatically, since it changes the fingerprint. `cortex_overview` instead caches a versioned, fingerprint-keyed **analysis** record (graph/report facts and dead-code findings), then reconstructs the response on every call. This deliberately bypasses old overview response-cache entries and invalidates an incompatible analysis shape when its cache version changes. Dynamic detailed-only capability data is never cached. Set `CORTEX_QUERY_CACHE=0` to disable both reading and writing this cache. `cortex gc` prunes cached rows older than 30 days or beyond 200 rows per repo.
 
-The MCP surface has 14 tools: 13 read/query/analysis tools (everything above except `cortex_refresh`) can carry a `_meta` object: `{index_age_seconds, indexed_at, fingerprint_fresh, auto_refreshed?, cached?, saved_tokens?}`. `detailed` responses always include it; `concise` responses include it only when something is worth surfacing — the index is stale, an auto-refresh just ran, the response came from the P1-3 cache (`cached: true`), or the call saved a meaningful number of tokens over a raw file read (`saved_tokens`, exactly the number recorded in the `tool_usage` ledger — see `cortex saved` below) — otherwise it's omitted so a routine concise call costs no extra tokens. A cache hit always reports the *current* index age, never a value frozen from when the cache entry was written.
+### Overview budgets, metadata, and caching
+
+`cortex_overview` accepts `budget` (default `2000`) and returns `budget`, `truncated`, `dead_code_total`, `dead_code_returned`, and `budget_feasible` alongside the rendered report. Its stable report sections are retained; when space is limited, only dead-code candidates are omitted, in deterministic confidence order: `high`, then `medium`, then `low` (with a stable tie-breaker). The report states how many candidates were omitted and directs callers to `cortex_dead_code` for the complete candidate list. A budget too small even for that irreducible report returns the same shape with `budget_feasible: false` and a `budget_note` rather than claiming the boundary was met.
+
+Dead-code findings are conservative static-analysis leads, not proof that deletion is safe. Treat the confidence tier as prioritization for review, and check dynamic/framework usage — especially Qt signals, slots, handlers, invokable methods, properties, and QML types — before removing code. For an exhaustive, unbudgeted report, use `cortex report`; its CLI output preserves all dead-code findings.
+
+In `response_format: "detailed"`, overview additionally reconstructs current `semantic` and `language_runtime` capability metadata on each call (including parser backend counts). That volatile capability detail is intentionally not reused from cache and contributes to the delivered response cost, so request a budget with room for it.
+
+The MCP surface has 14 tools: 13 read/query/analysis tools (everything above except `cortex_refresh`) can carry a `_meta` object: `{index_age_seconds, indexed_at, fingerprint_fresh, auto_refreshed?, cached?, saved_tokens?}`. `detailed` responses always include it; `concise` responses include it only when something is worth surfacing — the index is stale, an auto-refresh just ran, the response came from cache (`cached: true`), or the call saved a meaningful number of tokens over a raw file read (`saved_tokens`, exactly the number recorded in the `tool_usage` ledger — see `cortex saved` below) — otherwise it's omitted so a routine concise call costs no extra tokens. A cache hit always reports the *current* index age, never a value frozen from when the cache entry was written.
 
 ## CLI Reference
 
@@ -175,7 +183,7 @@ The MCP surface has 14 tools: 13 read/query/analysis tools (everything above exc
 |---|---|
 | `cortex ingest <repo> [--commits 50] [--update]` | Scan source files, git history, graph layers, symbols, and fingerprints into SQLite. |
 | `cortex bundle <repo> --task "..." [--budget 4000] [--rank pagerank\|bfs] [--hotspot-boost] [--format md\|json]` | Emit a token-budgeted context bundle. |
-| `cortex report <repo> [--out] [--include-test-pairs]` | Write an architecture report with central nodes, hotspots, communities, connections, and a confidence-tiered dead-code section. |
+| `cortex report <repo> [--out] [--include-test-pairs]` | Write an exhaustive, unbudgeted architecture report with central nodes, hotspots, communities, connections, and every confidence-tiered dead-code finding. |
 | `cortex risk [range] [--staged] [--format text|json] [--db PATH]` | Analyze a committed range (default `HEAD~1..HEAD`) or staged diff with deterministic per-file risk and missing-context directives. It runs local git only; no index is required, but an unindexed/partial result says so explicitly. |
 | `cortex gc [--prune]` | List central data dirs (`--prune` deletes ones whose repo is gone) and prune each repo's query result cache. |
 | `cortex enrich <repo> --provider claude\|codex --allow-code-upload [--force]` | Remote LLM enrichment. Sends up to 8,000 characters from each uncached indexed source file to the provider; requires explicit consent and `[llm]`. |

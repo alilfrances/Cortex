@@ -5,6 +5,7 @@ import json
 import os
 import re
 import time
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +16,7 @@ from ..impact import UnknownPathError, rank_file_impact
 from ..ingest import compute_repo_fingerprint, ingest_repository
 from ..pathfind import shortest_paths
 from ..references import find_references
-from ..report import generate_report
+from ..report import build_report_data, render_report
 from ..hotspots import top_hotspots
 from ..risk import analyze_risk, truncate_risk_result
 from ..store import CortexStore, default_db_path
@@ -41,7 +42,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "name": "cortex_overview",
         "description": "Repository graph summary, communities, hotspots, and surprising links. Use for orientation before targeted tools.",
-        "inputSchema": {"type": "object", "properties": {"repo_path": {"type": "string"}, "response_format": {"type": "string", "enum": ["concise", "detailed"], "default": "concise"}}},
+        "inputSchema": {"type": "object", "properties": {"repo_path": {"type": "string"}, "budget": {"type": "integer", "default": 2000}, "response_format": {"type": "string", "enum": ["concise", "detailed"], "default": "concise"}}},
     },
     {
         "name": "cortex_context",
@@ -627,6 +628,149 @@ def _call_query(arguments: dict[str, Any]) -> dict[str, Any]:
     return _content(_format_payload(payload, status, response_format, cached=cache_hit))
 
 
+# This is deliberately separate from the generic query-cache format.  The
+# cached value is analysis, not an MCP response, and changing this version is
+# an explicit invalidation when the report-data contract changes.
+_OVERVIEW_ANALYSIS_CACHE_VERSION = 1
+_OVERVIEW_DEFAULT_BUDGET = 2000
+_CONFIDENCE_PRIORITY = {"high": 0, "medium": 1, "low": 2}
+
+
+def _overview_analysis_cache_key(fingerprint: str) -> str:
+    return _cache_key(
+        fingerprint,
+        "cortex_overview_analysis",
+        {"version": _OVERVIEW_ANALYSIS_CACHE_VERSION},
+    )
+
+
+def _overview_dead_code_priority(finding: dict[str, Any]) -> tuple[int, str, str, int, str]:
+    """Return the public confidence/file/symbol/line presentation order."""
+    confidence = str(finding.get("confidence", "")).lower()
+    try:
+        line = int(finding.get("line", 0))
+    except (TypeError, ValueError):
+        line = 0
+    return (
+        _CONFIDENCE_PRIORITY.get(confidence, len(_CONFIDENCE_PRIORITY)),
+        str(finding.get("file", "")),
+        str(finding.get("symbol", "")),
+        line,
+        # Only break complete ties with a stable representation.
+        json.dumps(finding, sort_keys=True, default=str),
+    )
+
+
+def _is_overview_analysis(value: Any) -> bool:
+    """Reject malformed same-version cache values and recompute fail-open."""
+    if not isinstance(value, dict):
+        return False
+    required_types = {
+        "repo_name": str,
+        "repo_path": str,
+        "file_count": int,
+        "node_count": int,
+        "edge_count": int,
+        "communities": list,
+        "god_nodes": list,
+        "hotspots": list,
+        "surprising_connections": list,
+        "dead_code": list,
+    }
+    return all(isinstance(value.get(key), value_type) for key, value_type in required_types.items())
+
+
+def _overview_payload_for_report(
+    repo_root: Path,
+    analysis: dict[str, Any],
+    dead_code: list[dict[str, Any]],
+    omitted_count: int,
+    budget: int,
+    *,
+    budget_feasible: bool,
+    extra_fields: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    report = render_report(analysis, dead_code, omitted_count=omitted_count)
+    payload: dict[str, Any] = {
+        "repo_path": str(repo_root),
+        "report": report,
+        "top_hotspots": analysis.get("hotspots", []),
+        "budget": budget,
+        "truncated": omitted_count > 0 or not budget_feasible,
+        "dead_code_total": len(dead_code) + omitted_count,
+        "dead_code_returned": len(dead_code),
+        "budget_feasible": budget_feasible,
+        **(extra_fields or {}),
+    }
+    if not budget_feasible:
+        payload["budget_note"] = "Budget is too small for the stable overview sections."
+    return payload
+
+
+def _fit_overview_report(
+    repo_root: Path,
+    analysis: dict[str, Any],
+    budget: int,
+    *,
+    extra_fields: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Fit a confidence-ordered dead-code prefix without rerunning analysis.
+
+    The base report is intentionally never dismantled.  If that stable minimum
+    cannot fit, its shape is returned with ``budget_feasible=False`` rather
+    than claiming a response met a physically impossible budget.
+    """
+    findings = [item for item in analysis.get("dead_code", []) if isinstance(item, dict)]
+    findings.sort(key=_overview_dead_code_priority)
+    minimum = _overview_payload_for_report(
+        repo_root, analysis, [], len(findings), budget, budget_feasible=True, extra_fields=extra_fields
+    )
+    if count_text_tokens(json.dumps(minimum, sort_keys=True)) > budget:
+        return _overview_payload_for_report(
+            repo_root, analysis, [], len(findings), budget, budget_feasible=False, extra_fields=extra_fields
+        )
+
+    selected: list[dict[str, Any]] = []
+    for finding in findings:
+        candidate = [*selected, finding]
+        rendered = _overview_payload_for_report(
+            repo_root, analysis, candidate, len(findings) - len(candidate), budget,
+            budget_feasible=True, extra_fields=extra_fields,
+        )
+        if count_text_tokens(json.dumps(rendered, sort_keys=True)) > budget:
+            break
+        selected = candidate
+    return _overview_payload_for_report(
+        repo_root, analysis, selected, len(findings) - len(selected), budget,
+        budget_feasible=True, extra_fields=extra_fields,
+    )
+
+
+def _overview_detailed_capabilities(store: CortexStore, repo_root: Path) -> dict[str, Any]:
+    """Collect volatile detailed-only capability data; never cache it."""
+    try:
+        from ..semantic import semantic_status
+        semantic_payload = semantic_status(store, repo_root)
+    except Exception:
+        semantic_payload = {
+            "installed": False, "enabled": False, "active": False,
+            "model_ready": False, "indexed_chunks": 0,
+            "reason": "semantic status unavailable", "model_id": None, "model_version": None,
+        }
+    try:
+        from ..runtime import public_capability
+        runtime_payload = public_capability()
+        backend_counts: dict[str, int] = {}
+        for file_node in store.fetch_graph(repo_root)[0]:
+            if file_node.kind == "file" and file_node.metadata.get("parser_backend"):
+                key = str(file_node.metadata["parser_backend"])
+                backend_counts[key] = backend_counts.get(key, 0) + 1
+        runtime_payload = {**runtime_payload, "backend_counts": dict(sorted(backend_counts.items()))}
+    except Exception:
+        runtime_payload = {"ready": False, "degraded_reason": "runtime status unavailable"}
+    return {"semantic": semantic_payload, "language_runtime": runtime_payload}
+
+
 def _call_overview(arguments: dict[str, Any]) -> dict[str, Any]:
     repo_root = _repo_root(arguments)
     store, error = _store_or_error(repo_root)
@@ -635,60 +779,25 @@ def _call_overview(arguments: dict[str, Any]) -> dict[str, Any]:
     assert store is not None
     status = _ensure_fresh(store, repo_root)
     response_format = _response_format(arguments)
-    cache_key = _cache_key(status["current_fingerprint"], "cortex_overview", arguments)
-    cached_payload = _cache_get(store, repo_root, cache_key)
-    cache_hit = cached_payload is not None
+    budget = max(0, int(arguments.get("budget", _OVERVIEW_DEFAULT_BUDGET)))
+    cache_key = _overview_analysis_cache_key(status["current_fingerprint"])
+    cached_analysis = _cache_get(store, repo_root, cache_key)
+    cache_hit = (
+        isinstance(cached_analysis, dict)
+        and cached_analysis.get("version") == _OVERVIEW_ANALYSIS_CACHE_VERSION
+        and _is_overview_analysis(cached_analysis.get("analysis"))
+    )
     if cache_hit:
-        payload = cached_payload
-        # Older query-cache rows predate P1-2. Enrich them lazily rather than
-        # hiding hotspots until the repository fingerprint changes.
-        if "top_hotspots" not in payload:
-            nodes, _edges = store.fetch_graph(repo_root)
-            payload = {**payload, "top_hotspots": top_hotspots(nodes)}
-            _cache_set(store, repo_root, cache_key, payload)
+        analysis = cached_analysis["analysis"]
     else:
-        nodes, _edges = store.fetch_graph(repo_root)
-        payload = {
-            "repo_path": str(repo_root),
-            "report": generate_report(repo_root),
-            "top_hotspots": top_hotspots(nodes),
-        }
-        _cache_set(store, repo_root, cache_key, payload)
+        analysis = build_report_data(repo_root)
+        _cache_set(store, repo_root, cache_key, {"version": _OVERVIEW_ANALYSIS_CACHE_VERSION, "analysis": analysis})
 
-    # P1-7 status is deliberately detailed-only: concise overview responses
-    # remain byte-compatible with the stdlib/default path.  Refreshing this
-    # additive field on every detailed cache hit also upgrades old cache rows
-    # and reflects a newly completed setup without a repo fingerprint change.
-    if response_format == "detailed":
-        try:
-            from ..semantic import semantic_status
-
-            semantic_payload = semantic_status(store, repo_root)
-        except Exception:
-            semantic_payload = {
-                "installed": False,
-                "enabled": False,
-                "active": False,
-                "model_ready": False,
-                "indexed_chunks": 0,
-                "reason": "semantic status unavailable",
-                "model_id": None,
-                "model_version": None,
-            }
-        try:
-            from ..runtime import public_capability
-            runtime_payload = public_capability()
-            runtime_counts = {}
-            for file_node in store.fetch_graph(repo_root)[0]:
-                if file_node.kind == "file" and file_node.metadata.get("parser_backend"):
-                    key = str(file_node.metadata["parser_backend"])
-                    runtime_counts[key] = runtime_counts.get(key, 0) + 1
-            runtime_payload = {**runtime_payload, "backend_counts": dict(sorted(runtime_counts.items()))}
-        except Exception:
-            runtime_payload = {"ready": False, "degraded_reason": "runtime status unavailable"}
-        if payload.get("semantic") != semantic_payload or payload.get("language_runtime") != runtime_payload:
-            payload = {**payload, "semantic": semantic_payload, "language_runtime": runtime_payload}
-            _cache_set(store, repo_root, cache_key, payload)
+    # Capabilities describe current optional integrations, unlike graph
+    # analysis. They count toward detailed content, while freshness/status
+    # remains outside the budget and is merged only by `_format_payload`.
+    extra_fields = _overview_detailed_capabilities(store, repo_root) if response_format == "detailed" else None
+    payload = _fit_overview_report(repo_root, analysis, budget, extra_fields=extra_fields)
     return _content(_format_payload(payload, status, response_format, cached=cache_hit))
 
 
