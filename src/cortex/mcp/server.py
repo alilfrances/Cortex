@@ -7,7 +7,7 @@ from typing import Any
 from .tools import TOOL_DEFINITIONS, call_tool
 
 PROTOCOL_VERSION = "2024-11-05"
-SERVER_INFO = {"name": "cortex", "version": "0.9.0"}
+SERVER_INFO = {"name": "cortex", "version": "0.9.1"}
 SERVER_INSTRUCTIONS = (
     "Use Cortex before Grep or raw file reads. Start with cortex_query for a coding task "
     "and cortex_context before multi-file edits. Search with cortex_search_symbols for "
