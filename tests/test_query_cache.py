@@ -130,30 +130,25 @@ def test_second_identical_impact_hits_cache(tmp_path, monkeypatch):
 def test_second_identical_overview_hits_cache(tmp_path, monkeypatch):
     repo = _repo_with_index(tmp_path, monkeypatch)
     calls = {"n": 0}
-    original = mcp_tools.generate_report
+    original = mcp_tools.build_report_data
 
     def _counting(*args, **kwargs):
         calls["n"] += 1
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(mcp_tools, "generate_report", _counting)
+    monkeypatch.setattr(mcp_tools, "build_report_data", _counting)
     args = {"repo_path": str(repo)}
 
     call_tool("cortex_overview", args)
-    # The P0-1 ledger hook estimates cortex_overview's baseline by
-    # re-dispatching a `response_format: detailed` render of the same call
-    # (see mcp/tools._detailed_rendering_tokens) -- that shadow call has a
-    # different cache key (response_format is part of it) and is itself a
-    # miss the first time, so the first outer call legitimately triggers
-    # two generate_report runs: one for the concise response, one for the
-    # ledger's detailed baseline estimate. Both then land in the cache.
+    # Overview now caches analysis separately from presentation. The ledger's
+    # detailed baseline re-render reuses that analysis rather than rebuilding
+    # it, even though it has a different response format.
     after_first = calls["n"]
-    assert after_first == 2
+    assert after_first == 1
 
     call_tool("cortex_overview", args)
     assert calls["n"] == after_first, (
-        "second identical cortex_overview call must hit the cache for both "
-        "the concise response and the ledger's detailed baseline re-render"
+        "second identical cortex_overview call must reuse cached analysis"
     )
 
 

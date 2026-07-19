@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 import re
+from typing import Any
 
 from .community import detect_communities
 from .deadcode import analyze_dead_code
@@ -80,42 +82,80 @@ def _surprising_connections(
     return surprises[:top_n]
 
 
-def generate_report(
+def build_report_data(
     repo_path: Path,
     db_path: Path | None = None,
-    out_dir: Path | None = None,
     include_test_pairs: bool = False,
-) -> str:
+) -> dict[str, Any]:
+    """Collect the deterministic, JSON-serializable inputs to a report.
+
+    Community detection remains here (rather than in the renderer), so every
+    report format has the same analysis and continues to persist communities.
+    """
     repo_root = discover_repo_root(repo_path)
     store = CortexStore(db_path or default_db_path(repo_root))
     nodes, edges = store.fetch_graph(repo_root)
 
-    communities = detect_communities(nodes, edges)
-    node_community: dict[str, int] = {}
-    for community in communities:
-        for node_id in community.node_ids:
-            node_community[node_id] = community.community_id
-    store.save_communities(repo_root, communities)
+    detected_communities = detect_communities(nodes, edges)
+    node_community = {
+        node_id: community.community_id
+        for community in detected_communities
+        for node_id in community.node_ids
+    }
+    store.save_communities(repo_root, detected_communities)
 
-    god_nodes = _god_nodes(nodes, edges)
-    hotspots = top_hotspots(nodes)
-    surprises = _surprising_connections(nodes, edges, node_community, include_test_pairs=include_test_pairs)
-    dead_code = analyze_dead_code(repo_root, store=store, nodes=nodes, edges=edges)
-    file_node_count = sum(1 for node in nodes if node.kind == "file")
+    communities = [
+        {"community_id": community.community_id, "node_ids": sorted(community.node_ids), "label": community.label}
+        for community in sorted(detected_communities, key=lambda item: item.community_id)
+    ]
+    return {
+        "repo_name": repo_root.name,
+        "repo_path": str(repo_root),
+        "file_count": sum(1 for node in nodes if node.kind == "file"),
+        "node_count": len(nodes),
+        "edge_count": len(edges),
+        "communities": communities,
+        "god_nodes": [
+            {"path": node.label, "connections": degree}
+            for node, degree in _god_nodes(nodes, edges)
+        ],
+        "hotspots": top_hotspots(nodes),
+        "surprising_connections": [
+            {"source": source, "target": target, "note": note, "weight": weight}
+            for source, target, note, weight in _surprising_connections(
+                nodes, edges, node_community, include_test_pairs=include_test_pairs
+            )
+        ],
+        "dead_code": analyze_dead_code(repo_root, store=store, nodes=nodes, edges=edges)["findings"],
+    }
 
+
+def render_report(
+    data: Mapping[str, Any],
+    dead_code: Sequence[Mapping[str, Any]],
+    omitted_count: int = 0,
+) -> str:
+    """Render report data as Markdown using the supplied dead-code findings.
+
+    ``dead_code`` is deliberately an explicit input so callers can apply a
+    presentation budget without re-running analysis.  A zero omission count
+    produces the legacy report text exactly.
+    """
+    communities = data["communities"]
     lines = [
-        f"# Cortex Report: {repo_root.name}",
+        f"# Cortex Report: {data['repo_name']}",
         "",
-        f"- Files: {file_node_count}",
-        f"- Total Nodes: {len(nodes)}",
-        f"- Edges: {len(edges)}",
+        f"- Files: {data['file_count']}",
+        f"- Total Nodes: {data['node_count']}",
+        f"- Edges: {data['edge_count']}",
         f"- Communities: {len(communities)}",
         "",
         "## God Nodes (Most Connected Files)",
     ]
-    lines.extend(f"- `{node.label}` — {degree} connections" for node, degree in god_nodes)
+    lines.extend(f"- `{item['path']}` — {item['connections']} connections" for item in data["god_nodes"])
 
     lines.extend(["", "## Hotspots"])
+    hotspots = data["hotspots"]
     if hotspots:
         lines.extend(
             f"- `{item['path']}` — score={item['score']} (churn={item['churn']}, complexity={item['complexity']})"
@@ -125,29 +165,43 @@ def generate_report(
         lines.append("- None detected yet.")
 
     lines.extend(["", "## Communities"])
-    for community in sorted(communities, key=lambda item: (-len(item.node_ids), item.community_id))[:10]:
-        file_members = [node_id for node_id in community.node_ids if node_id.startswith("file:")][:5]
+    for community in sorted(communities, key=lambda item: (-len(item["node_ids"]), item["community_id"]))[:10]:
+        file_members = [node_id for node_id in community["node_ids"] if node_id.startswith("file:")][:5]
         member_labels = [node_id.removeprefix("file:") for node_id in file_members]
         preview = ", ".join(member_labels) if member_labels else "no file nodes"
-        lines.append(f"- Community {community.community_id} ({len(community.node_ids)} nodes): {preview}")
+        lines.append(f"- Community {community['community_id']} ({len(community['node_ids'])} nodes): {preview}")
 
     lines.extend(["", "## Surprising Cross-Community Connections"])
+    surprises = data["surprising_connections"]
     if surprises:
-        for source, target, note, _weight in surprises:
-            lines.append(f"- `{source}` ↔ `{target}` ({note})")
+        lines.extend(f"- `{item['source']}` ↔ `{item['target']}` ({item['note']})" for item in surprises)
     else:
         lines.append("- None detected yet. Run `cortex enrich .` for deeper semantic analysis.")
 
     lines.extend(["", "## Dead Code Candidates"])
-    if dead_code["findings"]:
+    if dead_code:
         lines.extend(
             f"- `{item['symbol']}` — `{item['file']}:{item['line']}` — {item['confidence']}: {item['reason']}"
-            for item in dead_code["findings"]
+            for item in dead_code
         )
-    else:
+    if omitted_count > 0:
+        lines.append(
+            f"- {omitted_count} additional candidate(s) omitted; use `cortex_dead_code` for the complete list."
+        )
+    elif not dead_code:
         lines.append("- None detected yet.")
 
-    report = "\n".join(lines).strip()
+    return "\n".join(lines).strip()
+
+
+def generate_report(
+    repo_path: Path,
+    db_path: Path | None = None,
+    out_dir: Path | None = None,
+    include_test_pairs: bool = False,
+) -> str:
+    data = build_report_data(repo_path, db_path=db_path, include_test_pairs=include_test_pairs)
+    report = render_report(data, data["dead_code"])
 
     if out_dir is not None:
         out_dir.mkdir(parents=True, exist_ok=True)

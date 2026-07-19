@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
 from cortex.models import GraphEdge, GraphNode
-from cortex.report import generate_report
+from cortex.report import build_report_data, generate_report, render_report
 from cortex.store import CortexStore
 
 
@@ -30,6 +31,31 @@ def _setup_store(tmp_path: Path) -> tuple[CortexStore, Path]:
     store.save_commits(repo, [])
     store.save_graph(repo, nodes, edges)
     return store, repo
+
+
+def test_report_data_is_json_serializable_and_renderer_accepts_selected_dead_code(tmp_path: Path) -> None:
+    store, repo = _setup_store(tmp_path)
+
+    data = build_report_data(repo, db_path=store.db_path)
+    assert json.loads(json.dumps(data)) == data
+    assert store.fetch_communities(repo)
+
+    report = render_report(
+        data,
+        [
+            {
+                "symbol": "unused_helper",
+                "file": "auth.py",
+                "line": 12,
+                "confidence": "high",
+                "reason": "no incoming edges",
+            }
+        ],
+        omitted_count=2,
+    )
+
+    assert "`unused_helper` — `auth.py:12` — high: no incoming edges" in report
+    assert "2 additional candidate(s) omitted; use `cortex_dead_code` for the complete list." in report
 
 
 def test_report_contains_god_nodes_section(tmp_path: Path) -> None:
