@@ -17,7 +17,7 @@ authors = [
 # launches use the isolated runtime manager instead of writing to site-packages.
 dependencies = [
   "tree-sitter==0.26.0",
-  "tree-sitter-language-pack==1.12.5",
+  "tree-sitter-language-pack==1.13.1",
 ]
 
 [project.optional-dependencies]
