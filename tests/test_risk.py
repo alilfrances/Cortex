@@ -178,6 +178,35 @@ def test_qt_instantiation_header_pair_signal_sites_and_qml_registration(tmp_path
     assert not any(item["qml"] == "qml/New.qml" for item in registered["build_system_misses"])
 
 
+def test_swift_test_pairs_produce_missing_test_directives_only_when_untouched(tmp_path: Path) -> None:
+    repo = tmp_path / "swift_repo"
+    repo.mkdir()
+    _run(repo, "init", "-q")
+    _run(repo, "config", "user.email", "test@example.com")
+    _run(repo, "config", "user.name", "Test")
+    (repo / "Sources").mkdir()
+    (repo / "LingleTests").mkdir()
+    source = repo / "Sources" / "Foo.swift"
+    test = repo / "LingleTests" / "FooTests.swift"
+    source.write_text("func foo() { }\n", encoding="utf-8")
+    test.write_text("func testFoo() { }\n", encoding="utf-8")
+    _run(repo, "add", ".")
+    _run(repo, "commit", "-qm", "initial")
+
+    source.write_text("func foo() { print(1) }\n", encoding="utf-8")
+    _run(repo, "add", "Sources/Foo.swift")
+    _run(repo, "commit", "-qm", "source only")
+    missing = analyze_risk(repo)
+    assert {"source": "Sources/Foo.swift", "test": "LingleTests/FooTests.swift", "reason": "paired test is untouched"} in missing["missing_tests"]
+
+    source.write_text("func foo() { print(2) }\n", encoding="utf-8")
+    test.write_text("func testFoo() { print(2) }\n", encoding="utf-8")
+    _run(repo, "add", ".")
+    _run(repo, "commit", "-qm", "source and test")
+    touched = analyze_risk(repo)
+    assert not any(item["source"] == "Sources/Foo.swift" for item in touched["missing_tests"])
+
+
 def test_mcp_risk_meta_ledger_and_budget(tmp_path: Path, monkeypatch) -> None:
     repo = _repo(tmp_path)
     import cortex.mcp.tools as mcp_tools

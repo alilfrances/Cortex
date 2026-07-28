@@ -19,6 +19,7 @@ from typing import Any, Iterable, Mapping, Sequence
 from .gitutils import discover_repo_root
 from .report import _looks_like_src_test_pair
 from .store import CortexStore, default_db_path
+from .testpatterns import is_test_path
 from .tokenizer import count_text_tokens
 
 # A direct COCHANGE edge is already normalised to [0, 1] by cochange.py.  A
@@ -496,7 +497,7 @@ def _test_directives(changed: Sequence[DiffFile], all_paths: set[str]) -> list[d
     for item in changed:
         if Path(item.path).suffix.lower() not in _SOURCE_SUFFIXES:
             continue
-        if "tests" in Path(item.path).parts or Path(item.path).stem.startswith("test_") or Path(item.path).stem.endswith("_test"):
+        if is_test_path(item.path):
             continue
         candidates = sorted(
             candidate for candidate in all_paths

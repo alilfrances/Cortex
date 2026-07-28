@@ -7,6 +7,7 @@ from pathlib import Path
 from cortex.deadcode import analyze_dead_code
 from cortex.ingest import ingest_repository
 from cortex.mcp.tools import call_tool
+from cortex.models import GraphNode
 from cortex.store import CortexStore, default_db_path
 from cortex.tokenizer import count_text_tokens
 from evals.run_evals import _build_qt_app
@@ -58,6 +59,47 @@ def test_python_dead_code_tiers_and_entry_point_exclusions(tmp_path: Path, monke
     assert by_symbol["docs_only"]["confidence"] == "medium"
     assert "no grep refs" not in by_symbol["docs_only"]["reason"]
     assert not {"main", "__init__", "__str__", "exported", "decorated_route", "test_fixture_helper"} & by_symbol.keys()
+
+
+def test_dead_code_confidence_tiering_uses_treesitter_metadata_but_not_regex_fallback(monkeypatch) -> None:
+    import cortex.deadcode as deadcode
+
+    class Store:
+        def fetch_source_content(self, repo_root: Path, path: str) -> str:
+            return ""
+
+    calls: list[str] = []
+
+    def tier(*args, **kwargs):
+        calls.append("tiered")
+        return "high", "no incoming edges; no grep refs"
+
+    monkeypatch.setattr(deadcode, "_reference_tier", tier)
+    treesitter_node = GraphNode(
+        node_id="symbol:Foo.swift:orphan",
+        kind="func",
+        label="orphan",
+        source_ref="Foo.swift",
+        metadata={"parser_backend": "treesitter"},
+    )
+    regex_node = GraphNode(
+        node_id="symbol:Foo.swift:fallback",
+        kind="func",
+        label="fallback",
+        source_ref="Foo.swift",
+        metadata={"parser_backend": "regex"},
+    )
+
+    assert deadcode._candidate_reason(Path("repo"), Store(), treesitter_node, [], 2000) == (
+        "high",
+        "no incoming edges; no grep refs",
+    )
+    assert calls == ["tiered"]
+    assert deadcode._candidate_reason(Path("repo"), Store(), regex_node, [], 2000) == (
+        "low",
+        "no incoming edges; regex/dynamic-language caveat",
+    )
+    assert calls == ["tiered"]
 
 
 def test_qt_dead_code_credits_runtime_edges_and_keeps_orphan_helper(tmp_path: Path, monkeypatch) -> None:

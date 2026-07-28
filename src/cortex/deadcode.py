@@ -11,6 +11,7 @@ from .gitutils import discover_repo_root
 from .models import GraphEdge, GraphNode
 from .references import find_references
 from .store import CortexStore, default_db_path
+from .testpatterns import is_test_path
 from .tokenizer import count_text_tokens
 
 
@@ -21,9 +22,7 @@ _COMMENT_PREFIXES = ("#", "//", "/*", "*", "*/", "<!--", "///")
 
 
 def _is_test_path(path: str) -> bool:
-    parts = Path(path).parts
-    stem = Path(path).stem.lower()
-    return "tests" in parts or stem.startswith("test_") or stem.endswith("_test")
+    return is_test_path(path)
 
 
 def _is_dunder_or_entry_point(node: GraphNode) -> bool:
@@ -171,7 +170,8 @@ def _candidate_reason(
     qt_macro, qml_registration = _qt_macro_flags(node, content, all_sources)
     if qt_kind in _QT_KINDS or qml_kind in _QT_KINDS or qt_macro or qml_registration:
         return "low", "no incoming edges; Qt meta-object or dynamic-language caveat"
-    if not node.source_ref.lower().endswith(".py"):
+    parser_backend = node.metadata.get("parser_backend") if isinstance(node.metadata, dict) else None
+    if not (node.source_ref.lower().endswith(".py") or parser_backend == "treesitter"):
         return "low", "no incoming edges; regex/dynamic-language caveat"
     return _reference_tier(repo_root, store, node, reference_budget)
 

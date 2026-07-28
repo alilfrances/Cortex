@@ -17,11 +17,13 @@ _HOTSPOT_LIMIT = 10
 _PYTHON_SUFFIXES = {".py"}
 _CPP_SUFFIXES = {".c", ".h", ".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx"}
 _QML_JS_SUFFIXES = {".qml", ".js", ".jsx", ".ts", ".tsx"}
+_SWIFT_SUFFIXES = {".swift"}
 
 _WORD_RULES: dict[str, tuple[str, ...]] = {
     "python": ("if", "elif", "for", "while", "except", "and", "or"),
     "cpp": ("if", "for", "while", "switch", "case", "catch"),
     "qml": ("if", "for", "while", "switch", "case"),
+    "swift": ("if", "for", "while", "switch", "case", "catch", "guard"),
     # A conservative fallback for other indexed code. It is deliberately not
     # the Python table: language-specific rules above are selected whenever
     # Cortex knows the suffix.
@@ -84,8 +86,12 @@ def _language_for_path(path: str) -> str:
     language_name = path.strip().lower()
     if language_name in {"python", "py"}:
         return "python"
-    if language_name in {"cpp", "c++", "c", "qml", "javascript", "js"}:
-        return "cpp" if language_name in {"cpp", "c++", "c"} else "qml"
+    if language_name in {"cpp", "c++", "c"}:
+        return "cpp"
+    if language_name in {"qml", "javascript", "js"}:
+        return "qml"
+    if language_name == "swift":
+        return "swift"
     suffix = PurePosixPath(path).suffix.lower()
     if suffix in _PYTHON_SUFFIXES:
         return "python"
@@ -93,6 +99,8 @@ def _language_for_path(path: str) -> str:
         return "cpp"
     if suffix in _QML_JS_SUFFIXES:
         return "qml"
+    if suffix in _SWIFT_SUFFIXES:
+        return "swift"
     return "generic"
 
 
@@ -101,11 +109,12 @@ def _word_count(masked: str, words: tuple[str, ...]) -> int:
 
 
 def _operator_count(masked: str, language: str) -> int:
-    if language not in {"cpp", "qml"}:
+    if language not in {"cpp", "qml", "swift"}:
         return 0
-    # A ternary is represented by its question mark. `?=` is not a C++/QML
-    # branch and is excluded defensively for JavaScript-like input.
-    return masked.count("&&") + masked.count("||") + len(re.findall(r"\?(?!=)", masked))
+    # A ternary is represented by its question mark. `?=` is not a branch;
+    # Swift's `??` nil-coalescing operator is also excluded because it is not
+    # control flow.
+    return masked.count("&&") + masked.count("||") + len(re.findall(r"(?<!\?)\?(?![?=])", masked))
 
 
 def _qml_binding_count(content: str, masked: str) -> int:
