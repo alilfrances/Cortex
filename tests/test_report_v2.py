@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 
 from cortex.models import GraphEdge, GraphNode
-from cortex.report import build_report_data, generate_report, render_report
+from cortex.report import _surprising_connections, build_report_data, generate_report, render_report
 from cortex.store import CortexStore
 
 
@@ -124,3 +124,35 @@ def test_report_filters_src_test_cochange_pairs_by_default(tmp_path: Path) -> No
 
     assert "`src/auth.py` ↔ `tests/test_auth.py`" not in report
     assert "`src/auth.py` ↔ `tests/test_auth.py`" in report_with_tests
+
+
+def test_report_filters_swift_and_typescript_test_pairs_by_default(tmp_path: Path) -> None:
+    db_path = tmp_path / "cortex.db"
+    store = CortexStore(db_path)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
+    nodes = [
+        GraphNode(node_id="file:Sources/Foo.swift", kind="file", label="Sources/Foo.swift", source_ref="Sources/Foo.swift"),
+        GraphNode(node_id="file:LingleTests/FooTests.swift", kind="file", label="LingleTests/FooTests.swift", source_ref="LingleTests/FooTests.swift"),
+        GraphNode(node_id="file:src/widget.ts", kind="file", label="src/widget.ts", source_ref="src/widget.ts"),
+        GraphNode(node_id="file:src/widget.test.ts", kind="file", label="src/widget.test.ts", source_ref="src/widget.test.ts"),
+    ]
+    edges = [
+        GraphEdge(edge_id="swift", source=nodes[0].node_id, target=nodes[1].node_id, relation="cochange", layer="COCHANGE"),
+        GraphEdge(edge_id="ts", source=nodes[2].node_id, target=nodes[3].node_id, relation="cochange", layer="COCHANGE"),
+    ]
+    store.reset_repo(repo)
+    store.save_sources(repo, [])
+    store.save_commits(repo, [])
+    store.save_graph(repo, nodes, edges)
+
+    communities = {node.node_id: index for index, node in enumerate(nodes)}
+    filtered = _surprising_connections(nodes, edges, communities)
+    included = _surprising_connections(nodes, edges, communities, include_test_pairs=True)
+
+    assert filtered == []
+    assert {(source, target) for source, target, _note, _weight in included} == {
+        ("Sources/Foo.swift", "LingleTests/FooTests.swift"),
+        ("src/widget.ts", "src/widget.test.ts"),
+    }

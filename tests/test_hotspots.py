@@ -85,6 +85,17 @@ def test_complexity_is_language_specific_and_skips_comments_strings_and_raw_stri
     assert estimate_complexity(cpp) == estimate_complexity(clean_cpp)
 
 
+def test_swift_complexity_counts_guard_if_and_operators_without_false_positives() -> None:
+    assert estimate_complexity("guard ready else { return }\n", "Flow.swift") == 1000
+    assert estimate_complexity("if ready { return }\n", "Flow.swift") == 1000
+    assert estimate_complexity("let ready = left && right\n", "Flow.swift") == 1000
+    assert estimate_complexity("guard ready else { return }; if left && right { return }\n", "Flow.swift") == 3000
+
+    assert estimate_complexity("// guard if && ?\n", "Flow.swift") == 0
+    assert estimate_complexity('let text = "guard if && ?"\n', "Flow.swift") == 0
+    assert estimate_complexity("let value = first ?? second\n", "Flow.swift") == 0
+
+
 def test_shared_masking_keeps_regex_cpp_body_span_past_raw_string_braces() -> None:
     content = (
         'void render() {\n'

@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-import re
 from typing import Any
 
 from .community import detect_communities
@@ -12,15 +11,11 @@ from .gitutils import discover_repo_root
 from .hotspots import top_hotspots
 from .models import GraphEdge, GraphNode
 from .store import CortexStore, default_db_path
+from .testpatterns import test_base_name
 
 
 def _normalized_test_base(path: str) -> tuple[str, bool]:
-    parts = Path(path).parts
-    stem = Path(path).stem
-    is_test = "tests" in parts or stem.startswith("test_") or stem.endswith("_test")
-    base = re.sub(r"^(test_)+", "", stem)
-    base = re.sub(r"(_test)+$", "", base)
-    return base, is_test
+    return test_base_name(path)
 
 
 def _looks_like_src_test_pair(source: str, target: str) -> bool:
