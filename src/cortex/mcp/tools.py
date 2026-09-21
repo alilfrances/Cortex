@@ -11,6 +11,7 @@ from typing import Any
 
 from ..bundle import _render_skeleton, _render_symbol_skeleton, _tokenize_query, generate_bundle
 from ..deadcode import analyze_dead_code, truncate_dead_code_result
+from ..deadline import DeadlineExceeded, deadline_scope, resolve_budget_seconds
 from ..gitutils import discover_repo_root
 from ..impact import UnknownPathError, rank_file_impact
 from ..ingest import compute_repo_fingerprint, ingest_repository
@@ -21,6 +22,7 @@ from ..hotspots import top_hotspots
 from ..risk import analyze_risk, truncate_risk_result
 from ..store import CortexStore, default_db_path
 from ..tokenizer import count_text_tokens, truncate_text_to_budget
+from .status import REGISTRY
 
 
 TOOL_DEFINITIONS: list[dict[str, Any]] = [
@@ -218,6 +220,20 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "repo_path": {"type": "string"},
                 "commits": {"type": "integer", "default": 1000},
                 "mode": {"type": "string", "enum": ["incremental", "full"], "default": "incremental"},
+            },
+        },
+    },
+    {
+        "name": "cortex_status",
+        "description": (
+            "Report this Cortex MCP server's in-flight requests and lifetime counters. Use it to tell "
+            "whether a slow call is still making progress or the server is wedged, without attaching a "
+            "debugger. Answers immediately even while another call is running."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "repo_path": {"type": "string", "description": "Unused; accepted for call-shape consistency."}
             },
         },
     },
@@ -730,16 +746,41 @@ def _fit_overview_report(
             repo_root, analysis, [], len(findings), budget, budget_feasible=False, extra_fields=extra_fields
         )
 
-    selected: list[dict[str, Any]] = []
-    for finding in findings:
-        candidate = [*selected, finding]
+    # The original loop grew `selected` one finding at a time and, for EVERY
+    # candidate, re-ran `render_report` over the whole analysis (god nodes,
+    # hotspots, communities, surprising connections -- none of which change
+    # as findings are added) and then re-serialized/re-tokenized the result,
+    # breaking at the first finding that didn't fit. That is O(findings) full
+    # report renders.
+    #
+    # `findings` is fixed, sorted, and never reordered here, and the report
+    # only ever *appends* one more "- `symbol` -- ..." line per included
+    # finding (see render_report's "Dead Code Candidates" section) while the
+    # "N additional candidate(s) omitted" line's count only shrinks -- so the
+    # rendered/serialized size is monotonically non-decreasing in the number
+    # of findings included. That means the first prefix length the original
+    # loop fails on (its `break` point) is exactly the largest prefix length
+    # that fits, which a binary search over prefix length finds directly,
+    # using the SAME `_overview_payload_for_report` + `json.dumps` +
+    # `count_text_tokens` measurement the original loop used -- just O(log
+    # findings) times instead of O(findings) times.
+    def _fits(count: int) -> bool:
+        candidate = findings[:count]
         rendered = _overview_payload_for_report(
             repo_root, analysis, candidate, len(findings) - len(candidate), budget,
             budget_feasible=True, extra_fields=extra_fields,
         )
-        if count_text_tokens(json.dumps(rendered, sort_keys=True)) > budget:
-            break
-        selected = candidate
+        return count_text_tokens(json.dumps(rendered, sort_keys=True)) <= budget
+
+    lo, hi, best = 0, len(findings), 0
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        if _fits(mid):
+            best = mid
+            lo = mid + 1
+        else:
+            hi = mid - 1
+    selected = findings[:best]
     return _overview_payload_for_report(
         repo_root, analysis, selected, len(findings) - len(selected), budget,
         budget_feasible=True, extra_fields=extra_fields,
@@ -1239,30 +1280,96 @@ def _context_fit_card(card: dict[str, Any], allowance: int) -> dict[str, Any]:
         "matches", "neighbors", "cochange", "cochange_detail", "signatures", "headings",
         "signals", "slots", "emits", "connects", "handlers", "instantiates",
     )
-    while count_text_tokens(json.dumps(card, sort_keys=True)) > allowance:
-        changed = False
-        for key in list_keys:
-            value = card.get(key)
-            if isinstance(value, list) and value:
-                value.pop()
-                changed = True
-                if count_text_tokens(json.dumps(card, sort_keys=True)) <= allowance:
+
+    # The original `while` loop popped ONE item (from the end) off the first
+    # non-empty list in `list_keys`, in round-robin order across repeated
+    # passes, re-serializing/re-tokenizing the WHOLE card after every single
+    # pop and stopping the instant it fit. That pop *order* depends only on
+    # each list's starting length and `list_keys`'s fixed order -- never on
+    # `allowance` or on measurement -- so it is entirely deterministic and
+    # can be computed once, with no serialization at all (`_pop_counts`
+    # below). And because every pop only ever removes content, json.dumps(card)
+    # after `m` pops is monotonically non-increasing in `m`. So the smallest
+    # `m` that fits (what the original loop's incremental checks converge
+    # on) is found directly with a binary search over `m`, measured with the
+    # SAME `count_text_tokens(json.dumps(card, sort_keys=True))` call the
+    # original used -- O(log total_items) full-card serializations instead
+    # of O(total_items).
+    remaining = {key: len(card[key]) for key in list_keys if isinstance(card.get(key), list) and card[key]}
+    total_items = sum(remaining.values())
+
+    def _pop_counts(pops: int) -> dict[str, int]:
+        """How many items are popped from each key within the first `pops`
+        steps of the round-robin sequence (successive rounds over
+        `list_keys`, skipping keys already exhausted) -- the same order the
+        original nested while/for loop walked, computed analytically."""
+        counts = {key: 0 for key in remaining}
+        left = dict(remaining)
+        done = 0
+        while done < pops:
+            progressed = False
+            for key in list_keys:
+                if done >= pops:
                     break
-        if changed:
-            continue
+                if left.get(key, 0) > 0:
+                    left[key] -= 1
+                    counts[key] += 1
+                    done += 1
+                    progressed = True
+            if not progressed:
+                break
+        return counts
+
+    def _card_after_pops(pops: int) -> dict[str, Any]:
+        popped = _pop_counts(pops)
+        if not any(popped.values()):
+            return card
+        trial = dict(card)
+        for key, count in popped.items():
+            if count:
+                trial[key] = card[key][: len(card[key]) - count]
+        return trial
+
+    if total_items:
+        if count_text_tokens(json.dumps(_card_after_pops(total_items), sort_keys=True)) <= allowance:
+            lo, hi, best = 0, total_items, total_items
+            while lo <= hi:
+                mid = (lo + hi) // 2
+                if count_text_tokens(json.dumps(_card_after_pops(mid), sort_keys=True)) <= allowance:
+                    best = mid
+                    hi = mid - 1
+                else:
+                    lo = mid + 1
+            popped = _pop_counts(best)
+            for key, count in popped.items():
+                if count:
+                    card[key] = card[key][: len(card[key]) - count]
+        else:
+            # Even emptying every list in `list_keys` doesn't fit -- matches
+            # the original loop running every round to exhaustion (all pops
+            # applied) before it ever reaches the scalar-trimming phase.
+            for key in remaining:
+                card[key] = []
+
+    if count_text_tokens(json.dumps(card, sort_keys=True)) > allowance:
         # Keep required scalar fields but shorten their human-readable parts.
         # ``target`` is the stable input-to-card mapping and must never be
         # altered, even when the requested budget is impossibly small.
+        #
+        # Bounded to exactly 4 fields (not input-sized), so -- unlike the
+        # list-popping phase above -- checking after each one is already
+        # O(1) and needs no further optimization; this loop is unchanged
+        # from the original, just no longer re-entered via an outer `while`.
         for key in ("signature", "message", "hint", "path"):
             value = card.get(key)
             if isinstance(value, str) and value:
                 shortened = truncate_text_to_budget(value, max(1, allowance // 4), kind="text")
                 if shortened != value:
                     card[key] = shortened
-                    changed = True
-                    break
-        if changed:
-            continue
+                    if count_text_tokens(json.dumps(card, sort_keys=True)) <= allowance:
+                        break
+
+    if count_text_tokens(json.dumps(card, sort_keys=True)) > allowance:
         # At an impossibly small budget there is no way to encode every
         # required key and its JSON punctuation. Emptying variable fields is
         # the deterministic last resort; one card and its truncation signal
@@ -1273,7 +1380,6 @@ def _context_fit_card(card: dict[str, Any], allowance: int) -> dict[str, Any]:
         for key in ("signature", "message", "hint", "path"):
             if isinstance(card.get(key), str):
                 card[key] = ""
-        break
     return card
 
 
@@ -1668,6 +1774,36 @@ _ORIGIN_PREFIXES = {
 }
 
 
+def _prefix_fit_items(all_items: list[dict[str, Any]], budget: int) -> tuple[list[dict[str, Any]], bool]:
+    """Binary-search the largest prefix of `all_items` (already built, in a
+    fixed order) whose `json.dumps` fits `budget`.
+
+    Used by `_call_relations` and `_call_search_text`, which both used to
+    grow a result list one item at a time and, for EVERY candidate item,
+    rebuild and re-serialize/re-tokenize the WHOLE accumulated list via
+    `count_text_tokens(json.dumps([*items, item]))`, stopping (without
+    adding it) at the first item that didn't fit -- an O(n^2) pattern in the
+    number of returned items.
+
+    Because `all_items` is fixed and never reordered, `json.dumps(all_items[:k])`
+    is monotonically non-decreasing in `k` (every larger `k` only appends
+    more JSON). That makes the first prefix length the original per-item
+    loop failed on -- its stopping point -- exactly the largest prefix
+    length that fits, which this binary search finds directly using the
+    SAME `count_text_tokens(json.dumps(...))` measurement the original loop
+    used, in O(log n) calls instead of O(n).
+    """
+    lo, hi, best = 0, len(all_items), 0
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        if count_text_tokens(json.dumps(all_items[:mid])) <= budget:
+            best = mid
+            lo = mid + 1
+        else:
+            hi = mid - 1
+    return all_items[:best], best < len(all_items)
+
+
 def _edge_origin(edge: Any) -> str:
     for prefix, origin in _ORIGIN_PREFIXES.items():
         if edge.edge_id.startswith(prefix):
@@ -1696,11 +1832,8 @@ def _call_relations(arguments: dict[str, Any]) -> dict[str, Any]:
     node_ids = sorted({edge.source for edge in edges} | {edge.target for edge in edges})
     nodes = store.get_nodes(repo_root, node_ids)
 
-    items: list[dict[str, Any]] = []
-    budget = int(arguments.get("budget", 2000))
-    truncated = False
-    for edge in edges:
-        item = {
+    all_items: list[dict[str, Any]] = [
+        {
             "relation": edge.relation,
             "source": _endpoint(edge.source, nodes),
             "target": _endpoint(edge.target, nodes),
@@ -1708,10 +1841,10 @@ def _call_relations(arguments: dict[str, Any]) -> dict[str, Any]:
             "confidence": edge.confidence,
             "origin": _edge_origin(edge),
         }
-        if count_text_tokens(json.dumps([*items, item])) > budget:
-            truncated = True
-            break
-        items.append(item)
+        for edge in edges
+    ]
+    budget = int(arguments.get("budget", 2000))
+    items, truncated = _prefix_fit_items(all_items, budget)
     response_format = _response_format(arguments)
     return _content(_format_payload(
         {"repo_path": str(repo_root), "items": items, "truncated": truncated, "returned_count": len(items)},
@@ -1842,14 +1975,10 @@ def _call_search_text(arguments: dict[str, Any]) -> dict[str, Any]:
     limit = int(arguments.get("limit", 10))
     budget = int(arguments.get("budget", 2000))
     hits = store.search_fulltext(repo_root, query, limit=limit)
-    items: list[dict[str, Any]] = []
-    truncated = False
-    for path, score, snippet in hits:
-        item = {"path": path, "score": score, "snippet": snippet}
-        if count_text_tokens(json.dumps([*items, item])) > budget:
-            truncated = True
-            break
-        items.append(item)
+    all_items: list[dict[str, Any]] = [
+        {"path": path, "score": score, "snippet": snippet} for path, score, snippet in hits
+    ]
+    items, truncated = _prefix_fit_items(all_items, budget)
     payload = {
         "repo_path": str(repo_root),
         "items": items,
@@ -1875,6 +2004,10 @@ def _call_refresh(arguments: dict[str, Any]) -> dict[str, Any]:
 
 # Tools covered by the P0-1 token-savings ledger. cortex_refresh is excluded:
 # it doesn't return retrievable content to compare against a raw-read baseline.
+# Tools the token-savings ledger prices. `cortex_refresh` writes the index
+# rather than answering from it, and `cortex_status` reports on the server
+# process itself -- neither has a "tokens an agent would have spent reading
+# files instead" counterfactual to measure against, so neither is priced.
 _LEDGER_TOOLS = {
     "cortex_query",
     "cortex_overview",
@@ -1899,6 +2032,24 @@ _RELATION_ENDPOINT_FILE_RE = re.compile(r" @ (.+?)(?::\d+)?$")
 # _grep_hits, to recover referenced file paths from an already-formatted
 # cortex_references payload.
 _REFERENCE_LOCATION_RE = re.compile(r"^(.*):\d+$")
+
+
+def _call_status(arguments: dict[str, Any]) -> dict[str, Any]:
+    """Report what this server process is doing right now.
+
+    The bug this answers (docs/fix-plan-mcp-concurrency-wedge.md) was
+    diagnosed only by reading /proc and attempting ptrace, which the
+    reporter's sandbox blocked. This exposes the same facts from inside the
+    process: what is in flight, how long each call has been running, and
+    lifetime per-tool counters including how many calls hit their deadline.
+
+    Deliberately does not touch the index or the database -- it must stay
+    answerable while another call is mid-scan, which is the exact moment it
+    is most useful.
+    """
+    snapshot = REGISTRY.snapshot()
+    snapshot["deadline_budget_seconds"] = resolve_budget_seconds()
+    return _content(snapshot)
 
 
 def _referenced_file_tokens(store: CortexStore, repo_root: Path, paths: set[str]) -> int:
@@ -2131,40 +2282,81 @@ def _record_tool_usage(name: str, arguments: dict[str, Any], result: dict[str, A
 
 
 def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
+    """Dispatch one MCP tool call under a wall-clock budget.
+
+    Phase 2/4 of docs/fix-plan-mcp-concurrency-wedge.md: every call runs
+    inside a `deadline_scope` so a pathological repository cannot burn
+    minutes of CPU unnoticed (hot loops call `check_deadline()`), and inside
+    `REGISTRY.track` so a concurrent `cortex_status` call can report what is
+    in flight and for how long. A `DeadlineExceeded` is turned into a normal
+    structured error payload rather than a crash -- the server must stay
+    responsive for the rest of the batch.
+    """
     args = arguments or {}
+    budget_seconds = resolve_budget_seconds()
     try:
-        if name == "cortex_query":
-            result = _call_query(args)
-        elif name == "cortex_overview":
-            result = _call_overview(args)
-        elif name == "cortex_context":
-            result = _call_context(args)
-        elif name == "cortex_impact":
-            result = _call_impact(args)
-        elif name == "cortex_search_symbols":
-            result = _call_search(args)
-        elif name == "cortex_read_symbol":
-            result = _call_read_symbol(args)
-        elif name == "cortex_read_file":
-            result = _call_read_file(args)
-        elif name == "cortex_relations":
-            result = _call_relations(args)
-        elif name == "cortex_path":
-            result = _call_path(args)
-        elif name == "cortex_references":
-            result = _call_references(args)
-        elif name == "cortex_search_text":
-            result = _call_search_text(args)
-        elif name == "cortex_risk":
-            result = _call_risk(args)
-        elif name == "cortex_dead_code":
-            result = _call_dead_code(args)
-        elif name == "cortex_refresh":
-            result = _call_refresh(args)
-        else:
-            return _content({"error": "unknown_tool", "message": f"Unknown Cortex tool: {name}"}, is_error=True)
+        with REGISTRY.track(name, str(args.get("_request_id", ""))), \
+                deadline_scope(budget_seconds, tool_name=name):
+            result = _dispatch_tool(name, args)
+    except DeadlineExceeded as exc:
+        return _content(
+            {
+                "error": "deadline_exceeded",
+                "tool": name,
+                "message": str(exc),
+                "elapsed_seconds": round(exc.elapsed_seconds, 3),
+                "budget_seconds": exc.budget_seconds,
+                "hint": (
+                    "This call exceeded its wall-clock budget and was stopped so it could not "
+                    "block other requests. Narrow the request (a smaller budget or a more specific "
+                    "target), or raise CORTEX_TOOL_TIMEOUT_SECONDS if this repository legitimately "
+                    "needs longer."
+                ),
+            },
+            is_error=True,
+        )
     except Exception as exc:
         return _content({"error": type(exc).__name__, "message": str(exc)}, is_error=True)
 
+    if result.get("isError"):
+        return result
     _record_tool_usage(name, args, result)
+    return result
+
+
+def _dispatch_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
+    """Route one tool name to its handler. Split out of `call_tool` so the
+    deadline/status wrappers stay one level above the routing table."""
+    if name == "cortex_query":
+        result = _call_query(args)
+    elif name == "cortex_overview":
+        result = _call_overview(args)
+    elif name == "cortex_context":
+        result = _call_context(args)
+    elif name == "cortex_impact":
+        result = _call_impact(args)
+    elif name == "cortex_search_symbols":
+        result = _call_search(args)
+    elif name == "cortex_read_symbol":
+        result = _call_read_symbol(args)
+    elif name == "cortex_read_file":
+        result = _call_read_file(args)
+    elif name == "cortex_relations":
+        result = _call_relations(args)
+    elif name == "cortex_path":
+        result = _call_path(args)
+    elif name == "cortex_references":
+        result = _call_references(args)
+    elif name == "cortex_search_text":
+        result = _call_search_text(args)
+    elif name == "cortex_risk":
+        result = _call_risk(args)
+    elif name == "cortex_dead_code":
+        result = _call_dead_code(args)
+    elif name == "cortex_refresh":
+        result = _call_refresh(args)
+    elif name == "cortex_status":
+        result = _call_status(args)
+    else:
+        return _content({"error": "unknown_tool", "message": f"Unknown Cortex tool: {name}"}, is_error=True)
     return result
