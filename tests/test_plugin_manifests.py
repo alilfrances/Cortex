@@ -98,10 +98,14 @@ class PluginManifestTests(unittest.TestCase):
             self.assertNotIn(f"- {tool}", tools_block)
         from cortex.mcp.tools import TOOL_DEFINITIONS
 
+        # cortex_refresh mutates the index; cortex_status inspects the server
+        # process. Neither is a repository-exploration tool, so neither belongs
+        # in the explorer agent's surface -- every other tool must be there.
+        non_exploration = {"cortex_refresh", "cortex_status"}
         read_tools = {
             tool["name"]
             for tool in TOOL_DEFINITIONS
-            if tool["name"] != "cortex_refresh"
+            if tool["name"] not in non_exploration
         }
         for tool in read_tools:
             self.assertIn(f"mcp__plugin_cortex_cortex__{tool}", tools_block)
