@@ -4,8 +4,9 @@ import hashlib
 import json
 import os
 import re
+import threading
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -636,6 +637,47 @@ _OVERVIEW_DEFAULT_BUDGET = 2000
 _CONFIDENCE_PRIORITY = {"high": 0, "medium": 1, "low": 2}
 
 
+_DEFAULT_ANALYSIS_BUDGET_SECONDS = 30.0
+_PARTIAL_ANALYSIS_NOTE = (
+    "Analysis stopped at the time budget, so dead-code findings are incomplete. "
+    "Set CORTEX_ANALYSIS_BUDGET_SECONDS to raise it (0 disables the budget)."
+)
+
+# Tool execution is serial, so call_tool can publish its cancel event and a
+# single-slot overview-analysis memo here instead of threading them through
+# every helper. Both are reset when the outer call finishes.
+_current_cancel: threading.Event | None = None
+_in_tool_call = False
+_analysis_memo: tuple[tuple[str, str], dict[str, Any]] | None = None
+
+
+def _analysis_budget_seconds() -> float | None:
+    raw = os.environ.get("CORTEX_ANALYSIS_BUDGET_SECONDS")
+    if raw is None or not raw.strip():
+        return _DEFAULT_ANALYSIS_BUDGET_SECONDS
+    try:
+        value = float(raw)
+    except ValueError:
+        return _DEFAULT_ANALYSIS_BUDGET_SECONDS
+    if value != value:
+        return _DEFAULT_ANALYSIS_BUDGET_SECONDS
+    return value if value > 0 else None
+
+
+def _analysis_should_stop() -> Callable[[], bool]:
+    """Build the stop predicate for one analysis; the clock starts now."""
+    cancel = _current_cancel
+    budget = _analysis_budget_seconds()
+    deadline = None if budget is None else time.monotonic() + budget
+
+    def should_stop() -> bool:
+        if cancel is not None and cancel.is_set():
+            return True
+        return deadline is not None and time.monotonic() > deadline
+
+    return should_stop
+
+
 def _overview_analysis_cache_key(fingerprint: str) -> str:
     return _cache_key(
         fingerprint,
@@ -787,16 +829,28 @@ def _call_overview(arguments: dict[str, Any]) -> dict[str, Any]:
         and cached_analysis.get("version") == _OVERVIEW_ANALYSIS_CACHE_VERSION
         and _is_overview_analysis(cached_analysis.get("analysis"))
     )
+    global _analysis_memo
     if cache_hit:
         analysis = cached_analysis["analysis"]
     else:
-        analysis = build_report_data(repo_root)
-        _cache_set(store, repo_root, cache_key, {"version": _OVERVIEW_ANALYSIS_CACHE_VERSION, "analysis": analysis})
+        memo_key = (str(repo_root.resolve()), status["current_fingerprint"])
+        if _analysis_memo is not None and _analysis_memo[0] == memo_key:
+            analysis = _analysis_memo[1]
+        else:
+            analysis = build_report_data(repo_root, should_stop=_analysis_should_stop())
+            if _in_tool_call:
+                _analysis_memo = (memo_key, analysis)
+            if not analysis.get("dead_code_partial", False):
+                _cache_set(
+                    store, repo_root, cache_key, {"version": _OVERVIEW_ANALYSIS_CACHE_VERSION, "analysis": analysis}
+                )
 
     # Capabilities describe current optional integrations, unlike graph
     # analysis. They count toward detailed content, while freshness/status
     # remains outside the budget and is merged only by `_format_payload`.
     extra_fields = _overview_detailed_capabilities(store, repo_root) if response_format == "detailed" else None
+    if analysis.get("dead_code_partial", False):
+        extra_fields = {**(extra_fields or {}), "dead_code_partial": True, "note": _PARTIAL_ANALYSIS_NOTE}
     payload = _fit_overview_report(repo_root, analysis, budget, extra_fields=extra_fields)
     return _content(_format_payload(payload, status, response_format, cached=cache_hit))
 
@@ -1422,8 +1476,13 @@ def _call_dead_code(arguments: dict[str, Any]) -> dict[str, Any]:
         nodes=nodes,
         edges=edges,
         budget=int(arguments.get("budget", 2000)),
+        should_stop=_analysis_should_stop(),
     )
     result = truncate_dead_code_result(result, int(arguments.get("budget", 2000)))
+    if result.get("partial"):
+        result["note"] = _PARTIAL_ANALYSIS_NOTE
+    else:
+        result.pop("partial", None)
     response_format = _response_format(arguments)
     return _content(_format_payload(result, status, response_format))
 
@@ -2130,7 +2189,24 @@ def _record_tool_usage(name: str, arguments: dict[str, Any], result: dict[str, A
             pass
 
 
-def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
+def call_tool(
+    name: str,
+    arguments: dict[str, Any] | None,
+    *,
+    cancel: threading.Event | None = None,
+) -> dict[str, Any]:
+    global _current_cancel, _in_tool_call, _analysis_memo
+    _current_cancel = cancel
+    _in_tool_call = True
+    try:
+        return _dispatch_tool(name, arguments)
+    finally:
+        _current_cancel = None
+        _in_tool_call = False
+        _analysis_memo = None
+
+
+def _dispatch_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
     args = arguments or {}
     try:
         if name == "cortex_query":

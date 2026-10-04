@@ -5,11 +5,11 @@ import json
 import re
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 from .gitutils import discover_repo_root
 from .models import GraphEdge, GraphNode
-from .references import find_references
+from .references import GraphReferenceIndex, ReferenceCorpus, find_references
 from .store import CortexStore, default_db_path
 from .testpatterns import is_test_path
 from .tokenizer import count_text_tokens
@@ -36,19 +36,75 @@ def _is_dunder_or_entry_point(node: GraphNode) -> bool:
     )
 
 
-def _decorated_symbol(content: str, line: int | None) -> bool:
-    if line is None:
-        return False
+def _decorated_lines(content: str) -> frozenset[int]:
     try:
         tree = ast.parse(content)
     except SyntaxError:
-        return False
-    return any(
-        isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
-        and node.lineno == line
-        and bool(node.decorator_list)
+        return frozenset()
+    return frozenset(
+        node.lineno
         for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.decorator_list
     )
+
+
+class _AnalysisContext:
+    """Per-analysis caches so per-symbol work does not repeat repo-wide I/O and parsing."""
+
+    def __init__(
+        self,
+        repo_root: Path,
+        store: CortexStore,
+        all_sources: Sequence[Any],
+        reference_budget: int,
+        graph_nodes: Sequence[GraphNode] | None = None,
+        graph_edges: Sequence[GraphEdge] | None = None,
+    ) -> None:
+        self.repo_root = repo_root
+        self.store = store
+        self.reference_budget = reference_budget
+        self._graph_nodes = graph_nodes
+        self._graph_edges = graph_edges
+        self._graph_index: GraphReferenceIndex | None = None
+        self.source_by_path: dict[str, str] = {source.path: source.content for source in all_sources}
+        # Both repo-wide qmlRegisterType patterns require this literal, so other sources cannot match.
+        self.qml_register_sources: list[Any] = [source for source in all_sources if "qmlRegisterType" in source.content]
+        self._decorated: dict[str, frozenset[int]] = {}
+        self._corpus: ReferenceCorpus | None = None
+        self._references: dict[str, dict[str, Any]] = {}
+
+    def content(self, path: str) -> str:
+        return self.source_by_path.get(path) or ""
+
+    def is_decorated(self, path: str, line: int | None) -> bool:
+        if line is None:
+            return False
+        lines = self._decorated.get(path)
+        if lines is None:
+            lines = self._decorated[path] = _decorated_lines(self.content(path))
+        return line in lines
+
+    def references(self, label: str) -> dict[str, Any]:
+        result = self._references.get(label)
+        if result is None:
+            if self._corpus is None:
+                symbols = (
+                    None
+                    if self._graph_nodes is None
+                    else {node.label for node in self._graph_nodes if node.granularity == "symbol"}
+                )
+                self._corpus = ReferenceCorpus(self.repo_root, symbols)
+            if self._graph_index is None and self._graph_nodes is not None and self._graph_edges is not None:
+                self._graph_index = GraphReferenceIndex(self._graph_nodes, self._graph_edges)
+            result = self._references[label] = find_references(
+                self.store,
+                self.repo_root,
+                label,
+                self.reference_budget,
+                corpus=self._corpus,
+                graph_index=self._graph_index,
+            )
+        return result
 
 
 def _reexported_symbols(sources: Sequence[Any]) -> set[str]:
@@ -90,14 +146,19 @@ def _line_location(value: Any) -> tuple[str, int | None] | None:
     return path, int(line)
 
 
-def _comment_or_doc_hit(repo_root: Path, store: CortexStore, location: str) -> bool:
+def _comment_or_doc_hit(
+    repo_root: Path,
+    store: CortexStore,
+    location: str,
+    source_by_path: Mapping[str, str] | None = None,
+) -> bool:
     parsed = _line_location(location)
     if parsed is None:
         return False
     path, line_number = parsed
     if Path(path).suffix.lower() in {".md", ".rst", ".txt"}:
         return True
-    content = store.fetch_source_content(repo_root, path)
+    content = source_by_path.get(path) if source_by_path is not None else store.fetch_source_content(repo_root, path)
     if content is None or line_number is None:
         return False
     lines = content.splitlines()
@@ -109,25 +170,27 @@ def _comment_or_doc_hit(repo_root: Path, store: CortexStore, location: str) -> b
     return any(marker in line for marker in (" #", " //", " /*", " <!--"))
 
 
-def _qt_macro_flags(node: GraphNode, content: str, all_sources: Sequence[Any]) -> tuple[bool, bool]:
+def _qt_macro_flags(node: GraphNode, content: str, qml_register_sources: Sequence[Any]) -> tuple[bool, bool]:
     lines = content.splitlines()
     start = max(0, (node.span_start or 1) - 1 - 20)
     end = min(len(lines), (node.span_end or node.span_start or 1) + 20)
     nearby = "\n".join(lines[start:end])
     label = re.escape(node.label)
-    qml_registration = any(
-        re.search(pattern, nearby) is not None
-        for pattern in (
-            r"\bQML_ELEMENT\b",
-            rf"\bqmlRegisterType\s*<\s*{label}\s*>",
-            rf"\bqmlRegisterType\s*\([^)]*\b{label}\b",
+    qml_registration = re.search(r"\bQML_ELEMENT\b", nearby) is not None
+    # The per-label patterns need this literal; checking it first avoids compiling them per symbol.
+    if not qml_registration and "qmlRegisterType" in nearby:
+        qml_registration = any(
+            re.search(pattern, nearby) is not None
+            for pattern in (
+                rf"\bqmlRegisterType\s*<\s*{label}\s*>",
+                rf"\bqmlRegisterType\s*\([^)]*\b{label}\b",
+            )
         )
-    )
     if not qml_registration and node.kind == "class":
         qml_registration = any(
             re.search(rf"\bqmlRegisterType\s*<\s*{label}\s*>", source.content)
             or re.search(rf"\bqmlRegisterType\s*\([^)]*\b{label}\b", source.content)
-            for source in all_sources
+            for source in qml_register_sources
         )
     qt_macro = bool(re.search(r"\bQ_INVOKABLE\b|\bQ_PROPERTY\b", nearby))
     return qt_macro, qml_registration
@@ -138,8 +201,13 @@ def _reference_tier(
     store: CortexStore,
     node: GraphNode,
     reference_budget: int,
+    context: _AnalysisContext | None = None,
 ) -> tuple[str, str]:
-    result = find_references(store, repo_root, node.label, reference_budget)
+    if context is not None:
+        result = context.references(node.label)
+    else:
+        result = find_references(store, repo_root, node.label, reference_budget)
+    source_by_path = context.source_by_path if context is not None else None
     locations: list[tuple[str, str]] = []
     own_start = node.span_start or 0
     own_end = node.span_end or own_start
@@ -152,7 +220,7 @@ def _reference_tier(
 
     if not locations:
         return "high", "no incoming edges; no grep refs"
-    if all(bucket == "doc" or _comment_or_doc_hit(repo_root, store, location) for bucket, location in locations):
+    if all(bucket == "doc" or _comment_or_doc_hit(repo_root, store, location, source_by_path) for bucket, location in locations):
         return "medium", "no incoming edges; grep refs only in comments/docs"
     return "low", "no incoming edges; grep refs in code/config"
 
@@ -163,17 +231,20 @@ def _candidate_reason(
     node: GraphNode,
     all_sources: Sequence[Any],
     reference_budget: int,
+    context: _AnalysisContext | None = None,
 ) -> tuple[str, str]:
-    content = store.fetch_source_content(repo_root, node.source_ref) or ""
+    if context is None:
+        context = _AnalysisContext(repo_root, store, all_sources, reference_budget)
+    content = context.content(node.source_ref)
     qt_kind = node.metadata.get("qt") if isinstance(node.metadata, dict) else None
     qml_kind = node.metadata.get("qml_kind") if isinstance(node.metadata, dict) else None
-    qt_macro, qml_registration = _qt_macro_flags(node, content, all_sources)
+    qt_macro, qml_registration = _qt_macro_flags(node, content, context.qml_register_sources)
     if qt_kind in _QT_KINDS or qml_kind in _QT_KINDS or qt_macro or qml_registration:
         return "low", "no incoming edges; Qt meta-object or dynamic-language caveat"
     parser_backend = node.metadata.get("parser_backend") if isinstance(node.metadata, dict) else None
     if not (node.source_ref.lower().endswith(".py") or parser_backend == "treesitter"):
         return "low", "no incoming edges; regex/dynamic-language caveat"
-    return _reference_tier(repo_root, store, node, reference_budget)
+    return _reference_tier(repo_root, store, node, reference_budget, context)
 
 
 def analyze_dead_code(
@@ -184,6 +255,7 @@ def analyze_dead_code(
     store: CortexStore | None = None,
     nodes: Sequence[GraphNode] | None = None,
     edges: Sequence[GraphEdge] | None = None,
+    should_stop: Callable[[], bool] | None = None,
 ) -> dict[str, Any]:
     repo_root = discover_repo_root(Path(repo_path))
     active_store = store or CortexStore(db_path or default_db_path(repo_root))
@@ -212,24 +284,30 @@ def analyze_dead_code(
                 credited_labels.add(str(value))
 
     reexports = _reexported_symbols(all_sources)
+    context = _AnalysisContext(repo_root, active_store, all_sources, max(2000, int(budget)), graph_nodes, graph_edges)
     findings: list[dict[str, Any]] = []
+    partial = False
     for node in sorted(
         (item for item in graph_nodes if item.granularity == "symbol"),
         key=lambda item: (item.source_ref, item.label, item.node_id),
     ):
+        if should_stop is not None and should_stop():
+            partial = True
+            break
         if _is_test_path(node.source_ref) or _is_dunder_or_entry_point(node) or node.label in reexports:
             continue
         if node.metadata.get("qt") == "handler":
             continue
-        content = active_store.fetch_source_content(repo_root, node.source_ref) or ""
-        if _decorated_symbol(content, node.span_start):
+        if context.is_decorated(node.source_ref, node.span_start):
             continue
         node_incoming = incoming.get(node.node_id, [])
         if node_incoming:
             continue
         if node.node_id in credited_nodes or node.label in credited_labels:
             continue
-        tier, reason = _candidate_reason(repo_root, active_store, node, all_sources, max(2000, int(budget)))
+        tier, reason = _candidate_reason(
+            repo_root, active_store, node, all_sources, context.reference_budget, context
+        )
         findings.append(
             {
                 "symbol": node.label,
@@ -241,7 +319,7 @@ def analyze_dead_code(
         )
 
     findings.sort(key=lambda item: (str(item["file"]), str(item["symbol"]), int(item["line"])))
-    return {"repo_path": str(repo_root), "findings": findings}
+    return {"repo_path": str(repo_root), "findings": findings, "partial": partial}
 
 
 def truncate_dead_code_result(result: dict[str, Any], budget: int) -> dict[str, Any]:

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fix `cortex_overview` and `cortex_dead_code` taking minutes (and wedging the MCP server) on large repositories: a cold call no longer grows with the number of dead-code candidates multiplied by the number of repo files and graph edges. Findings and their confidence tiers are unchanged.
+- Bound dead-code analysis in the MCP server with a time budget (default 30 seconds, set `CORTEX_ANALYSIS_BUDGET_SECONDS`; `0` disables it). When it runs out, `cortex_dead_code` returns `partial: true` and `cortex_overview` returns `dead_code_partial: true`, each with a `note` saying findings are incomplete, and the partial overview analysis is not cached. Complete results are unchanged, and the CLI and `cortex report` stay unbounded.
+- Make the MCP server resilient to slow tool calls: it now keeps reading input while a tool runs, so `notifications/cancelled` stops the running analysis (or drops a queued request) without sending a response, `ping` is answered immediately even during a long call, and an internal error is returned with the failing request's id instead of `null`. Tool calls still run one at a time.
+- Add a diagnostic file at `<data dir>/mcp-activity/<pid>.json` showing what each MCP server process is doing (current tool and request id, queue depth, completed and cancelled counts; never tool arguments or repo content). Stale files from dead processes are removed on startup and the file is removed on clean exit; set `CORTEX_MCP_ACTIVITY=0` to disable it.
+
 ## 0.9.1 — 2026-07-19
 
 - Make `cortex_overview` budget-aware (default 2000 tokens): prevent dead-code overflow by retaining candidates in high/medium/low confidence order, reporting omissions and an honest infeasible-budget boundary rather than silently exceeding it.

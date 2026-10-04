@@ -145,7 +145,7 @@ def test_concise_and_detailed_calls_obey_2000_token_budget_and_refresh_capabilit
     analysis = _analysis()
     calls = {"analysis": 0, "capabilities": 0}
 
-    def build(_repo):
+    def build(_repo, **_kwargs):
         calls["analysis"] += 1
         return analysis
 
@@ -182,7 +182,7 @@ def test_malformed_same_version_analysis_cache_is_replaced_and_ledger_uses_detai
     store.set_query_cache(repo, analysis_key, json.dumps({"version": mcp_tools._OVERVIEW_ANALYSIS_CACHE_VERSION, "analysis": {"dead_code": []}}))
     calls = {"analysis": 0}
 
-    def build(_repo):
+    def build(_repo, **_kwargs):
         calls["analysis"] += 1
         return analysis
 

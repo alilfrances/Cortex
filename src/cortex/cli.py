@@ -31,6 +31,9 @@ from .store import CortexStore, data_root, default_db_path
 from .viewer import write_html
 
 
+_NON_REPO_DATA_DIRS = {"semantic", "mcp-activity"}
+
+
 def _fetch_repo_graph(repo_path: Path, db_path: Path | None = None):
     repo_root = discover_repo_root(repo_path)
     store = CortexStore(db_path or default_db_path(repo_root))
@@ -55,7 +58,7 @@ def gc_data_dirs(prune: bool = False) -> dict:
     if not base.is_dir():
         return result
     for entry in sorted(base.iterdir()):
-        if not entry.is_dir() or entry.name == "semantic":
+        if not entry.is_dir() or entry.name in _NON_REPO_DATA_DIRS:
             # P1-7's managed model cache lives below CORTEX_DATA_DIR but is
             # not a repo data dir and must never be classified as orphaned.
             continue
@@ -94,7 +97,7 @@ def prune_query_caches() -> dict:
     if not base.is_dir():
         return result
     for entry in sorted(base.iterdir()):
-        if not entry.is_dir() or entry.name == "semantic":
+        if not entry.is_dir() or entry.name in _NON_REPO_DATA_DIRS:
             continue
         meta_path = entry / "meta.json"
         db_path = entry / "cortex.db"
