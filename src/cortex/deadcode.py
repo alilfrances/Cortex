@@ -5,12 +5,11 @@ import json
 import re
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
-from .deadline import check_deadline
 from .gitutils import discover_repo_root
 from .models import GraphEdge, GraphNode
-from .references import _GrepCorpus, build_grep_corpus, find_references
+from .references import GraphReferenceIndex, ReferenceCorpus, find_references
 from .store import CortexStore, default_db_path
 from .testpatterns import is_test_path
 from .tokenizer import count_text_tokens
@@ -20,45 +19,6 @@ _GRAPH_RELATIONS = {"calls", "imports", "inherits", "references", "reads", "writ
 _QT_RELATIONS = {"connects", "emits", "handles", "instantiates", "binds"}
 _QT_KINDS = {"signal", "slot", "handler", "property", "id", "binding", "enum", "enum_member", "module"}
 _COMMENT_PREFIXES = ("#", "//", "/*", "*", "*/", "<!--", "///")
-
-# Module-level, never-interpolated patterns for QML type-registration
-# scanning (P1-1). Interpolating `node.label` into a fresh regex per class
-# candidate, as the old code did, thrashes the 512-entry `re` cache once a
-# corpus has more than a few hundred distinct labels. These are compiled
-# once and reused for every file and every candidate.
-_QML_REGISTER_TEMPLATE_RE = re.compile(r"\bqmlRegisterType\s*<\s*([^<>]*?)\s*>")
-_QML_REGISTER_CALL_RE = re.compile(r"\bqmlRegisterType\s*\(")
-_QML_ELEMENT_RE = re.compile(r"\bQML_ELEMENT\b")
-_QT_MACRO_RE = re.compile(r"\bQ_INVOKABLE\b|\bQ_PROPERTY\b")
-_IDENTIFIER_RE = re.compile(r"\w+")
-
-
-def _qml_register_call_tokens(content: str, pos: int) -> list[str]:
-    """Identifier-like tokens inside a `qmlRegisterType(...)` call's parens,
-    up to the first `)` -- mirrors the old `[^)]*\\b{label}\\b` pattern,
-    which never crossed a `)` either and matched the label anywhere in that
-    span (return type, URI string, element name, ...)."""
-    end = content.find(")", pos)
-    if end == -1:
-        return []
-    return _IDENTIFIER_RE.findall(content[pos:end])
-
-
-def _build_qml_registered_index(all_sources: Sequence[Any]) -> set[str]:
-    """One corpus-wide pass building the set of names any
-    `qmlRegisterType<Name>` or `qmlRegisterType(...)` occurrence could credit.
-    Built once per `analyze_dead_code` run and shared by every candidate, in
-    place of the old per-candidate full-corpus regex scan."""
-    names: set[str] = set()
-    for source in all_sources:
-        content = source.content
-        for match in _QML_REGISTER_TEMPLATE_RE.finditer(content):
-            name = match.group(1).strip()
-            if name:
-                names.add(name)
-        for match in _QML_REGISTER_CALL_RE.finditer(content):
-            names.update(_qml_register_call_tokens(content, match.end()))
-    return names
 
 
 def _is_test_path(path: str) -> bool:
@@ -76,19 +36,75 @@ def _is_dunder_or_entry_point(node: GraphNode) -> bool:
     )
 
 
-def _decorated_symbol(content: str, line: int | None) -> bool:
-    if line is None:
-        return False
+def _decorated_lines(content: str) -> frozenset[int]:
     try:
         tree = ast.parse(content)
     except SyntaxError:
-        return False
-    return any(
-        isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
-        and node.lineno == line
-        and bool(node.decorator_list)
+        return frozenset()
+    return frozenset(
+        node.lineno
         for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.decorator_list
     )
+
+
+class _AnalysisContext:
+    """Per-analysis caches so per-symbol work does not repeat repo-wide I/O and parsing."""
+
+    def __init__(
+        self,
+        repo_root: Path,
+        store: CortexStore,
+        all_sources: Sequence[Any],
+        reference_budget: int,
+        graph_nodes: Sequence[GraphNode] | None = None,
+        graph_edges: Sequence[GraphEdge] | None = None,
+    ) -> None:
+        self.repo_root = repo_root
+        self.store = store
+        self.reference_budget = reference_budget
+        self._graph_nodes = graph_nodes
+        self._graph_edges = graph_edges
+        self._graph_index: GraphReferenceIndex | None = None
+        self.source_by_path: dict[str, str] = {source.path: source.content for source in all_sources}
+        # Both repo-wide qmlRegisterType patterns require this literal, so other sources cannot match.
+        self.qml_register_sources: list[Any] = [source for source in all_sources if "qmlRegisterType" in source.content]
+        self._decorated: dict[str, frozenset[int]] = {}
+        self._corpus: ReferenceCorpus | None = None
+        self._references: dict[str, dict[str, Any]] = {}
+
+    def content(self, path: str) -> str:
+        return self.source_by_path.get(path) or ""
+
+    def is_decorated(self, path: str, line: int | None) -> bool:
+        if line is None:
+            return False
+        lines = self._decorated.get(path)
+        if lines is None:
+            lines = self._decorated[path] = _decorated_lines(self.content(path))
+        return line in lines
+
+    def references(self, label: str) -> dict[str, Any]:
+        result = self._references.get(label)
+        if result is None:
+            if self._corpus is None:
+                symbols = (
+                    None
+                    if self._graph_nodes is None
+                    else {node.label for node in self._graph_nodes if node.granularity == "symbol"}
+                )
+                self._corpus = ReferenceCorpus(self.repo_root, symbols)
+            if self._graph_index is None and self._graph_nodes is not None and self._graph_edges is not None:
+                self._graph_index = GraphReferenceIndex(self._graph_nodes, self._graph_edges)
+            result = self._references[label] = find_references(
+                self.store,
+                self.repo_root,
+                label,
+                self.reference_budget,
+                corpus=self._corpus,
+                graph_index=self._graph_index,
+            )
+        return result
 
 
 def _reexported_symbols(sources: Sequence[Any]) -> set[str]:
@@ -130,14 +146,19 @@ def _line_location(value: Any) -> tuple[str, int | None] | None:
     return path, int(line)
 
 
-def _comment_or_doc_hit(repo_root: Path, store: CortexStore, location: str) -> bool:
+def _comment_or_doc_hit(
+    repo_root: Path,
+    store: CortexStore,
+    location: str,
+    source_by_path: Mapping[str, str] | None = None,
+) -> bool:
     parsed = _line_location(location)
     if parsed is None:
         return False
     path, line_number = parsed
     if Path(path).suffix.lower() in {".md", ".rst", ".txt"}:
         return True
-    content = store.fetch_source_content(repo_root, path)
+    content = source_by_path.get(path) if source_by_path is not None else store.fetch_source_content(repo_root, path)
     if content is None or line_number is None:
         return False
     lines = content.splitlines()
@@ -149,33 +170,29 @@ def _comment_or_doc_hit(repo_root: Path, store: CortexStore, location: str) -> b
     return any(marker in line for marker in (" #", " //", " /*", " <!--"))
 
 
-def _nearby_qml_registration(nearby: str, label: str) -> bool:
-    """QML_ELEMENT / qmlRegisterType check over a small +/-20 line window.
-
-    This stays a bounded per-candidate scan (it is not the bottleneck), but
-    it must not interpolate `label` into a fresh regex per candidate either
-    -- reuse the same module-level patterns and test membership instead.
-    """
-    if _QML_ELEMENT_RE.search(nearby) is not None:
-        return True
-    for match in _QML_REGISTER_TEMPLATE_RE.finditer(nearby):
-        if match.group(1).strip() == label:
-            return True
-    for match in _QML_REGISTER_CALL_RE.finditer(nearby):
-        if label in _qml_register_call_tokens(nearby, match.end()):
-            return True
-    return False
-
-
-def _qt_macro_flags(node: GraphNode, content: str, qml_registered_names: set[str]) -> tuple[bool, bool]:
+def _qt_macro_flags(node: GraphNode, content: str, qml_register_sources: Sequence[Any]) -> tuple[bool, bool]:
     lines = content.splitlines()
     start = max(0, (node.span_start or 1) - 1 - 20)
     end = min(len(lines), (node.span_end or node.span_start or 1) + 20)
     nearby = "\n".join(lines[start:end])
-    qml_registration = _nearby_qml_registration(nearby, node.label)
+    label = re.escape(node.label)
+    qml_registration = re.search(r"\bQML_ELEMENT\b", nearby) is not None
+    # The per-label patterns need this literal; checking it first avoids compiling them per symbol.
+    if not qml_registration and "qmlRegisterType" in nearby:
+        qml_registration = any(
+            re.search(pattern, nearby) is not None
+            for pattern in (
+                rf"\bqmlRegisterType\s*<\s*{label}\s*>",
+                rf"\bqmlRegisterType\s*\([^)]*\b{label}\b",
+            )
+        )
     if not qml_registration and node.kind == "class":
-        qml_registration = node.label in qml_registered_names
-    qt_macro = bool(_QT_MACRO_RE.search(nearby))
+        qml_registration = any(
+            re.search(rf"\bqmlRegisterType\s*<\s*{label}\s*>", source.content)
+            or re.search(rf"\bqmlRegisterType\s*\([^)]*\b{label}\b", source.content)
+            for source in qml_register_sources
+        )
+    qt_macro = bool(re.search(r"\bQ_INVOKABLE\b|\bQ_PROPERTY\b", nearby))
     return qt_macro, qml_registration
 
 
@@ -184,10 +201,13 @@ def _reference_tier(
     store: CortexStore,
     node: GraphNode,
     reference_budget: int,
-    *,
-    grep_corpus: _GrepCorpus | None = None,
+    context: _AnalysisContext | None = None,
 ) -> tuple[str, str]:
-    result = find_references(store, repo_root, node.label, reference_budget, corpus=grep_corpus)
+    if context is not None:
+        result = context.references(node.label)
+    else:
+        result = find_references(store, repo_root, node.label, reference_budget)
+    source_by_path = context.source_by_path if context is not None else None
     locations: list[tuple[str, str]] = []
     own_start = node.span_start or 0
     own_end = node.span_end or own_start
@@ -200,7 +220,7 @@ def _reference_tier(
 
     if not locations:
         return "high", "no incoming edges; no grep refs"
-    if all(bucket == "doc" or _comment_or_doc_hit(repo_root, store, location) for bucket, location in locations):
+    if all(bucket == "doc" or _comment_or_doc_hit(repo_root, store, location, source_by_path) for bucket, location in locations):
         return "medium", "no incoming edges; grep refs only in comments/docs"
     return "low", "no incoming edges; grep refs in code/config"
 
@@ -211,28 +231,20 @@ def _candidate_reason(
     node: GraphNode,
     all_sources: Sequence[Any],
     reference_budget: int,
-    *,
-    content: str | None = None,
-    qml_registered_names: set[str] | None = None,
-    grep_corpus: _GrepCorpus | None = None,
+    context: _AnalysisContext | None = None,
 ) -> tuple[str, str]:
-    # `content` and `qml_registered_names` let `analyze_dead_code` pass in
-    # values it already computed once for the whole run (P1-1/P1-3); callers
-    # that only have `all_sources` (e.g. direct unit tests) fall back to
-    # deriving them here, unchanged in behavior.
-    if content is None:
-        content = store.fetch_source_content(repo_root, node.source_ref) or ""
-    if qml_registered_names is None:
-        qml_registered_names = _build_qml_registered_index(all_sources)
+    if context is None:
+        context = _AnalysisContext(repo_root, store, all_sources, reference_budget)
+    content = context.content(node.source_ref)
     qt_kind = node.metadata.get("qt") if isinstance(node.metadata, dict) else None
     qml_kind = node.metadata.get("qml_kind") if isinstance(node.metadata, dict) else None
-    qt_macro, qml_registration = _qt_macro_flags(node, content, qml_registered_names)
+    qt_macro, qml_registration = _qt_macro_flags(node, content, context.qml_register_sources)
     if qt_kind in _QT_KINDS or qml_kind in _QT_KINDS or qt_macro or qml_registration:
         return "low", "no incoming edges; Qt meta-object or dynamic-language caveat"
     parser_backend = node.metadata.get("parser_backend") if isinstance(node.metadata, dict) else None
     if not (node.source_ref.lower().endswith(".py") or parser_backend == "treesitter"):
         return "low", "no incoming edges; regex/dynamic-language caveat"
-    return _reference_tier(repo_root, store, node, reference_budget, grep_corpus=grep_corpus)
+    return _reference_tier(repo_root, store, node, reference_budget, context)
 
 
 def analyze_dead_code(
@@ -243,6 +255,7 @@ def analyze_dead_code(
     store: CortexStore | None = None,
     nodes: Sequence[GraphNode] | None = None,
     edges: Sequence[GraphEdge] | None = None,
+    should_stop: Callable[[], bool] | None = None,
 ) -> dict[str, Any]:
     repo_root = discover_repo_root(Path(repo_path))
     active_store = store or CortexStore(db_path or default_db_path(repo_root))
@@ -250,14 +263,6 @@ def analyze_dead_code(
         (list(nodes), list(edges)) if nodes is not None and edges is not None else active_store.fetch_graph(repo_root)
     )
     all_sources = active_store.fetch_sources(repo_root)
-    # P1-1/P1-3: `all_sources` is already fully in memory here, so build a
-    # path -> content map and a corpus-wide QML-registration index ONCE for
-    # the whole run, instead of re-fetching each symbol's content twice
-    # (once here, once in `_candidate_reason`) and re-scanning every source
-    # file's content per class candidate.
-    sources_by_path = {source.path: source.content for source in all_sources}
-    qml_registered_names = _build_qml_registered_index(all_sources)
-    grep_corpus = build_grep_corpus(repo_root)
     nodes_by_id = {node.node_id: node for node in graph_nodes}
     incoming: defaultdict[str, list[GraphEdge]] = defaultdict(list)
     for edge in graph_edges:
@@ -279,24 +284,21 @@ def analyze_dead_code(
                 credited_labels.add(str(value))
 
     reexports = _reexported_symbols(all_sources)
+    context = _AnalysisContext(repo_root, active_store, all_sources, max(2000, int(budget)), graph_nodes, graph_edges)
     findings: list[dict[str, Any]] = []
+    partial = False
     for node in sorted(
         (item for item in graph_nodes if item.granularity == "symbol"),
         key=lambda item: (item.source_ref, item.label, item.node_id),
     ):
-        # The candidate loop is the hot path this module was rewritten for.
-        # Even at O(corpus) per run it is the most expensive thing a
-        # cortex_overview call does, so it is the natural place to honour a
-        # caller's wall-clock budget.
-        check_deadline()
+        if should_stop is not None and should_stop():
+            partial = True
+            break
         if _is_test_path(node.source_ref) or _is_dunder_or_entry_point(node) or node.label in reexports:
             continue
         if node.metadata.get("qt") == "handler":
             continue
-        content = sources_by_path.get(node.source_ref)
-        if content is None:
-            content = active_store.fetch_source_content(repo_root, node.source_ref) or ""
-        if _decorated_symbol(content, node.span_start):
+        if context.is_decorated(node.source_ref, node.span_start):
             continue
         node_incoming = incoming.get(node.node_id, [])
         if node_incoming:
@@ -304,14 +306,7 @@ def analyze_dead_code(
         if node.node_id in credited_nodes or node.label in credited_labels:
             continue
         tier, reason = _candidate_reason(
-            repo_root,
-            active_store,
-            node,
-            all_sources,
-            max(2000, int(budget)),
-            content=content,
-            qml_registered_names=qml_registered_names,
-            grep_corpus=grep_corpus,
+            repo_root, active_store, node, all_sources, context.reference_budget, context
         )
         findings.append(
             {
@@ -324,22 +319,19 @@ def analyze_dead_code(
         )
 
     findings.sort(key=lambda item: (str(item["file"]), str(item["symbol"]), int(item["line"])))
-    return {"repo_path": str(repo_root), "findings": findings}
+    return {"repo_path": str(repo_root), "findings": findings, "partial": partial}
 
 
 def truncate_dead_code_result(result: dict[str, Any], budget: int) -> dict[str, Any]:
     base = json.loads(json.dumps(result, sort_keys=True))
     limit = max(0, int(budget))
+    has_findings = "findings" in base
     findings: list[Any] = base.get("findings") or []
     total = len(findings)
 
-    # Equivalent to the old "pop one finding, re-serialize the whole result,
-    # check the budget, repeat" loop, but without paying for a full
-    # `json.dumps` + tokenize on every single finding -- that made this
-    # O(findings^2). Dropping findings from the end only ever shrinks the
-    # serialized payload, so the token count is monotone non-increasing as
-    # `count` shrinks; the point where sequential popping would first stop
-    # is exactly the largest prefix length a binary search finds.
+    # Dropping findings from the end only shrinks the payload, so the largest
+    # prefix that fits is found by binary search instead of re-serializing
+    # after every single pop.
     def fits(count: int) -> bool:
         candidate = dict(base)
         candidate["budget"] = limit
@@ -359,7 +351,8 @@ def truncate_dead_code_result(result: dict[str, Any], budget: int) -> dict[str, 
     output = dict(base)
     output["budget"] = limit
     output["truncated"] = best < total
-    output["findings"] = findings[:best]
+    if has_findings:
+        output["findings"] = findings[:best]
     output["returned_count"] = best
     output["budget_feasible"] = count_text_tokens(json.dumps(output, sort_keys=True)) <= limit
     return output

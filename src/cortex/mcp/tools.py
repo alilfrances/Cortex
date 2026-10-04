@@ -4,14 +4,15 @@ import hashlib
 import json
 import os
 import re
+import threading
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
 from ..bundle import _render_skeleton, _render_symbol_skeleton, _tokenize_query, generate_bundle
 from ..deadcode import analyze_dead_code, truncate_dead_code_result
-from ..deadline import DeadlineExceeded, deadline_scope, resolve_budget_seconds
+from ..deadline import DeadlineExceeded, current_deadline, deadline_scope, resolve_budget_seconds
 from ..gitutils import discover_repo_root
 from ..impact import UnknownPathError, rank_file_impact
 from ..ingest import compute_repo_fingerprint, ingest_repository
@@ -652,6 +653,35 @@ _OVERVIEW_DEFAULT_BUDGET = 2000
 _CONFIDENCE_PRIORITY = {"high": 0, "medium": 1, "low": 2}
 
 
+_PARTIAL_ANALYSIS_NOTE = (
+    "Analysis stopped at the time budget, so dead-code findings are incomplete. "
+    "Set CORTEX_TOOL_TIMEOUT_SECONDS to raise it (0 disables the budget)."
+)
+
+# Tool execution is serial, so call_tool can publish its cancel event and a
+# single-slot overview-analysis memo here instead of threading them through
+# every helper. Both are reset when the outer call finishes.
+_current_cancel: threading.Event | None = None
+_in_tool_call = False
+_analysis_memo: tuple[tuple[str, str], dict[str, Any]] | None = None
+
+
+def _analysis_should_stop() -> Callable[[], bool]:
+    """Build the stop predicate for one analysis: true once the request is
+    cancelled or the call's deadline (if any) has passed. Unlike
+    `check_deadline()` this stops softly, so the caller returns a partial
+    result instead of a `deadline_exceeded` error."""
+    cancel = _current_cancel
+    deadline = current_deadline()
+
+    def should_stop() -> bool:
+        if cancel is not None and cancel.is_set():
+            return True
+        return deadline is not None and deadline.expired
+
+    return should_stop
+
+
 def _overview_analysis_cache_key(fingerprint: str) -> str:
     return _cache_key(
         fingerprint,
@@ -828,16 +858,28 @@ def _call_overview(arguments: dict[str, Any]) -> dict[str, Any]:
         and cached_analysis.get("version") == _OVERVIEW_ANALYSIS_CACHE_VERSION
         and _is_overview_analysis(cached_analysis.get("analysis"))
     )
+    global _analysis_memo
     if cache_hit:
         analysis = cached_analysis["analysis"]
     else:
-        analysis = build_report_data(repo_root)
-        _cache_set(store, repo_root, cache_key, {"version": _OVERVIEW_ANALYSIS_CACHE_VERSION, "analysis": analysis})
+        memo_key = (str(repo_root.resolve()), status["current_fingerprint"])
+        if _analysis_memo is not None and _analysis_memo[0] == memo_key:
+            analysis = _analysis_memo[1]
+        else:
+            analysis = build_report_data(repo_root, should_stop=_analysis_should_stop())
+            if _in_tool_call:
+                _analysis_memo = (memo_key, analysis)
+            if not analysis.get("dead_code_partial", False):
+                _cache_set(
+                    store, repo_root, cache_key, {"version": _OVERVIEW_ANALYSIS_CACHE_VERSION, "analysis": analysis}
+                )
 
     # Capabilities describe current optional integrations, unlike graph
     # analysis. They count toward detailed content, while freshness/status
     # remains outside the budget and is merged only by `_format_payload`.
     extra_fields = _overview_detailed_capabilities(store, repo_root) if response_format == "detailed" else None
+    if analysis.get("dead_code_partial", False):
+        extra_fields = {**(extra_fields or {}), "dead_code_partial": True, "note": _PARTIAL_ANALYSIS_NOTE}
     payload = _fit_overview_report(repo_root, analysis, budget, extra_fields=extra_fields)
     return _content(_format_payload(payload, status, response_format, cached=cache_hit))
 
@@ -1528,8 +1570,13 @@ def _call_dead_code(arguments: dict[str, Any]) -> dict[str, Any]:
         nodes=nodes,
         edges=edges,
         budget=int(arguments.get("budget", 2000)),
+        should_stop=_analysis_should_stop(),
     )
     result = truncate_dead_code_result(result, int(arguments.get("budget", 2000)))
+    if result.get("partial"):
+        result["note"] = _PARTIAL_ANALYSIS_NOTE
+    else:
+        result.pop("partial", None)
     response_format = _response_format(arguments)
     return _content(_format_payload(result, status, response_format))
 
@@ -2034,6 +2081,17 @@ _RELATION_ENDPOINT_FILE_RE = re.compile(r" @ (.+?)(?::\d+)?$")
 _REFERENCE_LOCATION_RE = re.compile(r"^(.*):\d+$")
 
 
+def build_status_result(**extra_fields: Any) -> dict[str, Any]:
+    """Build the `cortex_status` tool result: the in-flight registry snapshot
+    plus the active deadline budget. Touches no module state owned by a
+    running `call_tool`, so the server's reader thread can call it while a
+    tool is executing."""
+    snapshot = REGISTRY.snapshot()
+    snapshot["deadline_budget_seconds"] = resolve_budget_seconds()
+    snapshot.update(extra_fields)
+    return _content(snapshot)
+
+
 def _call_status(arguments: dict[str, Any]) -> dict[str, Any]:
     """Report what this server process is doing right now.
 
@@ -2047,9 +2105,7 @@ def _call_status(arguments: dict[str, Any]) -> dict[str, Any]:
     answerable while another call is mid-scan, which is the exact moment it
     is most useful.
     """
-    snapshot = REGISTRY.snapshot()
-    snapshot["deadline_budget_seconds"] = resolve_budget_seconds()
-    return _content(snapshot)
+    return build_status_result()
 
 
 def _referenced_file_tokens(store: CortexStore, repo_root: Path, paths: set[str]) -> int:
@@ -2281,7 +2337,13 @@ def _record_tool_usage(name: str, arguments: dict[str, Any], result: dict[str, A
             pass
 
 
-def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
+def call_tool(
+    name: str,
+    arguments: dict[str, Any] | None,
+    *,
+    cancel: threading.Event | None = None,
+    request_id: Any = None,
+) -> dict[str, Any]:
     """Dispatch one MCP tool call under a wall-clock budget.
 
     Phase 2/4 of docs/fix-plan-mcp-concurrency-wedge.md: every call runs
@@ -2291,37 +2353,47 @@ def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
     in flight and for how long. A `DeadlineExceeded` is turned into a normal
     structured error payload rather than a crash -- the server must stay
     responsive for the rest of the batch.
-    """
-    args = arguments or {}
-    budget_seconds = resolve_budget_seconds()
-    try:
-        with REGISTRY.track(name, str(args.get("_request_id", ""))), \
-                deadline_scope(budget_seconds, tool_name=name):
-            result = _dispatch_tool(name, args)
-    except DeadlineExceeded as exc:
-        return _content(
-            {
-                "error": "deadline_exceeded",
-                "tool": name,
-                "message": str(exc),
-                "elapsed_seconds": round(exc.elapsed_seconds, 3),
-                "budget_seconds": exc.budget_seconds,
-                "hint": (
-                    "This call exceeded its wall-clock budget and was stopped so it could not "
-                    "block other requests. Narrow the request (a smaller budget or a more specific "
-                    "target), or raise CORTEX_TOOL_TIMEOUT_SECONDS if this repository legitimately "
-                    "needs longer."
-                ),
-            },
-            is_error=True,
-        )
-    except Exception as exc:
-        return _content({"error": type(exc).__name__, "message": str(exc)}, is_error=True)
 
-    if result.get("isError"):
+    `cancel` is the per-request cancellation event. The globals reset in the
+    `finally` cover `_record_tool_usage` too: the ledger's internal second
+    `_call_overview` call must reuse the memoised analysis.
+    """
+    global _current_cancel, _in_tool_call, _analysis_memo
+    _current_cancel = cancel
+    _in_tool_call = True
+    try:
+        args = arguments or {}
+        budget_seconds = resolve_budget_seconds()
+        tracked_id = "" if request_id is None else str(request_id)
+        try:
+            with REGISTRY.track(name, tracked_id), deadline_scope(budget_seconds, tool_name=name):
+                result = _dispatch_tool(name, args)
+        except DeadlineExceeded as exc:
+            return _content(
+                {
+                    "error": "deadline_exceeded",
+                    "tool": name,
+                    "message": str(exc),
+                    "elapsed_seconds": round(exc.elapsed_seconds, 3),
+                    "budget_seconds": exc.budget_seconds,
+                    "hint": (
+                        "This call exceeded its wall-clock budget and was stopped so it could not "
+                        "block other requests. Narrow the request (a smaller budget or a more specific "
+                        "target), or raise CORTEX_TOOL_TIMEOUT_SECONDS if this repository legitimately "
+                        "needs longer."
+                    ),
+                },
+                is_error=True,
+            )
+        except Exception as exc:
+            return _content({"error": type(exc).__name__, "message": str(exc)}, is_error=True)
+
+        _record_tool_usage(name, args, result)
         return result
-    _record_tool_usage(name, args, result)
-    return result
+    finally:
+        _current_cancel = None
+        _in_tool_call = False
+        _analysis_memo = None
 
 
 def _dispatch_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:

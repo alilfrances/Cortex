@@ -8,12 +8,11 @@ whole repo per candidate via `find_references` (cause 1b), and both
 file's content per symbol (cause 1c). See
 docs/fix-plan-mcp-concurrency-wedge.md.
 
-The fix replaces the per-candidate corpus scan with a single corpus-wide
-QML-registration index and a single reusable grep corpus, both built once per
-`analyze_dead_code` run, plus a shared path -> content map. These tests pin
-that shape down (built once, not once per candidate) and the exact
-cross-file / paren-form matching semantics the old per-label regex scan
-implemented.
+The fix reads the repo once into a shared `ReferenceCorpus`, builds one
+in-memory `GraphReferenceIndex`, and keeps a shared path -> content map, all
+per `analyze_dead_code` run. These tests pin that shape down (built once, not
+once per candidate) and the exact cross-file / paren-form matching semantics
+the old per-label regex scan implemented.
 """
 
 from __future__ import annotations
@@ -52,7 +51,8 @@ def _build_corpus(repo: Path, filler_files: int, class_candidates: int) -> tuple
     """`filler_files` padding files (never candidates themselves) plus
     `class_candidates` unused, Qt/QML-marker-free classes -- the exact shape
     that used to trigger the per-candidate full-corpus regex scan in
-    `_qt_macro_flags`."""
+    `_qt_macro_flags`. They are tree-sitter-backed so every candidate reaches
+    the reference lookup."""
     repo.mkdir(parents=True, exist_ok=True)
     filler_body = "// filler\n" + ("static const int kValue = 1;  // padding line\n" * 150)
 
@@ -74,7 +74,7 @@ def _build_corpus(repo: Path, filler_files: int, class_candidates: int) -> tuple
                 granularity="symbol",
                 span_start=1,
                 span_end=4,
-                metadata={"parser_backend": "regex"},
+                metadata={"parser_backend": "treesitter"},
             )
         )
 
@@ -85,38 +85,52 @@ def _build_corpus(repo: Path, filler_files: int, class_candidates: int) -> tuple
     return store, nodes
 
 
-def test_qml_index_and_grep_corpus_are_built_once_per_run_not_per_candidate(tmp_path, monkeypatch) -> None:
+def test_corpus_and_graph_index_are_built_once_per_run_not_per_candidate(tmp_path, monkeypatch) -> None:
     """Regression guard for the O(candidates x corpus) scan: count, rather
-    than time, how many times the expensive corpus-wide builders run.
+    than time, how many times the expensive corpus-wide work runs.
     Counting operations avoids timing flakiness while giving a hard
-    guarantee that neither builder is re-invoked per candidate."""
+    guarantee that none of it is re-done per candidate."""
     import cortex.deadcode as deadcode
+    import cortex.references as references
 
     repo = tmp_path / "repo"
     store, nodes = _build_corpus(repo, filler_files=60, class_candidates=40)
 
-    qml_index_calls: list[int] = []
-    real_build_index = deadcode._build_qml_registered_index
+    counts = {"corpus": 0, "graph_index": 0, "repo_listings": 0, "find_references": 0}
 
-    def counted_build_index(all_sources):
-        qml_index_calls.append(1)
-        return real_build_index(all_sources)
+    class CountedCorpus(references.ReferenceCorpus):
+        def __init__(self, *args, **kwargs):
+            counts["corpus"] += 1
+            super().__init__(*args, **kwargs)
 
-    grep_corpus_calls: list[int] = []
-    real_build_corpus = deadcode.build_grep_corpus
+    class CountedGraphIndex(references.GraphReferenceIndex):
+        def __init__(self, *args, **kwargs):
+            counts["graph_index"] += 1
+            super().__init__(*args, **kwargs)
 
-    def counted_build_corpus(repo_root):
-        grep_corpus_calls.append(1)
-        return real_build_corpus(repo_root)
+    real_listing = references._iter_candidate_files
+    real_find_references = deadcode.find_references
 
-    monkeypatch.setattr(deadcode, "_build_qml_registered_index", counted_build_index)
-    monkeypatch.setattr(deadcode, "build_grep_corpus", counted_build_corpus)
+    def counted_listing(repo_root):
+        counts["repo_listings"] += 1
+        return real_listing(repo_root)
+
+    def counted_find_references(*args, **kwargs):
+        counts["find_references"] += 1
+        return real_find_references(*args, **kwargs)
+
+    monkeypatch.setattr(deadcode, "ReferenceCorpus", CountedCorpus)
+    monkeypatch.setattr(deadcode, "GraphReferenceIndex", CountedGraphIndex)
+    monkeypatch.setattr(references, "_iter_candidate_files", counted_listing)
+    monkeypatch.setattr(deadcode, "find_references", counted_find_references)
 
     result = analyze_dead_code(repo, store=store, nodes=nodes, edges=[])
 
     assert len(result["findings"]) == 40
-    assert qml_index_calls == [1], "QML registration index must be built once per run, not once per candidate"
-    assert grep_corpus_calls == [1], "grep corpus must be built once per run, not once per candidate"
+    assert counts["find_references"] == 40, "every candidate must reach the reference lookup"
+    assert counts["corpus"] == 1, "reference corpus must be built once per run, not once per candidate"
+    assert counts["repo_listings"] == 1, "the repo must be listed and read once per run"
+    assert counts["graph_index"] == 1, "graph index must be built once per run, not once per candidate"
 
 
 def test_wall_clock_does_not_scale_with_candidate_count(tmp_path) -> None:

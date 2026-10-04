@@ -78,6 +78,23 @@ def test_status_reports_itself_in_flight_and_is_json_serializable() -> None:
     assert payload["deadline_budget_seconds"] > 0
 
 
+def test_request_id_reaches_the_in_flight_registry_without_entering_arguments(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: dict = {}
+
+    def _dispatch(name: str, args: dict) -> dict:
+        seen["args"] = dict(args)
+        seen["in_flight"] = mcp_tools.REGISTRY.snapshot()["in_flight"]
+        return mcp_tools._content({"ok": True})
+
+    monkeypatch.setattr(mcp_tools, "_dispatch_tool", _dispatch)
+    mcp_tools.call_tool("cortex_refresh", {"a": 1}, request_id=41)
+
+    assert seen["args"] == {"a": 1}
+    assert [(e["tool_name"], e["request_id"]) for e in seen["in_flight"]] == [("cortex_refresh", "41")]
+
+
 def test_status_is_registered_as_a_tool() -> None:
     names = [tool["name"] for tool in mcp_tools.TOOL_DEFINITIONS]
     assert "cortex_status" in names

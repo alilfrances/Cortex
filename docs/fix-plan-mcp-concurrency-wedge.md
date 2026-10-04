@@ -245,3 +245,18 @@ staleness.
 - Not an infinite loop — `detect_communities` is bounded at 30 iterations and
   measured at ~2 s on a 111k-node / 524k-edge synthetic graph.
 - Not a shared-resource outage — confirmed per-process, as the reporter observed.
+
+## Outcome
+
+- Phase 1 shipped, plus a cost the plan missed: the per-label SQLite `LIKE` scan
+  over graph edges in `find_references` was also O(candidates x edges) and
+  dominated once 1a-1d were fixed (23.4s on an 800-file probe). It is replaced by
+  an in-memory, trigram-prefiltered index that reproduces the `LIKE` scan exactly
+  (2.1s on the same probe), alongside a repo corpus read once per run.
+- Phase 2 shipped as one budget, `CORTEX_TOOL_TIMEOUT_SECONDS`. Dead-code analysis
+  stops softly at it and returns a partial result (`partial` / `dead_code_partial`,
+  not cached) instead of `deadline_exceeded`; other overruns still return the error.
+- Phase 3's worker pool was not built. A stdin reader thread handles
+  `notifications/cancelled`, `ping`, and `cortex_status` while tool execution stays
+  serial, which removes the wedge without concurrent tool state.
+- Phase 4 shipped: `cortex_status` plus a per-pid `mcp-activity/<pid>.json` file.
