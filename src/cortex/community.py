@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 
+from .deadline import check_deadline
 from .models import Community, GraphEdge, GraphNode
 
 COCHANGE_WEIGHT_FLOOR = 0.1
@@ -44,6 +45,10 @@ def detect_communities(
     labels: dict[str, int] = {nid: i for i, nid in enumerate(node_ids)}
 
     for _ in range(max_iterations):
+        # Bounded at max_iterations, but each pass is O(edges) in pure
+        # Python; on a large graph the whole loop is still seconds of CPU,
+        # so it honours the caller's budget between passes.
+        check_deadline()
         changed = False
         for nid in node_ids:
             nbrs = neighbors[nid]

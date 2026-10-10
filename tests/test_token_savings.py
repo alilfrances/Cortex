@@ -294,10 +294,16 @@ def test_estimate_baseline_relations_adds_referenced_file_tokens_to_detailed_ren
 
 
 def test_ledger_covers_every_non_refresh_mcp_tool():
+    # cortex_refresh writes the index instead of answering from it, and
+    # cortex_status reports on the server process rather than the repository.
+    # Neither has a "tokens an agent would have spent reading files instead"
+    # baseline, so neither is priced by the ledger. Every OTHER tool must be:
+    # that is what this test is guarding.
+    not_priced = {"cortex_refresh", "cortex_status"}
     expected = {
         tool["name"]
         for tool in mcp_tools.TOOL_DEFINITIONS
-        if tool["name"] != "cortex_refresh"
+        if tool["name"] not in not_priced
     }
     assert mcp_tools._LEDGER_TOOLS == expected
 

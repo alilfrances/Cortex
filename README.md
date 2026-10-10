@@ -4,7 +4,7 @@ Cortex is a graph-aware, local-first context engine for code agents. It ingests 
 
 The result is a repo-native context service: MCP tools for live agent queries, CLI commands for reports and exports, and local parser/runtime state. Parser setup downloads only locked artifacts; repository source is never sent during setup. Normal ingest/query is offline after setup.
 
-Current package and plugin metadata is `0.9.1` (`pyproject.toml` and plugin manifests).
+Current package and plugin metadata is `0.9.2` (`pyproject.toml` and plugin manifests).
 
 ## What Cortex Builds
 
@@ -162,10 +162,13 @@ This creates `cortex.db` and `cortex_report.md` under `~/.cortex/data/<repo-path
 | `cortex_references` | Returns cross-file references from parsed graph edges plus repo grep, bucketed by file type; `mode: "writes"` keeps definitions and mutation sites only. | "Find where `_ensure_fresh` is mutated with Cortex." |
 | `cortex_search_text` | Full-text body search (FTS5 BM25) across indexed file contents, with line-anchored snippets — a grep replacement over string literals, error messages, comments, and prose that symbol search can't see. | "Search Cortex text for the 'device offline' error message." |
 | `cortex_refresh` | Re-ingests the repo and updates freshness metadata. | "Refresh Cortex, then query the checkout flow again." |
+| `cortex_status` | Reports the server's in-flight requests, how long each has been running, and lifetime per-tool counters. Also reports `queue_depth` and the active `deadline_budget_seconds`. Answered immediately even while another call is mid-scan, so a slow call can be told apart from a wedged server without attaching a debugger. | "Ask Cortex for its server status." |
 
 Tool results include provenance where available. Read/query/analysis tools keep the index fresh automatically: when the repository fingerprint has changed since ingestion, they run an incremental re-ingest (changed, new, and deleted files only) before answering and report the delta under `auto_refreshed`. Set `CORTEX_AUTO_REFRESH=0` to disable and fall back to stale-state hints plus manual `cortex_refresh`. If no index exists yet, indexed read/query tools still require an explicit `cortex_refresh` first; `cortex_risk` can run a clearly marked partial git-only analysis.
 
 `cortex_query` and `cortex_impact` cache their result under a key derived from the (post-refresh) repo fingerprint, tool name, and call arguments, so a repeated identical call skips PageRank/packing entirely — any file change invalidates the cache automatically, since it changes the fingerprint. `cortex_overview` instead caches a versioned, fingerprint-keyed **analysis** record (graph/report facts and dead-code findings), then reconstructs the response on every call. This deliberately bypasses old overview response-cache entries and invalidates an incompatible analysis shape when its cache version changes. Dynamic detailed-only capability data is never cached. Set `CORTEX_QUERY_CACHE=0` to disable both reading and writing this cache. `cortex gc` prunes cached rows older than 30 days or beyond 200 rows per repo.
+
+The MCP server runs tool calls one at a time but keeps reading input while one runs, so a slow call cannot wedge the connection. `notifications/cancelled` stops a running dead-code analysis or drops a queued request without a response, and `ping` and `cortex_status` are answered immediately. Every call has a wall-clock budget, `CORTEX_TOOL_TIMEOUT_SECONDS` (default `30`, `0` disables). Dead-code analysis in `cortex_overview` and `cortex_dead_code` stops softly at the budget: the result is flagged `dead_code_partial` / `partial` with a `note`, and a partial overview analysis is not cached. Any other call that overruns returns a `deadline_exceeded` error naming the tool, elapsed time, and budget. Each server process also writes `<data dir>/mcp-activity/<pid>.json` with its current tool, request id, queue depth, and completed/cancelled counts (never arguments or repo content), so a slow server can be inspected without a debugger; set `CORTEX_MCP_ACTIVITY=0` to disable it.
 
 ### Overview budgets, metadata, and caching
 
@@ -175,7 +178,7 @@ Dead-code findings are conservative static-analysis leads, not proof that deleti
 
 In `response_format: "detailed"`, overview additionally reconstructs current `semantic` and `language_runtime` capability metadata on each call (including parser backend counts). That volatile capability detail is intentionally not reused from cache and contributes to the delivered response cost, so request a budget with room for it.
 
-The MCP surface has 14 tools: 13 read/query/analysis tools (everything above except `cortex_refresh`) can carry a `_meta` object: `{index_age_seconds, indexed_at, fingerprint_fresh, auto_refreshed?, cached?, saved_tokens?}`. `detailed` responses always include it; `concise` responses include it only when something is worth surfacing — the index is stale, an auto-refresh just ran, the response came from cache (`cached: true`), or the call saved a meaningful number of tokens over a raw file read (`saved_tokens`, exactly the number recorded in the `tool_usage` ledger — see `cortex saved` below) — otherwise it's omitted so a routine concise call costs no extra tokens. A cache hit always reports the *current* index age, never a value frozen from when the cache entry was written.
+The MCP surface has 15 tools: 13 read/query/analysis tools (everything above except `cortex_refresh` and `cortex_status`) can carry a `_meta` object: `{index_age_seconds, indexed_at, fingerprint_fresh, auto_refreshed?, cached?, saved_tokens?}`. `detailed` responses always include it; `concise` responses include it only when something is worth surfacing — the index is stale, an auto-refresh just ran, the response came from cache (`cached: true`), or the call saved a meaningful number of tokens over a raw file read (`saved_tokens`, exactly the number recorded in the `tool_usage` ledger — see `cortex saved` below) — otherwise it's omitted so a routine concise call costs no extra tokens. A cache hit always reports the *current* index age, never a value frozen from when the cache entry was written.
 
 ## CLI Reference
 

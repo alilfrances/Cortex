@@ -156,3 +156,56 @@ def test_cortex_dead_code_mcp_returns_findings_and_respects_budget(tmp_path: Pat
     assert len(capped["findings"]) <= 1
     assert capped["returned_count"] == len(capped["findings"])
     assert capped["truncated"] is True
+
+
+def _many_unused_repo(tmp_path: Path) -> Path:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "a.py").write_text(
+        "def alpha_unused():\n    return 1\n\n"
+        "def beta_unused():\n    return 2\n\n"
+        "def gamma_unused():\n    return 3\n",
+        encoding="utf-8",
+    )
+    (repo / "b.py").write_text("def delta_unused():\n    return 4\n", encoding="utf-8")
+    _init_git(repo)
+    return repo
+
+
+def test_dead_code_lists_repo_files_once_per_analysis(tmp_path: Path, monkeypatch) -> None:
+    import cortex.references as references
+
+    repo = _many_unused_repo(tmp_path)
+    store = _ingest(repo, tmp_path / "data", monkeypatch)
+    nodes, edges = store.fetch_graph(repo)
+    calls: list[Path] = []
+    original = references._iter_candidate_files
+
+    def counting(repo_root: Path, *args, **kwargs):
+        calls.append(repo_root)
+        return original(repo_root, *args, **kwargs)
+
+    monkeypatch.setattr(references, "_iter_candidate_files", counting)
+    findings = analyze_dead_code(repo, store=store, nodes=nodes, edges=edges)["findings"]
+
+    assert len(findings) >= 4
+    assert len(calls) == 1
+
+
+def test_dead_code_should_stop_returns_partial_findings(tmp_path: Path, monkeypatch) -> None:
+    repo = _many_unused_repo(tmp_path)
+    store = _ingest(repo, tmp_path / "data", monkeypatch)
+    nodes, edges = store.fetch_graph(repo)
+
+    full = analyze_dead_code(repo, store=store, nodes=nodes, edges=edges)
+    checks: list[int] = []
+
+    def stop_after_two() -> bool:
+        checks.append(1)
+        return len(checks) > 2
+
+    partial = analyze_dead_code(repo, store=store, nodes=nodes, edges=edges, should_stop=stop_after_two)
+
+    assert full["partial"] is False
+    assert partial["partial"] is True
+    assert len(partial["findings"]) < len(full["findings"])
