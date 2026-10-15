@@ -69,13 +69,15 @@ FRESH_COUNTS = {
 # Tools that never touch the fingerprint.
 NO_FINGERPRINT = ("cortex_status", "cortex_refresh")
 
-# Stale index + auto-refresh: one computation before the ingest, one after, plus
-# whatever the fresh path costs for the ledger shadow call (observed).
+# Stale index + auto-refresh: one computation before the ingest, one re-check after
+# taking the cross-process ingest lock (Task 1), one after the ingest, plus whatever
+# the fresh path costs for the ledger shadow call (observed).
+# At 7b0e6e0 (before the Task 1 lock re-check) these were 2/2/2/3.
 STALE_AUTO_REFRESH_COUNTS = {
-    "cortex_query": 2,
-    "cortex_impact": 2,
-    "cortex_read_file": 2,
-    "cortex_search_symbols": 3,
+    "cortex_query": 3,
+    "cortex_impact": 3,
+    "cortex_read_file": 3,
+    "cortex_search_symbols": 4,
 }
 
 
@@ -173,7 +175,7 @@ def test_stale_then_fresh_sequence(counter: dict[str, int], qt_repo: Path) -> No
     fresh_count, fresh = _call(counter, qt_repo, "cortex_impact")
 
     assert stale["_meta"]["auto_refreshed"]["updated_files"] == 1
-    assert stale_count == 2
+    assert stale_count == 3  # 2 at 7b0e6e0; +1 post-lock re-check (Task 1)
     assert "auto_refreshed" not in fresh["_meta"]
     assert fresh["stale"] is False and fresh_count == 1
 

@@ -3,16 +3,38 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import contextlib
 import re
 import sqlite3
+import threading
 import time
+from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 from .graph import QtSymbolIndex
 from .hotspots import estimate_complexity, hotspot_stats
 from .models import BundleItem, CommitRecord, Community, GraphEdge, GraphNode, RetrievalBundle, SourceRecord
 
 LEGACY_DIR_NAME = ".cortex"
+
+# Multi-process safety (0.10.0): every connection waits up to this long for a
+# competing writer instead of failing with "database is locked" after
+# SQLite's 5 s default, and on-disk databases use WAL so readers never block
+# behind an ingest's write transaction.
+BUSY_TIMEOUT_SECONDS = 30.0
+INGEST_LOCK_NAME = "ingest.lock"
+INGEST_LOCK_TIMEOUT_SECONDS = 120.0
+_LOCK_POLL_SECONDS = 0.05
+
+
+class IngestLockTimeout(TimeoutError):
+    """Another process held the repo's ingest lock for longer than allowed."""
+
+    def __init__(self, lock_path: Path, timeout: float) -> None:
+        self.lock_path = lock_path
+        self.timeout = timeout
+        super().__init__(f"timed out after {timeout:g}s waiting for ingest lock {lock_path}")
 
 
 def _is_managed_database(db_path: Path) -> bool:
@@ -127,14 +149,169 @@ def write_repo_meta(db_path: Path, repo_root: Path) -> None:
     _make_private(meta_path, 0o600)
 
 
+def ingest_lock_path(repo_root: Path, db_path: Path | None = None) -> Path:
+    """The advisory lock file guarding ingest for one database.
+
+    It lives next to the database it protects (the central per-repo data dir,
+    or a legacy in-repo ``.cortex/``), never in the work tree proper, so
+    taking it can neither change the repo fingerprint nor `git status`.
+    """
+    return (db_path or default_db_path(repo_root)).parent / INGEST_LOCK_NAME
+
+
+class _HeldLock:
+    """Per-lock-file state: one OS-level lock per process, re-entrant per thread.
+
+    POSIX ``flock`` locks belong to an open file description, so a second
+    ``open()`` + ``flock`` of the same file in the *same* process blocks
+    forever. Ingest re-enters itself (``_ensure_fresh`` holds the lock and
+    then calls ``ingest_repository``, which takes it too), so the OS lock is
+    taken once per process and nested acquisitions by the owning thread only
+    bump a depth counter. Other threads of the process serialize on the
+    ``RLock`` before ever touching the file.
+    """
+
+    def __init__(self) -> None:
+        self.thread_lock = threading.RLock()
+        self.depth = 0
+        self.handle: Any = None
+
+
+_LOCKS: dict[str, _HeldLock] = {}
+_LOCKS_GUARD = threading.Lock()
+
+
+def _os_try_lock(handle: Any) -> bool:
+    if os.name == "nt":  # pragma: no cover - exercised on Windows CI only
+        import msvcrt
+
+        try:
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        except OSError:
+            return False
+        return True
+    import fcntl
+
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return False
+    except OSError as exc:  # EWOULDBLOCK/EAGAIN spelled differently on some libcs
+        import errno
+
+        if exc.errno in (errno.EAGAIN, errno.EACCES, errno.EWOULDBLOCK):
+            return False
+        raise
+    return True
+
+
+def _os_unlock(handle: Any) -> None:
+    if os.name == "nt":  # pragma: no cover
+        import msvcrt
+
+        handle.seek(0)
+        with contextlib.suppress(OSError):
+            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        return
+    import fcntl
+
+    with contextlib.suppress(OSError):
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def _open_lock_file(lock_path: Path) -> Any:
+    lock_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    fd = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
+    _make_private(lock_path, 0o600)
+    return os.fdopen(fd, "r+b", buffering=0)
+
+
+def _check_deadline() -> None:
+    # Imported lazily: deadline is an MCP-layer concern and the store must stay
+    # importable on its own. Outside a deadline scope this is a no-op.
+    from .deadline import check_deadline
+
+    check_deadline()
+
+
+@contextlib.contextmanager
+def ingest_lock(
+    repo_root: Path,
+    *,
+    timeout: float | None = None,
+    db_path: Path | None = None,
+) -> Iterator[Path]:
+    """Hold the exclusive cross-process ingest lock for ``repo_root``'s database.
+
+    Blocking with polling until ``timeout`` seconds (default
+    ``INGEST_LOCK_TIMEOUT_SECONDS``, read at call time), then raises
+    :class:`IngestLockTimeout`. Re-entrant within one thread (see
+    :class:`_HeldLock`). Inside an MCP call the poll loop also honours the
+    call's cooperative deadline, so a waiting tool call fails with
+    ``deadline_exceeded`` rather than hanging past its budget.
+    """
+    if timeout is None:
+        timeout = INGEST_LOCK_TIMEOUT_SECONDS
+    lock_path = ingest_lock_path(repo_root, db_path)
+    key = str(lock_path.absolute())
+    with _LOCKS_GUARD:
+        held = _LOCKS.setdefault(key, _HeldLock())
+    deadline = time.monotonic() + max(0.0, timeout)
+
+    while not held.thread_lock.acquire(timeout=_LOCK_POLL_SECONDS):
+        _check_deadline()
+        if time.monotonic() >= deadline:
+            raise IngestLockTimeout(lock_path, timeout)
+    try:
+        if held.depth == 0:
+            handle = _open_lock_file(lock_path)
+            try:
+                while not _os_try_lock(handle):
+                    _check_deadline()
+                    if time.monotonic() >= deadline:
+                        raise IngestLockTimeout(lock_path, timeout)
+                    time.sleep(_LOCK_POLL_SECONDS)
+            except BaseException:
+                handle.close()
+                raise
+            held.handle = handle
+        held.depth += 1
+        try:
+            yield lock_path
+        finally:
+            held.depth -= 1
+            if held.depth == 0 and held.handle is not None:
+                handle, held.handle = held.handle, None
+                _os_unlock(handle)
+                handle.close()
+    finally:
+        held.thread_lock.release()
+
+
+def _configure_connection(connection: sqlite3.Connection, db_path: Path) -> None:
+    """Busy timeout + WAL. WAL is skipped for in-memory databases and silently
+    left at the current mode when the filesystem cannot support it (read-only
+    media, some network filesystems)."""
+    with contextlib.suppress(sqlite3.OperationalError):
+        connection.execute(f"PRAGMA busy_timeout = {int(BUSY_TIMEOUT_SECONDS * 1000)}")
+    if str(db_path) == ":memory:" or str(db_path).startswith("file::memory:"):
+        return
+    with contextlib.suppress(sqlite3.OperationalError):
+        connection.execute("PRAGMA journal_mode = WAL")
+
+
 class CortexStore:
     def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         if _is_managed_database(self.db_path):
             _make_private(self.db_path.parent, 0o700)
-        self.connection = sqlite3.connect(self.db_path)
+        self.connection = sqlite3.connect(self.db_path, timeout=BUSY_TIMEOUT_SECONDS)
+        # chmod before switching to WAL: SQLite creates the -wal/-shm files
+        # with the main database file's permission bits.
         _make_private(self.db_path, 0o600)
+        _configure_connection(self.connection, self.db_path)
         self.connection.row_factory = sqlite3.Row
         self.initialize_schema()
 
@@ -387,6 +564,13 @@ class CortexStore:
             try:
                 self.connection.execute(sql)
                 self.connection.commit()
+            except sqlite3.OperationalError as exc:
+                # "duplicate column name" is the normal already-migrated case.
+                # A busy/locked database must not be mistaken for it: that
+                # would silently leave the column missing for this process.
+                message = str(exc).lower()
+                if "locked" in message or "busy" in message:
+                    raise
             except Exception:
                 pass  # column already exists
 

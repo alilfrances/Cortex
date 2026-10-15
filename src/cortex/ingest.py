@@ -19,7 +19,7 @@ from .graph import (
 )
 from .hotspots import annotate_file_nodes, compute_churn, compute_hotspots
 from .models import CommitRecord, GraphNode, SourceRecord
-from .store import CortexStore, default_db_path, write_repo_meta
+from .store import CortexStore, default_db_path, ingest_lock, write_repo_meta
 
 _TEXT_SUFFIXES = {
     ".md",
@@ -358,8 +358,29 @@ def ingest_repository(
     commit_limit: int = 1000,
     db_path: Path | None = None,
     incremental: bool = False,
+    *,
+    lock_timeout: float | None = None,
 ) -> dict[str, Any]:
+    """Ingest (full or incremental) under the repo's cross-process ingest lock.
+
+    Two Cortex processes (e.g. a Claude Code and a Codex MCP server) may both
+    decide to refresh the same repository; the lock serializes them so their
+    delta writes never interleave. The lock is re-entrant within a thread, so
+    callers that already hold it (``mcp.tools._ensure_fresh``) do not deadlock.
+    Raises :class:`cortex.store.IngestLockTimeout` after ``lock_timeout``
+    (default ``cortex.store.INGEST_LOCK_TIMEOUT_SECONDS``).
+    """
     repo_root = discover_repo_root(repo_path)
+    with ingest_lock(repo_root, timeout=lock_timeout, db_path=db_path):
+        return _ingest_locked(repo_root, commit_limit, db_path, incremental)
+
+
+def _ingest_locked(
+    repo_root: Path,
+    commit_limit: int,
+    db_path: Path | None,
+    incremental: bool,
+) -> dict[str, Any]:
     config = load_config(repo_root)
     skip_dirs = _SKIP_DIRS | set(config.skip_dirs)
     store = CortexStore(db_path or default_db_path(repo_root))

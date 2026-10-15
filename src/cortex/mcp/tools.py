@@ -21,7 +21,7 @@ from ..references import find_references
 from ..report import build_report_data, render_report
 from ..hotspots import top_hotspots
 from ..risk import analyze_risk, truncate_risk_result
-from ..store import CortexStore, default_db_path
+from ..store import CortexStore, IngestLockTimeout, default_db_path, ingest_lock
 from ..tokenizer import count_text_tokens, truncate_text_to_budget
 from .status import REGISTRY
 
@@ -395,7 +395,20 @@ def _ensure_fresh(store: CortexStore, repo_root: Path) -> dict[str, Any]:
     status = _staleness(store, repo_root)
     if not status["stale"] or os.environ.get("CORTEX_AUTO_REFRESH", "1") == "0":
         return status
-    summary = ingest_repository(repo_root, incremental=True)
+    try:
+        with ingest_lock(repo_root):
+            # Another Cortex process (or thread) may have refreshed this repo
+            # while we waited for the lock: re-check before doing the work
+            # again, and only report `auto_refreshed` when *this* call ingested.
+            status = _staleness(store, repo_root)
+            if not status["stale"]:
+                return status
+            # Re-entrant: ingest_repository takes the same lock again.
+            summary = ingest_repository(repo_root, incremental=True)
+    except IngestLockTimeout:
+        # Another process is still ingesting; answer from the current index
+        # and keep reporting it as stale rather than failing the call.
+        return status
     status = _staleness(store, repo_root)
     status["auto_refreshed"] = {
         key: summary[key]

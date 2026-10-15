@@ -1,13 +1,15 @@
 """``CortexStore`` connection setup and ``cortex gc`` at 7b0e6e0 (Task 0 baseline).
 
-Pins today's single-process-oriented defaults.  Task 1 (WAL + busy timeout + ingest
-lock) flips the assertions marked ``TASK 1`` and extends the ``gc`` test with
-``ingest.lock`` / ``*-wal`` / ``*-shm``; everything else must stay green.
+Task 0 pinned the single-process-oriented defaults of 7b0e6e0: SQLite's Python
+default ``timeout=5.0`` (``busy_timeout = 5000``), journal mode ``delete``, and a data
+dir holding only ``cortex.db`` + ``meta.json``.
 
-Observed: SQLite's Python default ``timeout=5.0`` gives ``busy_timeout = 5000``; the
-journal mode is ``delete``; ``foreign_keys`` is on; a second writer cannot write while
-another connection holds a write transaction (``database is locked``) but readers can
-read.
+Task 1 (0.10.0, multi-process safety) flipped the assertions marked ``TASK 1``:
+``busy_timeout = 30000``, ``journal_mode = wal`` for on-disk databases, and the data
+dir now also holds ``ingest.lock`` (plus transient ``-wal``/``-shm`` sidecars while a
+connection is open).  Unchanged: ``foreign_keys`` is on; a second writer cannot write
+while another connection holds a write transaction (``database is locked`` once its
+busy timeout lapses) but readers can read.
 """
 
 from __future__ import annotations
@@ -41,20 +43,20 @@ def _tiny_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return repo
 
 
-def test_journal_mode_is_delete_today(tmp_path: Path) -> None:
-    """TASK 1 FLIP: becomes ``wal`` for on-disk databases."""
+def test_journal_mode_is_wal(tmp_path: Path) -> None:
+    """TASK 1 FLIP: was ``delete`` at 7b0e6e0; ``wal`` for on-disk databases now."""
     managed = CortexStore(default_db_path(tmp_path / "some-repo"))
     unmanaged = CortexStore(tmp_path / "elsewhere" / "cortex.db")
 
-    assert _pragma(managed, "journal_mode") == "delete"
-    assert _pragma(unmanaged, "journal_mode") == "delete"
+    assert _pragma(managed, "journal_mode") == "wal"
+    assert _pragma(unmanaged, "journal_mode") == "wal"
 
 
-def test_busy_timeout_and_foreign_keys_today(tmp_path: Path) -> None:
-    """TASK 1 FLIP: ``busy_timeout`` becomes 30000."""
+def test_busy_timeout_and_foreign_keys(tmp_path: Path) -> None:
+    """TASK 1 FLIP: ``busy_timeout`` was 5000 at 7b0e6e0; now 30000."""
     store = CortexStore(tmp_path / "cortex.db")
 
-    assert _pragma(store, "busy_timeout") == 5000
+    assert _pragma(store, "busy_timeout") == 30000
     assert _pragma(store, "foreign_keys") == 1
     assert store.connection.row_factory is sqlite3.Row
 
@@ -68,15 +70,19 @@ def test_managed_database_is_private(tmp_path: Path) -> None:
     assert stat.S_IMODE(db_path.parent.stat().st_mode) == 0o700
 
 
-def test_ingest_leaves_only_db_and_meta_in_the_data_dir_today(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """TASK 1 FLIP: ``-wal``/``-shm`` (and ``ingest.lock``) join the directory."""
+def test_ingest_data_dir_contents(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """TASK 1 FLIP: was exactly ``["cortex.db", "meta.json"]`` at 7b0e6e0.  Now the
+    ingest lock file is always left behind, and SQLite's ``-wal``/``-shm`` sidecars
+    exist while any connection is open (removed on the last clean close)."""
     from cortex.ingest import ingest_repository
 
     repo = _tiny_repo(tmp_path, monkeypatch)
     ingest_repository(repo, commit_limit=10)
 
     data_dir = default_db_path(repo).parent
-    assert sorted(p.name for p in data_dir.iterdir()) == ["cortex.db", "meta.json"]
+    names = {p.name for p in data_dir.iterdir()}
+    assert {"cortex.db", "meta.json", "ingest.lock"} <= names
+    assert names <= {"cortex.db", "meta.json", "ingest.lock", "cortex.db-wal", "cortex.db-shm"}
     assert json.loads((data_dir / "meta.json").read_text(encoding="utf-8"))["repo_path"] == str(repo.resolve())
 
 
@@ -127,7 +133,9 @@ def test_writer_blocks_second_writer_but_not_readers(tmp_path: Path) -> None:
 
 
 def test_second_writer_loses_to_uncommitted_ingest_connection(tmp_path: Path) -> None:
-    """Two ``CortexStore`` objects writing at once is unsafe today: no lock, no WAL."""
+    """SQLite still allows one writer at a time under WAL; a second ``BEGIN IMMEDIATE``
+    fails once its busy timeout lapses.  Cross-process ingest is serialized by
+    ``ingest.lock`` (Task 1) rather than by SQLite alone."""
     db_path = tmp_path / "cortex.db"
     first = CortexStore(db_path)
     second = CortexStore(db_path)

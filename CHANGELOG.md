@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Make one Cortex database safe to share between processes: connections use WAL journaling and wait up to 30 seconds for a competing writer (`busy_timeout`), and every ingest holds an exclusive cross-process `ingest.lock` next to the database (re-entrant within a thread, so an auto-refresh that already holds it cannot deadlock). A stale MCP call re-checks freshness after taking the lock and does not ingest again when another process just refreshed; only the call that ingested reports `auto_refreshed`. If the lock stays busy the call answers from the current index as stale instead of failing. Schema migrations no longer mistake a locked database for an already-applied migration. Baseline tests updated: `tests/test_store_connection_baseline.py` (journal mode `delete` → `wal`, busy timeout 5000 → 30000 ms, data dir now holds `ingest.lock` and transient `-wal`/`-shm`) and `tests/test_fingerprint_baseline.py` (stale auto-refresh computes the fingerprint once more, for the post-lock re-check). No golden changed.
+
 ## 0.9.2 — 2026-10-04
 
 - Fix `cortex_overview` and `cortex_dead_code` taking minutes (and wedging the MCP server) on large repositories: a cold call no longer grows with the number of dead-code candidates multiplied by the number of repo files and graph edges, and the graph-edge lookup, grep pass and token-budget fitting for references, dead-code and overview results are no longer quadratic. Findings and their confidence tiers are unchanged.

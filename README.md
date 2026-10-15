@@ -144,6 +144,8 @@ cortex report .
 
 This creates `cortex.db` and `cortex_report.md` under `~/.cortex/data/<repo-path-hash>/` — the target repo itself is never touched. Repos indexed before v0.4.0 keep using their existing in-repo `.cortex/` directory. Set `CORTEX_DATA_DIR` to relocate the central store. Run `cortex gc --prune` to delete data for repos that no longer exist.
 
+The data dir also holds `meta.json` (which repo it belongs to), `ingest.lock`, and, while any Cortex process has the database open, SQLite's `cortex.db-wal`/`cortex.db-shm` files. Several Cortex processes (for example a Claude Code and a Codex MCP server on the same repo) can share one database safely: it runs in WAL mode so readers never wait for an ingest, connections wait up to 30 seconds for a competing writer instead of failing with "database is locked", and every ingest holds an exclusive `ingest.lock`. When an MCP call finds the index stale it takes the lock, re-checks freshness, and skips the refresh if another process already did it; if the lock stays busy (default 120 seconds, or the call's time budget) the call answers from the current index and reports it as stale.
+
 ## MCP Tools
 
 | Tool | What it does | Example prompt |
