@@ -156,6 +156,12 @@ def test_second_identical_overview_hits_cache(tmp_path, monkeypatch):
 
 
 def test_file_edit_invalidates_cache_and_recomputes(tmp_path, monkeypatch):
+    # 0.10.0: the working-tree fingerprint is memoized for
+    # CORTEX_FINGERPRINT_TTL_SECONDS (default 2 s), so an edit is noticed by
+    # the first call after the TTL lapses. Disable the memo here to keep this
+    # test about cache invalidation, not timing (the TTL itself is covered in
+    # tests/test_fingerprint_baseline.py).
+    monkeypatch.setenv("CORTEX_FINGERPRINT_TTL_SECONDS", "0")
     repo = _repo_with_index(tmp_path, monkeypatch)
     calls = _count_pagerank_calls(monkeypatch)
     args = {"repo_path": str(repo), "task": "login billing"}

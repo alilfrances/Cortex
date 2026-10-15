@@ -281,8 +281,8 @@ tools.ingest_repository = counting_ingest
 
 real_staleness = tools._staleness
 calls = {{"n": 0}}
-def barrier_staleness(store, root):
-    status = real_staleness(store, root)
+def barrier_staleness(store, root, **kwargs):
+    status = real_staleness(store, root, **kwargs)
     calls["n"] += 1
     if calls["n"] == 1:
         # Both processes must have observed the stale index before either

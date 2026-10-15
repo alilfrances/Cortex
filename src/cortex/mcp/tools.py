@@ -363,8 +363,83 @@ def _store_or_error(repo_root: Path) -> tuple[CortexStore | None, dict[str, Any]
     return CortexStore(db_path), None
 
 
-def _staleness(store: CortexStore, repo_root: Path) -> dict[str, Any]:
+# Fingerprint TTL memo (0.10.0). `compute_repo_fingerprint` runs `git
+# ls-files` plus a stat() of every candidate file; an agent typically fires
+# several Cortex calls within a second or two, so the *working-tree*
+# fingerprint is memoized per repo for a short TTL. Only the disk-side value is
+# cached: the stored (indexed) fingerprint is always read from the database,
+# so another process's ingest is noticed immediately. Edits made inside the
+# TTL window are seen by the first call after it expires.
+_DEFAULT_FINGERPRINT_TTL_SECONDS = 2.0
+_FINGERPRINT_MEMO: dict[str, tuple[str, float]] = {}
+_FINGERPRINT_MEMO_LOCK = threading.Lock()
+
+
+def fingerprint_ttl_seconds(env: dict[str, str] | None = None) -> float:
+    """`CORTEX_FINGERPRINT_TTL_SECONDS` (float, default 2.0; `0` disables).
+    Unparseable or non-finite values fall back to the default; negative
+    values disable the memo."""
+    raw = (os.environ if env is None else env).get("CORTEX_FINGERPRINT_TTL_SECONDS")
+    if raw is None or not raw.strip():
+        return _DEFAULT_FINGERPRINT_TTL_SECONDS
+    try:
+        value = float(raw)
+    except ValueError:
+        return _DEFAULT_FINGERPRINT_TTL_SECONDS
+    if value != value or value in (float("inf"), float("-inf")):
+        return _DEFAULT_FINGERPRINT_TTL_SECONDS
+    return max(0.0, value)
+
+
+def _memo_key(repo_root: Path) -> str:
+    return str(repo_root.resolve())
+
+
+def _current_fingerprint(repo_root: Path, *, bypass_ttl: bool = False) -> str:
+    """Working-tree fingerprint, served from the TTL memo when fresh.
+
+    `bypass_ttl=True` always recomputes (and refreshes the memo); it is used
+    for the post-lock re-check in `_ensure_fresh`, where a value memoized
+    before waiting on another process's ingest must not decide whether to
+    ingest again."""
+    ttl = fingerprint_ttl_seconds()
+    key = _memo_key(repo_root)
+    if ttl > 0 and not bypass_ttl:
+        with _FINGERPRINT_MEMO_LOCK:
+            entry = _FINGERPRINT_MEMO.get(key)
+        if entry is not None and 0 <= time.monotonic() - entry[1] < ttl:
+            return entry[0]
     current = compute_repo_fingerprint(repo_root)
+    if ttl > 0:
+        _remember_fingerprint(repo_root, current)
+    return current
+
+
+def _remember_fingerprint(repo_root: Path, fingerprint: str) -> None:
+    if not fingerprint or fingerprint_ttl_seconds() <= 0:
+        _forget_fingerprint(repo_root)
+        return
+    with _FINGERPRINT_MEMO_LOCK:
+        _FINGERPRINT_MEMO[_memo_key(repo_root)] = (fingerprint, time.monotonic())
+
+
+def _forget_fingerprint(repo_root: Path) -> None:
+    with _FINGERPRINT_MEMO_LOCK:
+        _FINGERPRINT_MEMO.pop(_memo_key(repo_root), None)
+
+
+def _remember_ingested_fingerprint(store: CortexStore, repo_root: Path) -> None:
+    """After this process ingested, the fingerprint the ingest just stored *is*
+    the working-tree fingerprint it scanned: seed the memo with it instead of
+    paying for another full scan. Any failure just drops the entry."""
+    try:
+        _remember_fingerprint(repo_root, store.get_repo_fingerprint(repo_root))
+    except Exception:
+        _forget_fingerprint(repo_root)
+
+
+def _staleness(store: CortexStore, repo_root: Path, *, bypass_ttl: bool = False) -> dict[str, Any]:
+    current = _current_fingerprint(repo_root, bypass_ttl=bypass_ttl)
     stored = store.get_repo_fingerprint(repo_root)
     stale = bool(stored and current != stored)
     # P1-5: a failure looking up the index timestamp must not take down
@@ -400,11 +475,15 @@ def _ensure_fresh(store: CortexStore, repo_root: Path) -> dict[str, Any]:
             # Another Cortex process (or thread) may have refreshed this repo
             # while we waited for the lock: re-check before doing the work
             # again, and only report `auto_refreshed` when *this* call ingested.
-            status = _staleness(store, repo_root)
+            # The re-check bypasses the fingerprint TTL memo: the value
+            # memoized before the wait must not decide whether to ingest.
+            status = _staleness(store, repo_root, bypass_ttl=True)
             if not status["stale"]:
                 return status
             # Re-entrant: ingest_repository takes the same lock again.
+            _forget_fingerprint(repo_root)
             summary = ingest_repository(repo_root, incremental=True)
+            _remember_ingested_fingerprint(store, repo_root)
     except IngestLockTimeout:
         # Another process is still ingesting; answer from the current index
         # and keep reporting it as stale rather than failing the call.
@@ -2054,11 +2133,16 @@ def _call_refresh(arguments: dict[str, Any]) -> dict[str, Any]:
     mode = str(arguments.get("mode", "incremental"))
     # Incremental needs an existing database to diff against.
     incremental = mode != "full" and default_db_path(repo_root).exists()
+    _forget_fingerprint(repo_root)
     summary = ingest_repository(
         repo_root,
         commit_limit=int(arguments.get("commits", 1000)),
         incremental=incremental,
     )
+    try:
+        _remember_fingerprint(repo_root, CortexStore(default_db_path(repo_root)).get_repo_fingerprint(repo_root))
+    except Exception:
+        _forget_fingerprint(repo_root)
     return _content({"summary": summary, "mode": "incremental" if incremental else "full", "stale": False})
 
 
@@ -2101,6 +2185,7 @@ def build_status_result(**extra_fields: Any) -> dict[str, Any]:
     tool is executing."""
     snapshot = REGISTRY.snapshot()
     snapshot["deadline_budget_seconds"] = resolve_budget_seconds()
+    snapshot["fingerprint_ttl_seconds"] = fingerprint_ttl_seconds()
     snapshot.update(extra_fields)
     return _content(snapshot)
 
