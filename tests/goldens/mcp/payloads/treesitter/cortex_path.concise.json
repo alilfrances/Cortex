@@ -1,0 +1,154 @@
+{
+  "_meta": {
+    "cached": false,
+    "fingerprint_fresh": true
+  },
+  "paths": [
+    [
+      {
+        "confidence": "EXTRACTED",
+        "direction": "in",
+        "layer": "STRUCTURAL",
+        "node": "qml/Main.qml @ qml/Main.qml",
+        "node_id": "file:qml/Main.qml",
+        "origin": "unknown",
+        "relation": "contains"
+      },
+      {
+        "confidence": "EXTRACTED",
+        "direction": "out",
+        "layer": "STRUCTURAL",
+        "node": "DeviceManager @ include/DeviceManager.hpp:4",
+        "node_id": "symbol:include/DeviceManager.hpp:DeviceManager",
+        "origin": "unknown",
+        "relation": "instantiates"
+      },
+      {
+        "confidence": "EXTRACTED",
+        "direction": "in",
+        "layer": "STRUCTURAL",
+        "node": "include/DeviceManager.hpp @ include/DeviceManager.hpp",
+        "node_id": "file:include/DeviceManager.hpp",
+        "origin": "treesitter-parser",
+        "relation": "contains"
+      },
+      {
+        "confidence": "LOW",
+        "direction": "out",
+        "layer": "STRUCTURAL",
+        "node": "deviceConnected @ include/DeviceManager.hpp:11",
+        "node_id": "symbol:include/DeviceManager.hpp:deviceConnected",
+        "origin": "regex-parser",
+        "relation": "contains"
+      },
+      {
+        "confidence": "LOW",
+        "direction": "out",
+        "layer": "STRUCTURAL",
+        "node": "onDeviceConnected @ include/DeviceModel.hpp:10",
+        "node_id": "symbol:include/DeviceModel.hpp:onDeviceConnected",
+        "origin": "regex-parser",
+        "relation": "connects"
+      }
+    ],
+    [
+      {
+        "confidence": "EXTRACTED",
+        "direction": "in",
+        "layer": "STRUCTURAL",
+        "node": "qml/Main.qml @ qml/Main.qml",
+        "node_id": "file:qml/Main.qml",
+        "origin": "unknown",
+        "relation": "contains"
+      },
+      {
+        "confidence": "EXTRACTED",
+        "direction": "in",
+        "layer": "STRUCTURAL",
+        "node": "qt_app @ CMakeLists.txt:6",
+        "node_id": "target:qt_app",
+        "origin": "unknown",
+        "relation": "registers"
+      },
+      {
+        "confidence": "EXTRACTED",
+        "direction": "out",
+        "layer": "STRUCTURAL",
+        "node": "src/DeviceManager.cpp @ src/DeviceManager.cpp",
+        "node_id": "file:src/DeviceManager.cpp",
+        "origin": "regex-parser",
+        "relation": "builds"
+      },
+      {
+        "confidence": "EXTRACTED",
+        "direction": "out",
+        "layer": "STRUCTURAL",
+        "node": "include/DeviceModel.hpp @ include/DeviceModel.hpp",
+        "node_id": "file:include/DeviceModel.hpp",
+        "origin": "treesitter-parser",
+        "relation": "imports"
+      },
+      {
+        "confidence": "LOW",
+        "direction": "out",
+        "layer": "STRUCTURAL",
+        "node": "onDeviceConnected @ include/DeviceModel.hpp:10",
+        "node_id": "symbol:include/DeviceModel.hpp:onDeviceConnected",
+        "origin": "regex-parser",
+        "relation": "contains"
+      }
+    ],
+    [
+      {
+        "confidence": "EXTRACTED",
+        "direction": "in",
+        "layer": "STRUCTURAL",
+        "node": "qml/Main.qml @ qml/Main.qml",
+        "node_id": "file:qml/Main.qml",
+        "origin": "unknown",
+        "relation": "contains"
+      },
+      {
+        "confidence": "EXTRACTED",
+        "direction": "in",
+        "layer": "STRUCTURAL",
+        "node": "qt_app @ CMakeLists.txt:6",
+        "node_id": "target:qt_app",
+        "origin": "regex-parser",
+        "relation": "registers"
+      },
+      {
+        "confidence": "EXTRACTED",
+        "direction": "out",
+        "layer": "STRUCTURAL",
+        "node": "src/DeviceManager.cpp @ src/DeviceManager.cpp",
+        "node_id": "file:src/DeviceManager.cpp",
+        "origin": "regex-parser",
+        "relation": "builds"
+      },
+      {
+        "confidence": "EXTRACTED",
+        "direction": "out",
+        "layer": "STRUCTURAL",
+        "node": "include/DeviceModel.hpp @ include/DeviceModel.hpp",
+        "node_id": "file:include/DeviceModel.hpp",
+        "origin": "treesitter-parser",
+        "relation": "imports"
+      },
+      {
+        "confidence": "LOW",
+        "direction": "out",
+        "layer": "STRUCTURAL",
+        "node": "onDeviceConnected @ include/DeviceModel.hpp:10",
+        "node_id": "symbol:include/DeviceModel.hpp:onDeviceConnected",
+        "origin": "regex-parser",
+        "relation": "contains"
+      }
+    ]
+  ],
+  "repo_path": "<repo>",
+  "returned_count": 3,
+  "source": "onDeviceConnected @ qml/Main.qml:12",
+  "stale": false,
+  "target": "onDeviceConnected @ include/DeviceModel.hpp:10"
+}

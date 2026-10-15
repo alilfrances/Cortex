@@ -1,0 +1,55 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/cleanup.py:calls:cleanup_sessions:prune_expired",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5
+      },
+      "relation": "calls",
+      "source": "symbol:app/cleanup.py:cleanup_sessions",
+      "target": "name:prune_expired",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/cleanup.py:contains:cleanup_sessions",
+      "layer": "STRUCTURAL",
+      "metadata": {},
+      "relation": "contains",
+      "source": "file:app/cleanup.py",
+      "target": "symbol:app/cleanup.py:cleanup_sessions",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/cleanup.py:from:app.session",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "level": 0,
+        "lineno": 1,
+        "module": "app.session"
+      },
+      "relation": "imports",
+      "source": "file:app/cleanup.py",
+      "target": "file:app/session.py",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "cleanup_sessions",
+      "metadata": {
+        "lineno": 4
+      },
+      "node_id": "symbol:app/cleanup.py:cleanup_sessions",
+      "signature": "def cleanup_sessions(store: SessionStore, now):",
+      "source_ref": "app/cleanup.py",
+      "span_end": 5,
+      "span_start": 4
+    }
+  ]
+}

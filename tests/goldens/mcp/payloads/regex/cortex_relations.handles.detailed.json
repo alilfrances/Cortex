@@ -1,0 +1,37 @@
+{
+  "_meta": {
+    "cached": false,
+    "fingerprint_fresh": true
+  },
+  "items": [
+    {
+      "confidence": "LOW",
+      "layer": "STRUCTURAL",
+      "origin": "regex-parser",
+      "relation": "handles",
+      "source": "onClicked @ qml/DeviceDelegate.qml:9",
+      "target": "clicked"
+    },
+    {
+      "confidence": "LOW",
+      "layer": "STRUCTURAL",
+      "origin": "regex-parser",
+      "relation": "handles",
+      "source": "onClicked @ qml/Main.qml:11",
+      "target": "clicked @ qml/DeviceDelegate.qml:5"
+    },
+    {
+      "confidence": "LOW",
+      "layer": "STRUCTURAL",
+      "origin": "regex-parser",
+      "relation": "handles",
+      "source": "onDeviceConnected @ qml/Main.qml:12",
+      "target": "deviceConnected @ qml/DeviceDelegate.qml:4"
+    }
+  ],
+  "refresh_hint": "",
+  "repo_path": "<repo>",
+  "returned_count": 3,
+  "stale": false,
+  "truncated": false
+}

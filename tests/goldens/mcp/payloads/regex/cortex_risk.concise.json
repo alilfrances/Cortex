@@ -1,0 +1,105 @@
+{
+  "analysis_errors": [],
+  "budget": 2000,
+  "budget_feasible": true,
+  "build_system_misses": [],
+  "cochange_threshold": 0.5,
+  "directives": [
+    "missing_qt_pair: include/DeviceManager.hpp for src/DeviceManager.cpp"
+  ],
+  "files": [
+    {
+      "additions": 14,
+      "binary": false,
+      "churn": 14,
+      "components": {
+        "cochange": 0.0,
+        "diff": 0.14,
+        "directives": 0.333,
+        "fan_in": 0.1,
+        "hotspot": 0.24
+      },
+      "deletions": 0,
+      "fan_in": 1,
+      "hotspot": {
+        "churn": 2,
+        "complexity": 120,
+        "score": 240
+      },
+      "indexed": true,
+      "missing_cochange": [],
+      "path": "src/DeviceManager.cpp",
+      "risk": 1.72,
+      "risk_score": 1.72,
+      "score": 1.72,
+      "status": "M",
+      "structural_fan_in": 1
+    },
+    {
+      "additions": 1,
+      "binary": false,
+      "churn": 2,
+      "components": {
+        "cochange": 0.0,
+        "diff": 0.02,
+        "directives": 0.0,
+        "fan_in": 0.3,
+        "hotspot": 0.428
+      },
+      "deletions": 1,
+      "fan_in": 3,
+      "hotspot": {
+        "churn": 2,
+        "complexity": 214,
+        "score": 428
+      },
+      "indexed": true,
+      "missing_cochange": [],
+      "path": "qml/Main.qml",
+      "risk": 1.37,
+      "risk_score": 1.37,
+      "score": 1.37,
+      "status": "M",
+      "structural_fan_in": 3
+    }
+  ],
+  "index_status": "available",
+  "missing_cochange": [],
+  "missing_cochanges": [],
+  "missing_qt_instantiations": [],
+  "missing_qt_pairs": [
+    {
+      "changed": "src/DeviceManager.cpp",
+      "partner": "include/DeviceManager.hpp",
+      "reason": "Qt header/implementation partner is untouched"
+    }
+  ],
+  "missing_qt_sites": [],
+  "missing_tests": [],
+  "range": "HEAD~1..HEAD",
+  "repo_path": "<repo>",
+  "returned_count": 2,
+  "score_formula": {
+    "normalization": {
+      "cochange": "min(1, strongest missing partner weight)",
+      "diff": "min(1, churn/100)",
+      "directives": "min(1, actionable_directives/3)",
+      "fan_in": "min(1, fan_in/10)",
+      "hotspot": "min(1, stored_hotspot_score/1000)"
+    },
+    "score": "round(10 * sum(weight * component), 2)",
+    "weights": {
+      "cochange": 0.15,
+      "diff": 0.3,
+      "directives": 0.2,
+      "fan_in": 0.15,
+      "hotspot": 0.2
+    }
+  },
+  "staged": false,
+  "stale": false,
+  "status": "ok",
+  "truncated": false,
+  "unindexed": false,
+  "unindexed_files": []
+}

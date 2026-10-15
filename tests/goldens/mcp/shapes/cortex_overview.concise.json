@@ -1,0 +1,22 @@
+{
+  "first_item_keys": {
+    "top_hotspots": [
+      "churn",
+      "complexity",
+      "path",
+      "score"
+    ]
+  },
+  "keys": [
+    "_meta",
+    "budget",
+    "budget_feasible",
+    "dead_code_returned",
+    "dead_code_total",
+    "repo_path",
+    "report",
+    "stale",
+    "top_hotspots",
+    "truncated"
+  ]
+}

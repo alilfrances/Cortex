@@ -1,0 +1,25 @@
+{
+  "first_item_keys": {
+    "paths": [
+      "confidence",
+      "direction",
+      "layer",
+      "node",
+      "node_id",
+      "origin",
+      "relation"
+    ]
+  },
+  "keys": [
+    "_meta",
+    "current_fingerprint",
+    "fingerprint",
+    "paths",
+    "refresh_hint",
+    "repo_path",
+    "returned_count",
+    "source",
+    "stale",
+    "target"
+  ]
+}

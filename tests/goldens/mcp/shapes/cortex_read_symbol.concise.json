@@ -1,0 +1,15 @@
+{
+  "first_item_keys": {},
+  "keys": [
+    "body",
+    "body_format",
+    "node_id",
+    "path",
+    "repo_path",
+    "signature",
+    "span_end",
+    "span_start",
+    "stale",
+    "truncated"
+  ]
+}

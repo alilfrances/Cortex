@@ -1,0 +1,28 @@
+{
+  "_meta": {
+    "cached": false,
+    "fingerprint_fresh": true
+  },
+  "items": [
+    {
+      "confidence": "LOW",
+      "layer": "STRUCTURAL",
+      "origin": "regex-parser",
+      "relation": "inherits",
+      "source": "DeviceManager @ include/DeviceManager.hpp:4",
+      "target": "QObject"
+    },
+    {
+      "confidence": "LOW",
+      "layer": "STRUCTURAL",
+      "origin": "regex-parser",
+      "relation": "inherits",
+      "source": "DeviceModel @ include/DeviceModel.hpp:4",
+      "target": "QObject"
+    }
+  ],
+  "repo_path": "<repo>",
+  "returned_count": 2,
+  "stale": false,
+  "truncated": false
+}

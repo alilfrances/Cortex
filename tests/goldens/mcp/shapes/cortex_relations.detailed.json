@@ -1,0 +1,23 @@
+{
+  "first_item_keys": {
+    "items": [
+      "confidence",
+      "layer",
+      "origin",
+      "relation",
+      "source",
+      "target"
+    ]
+  },
+  "keys": [
+    "_meta",
+    "current_fingerprint",
+    "fingerprint",
+    "items",
+    "refresh_hint",
+    "repo_path",
+    "returned_count",
+    "stale",
+    "truncated"
+  ]
+}

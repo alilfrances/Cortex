@@ -1,0 +1,14 @@
+{
+  "first_item_keys": {},
+  "keys": [
+    "_meta",
+    "current_fingerprint",
+    "fingerprint",
+    "items",
+    "refresh_hint",
+    "repo_path",
+    "returned_count",
+    "stale",
+    "truncated"
+  ]
+}

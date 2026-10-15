@@ -1,0 +1,17 @@
+{
+  "first_item_keys": {
+    "items": [
+      "path",
+      "score",
+      "snippet"
+    ]
+  },
+  "keys": [
+    "fts_available",
+    "items",
+    "repo_path",
+    "returned_count",
+    "stale",
+    "truncated"
+  ]
+}

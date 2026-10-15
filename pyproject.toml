@@ -23,6 +23,8 @@ dependencies = [
 [project.optional-dependencies]
 llm    = ["anthropic>=0.40", "openai>=1.0"]
 watch  = ["watchdog>=4"]
+# Development / CI only (never a runtime dependency): test runner and coverage.
+dev    = ["pytest>=8", "pytest-cov>=5"]
 # Optional exact BPE token counts; tokenization falls back to the calibrated
 # regex-segment heuristic when tiktoken is unavailable.
 tokens = ["tiktoken>=0.7"]

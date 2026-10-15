@@ -1,0 +1,52 @@
+{
+  "budget": 2000,
+  "budget_feasible": true,
+  "findings": [
+    {
+      "confidence": "low",
+      "file": "CMakeLists.txt",
+      "line": 6,
+      "reason": "no incoming edges; regex/dynamic-language caveat",
+      "symbol": "qt_app"
+    },
+    {
+      "confidence": "low",
+      "file": "include/DeviceModel.hpp",
+      "line": 4,
+      "reason": "no incoming edges; regex/dynamic-language caveat",
+      "symbol": "DeviceModel"
+    },
+    {
+      "confidence": "low",
+      "file": "qml/Main.qml",
+      "line": 4,
+      "reason": "no incoming edges; regex/dynamic-language caveat",
+      "symbol": "Main"
+    },
+    {
+      "confidence": "low",
+      "file": "qml/Main.qml",
+      "line": 5,
+      "reason": "no incoming edges; Qt meta-object or dynamic-language caveat",
+      "symbol": "sceneReady"
+    },
+    {
+      "confidence": "low",
+      "file": "src/DeviceManager.cpp",
+      "line": 9,
+      "reason": "no incoming edges; regex/dynamic-language caveat",
+      "symbol": "scan"
+    },
+    {
+      "confidence": "low",
+      "file": "src/DeviceManager.cpp",
+      "line": 11,
+      "reason": "no incoming edges; regex/dynamic-language caveat",
+      "symbol": "switch"
+    }
+  ],
+  "repo_path": "<repo>",
+  "returned_count": 6,
+  "stale": false,
+  "truncated": false
+}

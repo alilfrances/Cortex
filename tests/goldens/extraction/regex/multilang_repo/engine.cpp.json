@@ -1,0 +1,149 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:engine.cpp:contains:Engine",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "engine.cpp"
+      },
+      "relation": "contains",
+      "source": "file:engine.cpp",
+      "target": "symbol:engine.cpp:Engine",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:engine.cpp:contains:Runner",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "engine.cpp"
+      },
+      "relation": "contains",
+      "source": "file:engine.cpp",
+      "target": "symbol:engine.cpp:Runner",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:engine.cpp:contains:compute",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 9,
+        "source_file": "engine.cpp"
+      },
+      "relation": "contains",
+      "source": "file:engine.cpp",
+      "target": "symbol:engine.cpp:compute",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:engine.cpp:contains:start",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "engine.cpp"
+      },
+      "relation": "contains",
+      "source": "file:engine.cpp",
+      "target": "symbol:engine.cpp:start",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:engine.cpp:import:1:1:engine.hpp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "engine.cpp"
+      },
+      "relation": "imports",
+      "source": "file:engine.cpp",
+      "target": "file:engine.hpp",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "engine.cpp",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "cpp",
+        "size_bytes": 140
+      },
+      "node_id": "file:engine.cpp",
+      "signature": "",
+      "source_ref": "engine.cpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Engine",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 3,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:engine.cpp:Engine",
+      "signature": "namespace Engine {",
+      "source_ref": "engine.cpp",
+      "span_end": 12,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Runner",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 4,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:engine.cpp:Runner",
+      "signature": "class Runner {",
+      "source_ref": "engine.cpp",
+      "span_end": 7,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "compute",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 9,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:engine.cpp:compute",
+      "signature": "int compute(int value) {",
+      "source_ref": "engine.cpp",
+      "span_end": 11,
+      "span_start": 9
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "start",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 6,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:engine.cpp:start",
+      "signature": "void start() {}",
+      "source_ref": "engine.cpp",
+      "span_end": 6,
+      "span_start": 6
+    }
+  ]
+}

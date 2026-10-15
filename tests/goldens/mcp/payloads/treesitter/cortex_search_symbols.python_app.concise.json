@@ -1,0 +1,25 @@
+{
+  "_meta": {
+    "cached": false,
+    "fingerprint_fresh": true
+  },
+  "items": [
+    {
+      "degree": 4,
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "login",
+      "metadata": {
+        "degree": 4,
+        "lineno": 11
+      },
+      "node_id": "symbol:app/auth.py:AuthService.login",
+      "signature": "def login(self, username, password):",
+      "source_ref": "app/auth.py",
+      "span_end": 18,
+      "span_start": 11
+    }
+  ],
+  "repo_path": "<repo>",
+  "stale": false
+}

@@ -1,0 +1,25 @@
+{
+  "first_item_keys": {
+    "confidence_notes": null,
+    "items": [
+      "content",
+      "kind",
+      "path",
+      "score",
+      "token_count",
+      "why"
+    ],
+    "open_questions": null
+  },
+  "keys": [
+    "budget",
+    "confidence_notes",
+    "items",
+    "open_questions",
+    "repo_path",
+    "stale",
+    "task",
+    "token_stats",
+    "total_tokens"
+  ]
+}

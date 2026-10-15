@@ -1,0 +1,24 @@
+{
+  "first_item_keys": {
+    "findings": [
+      "confidence",
+      "file",
+      "line",
+      "reason",
+      "symbol"
+    ]
+  },
+  "keys": [
+    "_meta",
+    "budget",
+    "budget_feasible",
+    "current_fingerprint",
+    "findings",
+    "fingerprint",
+    "refresh_hint",
+    "repo_path",
+    "returned_count",
+    "stale",
+    "truncated"
+  ]
+}

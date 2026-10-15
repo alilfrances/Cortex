@@ -1,0 +1,104 @@
+{
+  "_meta": {
+    "cached": false,
+    "fingerprint_fresh": true
+  },
+  "items": [
+    {
+      "degree": 3,
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "DeviceManager",
+      "metadata": {
+        "degree": 3,
+        "lineno": 4,
+        "parser_backend": "treesitter",
+        "qt": "qobject"
+      },
+      "node_id": "symbol:include/DeviceManager.hpp:DeviceManager",
+      "signature": "class DeviceManager : public QObject {",
+      "source_ref": "include/DeviceManager.hpp",
+      "span_end": 15,
+      "span_start": 4
+    },
+    {
+      "degree": 1,
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "DeviceManager",
+      "metadata": {
+        "degree": 1,
+        "lineno": 4,
+        "parser_backend": "treesitter",
+        "qualifier": "DeviceManager"
+      },
+      "node_id": "symbol:src/DeviceManager.cpp:DeviceManager",
+      "signature": "DeviceManager::DeviceManager(QObject *parent) : QObject(parent) {",
+      "source_ref": "src/DeviceManager.cpp",
+      "span_end": 7,
+      "span_start": 4
+    },
+    {
+      "degree": 2,
+      "granularity": "symbol",
+      "kind": "object",
+      "label": "DeviceManager",
+      "metadata": {
+        "byte_end": 115,
+        "byte_start": 99,
+        "degree": 2,
+        "lineno": 7,
+        "parent_owner": "symbol:qml/Main.qml:Main",
+        "parser_backend": "treesitter",
+        "qml_kind": "object",
+        "qml_owner": "Main.DeviceManager",
+        "type_name": "DeviceManager"
+      },
+      "node_id": "symbol:qml/Main.qml:Main.DeviceManager",
+      "signature": "DeviceManager {}",
+      "source_ref": "qml/Main.qml",
+      "span_end": 7,
+      "span_start": 7
+    },
+    {
+      "degree": 5,
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "DeviceDelegate",
+      "metadata": {
+        "byte_end": 172,
+        "byte_start": 21,
+        "degree": 5,
+        "lineno": 3,
+        "parser_backend": "treesitter",
+        "qml_base_type": "Item",
+        "qml_kind": "component",
+        "qml_owner": "DeviceDelegate"
+      },
+      "node_id": "symbol:qml/DeviceDelegate.qml:DeviceDelegate",
+      "signature": "Item {",
+      "source_ref": "qml/DeviceDelegate.qml",
+      "span_end": 11,
+      "span_start": 3
+    },
+    {
+      "degree": 2,
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "DeviceModel",
+      "metadata": {
+        "degree": 2,
+        "lineno": 4,
+        "parser_backend": "treesitter",
+        "qt": "qobject"
+      },
+      "node_id": "symbol:include/DeviceModel.hpp:DeviceModel",
+      "signature": "class DeviceModel : public QObject {",
+      "source_ref": "include/DeviceModel.hpp",
+      "span_end": 14,
+      "span_start": 4
+    }
+  ],
+  "repo_path": "<repo>",
+  "stale": false
+}

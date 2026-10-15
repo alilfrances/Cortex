@@ -1,0 +1,93 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.js:contains:AppController",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 7,
+        "source_file": "app.js"
+      },
+      "relation": "contains",
+      "source": "file:app.js",
+      "target": "symbol:app.js:AppController",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.js:contains:start",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "app.js"
+      },
+      "relation": "contains",
+      "source": "file:app.js",
+      "target": "symbol:app.js:start",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.js:import:1:1:./helper.js",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "app.js"
+      },
+      "relation": "imports",
+      "source": "file:app.js",
+      "target": "module:./helper.js",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "app.js",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "js",
+        "size_bytes": 145
+      },
+      "node_id": "file:app.js",
+      "signature": "",
+      "source_ref": "app.js",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "AppController",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 7,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:app.js:AppController",
+      "signature": "class AppController {",
+      "source_ref": "app.js",
+      "span_end": 11,
+      "span_start": 7
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "start",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 3,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:app.js:start",
+      "signature": "export function start() {",
+      "source_ref": "app.js",
+      "span_end": 5,
+      "span_start": 3
+    }
+  ]
+}

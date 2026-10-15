@@ -1,0 +1,26 @@
+{
+  "first_item_keys": {
+    "items": [
+      "degree",
+      "granularity",
+      "kind",
+      "label",
+      "metadata",
+      "node_id",
+      "signature",
+      "source_ref",
+      "span_end",
+      "span_start",
+      "why"
+    ]
+  },
+  "keys": [
+    "_meta",
+    "current_fingerprint",
+    "fingerprint",
+    "items",
+    "refresh_hint",
+    "repo_path",
+    "stale"
+  ]
+}

@@ -1,0 +1,250 @@
+"""Golden snapshots of structural extraction at 7b0e6e0 (Task 0 baseline).
+
+Every file of ``tests/fixtures/multilang_repo`` and ``tests/fixtures/qml_full_repo``
+is run through ``cortex.graph.build_file_layer`` once per backend and the full
+node/edge set is compared with a checked-in golden:
+
+* ``tests/goldens/extraction/treesitter/<fixture>/<file>.json`` -- skipped when the
+  managed runtime is not ready or ``CORTEX_FORCE_REGEX=1``.
+* ``tests/goldens/extraction/regex/<fixture>/<file>.json`` -- always runs; the test
+  sets ``CORTEX_FORCE_REGEX=1`` itself.
+
+Also pinned: the Python (stdlib ``ast``) output for the ``python_app`` eval fixture,
+and the full ``build_graph`` result (degree metadata included) for the Qt eval
+fixture, per backend.
+
+The ``test_*_today`` assertions document *current limitations* so that a later
+task flipping them does so visibly and intentionally.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from cortex.ast_extract import extract_python_edges
+from cortex.graph import build_file_layer, build_graph
+from tests.baseline_helpers import (
+    FIXTURES,
+    fixed_git_env,
+    fixture_files,
+    init_git,
+    normalised_commits,
+    read_sources,
+)
+from tests.golden_utils import TREE_SITTER_ONLY, assert_golden, canonical_graph
+from evals.run_evals import _build_python_app, _build_qt_app
+
+FIXTURE_NAMES = ("multilang_repo", "qml_full_repo")
+
+# Always extracted through the regex-based module-metadata path, in both backends.
+_METADATA_ONLY_NAMES = {"cmakelists.txt", "qmldir"}
+_METADATA_ONLY_SUFFIXES = {".cmake", ".qrc", ".qmltypes", ".qmlproject"}
+
+CASES = [
+    pytest.param(name, rel, id=f"{name}/{rel}")
+    for name in FIXTURE_NAMES
+    for rel in fixture_files(FIXTURES / name)
+]
+
+
+def _is_metadata_only(rel: str) -> bool:
+    path = Path(rel)
+    return path.name.lower() in _METADATA_ONLY_NAMES or path.suffix.lower() in _METADATA_ONLY_SUFFIXES
+
+
+def _layer(fixture: str, rel: str):
+    root = FIXTURES / fixture
+    known = set(fixture_files(root))
+    sources = read_sources(root, [rel])
+    return build_file_layer(sources, known_paths=known)
+
+
+def _whole_fixture_layer(fixture: str):
+    root = FIXTURES / fixture
+    rels = fixture_files(root)
+    return build_file_layer(read_sources(root, rels), known_paths=set(rels))
+
+
+def _backends_of(nodes) -> set[str]:
+    return {
+        str(node.metadata["parser_backend"])
+        for node in nodes
+        if node.kind == "file" and "parser_backend" in node.metadata
+    }
+
+
+# --------------------------------------------------------------------------- #
+# per-file goldens
+# --------------------------------------------------------------------------- #
+
+
+@TREE_SITTER_ONLY
+@pytest.mark.parametrize("fixture,rel", CASES)
+def test_treesitter_extraction_golden(fixture: str, rel: str) -> None:
+    nodes, edges = _layer(fixture, rel)
+
+    if not _is_metadata_only(rel) and Path(rel).suffix in {".java", ".js", ".ts", ".go", ".rs", ".rb", ".c", ".cpp", ".hpp", ".h", ".qml"}:
+        # A silent fallback would otherwise bake regex output into the
+        # tree-sitter golden.
+        assert _backends_of(nodes) == {"treesitter"}, (fixture, rel, _backends_of(nodes))
+    assert_golden(f"extraction/treesitter/{fixture}/{rel}.json", canonical_graph(nodes, edges))
+
+
+@pytest.mark.parametrize("fixture,rel", CASES)
+def test_regex_extraction_golden(fixture: str, rel: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CORTEX_FORCE_REGEX", "1")
+    nodes, edges = _layer(fixture, rel)
+
+    assert _backends_of(nodes) <= {"regex"}, (fixture, rel, _backends_of(nodes))
+    assert_golden(f"extraction/regex/{fixture}/{rel}.json", canonical_graph(nodes, edges))
+
+
+@TREE_SITTER_ONLY
+@pytest.mark.parametrize("fixture", FIXTURE_NAMES)
+def test_treesitter_whole_fixture_golden(fixture: str) -> None:
+    """Cross-file resolution passes (Qt emits/connects/handles, QML) over a full batch."""
+    nodes, edges = _whole_fixture_layer(fixture)
+    assert_golden(f"extraction/treesitter/{fixture}/__whole_fixture__.json", canonical_graph(nodes, edges))
+
+
+@pytest.mark.parametrize("fixture", FIXTURE_NAMES)
+def test_regex_whole_fixture_golden(fixture: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CORTEX_FORCE_REGEX", "1")
+    nodes, edges = _whole_fixture_layer(fixture)
+    assert_golden(f"extraction/regex/{fixture}/__whole_fixture__.json", canonical_graph(nodes, edges))
+
+
+# --------------------------------------------------------------------------- #
+# Python (stdlib ast) goldens
+# --------------------------------------------------------------------------- #
+
+
+def _python_app_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, list[str]]:
+    fixed_git_env(monkeypatch)
+    repo = _build_python_app(tmp_path)
+    rels = sorted(p.relative_to(repo).as_posix() for p in repo.rglob("*.py"))
+    return repo, rels
+
+
+def _python_extraction(repo: Path, rels: list[str]) -> dict[str, tuple[list, list]]:
+    known = {p.relative_to(repo).as_posix() for p in repo.rglob("*") if p.is_file() and ".git" not in p.parts}
+    return {
+        rel: extract_python_edges(rel, (repo / rel).read_text(encoding="utf-8"), known)
+        for rel in rels
+    }
+
+
+def test_python_extraction_golden(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo, rels = _python_app_files(tmp_path, monkeypatch)
+    assert rels, "python_app fixture produced no .py files"
+    for rel, (nodes, edges) in _python_extraction(repo, rels).items():
+        assert_golden(f"extraction/python/{rel}.json", canonical_graph(nodes, edges))
+
+
+# --------------------------------------------------------------------------- #
+# build_graph (nodes + edges + degree metadata) for the Qt eval fixture
+# --------------------------------------------------------------------------- #
+
+
+def _qt_graph(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    fixed_git_env(monkeypatch)
+    repo = _build_qt_app(tmp_path)
+    rels = sorted(
+        p.relative_to(repo).as_posix()
+        for p in repo.rglob("*")
+        if p.is_file() and ".git" not in p.parts
+    )
+    sources = read_sources(repo, rels)
+    commits = normalised_commits(repo)
+    assert len(commits) == 2, "qt_app fixture is expected to have two commits"
+    return build_graph(sources, commits)
+
+
+@TREE_SITTER_ONLY
+def test_treesitter_qt_app_build_graph_golden(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    nodes, edges = _qt_graph(tmp_path, monkeypatch)
+    assert all("degree" in node.metadata for node in nodes)
+    assert_golden("graph/treesitter/qt_app.json", canonical_graph(nodes, edges))
+
+
+def test_regex_qt_app_build_graph_golden(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CORTEX_FORCE_REGEX", "1")
+    nodes, edges = _qt_graph(tmp_path, monkeypatch)
+    assert all("degree" in node.metadata for node in nodes)
+    assert_golden("graph/regex/qt_app.json", canonical_graph(nodes, edges))
+
+
+# --------------------------------------------------------------------------- #
+# Characterization of today's limitations (flipped deliberately by later tasks)
+# --------------------------------------------------------------------------- #
+
+
+def _calls(edges) -> list:
+    return [edge for edge in edges if edge.relation == "calls"]
+
+
+def _non_python_non_qml_cases():
+    return [c for c in CASES if Path(c.values[1]).suffix not in {".py", ".qml"}]
+
+
+@TREE_SITTER_ONLY
+@pytest.mark.parametrize("fixture,rel", _non_python_non_qml_cases())
+def test_no_calls_edges_outside_python_and_qml_treesitter_today(fixture: str, rel: str) -> None:
+    """Task 6-8 flip: C/C++/JS/TS/Go/Rust/Swift/Java/Ruby gain `calls` edges."""
+    _, edges = _layer(fixture, rel)
+    assert _calls(edges) == []
+
+
+@pytest.mark.parametrize("fixture,rel", _non_python_non_qml_cases())
+def test_no_calls_edges_outside_python_and_qml_regex_today(
+    fixture: str, rel: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Task 6-8 flip: the regex fallback gains name-only `calls` edges."""
+    monkeypatch.setenv("CORTEX_FORCE_REGEX", "1")
+    _, edges = _layer(fixture, rel)
+    assert _calls(edges) == []
+
+
+def test_python_calls_targets_are_name_based_today(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Task 5 flip: resolved `symbol:` targets replace `name:` where unambiguous."""
+    repo, rels = _python_app_files(tmp_path, monkeypatch)
+    calls = [
+        edge
+        for nodes_edges in _python_extraction(repo, rels).values()
+        for edge in _calls(nodes_edges[1])
+    ]
+    assert calls, "python_app fixture is expected to contain call sites"
+    assert all(edge.target.startswith("name:") for edge in calls)
+    assert all(edge.layer == "STRUCTURAL" and edge.relation == "calls" for edge in calls)
+
+
+@TREE_SITTER_ONLY
+def test_parser_backend_label_treesitter() -> None:
+    nodes, _ = _layer("multilang_repo", "app.js")
+    structural = [node for node in nodes if node.kind != "file"]
+    assert structural, "app.js should yield symbol nodes"
+    assert {node.metadata["parser_backend"] for node in structural} == {"treesitter"}
+    assert _backends_of(nodes) == {"treesitter"}
+
+
+def test_parser_backend_label_regex(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CORTEX_FORCE_REGEX", "1")
+    nodes, edges = _layer("multilang_repo", "app.js")
+    structural = [node for node in nodes if node.kind != "file"]
+    assert structural
+    assert {node.metadata["parser_backend"] for node in structural} == {"regex"}
+    assert _backends_of(nodes) == {"regex"}
+    # The dispatcher forces LOW confidence on every fallback edge.
+    structural_edges = [e for e in edges if e.layer == "STRUCTURAL"]
+    assert structural_edges and {e.confidence for e in structural_edges} == {"LOW"}
+
+
+@TREE_SITTER_ONLY
+def test_treesitter_dedupes_same_named_symbols_per_file_today() -> None:
+    """Non-goal documented by the plan: symbol ids are ``symbol:<path>:<bare name>``."""
+    nodes, _ = _layer("multilang_repo", "engine.cpp")
+    symbol_ids = [node.node_id for node in nodes if node.node_id.startswith("symbol:")]
+    assert len(symbol_ids) == len(set(symbol_ids))
+    assert all(sid.startswith("symbol:engine.cpp:") for sid in symbol_ids)

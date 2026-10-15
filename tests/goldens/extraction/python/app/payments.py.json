@@ -1,0 +1,113 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/payments.py:calls:PaymentGateway.capture:capture",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 9
+      },
+      "relation": "calls",
+      "source": "symbol:app/payments.py:PaymentGateway.capture",
+      "target": "name:capture",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/payments.py:calls:PaymentGateway.capture:retry_operation",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 9
+      },
+      "relation": "calls",
+      "source": "symbol:app/payments.py:PaymentGateway.capture",
+      "target": "name:retry_operation",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/payments.py:contains:PaymentGateway",
+      "layer": "STRUCTURAL",
+      "metadata": {},
+      "relation": "contains",
+      "source": "file:app/payments.py",
+      "target": "symbol:app/payments.py:PaymentGateway",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/payments.py:contains:PaymentGateway.__init__",
+      "layer": "STRUCTURAL",
+      "metadata": {},
+      "relation": "contains",
+      "source": "symbol:app/payments.py:PaymentGateway",
+      "target": "symbol:app/payments.py:PaymentGateway.__init__",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/payments.py:contains:PaymentGateway.capture",
+      "layer": "STRUCTURAL",
+      "metadata": {},
+      "relation": "contains",
+      "source": "symbol:app/payments.py:PaymentGateway",
+      "target": "symbol:app/payments.py:PaymentGateway.capture",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/payments.py:from:app.retry",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "level": 0,
+        "lineno": 1,
+        "module": "app.retry"
+      },
+      "relation": "imports",
+      "source": "file:app/payments.py",
+      "target": "file:app/retry.py",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "PaymentGateway",
+      "metadata": {
+        "lineno": 4
+      },
+      "node_id": "symbol:app/payments.py:PaymentGateway",
+      "signature": "class PaymentGateway:",
+      "source_ref": "app/payments.py",
+      "span_end": 9,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "__init__",
+      "metadata": {
+        "lineno": 5
+      },
+      "node_id": "symbol:app/payments.py:PaymentGateway.__init__",
+      "signature": "def __init__(self, client):",
+      "source_ref": "app/payments.py",
+      "span_end": 6,
+      "span_start": 5
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "capture",
+      "metadata": {
+        "lineno": 8
+      },
+      "node_id": "symbol:app/payments.py:PaymentGateway.capture",
+      "signature": "def capture(self, order_id, amount):",
+      "source_ref": "app/payments.py",
+      "span_end": 9,
+      "span_start": 8
+    }
+  ]
+}

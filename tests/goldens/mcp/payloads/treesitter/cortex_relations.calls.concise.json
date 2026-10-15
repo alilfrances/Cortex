@@ -1,0 +1,20 @@
+{
+  "_meta": {
+    "cached": false,
+    "fingerprint_fresh": true
+  },
+  "items": [
+    {
+      "confidence": "EXTRACTED",
+      "layer": "STRUCTURAL",
+      "origin": "unknown",
+      "relation": "calls",
+      "source": "onClicked @ qml/DeviceDelegate.qml:9",
+      "target": "clicked @ qml/DeviceDelegate.qml:5"
+    }
+  ],
+  "repo_path": "<repo>",
+  "returned_count": 1,
+  "stale": false,
+  "truncated": false
+}

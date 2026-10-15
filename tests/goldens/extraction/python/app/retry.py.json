@@ -1,0 +1,53 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/retry.py:calls:retry_operation:operation",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5
+      },
+      "relation": "calls",
+      "source": "symbol:app/retry.py:retry_operation",
+      "target": "name:operation",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/retry.py:calls:retry_operation:range",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3
+      },
+      "relation": "calls",
+      "source": "symbol:app/retry.py:retry_operation",
+      "target": "name:range",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/retry.py:contains:retry_operation",
+      "layer": "STRUCTURAL",
+      "metadata": {},
+      "relation": "contains",
+      "source": "file:app/retry.py",
+      "target": "symbol:app/retry.py:retry_operation",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "retry_operation",
+      "metadata": {
+        "lineno": 1
+      },
+      "node_id": "symbol:app/retry.py:retry_operation",
+      "signature": "def retry_operation(operation, attempts=3):",
+      "source_ref": "app/retry.py",
+      "span_end": 8,
+      "span_start": 1
+    }
+  ]
+}

@@ -1,0 +1,513 @@
+[
+  {
+    "description": "Ranked, graph-aware files and snippets for a concrete coding task. Use before broad search or reads.",
+    "inputSchema": {
+      "properties": {
+        "budget": {
+          "default": 4000,
+          "type": "integer"
+        },
+        "hotspot_boost": {
+          "default": false,
+          "description": "Opt-in churn×complexity ranking boost; default retrieval is unchanged.",
+          "type": "boolean"
+        },
+        "repo_path": {
+          "type": "string"
+        },
+        "response_format": {
+          "default": "concise",
+          "enum": [
+            "concise",
+            "detailed"
+          ],
+          "type": "string"
+        },
+        "task": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "task"
+      ],
+      "type": "object"
+    },
+    "name": "cortex_query"
+  },
+  {
+    "description": "Repository graph summary, communities, hotspots, and surprising links. Use for orientation before targeted tools.",
+    "inputSchema": {
+      "properties": {
+        "budget": {
+          "default": 2000,
+          "type": "integer"
+        },
+        "repo_path": {
+          "type": "string"
+        },
+        "response_format": {
+          "default": "concise",
+          "enum": [
+            "concise",
+            "detailed"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "cortex_overview"
+  },
+  {
+    "description": "Compact triage cards for paths or symbols, including neighbors, co-change, hotspots, and Qt/QML wiring.",
+    "inputSchema": {
+      "properties": {
+        "budget": {
+          "default": 2000,
+          "type": "integer"
+        },
+        "include": {
+          "description": "Optional detail expansions.",
+          "items": {
+            "enum": [
+              "impact",
+              "cochange",
+              "symbols"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "repo_path": {
+          "type": "string"
+        },
+        "response_format": {
+          "default": "concise",
+          "enum": [
+            "concise",
+            "detailed"
+          ],
+          "type": "string"
+        },
+        "targets": {
+          "description": "Repository-relative paths, file node ids, or symbol names/node ids.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "targets"
+      ],
+      "type": "object"
+    },
+    "name": "cortex_context"
+  },
+  {
+    "description": "Files structurally or historically coupled to a path. Use to assess a file's blast radius.",
+    "inputSchema": {
+      "properties": {
+        "budget": {
+          "default": 2000,
+          "type": "integer"
+        },
+        "limit": {
+          "default": 10,
+          "type": "integer"
+        },
+        "path": {
+          "type": "string"
+        },
+        "repo_path": {
+          "type": "string"
+        },
+        "response_format": {
+          "default": "concise",
+          "enum": [
+            "concise",
+            "detailed"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "name": "cortex_impact"
+  },
+  {
+    "description": "Deterministic per-file risk for a local git diff, with missing-context guidance. Defaults to HEAD~1..HEAD.",
+    "inputSchema": {
+      "properties": {
+        "budget": {
+          "default": 2000,
+          "type": "integer"
+        },
+        "range": {
+          "description": "Git revision range; defaults to HEAD~1..HEAD unless staged=true.",
+          "type": "string"
+        },
+        "repo_path": {
+          "type": "string"
+        },
+        "response_format": {
+          "default": "concise",
+          "enum": [
+            "concise",
+            "detailed"
+          ],
+          "type": "string"
+        },
+        "staged": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "name": "cortex_risk"
+  },
+  {
+    "description": "Conservative dead-code candidates from the symbol graph and local references, with confidence tiers and Qt exclusions.",
+    "inputSchema": {
+      "properties": {
+        "budget": {
+          "default": 2000,
+          "type": "integer"
+        },
+        "repo_path": {
+          "type": "string"
+        },
+        "response_format": {
+          "default": "concise",
+          "enum": [
+            "concise",
+            "detailed"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "cortex_dead_code"
+  },
+  {
+    "description": "Matching indexed symbols without file bodies. Use when you know a function, class, or identifier.",
+    "inputSchema": {
+      "properties": {
+        "limit": {
+          "default": 20,
+          "type": "integer"
+        },
+        "query": {
+          "type": "string"
+        },
+        "repo_path": {
+          "type": "string"
+        },
+        "response_format": {
+          "default": "concise",
+          "enum": [
+            "concise",
+            "detailed"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "name": "cortex_search_symbols"
+  },
+  {
+    "description": "Indexed source for one symbol span, available as full source, skeleton, or signature.",
+    "inputSchema": {
+      "properties": {
+        "budget": {
+          "default": 2000,
+          "type": "integer"
+        },
+        "mode": {
+          "default": "full",
+          "enum": [
+            "full",
+            "skeleton",
+            "signature"
+          ],
+          "type": "string"
+        },
+        "repo_path": {
+          "type": "string"
+        },
+        "response_format": {
+          "default": "concise",
+          "enum": [
+            "concise",
+            "detailed"
+          ],
+          "type": "string"
+        },
+        "symbol": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbol"
+      ],
+      "type": "object"
+    },
+    "name": "cortex_read_symbol"
+  },
+  {
+    "description": "Indexed file content as a compact symbol skeleton or full source. Prefer it to raw reads.",
+    "inputSchema": {
+      "properties": {
+        "budget": {
+          "default": 4000,
+          "type": "integer"
+        },
+        "mode": {
+          "default": "skeleton",
+          "enum": [
+            "skeleton",
+            "full"
+          ],
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "repo_path": {
+          "type": "string"
+        },
+        "response_format": {
+          "default": "concise",
+          "enum": [
+            "concise",
+            "detailed"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "name": "cortex_read_file"
+  },
+  {
+    "description": "Parsed structural graph edges for symbol relationships such as calls, imports, connects, reads, and writes.",
+    "inputSchema": {
+      "properties": {
+        "budget": {
+          "default": 2000,
+          "type": "integer"
+        },
+        "direction": {
+          "default": "both",
+          "enum": [
+            "out",
+            "in",
+            "both"
+          ],
+          "type": "string"
+        },
+        "limit": {
+          "default": 50,
+          "type": "integer"
+        },
+        "relation": {
+          "enum": [
+            "contains",
+            "imports",
+            "inherits",
+            "calls",
+            "emits",
+            "connects",
+            "handles",
+            "instantiates",
+            "builds",
+            "registers",
+            "binds",
+            "reads",
+            "writes",
+            "references",
+            "aliases",
+            "exports"
+          ],
+          "type": "string"
+        },
+        "repo_path": {
+          "type": "string"
+        },
+        "response_format": {
+          "default": "concise",
+          "enum": [
+            "concise",
+            "detailed"
+          ],
+          "type": "string"
+        },
+        "symbol": {
+          "description": "substring match against endpoint node id or label",
+          "type": "string"
+        },
+        "target": {
+          "description": "alias for 'symbol'",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "cortex_relations"
+  },
+  {
+    "description": "Cross-language symbol references from graph edges and repository search. Use writes mode to find mutations.",
+    "inputSchema": {
+      "properties": {
+        "budget": {
+          "default": 2000,
+          "type": "integer"
+        },
+        "mode": {
+          "default": "all",
+          "enum": [
+            "all",
+            "writes"
+          ],
+          "type": "string"
+        },
+        "repo_path": {
+          "type": "string"
+        },
+        "response_format": {
+          "default": "concise",
+          "enum": [
+            "concise",
+            "detailed"
+          ],
+          "type": "string"
+        },
+        "symbol": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbol"
+      ],
+      "type": "object"
+    },
+    "name": "cortex_references"
+  },
+  {
+    "description": "Full-text search across indexed file bodies. Use for literals, messages, comments, or prose rather than symbol names.",
+    "inputSchema": {
+      "properties": {
+        "budget": {
+          "default": 2000,
+          "type": "integer"
+        },
+        "limit": {
+          "default": 10,
+          "type": "integer"
+        },
+        "query": {
+          "type": "string"
+        },
+        "repo_path": {
+          "type": "string"
+        },
+        "response_format": {
+          "default": "concise",
+          "enum": [
+            "concise",
+            "detailed"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "name": "cortex_search_text"
+  },
+  {
+    "description": "Up to three shortest structural graph paths between two symbols. Use to explain how one reaches another.",
+    "inputSchema": {
+      "properties": {
+        "max_depth": {
+          "default": 6,
+          "type": "integer"
+        },
+        "repo_path": {
+          "type": "string"
+        },
+        "response_format": {
+          "default": "concise",
+          "enum": [
+            "concise",
+            "detailed"
+          ],
+          "type": "string"
+        },
+        "symbol_a": {
+          "type": "string"
+        },
+        "symbol_b": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbol_a",
+        "symbol_b"
+      ],
+      "type": "object"
+    },
+    "name": "cortex_path"
+  },
+  {
+    "description": "Refresh the local repository index incrementally, or rebuild it in full.",
+    "inputSchema": {
+      "properties": {
+        "commits": {
+          "default": 1000,
+          "type": "integer"
+        },
+        "mode": {
+          "default": "incremental",
+          "enum": [
+            "incremental",
+            "full"
+          ],
+          "type": "string"
+        },
+        "repo_path": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "cortex_refresh"
+  },
+  {
+    "description": "Report this Cortex MCP server's in-flight requests and lifetime counters. Use it to tell whether a slow call is still making progress or the server is wedged, without attaching a debugger. Answers immediately even while another call is running.",
+    "inputSchema": {
+      "properties": {
+        "repo_path": {
+          "description": "Unused; accepted for call-shape consistency.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "cortex_status"
+  }
+]

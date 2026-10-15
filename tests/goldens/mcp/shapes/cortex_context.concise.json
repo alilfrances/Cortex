@@ -1,0 +1,43 @@
+{
+  "first_item_keys": {
+    "cards": [
+      "bindings",
+      "cochange",
+      "connects",
+      "emits",
+      "enums",
+      "handlers",
+      "hotspot",
+      "hotspot_bit",
+      "ids",
+      "imports",
+      "inline_components",
+      "instantiates",
+      "kind",
+      "methods",
+      "modules",
+      "neighbors",
+      "node_id",
+      "path",
+      "properties",
+      "signals",
+      "signatures",
+      "slots",
+      "span",
+      "target",
+      "truncated"
+    ],
+    "include": null,
+    "targets": null
+  },
+  "keys": [
+    "budget",
+    "budget_feasible",
+    "cards",
+    "include",
+    "repo_path",
+    "stale",
+    "targets",
+    "total_tokens"
+  ]
+}

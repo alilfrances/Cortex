@@ -1,0 +1,855 @@
+[
+  {
+    "files": [
+      "app/auth.py",
+      "app/session.py",
+      "app/audit.py",
+      "app/cleanup.py",
+      "app/orders.py",
+      "README.md",
+      "app/payments.py",
+      "app/emailer.py",
+      "app/retry.py",
+      "docs/setup.md"
+    ],
+    "mode": "pagerank",
+    "repo": "python_app",
+    "task": "Trace password login token issuance and session audit"
+  },
+  {
+    "files": [
+      "app/auth.py",
+      "app/session.py",
+      "app/audit.py",
+      "app/cleanup.py",
+      "app/orders.py",
+      "README.md",
+      "app/emailer.py",
+      "app/payments.py",
+      "app/retry.py",
+      "docs/setup.md"
+    ],
+    "mode": "bfs",
+    "repo": "python_app",
+    "task": "Trace password login token issuance and session audit"
+  },
+  {
+    "files": [
+      "app/auth.py",
+      "app/session.py",
+      "app/audit.py",
+      "app/session.py"
+    ],
+    "mode": "skeleton_on",
+    "repo": "python_app",
+    "task": "Trace password login token issuance and session audit"
+  },
+  {
+    "files": [
+      "app/auth.py",
+      "app/session.py",
+      "app/audit.py",
+      "app/session.py"
+    ],
+    "mode": "skeleton_off",
+    "repo": "python_app",
+    "task": "Trace password login token issuance and session audit"
+  },
+  {
+    "files": [
+      "app/cleanup.py",
+      "app/session.py",
+      "app/auth.py",
+      "app/orders.py",
+      "app/audit.py",
+      "app/payments.py",
+      "README.md",
+      "docs/setup.md",
+      "app/emailer.py",
+      "app/retry.py"
+    ],
+    "mode": "pagerank",
+    "repo": "python_app",
+    "task": "Find where expired sessions are pruned from storage"
+  },
+  {
+    "files": [
+      "app/cleanup.py",
+      "app/session.py",
+      "app/auth.py",
+      "app/orders.py",
+      "app/payments.py",
+      "README.md",
+      "app/audit.py",
+      "app/emailer.py",
+      "app/retry.py",
+      "docs/setup.md"
+    ],
+    "mode": "bfs",
+    "repo": "python_app",
+    "task": "Find where expired sessions are pruned from storage"
+  },
+  {
+    "files": [
+      "app/cleanup.py",
+      "app/session.py",
+      "app/session.py",
+      "app/session.py",
+      "README.md"
+    ],
+    "mode": "skeleton_on",
+    "repo": "python_app",
+    "task": "Find where expired sessions are pruned from storage"
+  },
+  {
+    "files": [
+      "app/cleanup.py",
+      "app/session.py",
+      "app/session.py",
+      "app/session.py",
+      "README.md"
+    ],
+    "mode": "skeleton_off",
+    "repo": "python_app",
+    "task": "Find where expired sessions are pruned from storage"
+  },
+  {
+    "files": [
+      "app/orders.py",
+      "app/payments.py",
+      "app/emailer.py",
+      "app/retry.py",
+      "app/audit.py",
+      "app/session.py",
+      "app/auth.py",
+      "README.md",
+      "app/cleanup.py",
+      "docs/setup.md"
+    ],
+    "mode": "pagerank",
+    "repo": "python_app",
+    "task": "Explain order checkout payment capture and receipt email"
+  },
+  {
+    "files": [
+      "app/orders.py",
+      "app/payments.py",
+      "app/emailer.py",
+      "README.md",
+      "app/audit.py",
+      "app/auth.py",
+      "app/cleanup.py",
+      "app/retry.py",
+      "app/session.py",
+      "docs/setup.md"
+    ],
+    "mode": "bfs",
+    "repo": "python_app",
+    "task": "Explain order checkout payment capture and receipt email"
+  },
+  {
+    "files": [
+      "app/orders.py",
+      "app/payments.py",
+      "app/emailer.py",
+      "app/orders.py"
+    ],
+    "mode": "skeleton_on",
+    "repo": "python_app",
+    "task": "Explain order checkout payment capture and receipt email"
+  },
+  {
+    "files": [
+      "app/orders.py",
+      "app/payments.py",
+      "app/emailer.py",
+      "app/orders.py"
+    ],
+    "mode": "skeleton_off",
+    "repo": "python_app",
+    "task": "Explain order checkout payment capture and receipt email"
+  },
+  {
+    "files": [
+      "app/payments.py",
+      "app/retry.py",
+      "app/auth.py",
+      "app/orders.py",
+      "app/session.py",
+      "app/emailer.py",
+      "app/audit.py",
+      "app/cleanup.py",
+      "README.md",
+      "docs/setup.md"
+    ],
+    "mode": "pagerank",
+    "repo": "python_app",
+    "task": "Locate retry behavior for failed payment captures"
+  },
+  {
+    "files": [
+      "app/payments.py",
+      "app/retry.py",
+      "app/auth.py",
+      "app/orders.py",
+      "app/session.py",
+      "README.md",
+      "app/audit.py",
+      "app/cleanup.py",
+      "app/emailer.py",
+      "docs/setup.md"
+    ],
+    "mode": "bfs",
+    "repo": "python_app",
+    "task": "Locate retry behavior for failed payment captures"
+  },
+  {
+    "files": [
+      "app/payments.py",
+      "app/retry.py",
+      "app/auth.py"
+    ],
+    "mode": "skeleton_on",
+    "repo": "python_app",
+    "task": "Locate retry behavior for failed payment captures"
+  },
+  {
+    "files": [
+      "app/payments.py",
+      "app/retry.py",
+      "app/orders.py",
+      "README.md"
+    ],
+    "mode": "skeleton_off",
+    "repo": "python_app",
+    "task": "Locate retry behavior for failed payment captures"
+  },
+  {
+    "files": [
+      "docs/setup.md",
+      "README.md",
+      "app/cleanup.py",
+      "app/session.py",
+      "app/retry.py",
+      "app/audit.py",
+      "app/auth.py",
+      "app/orders.py",
+      "app/payments.py",
+      "app/emailer.py"
+    ],
+    "mode": "pagerank",
+    "repo": "python_app",
+    "task": "Find markdown setup guidance for plugin installation"
+  },
+  {
+    "files": [
+      "docs/setup.md",
+      "README.md",
+      "app/retry.py",
+      "app/session.py",
+      "app/audit.py",
+      "app/auth.py",
+      "app/cleanup.py",
+      "app/emailer.py",
+      "app/orders.py",
+      "app/payments.py"
+    ],
+    "mode": "bfs",
+    "repo": "python_app",
+    "task": "Find markdown setup guidance for plugin installation"
+  },
+  {
+    "files": [
+      "docs/setup.md",
+      "README.md",
+      "app/cleanup.py",
+      "app/session.py"
+    ],
+    "mode": "skeleton_on",
+    "repo": "python_app",
+    "task": "Find markdown setup guidance for plugin installation"
+  },
+  {
+    "files": [
+      "docs/setup.md",
+      "README.md",
+      "app/cleanup.py",
+      "app/retry.py",
+      "app/emailer.py"
+    ],
+    "mode": "skeleton_off",
+    "repo": "python_app",
+    "task": "Find markdown setup guidance for plugin installation"
+  },
+  {
+    "files": [
+      "app/orders.py",
+      "app/audit.py",
+      "app/auth.py",
+      "app/payments.py",
+      "app/emailer.py",
+      "app/session.py",
+      "app/retry.py",
+      "README.md",
+      "app/cleanup.py",
+      "docs/setup.md"
+    ],
+    "mode": "pagerank",
+    "repo": "python_app",
+    "task": "Investigate audit logging for order checkout and login events"
+  },
+  {
+    "files": [
+      "app/orders.py",
+      "app/audit.py",
+      "app/auth.py",
+      "app/emailer.py",
+      "app/payments.py",
+      "app/session.py",
+      "app/retry.py",
+      "README.md",
+      "app/cleanup.py",
+      "docs/setup.md"
+    ],
+    "mode": "bfs",
+    "repo": "python_app",
+    "task": "Investigate audit logging for order checkout and login events"
+  },
+  {
+    "files": [
+      "app/orders.py",
+      "app/audit.py",
+      "app/auth.py"
+    ],
+    "mode": "skeleton_on",
+    "repo": "python_app",
+    "task": "Investigate audit logging for order checkout and login events"
+  },
+  {
+    "files": [
+      "app/orders.py",
+      "app/audit.py",
+      "app/auth.py"
+    ],
+    "mode": "skeleton_off",
+    "repo": "python_app",
+    "task": "Investigate audit logging for order checkout and login events"
+  },
+  {
+    "files": [
+      "app/network.py",
+      "app/messages.py",
+      "README.md"
+    ],
+    "mode": "pagerank",
+    "repo": "body_text_repo",
+    "task": "Locate the power-cycle gateway retry connection error message text"
+  },
+  {
+    "files": [
+      "app/network.py",
+      "app/messages.py",
+      "README.md"
+    ],
+    "mode": "bfs",
+    "repo": "body_text_repo",
+    "task": "Locate the power-cycle gateway retry connection error message text"
+  },
+  {
+    "files": [
+      "app/network.py",
+      "app/messages.py",
+      "README.md"
+    ],
+    "mode": "skeleton_on",
+    "repo": "body_text_repo",
+    "task": "Locate the power-cycle gateway retry connection error message text"
+  },
+  {
+    "files": [
+      "app/network.py",
+      "app/messages.py",
+      "README.md"
+    ],
+    "mode": "skeleton_off",
+    "repo": "body_text_repo",
+    "task": "Locate the power-cycle gateway retry connection error message text"
+  },
+  {
+    "files": [
+      "server.py",
+      "integrations/slack.py",
+      "tests/test_incidents.py",
+      "handlers/incidents.py",
+      "config.py",
+      "storage/repository.py"
+    ],
+    "mode": "pagerank",
+    "repo": "web_service",
+    "task": "Trace API route for creating incidents and notifying Slack"
+  },
+  {
+    "files": [
+      "server.py",
+      "integrations/slack.py",
+      "tests/test_incidents.py",
+      "handlers/incidents.py",
+      "config.py",
+      "storage/repository.py"
+    ],
+    "mode": "bfs",
+    "repo": "web_service",
+    "task": "Trace API route for creating incidents and notifying Slack"
+  },
+  {
+    "files": [
+      "server.py",
+      "integrations/slack.py",
+      "tests/test_incidents.py"
+    ],
+    "mode": "skeleton_on",
+    "repo": "web_service",
+    "task": "Trace API route for creating incidents and notifying Slack"
+  },
+  {
+    "files": [
+      "server.py",
+      "integrations/slack.py",
+      "tests/test_incidents.py"
+    ],
+    "mode": "skeleton_off",
+    "repo": "web_service",
+    "task": "Trace API route for creating incidents and notifying Slack"
+  },
+  {
+    "files": [
+      "storage/repository.py",
+      "handlers/incidents.py",
+      "tests/test_incidents.py",
+      "config.py",
+      "server.py",
+      "integrations/slack.py"
+    ],
+    "mode": "pagerank",
+    "repo": "web_service",
+    "task": "Find repository code that saves incidents to SQLite"
+  },
+  {
+    "files": [
+      "storage/repository.py",
+      "handlers/incidents.py",
+      "tests/test_incidents.py",
+      "config.py",
+      "server.py",
+      "integrations/slack.py"
+    ],
+    "mode": "bfs",
+    "repo": "web_service",
+    "task": "Find repository code that saves incidents to SQLite"
+  },
+  {
+    "files": [
+      "storage/repository.py",
+      "handlers/incidents.py",
+      "tests/test_incidents.py",
+      "config.py"
+    ],
+    "mode": "skeleton_on",
+    "repo": "web_service",
+    "task": "Find repository code that saves incidents to SQLite"
+  },
+  {
+    "files": [
+      "storage/repository.py",
+      "handlers/incidents.py",
+      "config.py"
+    ],
+    "mode": "skeleton_off",
+    "repo": "web_service",
+    "task": "Find repository code that saves incidents to SQLite"
+  },
+  {
+    "files": [
+      "server.py",
+      "handlers/incidents.py",
+      "config.py",
+      "integrations/slack.py",
+      "storage/repository.py",
+      "tests/test_incidents.py"
+    ],
+    "mode": "pagerank",
+    "repo": "web_service",
+    "task": "Explain health check route and configuration loading"
+  },
+  {
+    "files": [
+      "server.py",
+      "config.py",
+      "handlers/incidents.py",
+      "integrations/slack.py",
+      "storage/repository.py",
+      "tests/test_incidents.py"
+    ],
+    "mode": "bfs",
+    "repo": "web_service",
+    "task": "Explain health check route and configuration loading"
+  },
+  {
+    "files": [
+      "server.py",
+      "server.py",
+      "handlers/incidents.py",
+      "config.py"
+    ],
+    "mode": "skeleton_on",
+    "repo": "web_service",
+    "task": "Explain health check route and configuration loading"
+  },
+  {
+    "files": [
+      "server.py",
+      "server.py",
+      "config.py",
+      "integrations/slack.py"
+    ],
+    "mode": "skeleton_off",
+    "repo": "web_service",
+    "task": "Explain health check route and configuration loading"
+  },
+  {
+    "files": [
+      "tests/test_incidents.py",
+      "handlers/incidents.py",
+      "storage/repository.py",
+      "server.py",
+      "integrations/slack.py",
+      "config.py"
+    ],
+    "mode": "pagerank",
+    "repo": "web_service",
+    "task": "Locate tests for incident creation notifications"
+  },
+  {
+    "files": [
+      "tests/test_incidents.py",
+      "handlers/incidents.py",
+      "storage/repository.py",
+      "server.py",
+      "config.py",
+      "integrations/slack.py"
+    ],
+    "mode": "bfs",
+    "repo": "web_service",
+    "task": "Locate tests for incident creation notifications"
+  },
+  {
+    "files": [
+      "tests/test_incidents.py",
+      "handlers/incidents.py",
+      "storage/repository.py"
+    ],
+    "mode": "skeleton_on",
+    "repo": "web_service",
+    "task": "Locate tests for incident creation notifications"
+  },
+  {
+    "files": [
+      "tests/test_incidents.py",
+      "handlers/incidents.py",
+      "storage/repository.py"
+    ],
+    "mode": "skeleton_off",
+    "repo": "web_service",
+    "task": "Locate tests for incident creation notifications"
+  },
+  {
+    "files": [
+      "src/ranker.py",
+      "README.md",
+      "docs/plan.md",
+      "src/packer.py"
+    ],
+    "mode": "pagerank",
+    "repo": "noisy_lib",
+    "task": "How does rank_nodes score and order graph nodes"
+  },
+  {
+    "files": [
+      "src/ranker.py",
+      "README.md",
+      "docs/plan.md",
+      "src/packer.py"
+    ],
+    "mode": "bfs",
+    "repo": "noisy_lib",
+    "task": "How does rank_nodes score and order graph nodes"
+  },
+  {
+    "files": [
+      "src/ranker.py",
+      "README.md",
+      "src/packer.py"
+    ],
+    "mode": "skeleton_on",
+    "repo": "noisy_lib",
+    "task": "How does rank_nodes score and order graph nodes"
+  },
+  {
+    "files": [
+      "src/ranker.py",
+      "README.md"
+    ],
+    "mode": "skeleton_off",
+    "repo": "noisy_lib",
+    "task": "How does rank_nodes score and order graph nodes"
+  },
+  {
+    "files": [
+      "src/packer.py",
+      "README.md",
+      "docs/plan.md",
+      "src/ranker.py"
+    ],
+    "mode": "pagerank",
+    "repo": "noisy_lib",
+    "task": "Where is the token budget applied when packing output"
+  },
+  {
+    "files": [
+      "src/packer.py",
+      "README.md",
+      "docs/plan.md",
+      "src/ranker.py"
+    ],
+    "mode": "bfs",
+    "repo": "noisy_lib",
+    "task": "Where is the token budget applied when packing output"
+  },
+  {
+    "files": [
+      "src/packer.py",
+      "README.md",
+      "src/ranker.py"
+    ],
+    "mode": "skeleton_on",
+    "repo": "noisy_lib",
+    "task": "Where is the token budget applied when packing output"
+  },
+  {
+    "files": [
+      "src/packer.py",
+      "README.md"
+    ],
+    "mode": "skeleton_off",
+    "repo": "noisy_lib",
+    "task": "Where is the token budget applied when packing output"
+  },
+  {
+    "files": [
+      "src/cortex/mcp/tools.py",
+      "src/cortex/cli.py",
+      "src/cortex/ingest.py",
+      "src/cortex/report.py",
+      "src/cortex/store.py",
+      "CHANGELOG.md",
+      "README.md",
+      "docs/noise.md",
+      "tests/test_watch.py"
+    ],
+    "mode": "pagerank",
+    "repo": "refresh_distractors",
+    "task": "fix the stale index detection in the auto refresh path"
+  },
+  {
+    "files": [
+      "src/cortex/mcp/tools.py",
+      "CHANGELOG.md",
+      "README.md",
+      "docs/noise.md",
+      "src/cortex/cli.py",
+      "src/cortex/ingest.py",
+      "src/cortex/report.py",
+      "src/cortex/store.py",
+      "tests/test_watch.py"
+    ],
+    "mode": "bfs",
+    "repo": "refresh_distractors",
+    "task": "fix the stale index detection in the auto refresh path"
+  },
+  {
+    "files": [
+      "src/cortex/mcp/tools.py",
+      "src/cortex/cli.py",
+      "src/cortex/ingest.py",
+      "src/cortex/report.py"
+    ],
+    "mode": "skeleton_on",
+    "repo": "refresh_distractors",
+    "task": "fix the stale index detection in the auto refresh path"
+  },
+  {
+    "files": [
+      "src/cortex/mcp/tools.py",
+      "src/cortex/cli.py",
+      "src/cortex/ingest.py",
+      "src/cortex/report.py"
+    ],
+    "mode": "skeleton_off",
+    "repo": "refresh_distractors",
+    "task": "fix the stale index detection in the auto refresh path"
+  },
+  {
+    "files": [
+      "qml/DeviceDelegate.qml",
+      "qml/Main.qml",
+      "include/DeviceManager.hpp",
+      "include/DeviceModel.hpp",
+      "src/DeviceModel.cpp",
+      "src/DeviceManager.cpp",
+      "resources.qrc",
+      "CMakeLists.txt"
+    ],
+    "mode": "pagerank",
+    "repo": "qt_app",
+    "task": "Where is the deviceConnected signal emitted and which slot receives it"
+  },
+  {
+    "files": [
+      "qml/DeviceDelegate.qml",
+      "qml/Main.qml",
+      "include/DeviceManager.hpp",
+      "include/DeviceModel.hpp",
+      "src/DeviceModel.cpp",
+      "src/DeviceManager.cpp",
+      "CMakeLists.txt",
+      "resources.qrc"
+    ],
+    "mode": "bfs",
+    "repo": "qt_app",
+    "task": "Where is the deviceConnected signal emitted and which slot receives it"
+  },
+  {
+    "files": [
+      "qml/DeviceDelegate.qml",
+      "qml/Main.qml",
+      "include/DeviceManager.hpp",
+      "include/DeviceModel.hpp",
+      "src/DeviceModel.cpp"
+    ],
+    "mode": "skeleton_on",
+    "repo": "qt_app",
+    "task": "Where is the deviceConnected signal emitted and which slot receives it"
+  },
+  {
+    "files": [
+      "qml/DeviceDelegate.qml",
+      "qml/Main.qml",
+      "include/DeviceManager.hpp",
+      "include/DeviceModel.hpp",
+      "src/DeviceModel.cpp"
+    ],
+    "mode": "skeleton_off",
+    "repo": "qt_app",
+    "task": "Where is the deviceConnected signal emitted and which slot receives it"
+  },
+  {
+    "files": [
+      "qml/DeviceDelegate.qml",
+      "qml/Main.qml",
+      "CMakeLists.txt",
+      "resources.qrc",
+      "src/DeviceManager.cpp",
+      "include/DeviceModel.hpp",
+      "include/DeviceManager.hpp",
+      "src/DeviceModel.cpp"
+    ],
+    "mode": "pagerank",
+    "repo": "qt_app",
+    "task": "Find the QML delegate component and its declared click signal"
+  },
+  {
+    "files": [
+      "qml/DeviceDelegate.qml",
+      "qml/Main.qml",
+      "CMakeLists.txt",
+      "resources.qrc",
+      "include/DeviceManager.hpp",
+      "include/DeviceModel.hpp",
+      "src/DeviceManager.cpp",
+      "src/DeviceModel.cpp"
+    ],
+    "mode": "bfs",
+    "repo": "qt_app",
+    "task": "Find the QML delegate component and its declared click signal"
+  },
+  {
+    "files": [
+      "qml/DeviceDelegate.qml",
+      "qml/Main.qml",
+      "CMakeLists.txt"
+    ],
+    "mode": "skeleton_on",
+    "repo": "qt_app",
+    "task": "Find the QML delegate component and its declared click signal"
+  },
+  {
+    "files": [
+      "qml/DeviceDelegate.qml",
+      "qml/Main.qml",
+      "CMakeLists.txt"
+    ],
+    "mode": "skeleton_off",
+    "repo": "qt_app",
+    "task": "Find the QML delegate component and its declared click signal"
+  },
+  {
+    "files": [
+      "qml/Main.qml",
+      "qml/DeviceDelegate.qml",
+      "CMakeLists.txt",
+      "resources.qrc",
+      "src/DeviceManager.cpp",
+      "include/DeviceModel.hpp",
+      "include/DeviceManager.hpp",
+      "src/DeviceModel.cpp"
+    ],
+    "mode": "pagerank",
+    "repo": "qt_app",
+    "task": "Find the Qt build files that register the QML scene and delegate for compilation"
+  },
+  {
+    "files": [
+      "qml/Main.qml",
+      "qml/DeviceDelegate.qml",
+      "CMakeLists.txt",
+      "resources.qrc",
+      "include/DeviceManager.hpp",
+      "include/DeviceModel.hpp",
+      "src/DeviceManager.cpp",
+      "src/DeviceModel.cpp"
+    ],
+    "mode": "bfs",
+    "repo": "qt_app",
+    "task": "Find the Qt build files that register the QML scene and delegate for compilation"
+  },
+  {
+    "files": [
+      "qml/Main.qml",
+      "qml/DeviceDelegate.qml",
+      "CMakeLists.txt"
+    ],
+    "mode": "skeleton_on",
+    "repo": "qt_app",
+    "task": "Find the Qt build files that register the QML scene and delegate for compilation"
+  },
+  {
+    "files": [
+      "qml/Main.qml",
+      "qml/DeviceDelegate.qml",
+      "CMakeLists.txt"
+    ],
+    "mode": "skeleton_off",
+    "repo": "qt_app",
+    "task": "Find the Qt build files that register the QML scene and delegate for compilation"
+  }
+]
