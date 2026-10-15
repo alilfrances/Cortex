@@ -14,7 +14,17 @@ from typing import Any, TextIO
 from ..store import data_root
 from .tools import TOOL_DEFINITIONS, build_status_result, call_tool
 
-PROTOCOL_VERSION = "2024-11-05"
+# Newest first. `initialize` answers with the client's requested version when
+# we support it, otherwise with our newest (MCP lifecycle negotiation); the
+# client then decides whether it can proceed.
+SUPPORTED_PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
+PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0]
+
+
+def negotiate_protocol_version(client_version: Any) -> str:
+    if isinstance(client_version, str) and client_version in SUPPORTED_PROTOCOL_VERSIONS:
+        return client_version
+    return PROTOCOL_VERSION
 SERVER_INFO = {"name": "cortex", "version": "0.9.2"}
 SERVER_INSTRUCTIONS = (
     "Use Cortex before Grep or raw file reads. Start with cortex_query for a coding task "
@@ -43,12 +53,11 @@ def _handle(frame: dict[str, Any], cancel: threading.Event | None = None) -> dic
     if method == "notifications/initialized":
         return None
     if method == "initialize":
-        client_version = params.get("protocolVersion")
         return _response(
             request_id,
             {
-                "protocolVersion": client_version or PROTOCOL_VERSION,
-                "capabilities": {"tools": {}},
+                "protocolVersion": negotiate_protocol_version(params.get("protocolVersion")),
+                "capabilities": {"tools": {"listChanged": False}},
                 "serverInfo": SERVER_INFO,
                 "instructions": SERVER_INSTRUCTIONS,
             },

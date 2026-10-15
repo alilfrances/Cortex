@@ -182,6 +182,8 @@ In `response_format: "detailed"`, overview additionally reconstructs current `se
 
 The MCP surface has 15 tools: 13 read/query/analysis tools (everything above except `cortex_refresh` and `cortex_status`) can carry a `_meta` object: `{index_age_seconds, indexed_at, fingerprint_fresh, auto_refreshed?, cached?, saved_tokens?}`. `detailed` responses always include it; `concise` responses include it only when something is worth surfacing — the index is stale, an auto-refresh just ran, the response came from cache (`cached: true`), or the call saved a meaningful number of tokens over a raw file read (`saved_tokens`, exactly the number recorded in the `tool_usage` ledger — see `cortex saved` below) — otherwise it's omitted so a routine concise call costs no extra tokens. A cache hit always reports the *current* index age, never a value frozen from when the cache entry was written.
 
+Every tool definition carries a human-readable `title` and MCP `annotations` (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`). All tools except `cortex_refresh` are marked read-only: they never modify your files (an automatic refresh only updates Cortex's own index), so clients that honour `readOnlyHint` may run them without asking for approval. None are destructive or reach the network. The server negotiates MCP protocol versions `2025-06-18`, `2025-03-26`, and `2024-11-05`: it answers `initialize` with the client's version when supported and with `2025-06-18` otherwise. Responses still use a single text content block (no `structuredContent`).
+
 ## CLI Reference
 
 | Command | Purpose |

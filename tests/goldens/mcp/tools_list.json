@@ -1,5 +1,12 @@
 [
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Cortex: task context bundle"
+    },
     "description": "Ranked, graph-aware files and snippets for a concrete coding task. Use before broad search or reads.",
     "inputSchema": {
       "properties": {
@@ -32,9 +39,17 @@
       ],
       "type": "object"
     },
-    "name": "cortex_query"
+    "name": "cortex_query",
+    "title": "Cortex: task context bundle"
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Cortex: repository overview"
+    },
     "description": "Repository graph summary, communities, hotspots, and surprising links. Use for orientation before targeted tools.",
     "inputSchema": {
       "properties": {
@@ -56,9 +71,17 @@
       },
       "type": "object"
     },
-    "name": "cortex_overview"
+    "name": "cortex_overview",
+    "title": "Cortex: repository overview"
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Cortex: pre-edit context cards"
+    },
     "description": "Compact triage cards for paths or symbols, including neighbors, co-change, hotspots, and Qt/QML wiring.",
     "inputSchema": {
       "properties": {
@@ -102,9 +125,17 @@
       ],
       "type": "object"
     },
-    "name": "cortex_context"
+    "name": "cortex_context",
+    "title": "Cortex: pre-edit context cards"
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Cortex: file impact ranking"
+    },
     "description": "Files structurally or historically coupled to a path. Use to assess a file's blast radius.",
     "inputSchema": {
       "properties": {
@@ -136,9 +167,17 @@
       ],
       "type": "object"
     },
-    "name": "cortex_impact"
+    "name": "cortex_impact",
+    "title": "Cortex: file impact ranking"
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Cortex: change risk review"
+    },
     "description": "Deterministic per-file risk for a local git diff, with missing-context guidance. Defaults to HEAD~1..HEAD.",
     "inputSchema": {
       "properties": {
@@ -168,9 +207,17 @@
       },
       "type": "object"
     },
-    "name": "cortex_risk"
+    "name": "cortex_risk",
+    "title": "Cortex: change risk review"
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Cortex: dead code candidates"
+    },
     "description": "Conservative dead-code candidates from the symbol graph and local references, with confidence tiers and Qt exclusions.",
     "inputSchema": {
       "properties": {
@@ -192,9 +239,17 @@
       },
       "type": "object"
     },
-    "name": "cortex_dead_code"
+    "name": "cortex_dead_code",
+    "title": "Cortex: dead code candidates"
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Cortex: search symbols"
+    },
     "description": "Matching indexed symbols without file bodies. Use when you know a function, class, or identifier.",
     "inputSchema": {
       "properties": {
@@ -222,9 +277,17 @@
       ],
       "type": "object"
     },
-    "name": "cortex_search_symbols"
+    "name": "cortex_search_symbols",
+    "title": "Cortex: search symbols"
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Cortex: read symbol source"
+    },
     "description": "Indexed source for one symbol span, available as full source, skeleton, or signature.",
     "inputSchema": {
       "properties": {
@@ -261,9 +324,17 @@
       ],
       "type": "object"
     },
-    "name": "cortex_read_symbol"
+    "name": "cortex_read_symbol",
+    "title": "Cortex: read symbol source"
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Cortex: read indexed file"
+    },
     "description": "Indexed file content as a compact symbol skeleton or full source. Prefer it to raw reads.",
     "inputSchema": {
       "properties": {
@@ -299,9 +370,17 @@
       ],
       "type": "object"
     },
-    "name": "cortex_read_file"
+    "name": "cortex_read_file",
+    "title": "Cortex: read indexed file"
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Cortex: graph relations"
+    },
     "description": "Parsed structural graph edges for symbol relationships such as calls, imports, connects, reads, and writes.",
     "inputSchema": {
       "properties": {
@@ -365,9 +444,17 @@
       },
       "type": "object"
     },
-    "name": "cortex_relations"
+    "name": "cortex_relations",
+    "title": "Cortex: graph relations"
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Cortex: find references"
+    },
     "description": "Cross-language symbol references from graph edges and repository search. Use writes mode to find mutations.",
     "inputSchema": {
       "properties": {
@@ -403,9 +490,17 @@
       ],
       "type": "object"
     },
-    "name": "cortex_references"
+    "name": "cortex_references",
+    "title": "Cortex: find references"
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Cortex: search indexed text"
+    },
     "description": "Full-text search across indexed file bodies. Use for literals, messages, comments, or prose rather than symbol names.",
     "inputSchema": {
       "properties": {
@@ -437,9 +532,17 @@
       ],
       "type": "object"
     },
-    "name": "cortex_search_text"
+    "name": "cortex_search_text",
+    "title": "Cortex: search indexed text"
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Cortex: path between symbols"
+    },
     "description": "Up to three shortest structural graph paths between two symbols. Use to explain how one reaches another.",
     "inputSchema": {
       "properties": {
@@ -471,9 +574,17 @@
       ],
       "type": "object"
     },
-    "name": "cortex_path"
+    "name": "cortex_path",
+    "title": "Cortex: path between symbols"
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+      "title": "Cortex: refresh index"
+    },
     "description": "Refresh the local repository index incrementally, or rebuild it in full.",
     "inputSchema": {
       "properties": {
@@ -495,9 +606,17 @@
       },
       "type": "object"
     },
-    "name": "cortex_refresh"
+    "name": "cortex_refresh",
+    "title": "Cortex: refresh index"
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Cortex: server status"
+    },
     "description": "Report this Cortex MCP server's in-flight requests and lifetime counters. Use it to tell whether a slow call is still making progress or the server is wedged, without attaching a debugger. Answers immediately even while another call is running.",
     "inputSchema": {
       "properties": {
@@ -508,6 +627,7 @@
       },
       "type": "object"
     },
-    "name": "cortex_status"
+    "name": "cortex_status",
+    "title": "Cortex: server status"
   }
 ]

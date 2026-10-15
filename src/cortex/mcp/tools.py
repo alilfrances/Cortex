@@ -240,6 +240,49 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
 ]
 
+# MCP 2025-03-26+ `Tool.title` and `Tool.annotations`. Clients treat
+# annotations as untrusted hints; several use `readOnlyHint` to auto-approve
+# calls. Every tool except cortex_refresh only reads the repository. Read
+# tools may update Cortex's own index (auto-refresh) and token ledger, but
+# never the user's files or anything outside the local data dir, so they are
+# read-only from the environment's point of view. Nothing reaches the
+# network, so `openWorldHint` is false everywhere.
+TOOL_TITLES: dict[str, str] = {
+    "cortex_query": "Cortex: task context bundle",
+    "cortex_overview": "Cortex: repository overview",
+    "cortex_context": "Cortex: pre-edit context cards",
+    "cortex_impact": "Cortex: file impact ranking",
+    "cortex_risk": "Cortex: change risk review",
+    "cortex_dead_code": "Cortex: dead code candidates",
+    "cortex_search_symbols": "Cortex: search symbols",
+    "cortex_read_symbol": "Cortex: read symbol source",
+    "cortex_read_file": "Cortex: read indexed file",
+    "cortex_relations": "Cortex: graph relations",
+    "cortex_references": "Cortex: find references",
+    "cortex_search_text": "Cortex: search indexed text",
+    "cortex_path": "Cortex: path between symbols",
+    "cortex_refresh": "Cortex: refresh index",
+    "cortex_status": "Cortex: server status",
+}
+_NON_READ_ONLY_TOOLS = frozenset({"cortex_refresh"})
+
+
+def _annotate_tool_definition(definition: dict[str, Any]) -> dict[str, Any]:
+    name = definition["name"]
+    title = TOOL_TITLES[name]
+    annotations = {
+        "title": title,
+        "readOnlyHint": name not in _NON_READ_ONLY_TOOLS,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": False,
+    }
+    rest = {key: value for key, value in definition.items() if key != "name"}
+    return {"name": name, "title": title, **rest, "annotations": annotations}
+
+
+TOOL_DEFINITIONS = [_annotate_tool_definition(definition) for definition in TOOL_DEFINITIONS]
+
 
 def _content(payload: dict[str, Any], is_error: bool = False) -> dict[str, Any]:
     return {

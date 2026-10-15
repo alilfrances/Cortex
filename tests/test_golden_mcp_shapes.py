@@ -159,7 +159,8 @@ def test_tools_list_golden() -> None:
     assert len({t["name"] for t in TOOL_DEFINITIONS}) == len(TOOL_DEFINITIONS)
     assert len(TOOL_DEFINITIONS) == 15
     assert sorted(CASES) == sorted(t["name"] for t in TOOL_DEFINITIONS)
-    assert all("title" not in t and "annotations" not in t for t in TOOL_DEFINITIONS)  # Task 3 adds both
+    # Task 3 (0.10.0) added `title` + `annotations` to every tool (absent at 7b0e6e0).
+    assert all(t["title"] == t["annotations"]["title"] for t in TOOL_DEFINITIONS)
     assert_golden("mcp/tools_list.json", json.loads(json.dumps(TOOL_DEFINITIONS)))
 
 
@@ -175,12 +176,14 @@ def test_initialize_golden() -> None:
         assert response is not None and response["id"] == 7
         results[label] = response["result"]
 
-    # Today every client version is echoed verbatim (Task 3 negotiates instead).
+    # 7b0e6e0 echoed every client version verbatim (and "2024-11-05" when none was
+    # sent), with capabilities {"tools": {}}.  Task 3 negotiates: a supported version
+    # is echoed, anything else (or nothing) gets the server's newest.
     assert results["client_2024-11-05"]["protocolVersion"] == "2024-11-05"
     assert results["client_2025-06-18"]["protocolVersion"] == "2025-06-18"
-    assert results["client_unsupported_2023-01-01"]["protocolVersion"] == "2023-01-01"
-    assert results["client_sends_no_version"]["protocolVersion"] == "2024-11-05"
-    assert all(r["capabilities"] == {"tools": {}} for r in results.values())
+    assert results["client_unsupported_2023-01-01"]["protocolVersion"] == "2025-06-18"
+    assert results["client_sends_no_version"]["protocolVersion"] == "2025-06-18"
+    assert all(r["capabilities"] == {"tools": {"listChanged": False}} for r in results.values())
     assert all(r["serverInfo"] == {"name": "cortex", "version": "0.9.2"} for r in results.values())
     assert_golden("mcp/initialize.json", results)
 
