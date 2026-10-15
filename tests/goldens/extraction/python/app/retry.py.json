@@ -2,10 +2,17 @@
   "edges": [
     {
       "confidence": "EXTRACTED",
-      "edge_id": "ast:app/retry.py:calls:retry_operation:operation",
+      "edge_id": "ast:app/retry.py:calls:retry_operation:operation:5",
       "layer": "STRUCTURAL",
       "metadata": {
-        "lineno": 5
+        "callee": "operation",
+        "enclosing_class": null,
+        "lineno": 5,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/retry.py"
       },
       "relation": "calls",
       "source": "symbol:app/retry.py:retry_operation",
@@ -14,10 +21,17 @@
     },
     {
       "confidence": "EXTRACTED",
-      "edge_id": "ast:app/retry.py:calls:retry_operation:range",
+      "edge_id": "ast:app/retry.py:calls:retry_operation:range:3",
       "layer": "STRUCTURAL",
       "metadata": {
-        "lineno": 3
+        "callee": "range",
+        "enclosing_class": null,
+        "lineno": 3,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/retry.py"
       },
       "relation": "calls",
       "source": "symbol:app/retry.py:retry_operation",

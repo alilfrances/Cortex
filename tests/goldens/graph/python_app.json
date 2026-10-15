@@ -1,0 +1,1495 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/audit.py:calls:AuditLog.record:self.events.append:6",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "append",
+        "enclosing_class": "AuditLog",
+        "lineno": 6,
+        "receiver": "self.events",
+        "receiver_kind": "chain",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/audit.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/audit.py:AuditLog.record",
+      "target": "name:append",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/audit.py:contains:AuditLog",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "source_file": "app/audit.py"
+      },
+      "relation": "contains",
+      "source": "file:app/audit.py",
+      "target": "symbol:app/audit.py:AuditLog",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/audit.py:contains:AuditLog.__init__",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "source_file": "app/audit.py"
+      },
+      "relation": "contains",
+      "source": "symbol:app/audit.py:AuditLog",
+      "target": "symbol:app/audit.py:AuditLog.__init__",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/audit.py:contains:AuditLog.record",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "source_file": "app/audit.py"
+      },
+      "relation": "contains",
+      "source": "symbol:app/audit.py:AuditLog",
+      "target": "symbol:app/audit.py:AuditLog.record",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/auth.py:calls:AuthService.__init__:AuditLog:8",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "AuditLog",
+        "enclosing_class": "AuthService",
+        "import_module": "app.audit",
+        "lineno": 8,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "resolution": "import_scoped",
+        "scope": null,
+        "source_file": "app/auth.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/auth.py:AuthService.__init__",
+      "target": "symbol:app/audit.py:AuditLog",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/auth.py:calls:AuthService.__init__:SessionStore:9",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "SessionStore",
+        "enclosing_class": "AuthService",
+        "import_module": "app.session",
+        "lineno": 9,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "resolution": "import_scoped",
+        "scope": null,
+        "source_file": "app/auth.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/auth.py:AuthService.__init__",
+      "target": "symbol:app/session.py:SessionStore",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/auth.py:calls:AuthService.login:ValueError:15",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "ValueError",
+        "enclosing_class": "AuthService",
+        "lineno": 15,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/auth.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/auth.py:AuthService.login",
+      "target": "name:ValueError",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/auth.py:calls:AuthService.login:self.audit.record:14",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "record",
+        "enclosing_class": "AuthService",
+        "lineno": 14,
+        "receiver": "self.audit",
+        "receiver_kind": "chain",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/auth.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/auth.py:AuthService.login",
+      "target": "name:record",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/auth.py:calls:AuthService.login:self.sessions.create:16",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "create",
+        "enclosing_class": "AuthService",
+        "lineno": 16,
+        "receiver": "self.sessions",
+        "receiver_kind": "chain",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/auth.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/auth.py:AuthService.login",
+      "target": "name:create",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/auth.py:contains:AuthService",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "source_file": "app/auth.py"
+      },
+      "relation": "contains",
+      "source": "file:app/auth.py",
+      "target": "symbol:app/auth.py:AuthService",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/auth.py:contains:AuthService.__init__",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "source_file": "app/auth.py"
+      },
+      "relation": "contains",
+      "source": "symbol:app/auth.py:AuthService",
+      "target": "symbol:app/auth.py:AuthService.__init__",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/auth.py:contains:AuthService.login",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "source_file": "app/auth.py"
+      },
+      "relation": "contains",
+      "source": "symbol:app/auth.py:AuthService",
+      "target": "symbol:app/auth.py:AuthService.login",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/auth.py:from:app.audit",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "level": 0,
+        "lineno": 1,
+        "module": "app.audit",
+        "source_file": "app/auth.py"
+      },
+      "relation": "imports",
+      "source": "file:app/auth.py",
+      "target": "file:app/audit.py",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/auth.py:from:app.session",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "level": 0,
+        "lineno": 2,
+        "module": "app.session",
+        "source_file": "app/auth.py"
+      },
+      "relation": "imports",
+      "source": "file:app/auth.py",
+      "target": "file:app/session.py",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/cleanup.py:calls:cleanup_sessions:store.prune_expired:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "prune_expired",
+        "enclosing_class": null,
+        "lineno": 5,
+        "receiver": "store",
+        "receiver_kind": "var",
+        "receiver_type": "SessionStore",
+        "resolution": "declared_type",
+        "scope": null,
+        "source_file": "app/cleanup.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/cleanup.py:cleanup_sessions",
+      "target": "symbol:app/session.py:SessionStore.prune_expired",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/cleanup.py:contains:cleanup_sessions",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "source_file": "app/cleanup.py"
+      },
+      "relation": "contains",
+      "source": "file:app/cleanup.py",
+      "target": "symbol:app/cleanup.py:cleanup_sessions",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/cleanup.py:from:app.session",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "level": 0,
+        "lineno": 1,
+        "module": "app.session",
+        "source_file": "app/cleanup.py"
+      },
+      "relation": "imports",
+      "source": "file:app/cleanup.py",
+      "target": "file:app/session.py",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/emailer.py:contains:ReceiptEmailer",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "source_file": "app/emailer.py"
+      },
+      "relation": "contains",
+      "source": "file:app/emailer.py",
+      "target": "symbol:app/emailer.py:ReceiptEmailer",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/emailer.py:contains:ReceiptEmailer.send_receipt",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "source_file": "app/emailer.py"
+      },
+      "relation": "contains",
+      "source": "symbol:app/emailer.py:ReceiptEmailer",
+      "target": "symbol:app/emailer.py:ReceiptEmailer.send_receipt",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/orders.py:calls:OrderService.__init__:AuditLog:8",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "AuditLog",
+        "enclosing_class": "OrderService",
+        "import_module": "app.audit",
+        "lineno": 8,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "resolution": "import_scoped",
+        "scope": null,
+        "source_file": "app/orders.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/orders.py:OrderService.__init__",
+      "target": "symbol:app/audit.py:AuditLog",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/orders.py:calls:OrderService.__init__:PaymentGateway:9",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "PaymentGateway",
+        "enclosing_class": "OrderService",
+        "import_module": "app.payments",
+        "lineno": 9,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "resolution": "import_scoped",
+        "scope": null,
+        "source_file": "app/orders.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/orders.py:OrderService.__init__",
+      "target": "symbol:app/payments.py:PaymentGateway",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/orders.py:calls:OrderService.__init__:ReceiptEmailer:10",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "ReceiptEmailer",
+        "enclosing_class": "OrderService",
+        "import_module": "app.emailer",
+        "lineno": 10,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "resolution": "import_scoped",
+        "scope": null,
+        "source_file": "app/orders.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/orders.py:OrderService.__init__",
+      "target": "symbol:app/emailer.py:ReceiptEmailer",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/orders.py:calls:OrderService.checkout:self.audit.record:14",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "record",
+        "enclosing_class": "OrderService",
+        "lineno": 14,
+        "receiver": "self.audit",
+        "receiver_kind": "chain",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/orders.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/orders.py:OrderService.checkout",
+      "target": "name:record",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/orders.py:calls:OrderService.checkout:self.emailer.send_receipt:15",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "send_receipt",
+        "enclosing_class": "OrderService",
+        "lineno": 15,
+        "receiver": "self.emailer",
+        "receiver_kind": "chain",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/orders.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/orders.py:OrderService.checkout",
+      "target": "name:send_receipt",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/orders.py:calls:OrderService.checkout:self.gateway.capture:13",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "capture",
+        "enclosing_class": "OrderService",
+        "lineno": 13,
+        "receiver": "self.gateway",
+        "receiver_kind": "chain",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/orders.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/orders.py:OrderService.checkout",
+      "target": "name:capture",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/orders.py:contains:OrderService",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "source_file": "app/orders.py"
+      },
+      "relation": "contains",
+      "source": "file:app/orders.py",
+      "target": "symbol:app/orders.py:OrderService",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/orders.py:contains:OrderService.__init__",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "source_file": "app/orders.py"
+      },
+      "relation": "contains",
+      "source": "symbol:app/orders.py:OrderService",
+      "target": "symbol:app/orders.py:OrderService.__init__",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/orders.py:contains:OrderService.checkout",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "source_file": "app/orders.py"
+      },
+      "relation": "contains",
+      "source": "symbol:app/orders.py:OrderService",
+      "target": "symbol:app/orders.py:OrderService.checkout",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/orders.py:from:app.audit",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "level": 0,
+        "lineno": 1,
+        "module": "app.audit",
+        "source_file": "app/orders.py"
+      },
+      "relation": "imports",
+      "source": "file:app/orders.py",
+      "target": "file:app/audit.py",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/orders.py:from:app.emailer",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "level": 0,
+        "lineno": 2,
+        "module": "app.emailer",
+        "source_file": "app/orders.py"
+      },
+      "relation": "imports",
+      "source": "file:app/orders.py",
+      "target": "file:app/emailer.py",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/orders.py:from:app.payments",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "level": 0,
+        "lineno": 3,
+        "module": "app.payments",
+        "source_file": "app/orders.py"
+      },
+      "relation": "imports",
+      "source": "file:app/orders.py",
+      "target": "file:app/payments.py",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/payments.py:calls:PaymentGateway.capture:retry_operation:9",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "retry_operation",
+        "enclosing_class": "PaymentGateway",
+        "import_module": "app.retry",
+        "lineno": 9,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "resolution": "import_scoped",
+        "scope": null,
+        "source_file": "app/payments.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/payments.py:PaymentGateway.capture",
+      "target": "symbol:app/retry.py:retry_operation",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/payments.py:calls:PaymentGateway.capture:self.client.capture:9",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "capture",
+        "enclosing_class": "PaymentGateway",
+        "lineno": 9,
+        "receiver": "self.client",
+        "receiver_kind": "chain",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/payments.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/payments.py:PaymentGateway.capture",
+      "target": "name:capture",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/payments.py:contains:PaymentGateway",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "source_file": "app/payments.py"
+      },
+      "relation": "contains",
+      "source": "file:app/payments.py",
+      "target": "symbol:app/payments.py:PaymentGateway",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/payments.py:contains:PaymentGateway.__init__",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "source_file": "app/payments.py"
+      },
+      "relation": "contains",
+      "source": "symbol:app/payments.py:PaymentGateway",
+      "target": "symbol:app/payments.py:PaymentGateway.__init__",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/payments.py:contains:PaymentGateway.capture",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "source_file": "app/payments.py"
+      },
+      "relation": "contains",
+      "source": "symbol:app/payments.py:PaymentGateway",
+      "target": "symbol:app/payments.py:PaymentGateway.capture",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/payments.py:from:app.retry",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "level": 0,
+        "lineno": 1,
+        "module": "app.retry",
+        "source_file": "app/payments.py"
+      },
+      "relation": "imports",
+      "source": "file:app/payments.py",
+      "target": "file:app/retry.py",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/retry.py:calls:retry_operation:operation:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "operation",
+        "enclosing_class": null,
+        "lineno": 5,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/retry.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/retry.py:retry_operation",
+      "target": "name:operation",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/retry.py:calls:retry_operation:range:3",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "range",
+        "enclosing_class": null,
+        "lineno": 3,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/retry.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/retry.py:retry_operation",
+      "target": "name:range",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/retry.py:contains:retry_operation",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "source_file": "app/retry.py"
+      },
+      "relation": "contains",
+      "source": "file:app/retry.py",
+      "target": "symbol:app/retry.py:retry_operation",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/session.py:calls:SessionStore.__init__:AuditLog:6",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "AuditLog",
+        "enclosing_class": "SessionStore",
+        "import_module": "app.audit",
+        "lineno": 6,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "resolution": "import_scoped",
+        "scope": null,
+        "source_file": "app/session.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/session.py:SessionStore.__init__",
+      "target": "symbol:app/audit.py:AuditLog",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/session.py:calls:SessionStore.create:self.audit.record:12",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "record",
+        "enclosing_class": "SessionStore",
+        "lineno": 12,
+        "receiver": "self.audit",
+        "receiver_kind": "chain",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/session.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/session.py:SessionStore.create",
+      "target": "name:record",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/session.py:calls:SessionStore.prune_expired:self.sessions.items:16",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "items",
+        "enclosing_class": "SessionStore",
+        "lineno": 16,
+        "receiver": "self.sessions",
+        "receiver_kind": "chain",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/session.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/session.py:SessionStore.prune_expired",
+      "target": "name:items",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/session.py:contains:SessionStore",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "source_file": "app/session.py"
+      },
+      "relation": "contains",
+      "source": "file:app/session.py",
+      "target": "symbol:app/session.py:SessionStore",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/session.py:contains:SessionStore.__init__",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "source_file": "app/session.py"
+      },
+      "relation": "contains",
+      "source": "symbol:app/session.py:SessionStore",
+      "target": "symbol:app/session.py:SessionStore.__init__",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/session.py:contains:SessionStore.create",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "source_file": "app/session.py"
+      },
+      "relation": "contains",
+      "source": "symbol:app/session.py:SessionStore",
+      "target": "symbol:app/session.py:SessionStore.create",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/session.py:contains:SessionStore.prune_expired",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "source_file": "app/session.py"
+      },
+      "relation": "contains",
+      "source": "symbol:app/session.py:SessionStore",
+      "target": "symbol:app/session.py:SessionStore.prune_expired",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/session.py:from:app.audit",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "level": 0,
+        "lineno": 1,
+        "module": "app.audit",
+        "source_file": "app/session.py"
+      },
+      "relation": "imports",
+      "source": "file:app/session.py",
+      "target": "file:app/audit.py",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:README.md:app/audit.py",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 1
+      },
+      "relation": "cochange",
+      "source": "file:README.md",
+      "target": "file:app/audit.py",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:README.md:app/auth.py",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 1
+      },
+      "relation": "cochange",
+      "source": "file:README.md",
+      "target": "file:app/auth.py",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:README.md:app/session.py",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 1
+      },
+      "relation": "cochange",
+      "source": "file:README.md",
+      "target": "file:app/session.py",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:app/audit.py:app/auth.py",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 1
+      },
+      "relation": "cochange",
+      "source": "file:app/audit.py",
+      "target": "file:app/auth.py",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:app/audit.py:app/session.py",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 1
+      },
+      "relation": "cochange",
+      "source": "file:app/audit.py",
+      "target": "file:app/session.py",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:app/auth.py:app/session.py",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 1
+      },
+      "relation": "cochange",
+      "source": "file:app/auth.py",
+      "target": "file:app/session.py",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:app/cleanup.py:docs/setup.md",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 1
+      },
+      "relation": "cochange",
+      "source": "file:app/cleanup.py",
+      "target": "file:docs/setup.md",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:app/emailer.py:app/orders.py",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 1
+      },
+      "relation": "cochange",
+      "source": "file:app/emailer.py",
+      "target": "file:app/orders.py",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:app/emailer.py:app/payments.py",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 1
+      },
+      "relation": "cochange",
+      "source": "file:app/emailer.py",
+      "target": "file:app/payments.py",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:app/emailer.py:app/retry.py",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 1
+      },
+      "relation": "cochange",
+      "source": "file:app/emailer.py",
+      "target": "file:app/retry.py",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:app/orders.py:app/payments.py",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 1
+      },
+      "relation": "cochange",
+      "source": "file:app/orders.py",
+      "target": "file:app/payments.py",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:app/orders.py:app/retry.py",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 1
+      },
+      "relation": "cochange",
+      "source": "file:app/orders.py",
+      "target": "file:app/retry.py",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:app/payments.py:app/retry.py",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 1
+      },
+      "relation": "cochange",
+      "source": "file:app/payments.py",
+      "target": "file:app/retry.py",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "edge:0000000000000000000000000000000000000001:app/audit.py",
+      "layer": "COCHANGE",
+      "metadata": {},
+      "relation": "touches",
+      "source": "commit:0000000000000000000000000000000000000001",
+      "target": "file:app/audit.py",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "edge:0000000000000000000000000000000000000001:app/auth.py",
+      "layer": "COCHANGE",
+      "metadata": {},
+      "relation": "touches",
+      "source": "commit:0000000000000000000000000000000000000001",
+      "target": "file:app/auth.py",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "edge:0000000000000000000000000000000000000001:app/session.py",
+      "layer": "COCHANGE",
+      "metadata": {},
+      "relation": "touches",
+      "source": "commit:0000000000000000000000000000000000000001",
+      "target": "file:app/session.py",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "edge:0000000000000000000000000000000000000002:app/emailer.py",
+      "layer": "COCHANGE",
+      "metadata": {},
+      "relation": "touches",
+      "source": "commit:0000000000000000000000000000000000000002",
+      "target": "file:app/emailer.py",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "edge:0000000000000000000000000000000000000002:app/orders.py",
+      "layer": "COCHANGE",
+      "metadata": {},
+      "relation": "touches",
+      "source": "commit:0000000000000000000000000000000000000002",
+      "target": "file:app/orders.py",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "edge:0000000000000000000000000000000000000002:app/payments.py",
+      "layer": "COCHANGE",
+      "metadata": {},
+      "relation": "touches",
+      "source": "commit:0000000000000000000000000000000000000002",
+      "target": "file:app/payments.py",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "edge:0000000000000000000000000000000000000002:app/retry.py",
+      "layer": "COCHANGE",
+      "metadata": {},
+      "relation": "touches",
+      "source": "commit:0000000000000000000000000000000000000002",
+      "target": "file:app/retry.py",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "edge:0000000000000000000000000000000000000003:app/cleanup.py",
+      "layer": "COCHANGE",
+      "metadata": {},
+      "relation": "touches",
+      "source": "commit:0000000000000000000000000000000000000003",
+      "target": "file:app/cleanup.py",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "commit",
+      "label": "add auth session audit",
+      "metadata": {
+        "author": "Cortex Evals",
+        "authored_at": 1700000060,
+        "degree": 3
+      },
+      "node_id": "commit:0000000000000000000000000000000000000001",
+      "signature": "",
+      "source_ref": "0000000000000000000000000000000000000001",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "commit",
+      "label": "add checkout payments",
+      "metadata": {
+        "author": "Cortex Evals",
+        "authored_at": 1700000120,
+        "degree": 4
+      },
+      "node_id": "commit:0000000000000000000000000000000000000002",
+      "signature": "",
+      "source_ref": "0000000000000000000000000000000000000002",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "commit",
+      "label": "add cleanup and setup docs",
+      "metadata": {
+        "author": "Cortex Evals",
+        "authored_at": 1700000180,
+        "degree": 1
+      },
+      "node_id": "commit:0000000000000000000000000000000000000003",
+      "signature": "",
+      "source_ref": "0000000000000000000000000000000000000003",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "app/audit.py",
+      "metadata": {
+        "degree": 8,
+        "hotspot": {
+          "churn": 1,
+          "complexity": 0,
+          "score": 0
+        },
+        "kind": "code",
+        "size_bytes": 210
+      },
+      "node_id": "file:app/audit.py",
+      "signature": "",
+      "source_ref": "app/audit.py",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "app/auth.py",
+      "metadata": {
+        "degree": 7,
+        "hotspot": {
+          "churn": 1,
+          "complexity": 167,
+          "score": 167
+        },
+        "kind": "code",
+        "size_bytes": 643
+      },
+      "node_id": "file:app/auth.py",
+      "signature": "",
+      "source_ref": "app/auth.py",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "app/cleanup.py",
+      "metadata": {
+        "degree": 4,
+        "hotspot": {
+          "churn": 1,
+          "complexity": 0,
+          "score": 0
+        },
+        "kind": "code",
+        "size_bytes": 123
+      },
+      "node_id": "file:app/cleanup.py",
+      "signature": "",
+      "source_ref": "app/cleanup.py",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "app/emailer.py",
+      "metadata": {
+        "degree": 6,
+        "hotspot": {
+          "churn": 1,
+          "complexity": 0,
+          "score": 0
+        },
+        "kind": "code",
+        "size_bytes": 97
+      },
+      "node_id": "file:app/emailer.py",
+      "signature": "",
+      "source_ref": "app/emailer.py",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "app/orders.py",
+      "metadata": {
+        "degree": 8,
+        "hotspot": {
+          "churn": 1,
+          "complexity": 125,
+          "score": 125
+        },
+        "kind": "code",
+        "size_bytes": 577
+      },
+      "node_id": "file:app/orders.py",
+      "signature": "",
+      "source_ref": "app/orders.py",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "app/payments.py",
+      "metadata": {
+        "degree": 7,
+        "hotspot": {
+          "churn": 1,
+          "complexity": 0,
+          "score": 0
+        },
+        "kind": "code",
+        "size_bytes": 243
+      },
+      "node_id": "file:app/payments.py",
+      "signature": "",
+      "source_ref": "app/payments.py",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "app/retry.py",
+      "metadata": {
+        "degree": 6,
+        "hotspot": {
+          "churn": 1,
+          "complexity": 250,
+          "score": 250
+        },
+        "kind": "code",
+        "size_bytes": 226
+      },
+      "node_id": "file:app/retry.py",
+      "signature": "",
+      "source_ref": "app/retry.py",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "app/session.py",
+      "metadata": {
+        "degree": 8,
+        "hotspot": {
+          "churn": 1,
+          "complexity": 211,
+          "score": 211
+        },
+        "kind": "code",
+        "size_bytes": 597
+      },
+      "node_id": "file:app/session.py",
+      "signature": "",
+      "source_ref": "app/session.py",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "AuditLog",
+      "metadata": {
+        "degree": 6,
+        "lineno": 1
+      },
+      "node_id": "symbol:app/audit.py:AuditLog",
+      "signature": "class AuditLog:",
+      "source_ref": "app/audit.py",
+      "span_end": 7,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "__init__",
+      "metadata": {
+        "degree": 1,
+        "lineno": 2
+      },
+      "node_id": "symbol:app/audit.py:AuditLog.__init__",
+      "signature": "def __init__(self):",
+      "source_ref": "app/audit.py",
+      "span_end": 3,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "record",
+      "metadata": {
+        "degree": 2,
+        "lineno": 5
+      },
+      "node_id": "symbol:app/audit.py:AuditLog.record",
+      "signature": "def record(self, event_name, payload):",
+      "source_ref": "app/audit.py",
+      "span_end": 7,
+      "span_start": 5
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "AuthService",
+      "metadata": {
+        "degree": 3,
+        "lineno": 5
+      },
+      "node_id": "symbol:app/auth.py:AuthService",
+      "signature": "class AuthService:",
+      "source_ref": "app/auth.py",
+      "span_end": 18,
+      "span_start": 5
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "__init__",
+      "metadata": {
+        "degree": 3,
+        "lineno": 6
+      },
+      "node_id": "symbol:app/auth.py:AuthService.__init__",
+      "signature": "def __init__(self, users, sessions=None, audit=None):",
+      "source_ref": "app/auth.py",
+      "span_end": 9,
+      "span_start": 6
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "login",
+      "metadata": {
+        "degree": 4,
+        "lineno": 11
+      },
+      "node_id": "symbol:app/auth.py:AuthService.login",
+      "signature": "def login(self, username, password):",
+      "source_ref": "app/auth.py",
+      "span_end": 18,
+      "span_start": 11
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "cleanup_sessions",
+      "metadata": {
+        "degree": 2,
+        "lineno": 4
+      },
+      "node_id": "symbol:app/cleanup.py:cleanup_sessions",
+      "signature": "def cleanup_sessions(store: SessionStore, now):",
+      "source_ref": "app/cleanup.py",
+      "span_end": 5,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "ReceiptEmailer",
+      "metadata": {
+        "degree": 3,
+        "lineno": 1
+      },
+      "node_id": "symbol:app/emailer.py:ReceiptEmailer",
+      "signature": "class ReceiptEmailer:",
+      "source_ref": "app/emailer.py",
+      "span_end": 3,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "send_receipt",
+      "metadata": {
+        "degree": 1,
+        "lineno": 2
+      },
+      "node_id": "symbol:app/emailer.py:ReceiptEmailer.send_receipt",
+      "signature": "def send_receipt(self, order):",
+      "source_ref": "app/emailer.py",
+      "span_end": 3,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "OrderService",
+      "metadata": {
+        "degree": 3,
+        "lineno": 6
+      },
+      "node_id": "symbol:app/orders.py:OrderService",
+      "signature": "class OrderService:",
+      "source_ref": "app/orders.py",
+      "span_end": 16,
+      "span_start": 6
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "__init__",
+      "metadata": {
+        "degree": 4,
+        "lineno": 7
+      },
+      "node_id": "symbol:app/orders.py:OrderService.__init__",
+      "signature": "def __init__(self, payment_client, audit=None, emailer=None):",
+      "source_ref": "app/orders.py",
+      "span_end": 10,
+      "span_start": 7
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "checkout",
+      "metadata": {
+        "degree": 4,
+        "lineno": 12
+      },
+      "node_id": "symbol:app/orders.py:OrderService.checkout",
+      "signature": "def checkout(self, order):",
+      "source_ref": "app/orders.py",
+      "span_end": 16,
+      "span_start": 12
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "PaymentGateway",
+      "metadata": {
+        "degree": 4,
+        "lineno": 4
+      },
+      "node_id": "symbol:app/payments.py:PaymentGateway",
+      "signature": "class PaymentGateway:",
+      "source_ref": "app/payments.py",
+      "span_end": 9,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "__init__",
+      "metadata": {
+        "degree": 1,
+        "lineno": 5
+      },
+      "node_id": "symbol:app/payments.py:PaymentGateway.__init__",
+      "signature": "def __init__(self, client):",
+      "source_ref": "app/payments.py",
+      "span_end": 6,
+      "span_start": 5
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "capture",
+      "metadata": {
+        "degree": 3,
+        "lineno": 8
+      },
+      "node_id": "symbol:app/payments.py:PaymentGateway.capture",
+      "signature": "def capture(self, order_id, amount):",
+      "source_ref": "app/payments.py",
+      "span_end": 9,
+      "span_start": 8
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "retry_operation",
+      "metadata": {
+        "degree": 4,
+        "lineno": 1
+      },
+      "node_id": "symbol:app/retry.py:retry_operation",
+      "signature": "def retry_operation(operation, attempts=3):",
+      "source_ref": "app/retry.py",
+      "span_end": 8,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "SessionStore",
+      "metadata": {
+        "degree": 5,
+        "lineno": 4
+      },
+      "node_id": "symbol:app/session.py:SessionStore",
+      "signature": "class SessionStore:",
+      "source_ref": "app/session.py",
+      "span_end": 19,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "__init__",
+      "metadata": {
+        "degree": 2,
+        "lineno": 5
+      },
+      "node_id": "symbol:app/session.py:SessionStore.__init__",
+      "signature": "def __init__(self, audit=None):",
+      "source_ref": "app/session.py",
+      "span_end": 7,
+      "span_start": 5
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "create",
+      "metadata": {
+        "degree": 2,
+        "lineno": 9
+      },
+      "node_id": "symbol:app/session.py:SessionStore.create",
+      "signature": "def create(self, user_id):",
+      "source_ref": "app/session.py",
+      "span_end": 13,
+      "span_start": 9
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "prune_expired",
+      "metadata": {
+        "degree": 3,
+        "lineno": 15
+      },
+      "node_id": "symbol:app/session.py:SessionStore.prune_expired",
+      "signature": "def prune_expired(self, now):",
+      "source_ref": "app/session.py",
+      "span_end": 19,
+      "span_start": 15
+    }
+  ]
+}

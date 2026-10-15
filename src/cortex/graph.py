@@ -5,6 +5,7 @@ from collections import Counter, defaultdict
 from typing import NamedTuple
 
 from .ast_extract import extract_python_edges
+from .callresolve import resolve_call_endpoints
 from .cochange import build_cochange_edges
 from .gitutils import canonical_commit_files
 from .hotspots import annotate_file_nodes, compute_hotspots
@@ -453,6 +454,10 @@ def build_graph(
     # repo-wide question. The incremental path re-runs this over the merged
     # store for the same reason (see ingest_repository).
     edges = resolve_connect_endpoints(nodes, edges)
+    # `name:<callee>` call targets resolve the same way: repo-wide uniqueness
+    # (and base-class / import scoping) is only knowable over the full node
+    # set. See callresolve.py for the contract and tiers.
+    edges = resolve_call_endpoints(nodes, edges)
     cochange_nodes, cochange_edges = build_cochange_layer(commits, known_paths)
     nodes.extend(cochange_nodes)
     edges.extend(cochange_edges)

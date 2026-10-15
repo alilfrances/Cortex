@@ -2,10 +2,18 @@
   "edges": [
     {
       "confidence": "EXTRACTED",
-      "edge_id": "ast:app/orders.py:calls:OrderService.__init__:AuditLog",
+      "edge_id": "ast:app/orders.py:calls:OrderService.__init__:AuditLog:8",
       "layer": "STRUCTURAL",
       "metadata": {
-        "lineno": 8
+        "callee": "AuditLog",
+        "enclosing_class": "OrderService",
+        "import_module": "app.audit",
+        "lineno": 8,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/orders.py"
       },
       "relation": "calls",
       "source": "symbol:app/orders.py:OrderService.__init__",
@@ -14,10 +22,18 @@
     },
     {
       "confidence": "EXTRACTED",
-      "edge_id": "ast:app/orders.py:calls:OrderService.__init__:PaymentGateway",
+      "edge_id": "ast:app/orders.py:calls:OrderService.__init__:PaymentGateway:9",
       "layer": "STRUCTURAL",
       "metadata": {
-        "lineno": 9
+        "callee": "PaymentGateway",
+        "enclosing_class": "OrderService",
+        "import_module": "app.payments",
+        "lineno": 9,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/orders.py"
       },
       "relation": "calls",
       "source": "symbol:app/orders.py:OrderService.__init__",
@@ -26,10 +42,18 @@
     },
     {
       "confidence": "EXTRACTED",
-      "edge_id": "ast:app/orders.py:calls:OrderService.__init__:ReceiptEmailer",
+      "edge_id": "ast:app/orders.py:calls:OrderService.__init__:ReceiptEmailer:10",
       "layer": "STRUCTURAL",
       "metadata": {
-        "lineno": 10
+        "callee": "ReceiptEmailer",
+        "enclosing_class": "OrderService",
+        "import_module": "app.emailer",
+        "lineno": 10,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/orders.py"
       },
       "relation": "calls",
       "source": "symbol:app/orders.py:OrderService.__init__",
@@ -38,22 +62,17 @@
     },
     {
       "confidence": "EXTRACTED",
-      "edge_id": "ast:app/orders.py:calls:OrderService.checkout:capture",
+      "edge_id": "ast:app/orders.py:calls:OrderService.checkout:self.audit.record:14",
       "layer": "STRUCTURAL",
       "metadata": {
-        "lineno": 13
-      },
-      "relation": "calls",
-      "source": "symbol:app/orders.py:OrderService.checkout",
-      "target": "name:capture",
-      "weight": 1.0
-    },
-    {
-      "confidence": "EXTRACTED",
-      "edge_id": "ast:app/orders.py:calls:OrderService.checkout:record",
-      "layer": "STRUCTURAL",
-      "metadata": {
-        "lineno": 14
+        "callee": "record",
+        "enclosing_class": "OrderService",
+        "lineno": 14,
+        "receiver": "self.audit",
+        "receiver_kind": "chain",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/orders.py"
       },
       "relation": "calls",
       "source": "symbol:app/orders.py:OrderService.checkout",
@@ -62,14 +81,40 @@
     },
     {
       "confidence": "EXTRACTED",
-      "edge_id": "ast:app/orders.py:calls:OrderService.checkout:send_receipt",
+      "edge_id": "ast:app/orders.py:calls:OrderService.checkout:self.emailer.send_receipt:15",
       "layer": "STRUCTURAL",
       "metadata": {
-        "lineno": 15
+        "callee": "send_receipt",
+        "enclosing_class": "OrderService",
+        "lineno": 15,
+        "receiver": "self.emailer",
+        "receiver_kind": "chain",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/orders.py"
       },
       "relation": "calls",
       "source": "symbol:app/orders.py:OrderService.checkout",
       "target": "name:send_receipt",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/orders.py:calls:OrderService.checkout:self.gateway.capture:13",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "capture",
+        "enclosing_class": "OrderService",
+        "lineno": 13,
+        "receiver": "self.gateway",
+        "receiver_kind": "chain",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/orders.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/orders.py:OrderService.checkout",
+      "target": "name:capture",
       "weight": 1.0
     },
     {

@@ -2,10 +2,18 @@
   "edges": [
     {
       "confidence": "EXTRACTED",
-      "edge_id": "ast:app/session.py:calls:SessionStore.__init__:AuditLog",
+      "edge_id": "ast:app/session.py:calls:SessionStore.__init__:AuditLog:6",
       "layer": "STRUCTURAL",
       "metadata": {
-        "lineno": 6
+        "callee": "AuditLog",
+        "enclosing_class": "SessionStore",
+        "import_module": "app.audit",
+        "lineno": 6,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/session.py"
       },
       "relation": "calls",
       "source": "symbol:app/session.py:SessionStore.__init__",
@@ -14,10 +22,17 @@
     },
     {
       "confidence": "EXTRACTED",
-      "edge_id": "ast:app/session.py:calls:SessionStore.create:record",
+      "edge_id": "ast:app/session.py:calls:SessionStore.create:self.audit.record:12",
       "layer": "STRUCTURAL",
       "metadata": {
-        "lineno": 12
+        "callee": "record",
+        "enclosing_class": "SessionStore",
+        "lineno": 12,
+        "receiver": "self.audit",
+        "receiver_kind": "chain",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/session.py"
       },
       "relation": "calls",
       "source": "symbol:app/session.py:SessionStore.create",
@@ -26,10 +41,17 @@
     },
     {
       "confidence": "EXTRACTED",
-      "edge_id": "ast:app/session.py:calls:SessionStore.prune_expired:items",
+      "edge_id": "ast:app/session.py:calls:SessionStore.prune_expired:self.sessions.items:16",
       "layer": "STRUCTURAL",
       "metadata": {
-        "lineno": 16
+        "callee": "items",
+        "enclosing_class": "SessionStore",
+        "lineno": 16,
+        "receiver": "self.sessions",
+        "receiver_kind": "chain",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/session.py"
       },
       "relation": "calls",
       "source": "symbol:app/session.py:SessionStore.prune_expired",

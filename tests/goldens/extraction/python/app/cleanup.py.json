@@ -2,10 +2,17 @@
   "edges": [
     {
       "confidence": "EXTRACTED",
-      "edge_id": "ast:app/cleanup.py:calls:cleanup_sessions:prune_expired",
+      "edge_id": "ast:app/cleanup.py:calls:cleanup_sessions:store.prune_expired:5",
       "layer": "STRUCTURAL",
       "metadata": {
-        "lineno": 5
+        "callee": "prune_expired",
+        "enclosing_class": null,
+        "lineno": 5,
+        "receiver": "store",
+        "receiver_kind": "var",
+        "receiver_type": "SessionStore",
+        "scope": null,
+        "source_file": "app/cleanup.py"
       },
       "relation": "calls",
       "source": "symbol:app/cleanup.py:cleanup_sessions",

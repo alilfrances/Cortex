@@ -9,13 +9,6 @@
     {
       "confidence": "low",
       "file": "app/audit.py",
-      "line": 1,
-      "reason": "no incoming edges; grep refs in code/config",
-      "symbol": "AuditLog"
-    },
-    {
-      "confidence": "low",
-      "file": "app/audit.py",
       "line": 5,
       "reason": "no incoming edges; grep refs in code/config",
       "symbol": "record"
@@ -44,13 +37,6 @@
     {
       "confidence": "low",
       "file": "app/emailer.py",
-      "line": 1,
-      "reason": "no incoming edges; grep refs in code/config",
-      "symbol": "ReceiptEmailer"
-    },
-    {
-      "confidence": "low",
-      "file": "app/emailer.py",
       "line": 2,
       "reason": "no incoming edges; grep refs in code/config",
       "symbol": "send_receipt"
@@ -72,30 +58,9 @@
     {
       "confidence": "low",
       "file": "app/payments.py",
-      "line": 4,
-      "reason": "no incoming edges; grep refs in code/config",
-      "symbol": "PaymentGateway"
-    },
-    {
-      "confidence": "low",
-      "file": "app/payments.py",
       "line": 8,
       "reason": "no incoming edges; grep refs in code/config",
       "symbol": "capture"
-    },
-    {
-      "confidence": "low",
-      "file": "app/retry.py",
-      "line": 1,
-      "reason": "no incoming edges; grep refs in code/config",
-      "symbol": "retry_operation"
-    },
-    {
-      "confidence": "low",
-      "file": "app/session.py",
-      "line": 4,
-      "reason": "no incoming edges; grep refs in code/config",
-      "symbol": "SessionStore"
     },
     {
       "confidence": "low",
@@ -103,18 +68,11 @@
       "line": 9,
       "reason": "no incoming edges; grep refs in code/config",
       "symbol": "create"
-    },
-    {
-      "confidence": "low",
-      "file": "app/session.py",
-      "line": 15,
-      "reason": "no incoming edges; grep refs in code/config",
-      "symbol": "prune_expired"
     }
   ],
   "refresh_hint": "",
   "repo_path": "<repo>",
-  "returned_count": 15,
+  "returned_count": 9,
   "stale": false,
   "truncated": false
 }

@@ -2,26 +2,41 @@
   "edges": [
     {
       "confidence": "EXTRACTED",
-      "edge_id": "ast:app/payments.py:calls:PaymentGateway.capture:capture",
+      "edge_id": "ast:app/payments.py:calls:PaymentGateway.capture:retry_operation:9",
       "layer": "STRUCTURAL",
       "metadata": {
-        "lineno": 9
-      },
-      "relation": "calls",
-      "source": "symbol:app/payments.py:PaymentGateway.capture",
-      "target": "name:capture",
-      "weight": 1.0
-    },
-    {
-      "confidence": "EXTRACTED",
-      "edge_id": "ast:app/payments.py:calls:PaymentGateway.capture:retry_operation",
-      "layer": "STRUCTURAL",
-      "metadata": {
-        "lineno": 9
+        "callee": "retry_operation",
+        "enclosing_class": "PaymentGateway",
+        "import_module": "app.retry",
+        "lineno": 9,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/payments.py"
       },
       "relation": "calls",
       "source": "symbol:app/payments.py:PaymentGateway.capture",
       "target": "name:retry_operation",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/payments.py:calls:PaymentGateway.capture:self.client.capture:9",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "capture",
+        "enclosing_class": "PaymentGateway",
+        "lineno": 9,
+        "receiver": "self.client",
+        "receiver_kind": "chain",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/payments.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/payments.py:PaymentGateway.capture",
+      "target": "name:capture",
       "weight": 1.0
     },
     {

@@ -207,8 +207,17 @@ def test_no_calls_edges_outside_python_and_qml_regex_today(
     assert _calls(edges) == []
 
 
-def test_python_calls_targets_are_name_based_today(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Task 5 flip: resolved `symbol:` targets replace `name:` where unambiguous."""
+CALL_CONTRACT_KEYS = {
+    "lineno", "source_file", "callee", "receiver", "receiver_kind", "scope", "receiver_type", "enclosing_class",
+}
+
+
+def test_python_calls_follow_the_call_metadata_contract(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Task 5 flip (was: "all Python `calls` targets start with `name:`").
+
+    Per-file extraction still emits `name:<callee>` -- resolution is a repo-wide
+    pass -- but every call edge now carries the full call-site metadata
+    contract, and the resolved `build_graph` rewrites targets to symbol ids."""
     repo, rels = _python_app_files(tmp_path, monkeypatch)
     calls = [
         edge
@@ -216,8 +225,24 @@ def test_python_calls_targets_are_name_based_today(tmp_path: Path, monkeypatch: 
         for edge in _calls(nodes_edges[1])
     ]
     assert calls, "python_app fixture is expected to contain call sites"
-    assert all(edge.target.startswith("name:") for edge in calls)
     assert all(edge.layer == "STRUCTURAL" and edge.relation == "calls" for edge in calls)
+    assert all(CALL_CONTRACT_KEYS <= set(edge.metadata) for edge in calls)
+    assert all(edge.target == f"name:{edge.metadata['callee']}" for edge in calls)
+    assert len({edge.edge_id for edge in calls}) == len(calls)
+
+    sources = read_sources(repo, rels)
+    _, graph_edges = build_graph(sources, [])
+    resolved = {(e.source, e.target) for e in _calls(graph_edges) if e.target.startswith("symbol:")}
+    assert ("symbol:app/cleanup.py:cleanup_sessions", "symbol:app/session.py:SessionStore.prune_expired") in resolved
+    assert ("symbol:app/payments.py:PaymentGateway.capture", "symbol:app/retry.py:retry_operation") in resolved
+
+
+def test_python_app_build_graph_golden(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Full `build_graph` (resolved call targets, resolution tiers, degree) for the Python eval fixture."""
+    repo, rels = _python_app_files(tmp_path, monkeypatch)
+    sources = read_sources(repo, rels)
+    nodes, edges = build_graph(sources, normalised_commits(repo))
+    assert_golden("graph/python_app.json", canonical_graph(nodes, edges))
 
 
 @TREE_SITTER_ONLY

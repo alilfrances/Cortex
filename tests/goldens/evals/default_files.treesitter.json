@@ -178,8 +178,8 @@
       "app/session.py",
       "app/emailer.py",
       "app/audit.py",
-      "app/cleanup.py",
       "README.md",
+      "app/cleanup.py",
       "docs/setup.md"
     ],
     "mode": "pagerank",
@@ -228,8 +228,8 @@
     "files": [
       "docs/setup.md",
       "README.md",
-      "app/cleanup.py",
       "app/session.py",
+      "app/cleanup.py",
       "app/retry.py",
       "app/audit.py",
       "app/auth.py",
@@ -262,8 +262,8 @@
     "files": [
       "docs/setup.md",
       "README.md",
-      "app/cleanup.py",
-      "app/session.py"
+      "app/session.py",
+      "app/cleanup.py"
     ],
     "mode": "skeleton_on",
     "repo": "python_app",

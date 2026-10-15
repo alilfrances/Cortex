@@ -209,3 +209,21 @@ def test_dead_code_should_stop_returns_partial_findings(tmp_path: Path, monkeypa
     assert full["partial"] is False
     assert partial["partial"] is True
     assert len(partial["findings"]) < len(full["findings"])
+
+
+def test_python_function_called_only_from_another_module_is_not_a_candidate(tmp_path: Path, monkeypatch) -> None:
+    """Task 5: call edges used to end at `name:` endpoints, so only the grep tier
+    rescued a cross-module callee. The resolved `symbol:` edge is a real caller."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "helpers.py").write_text("def shared_helper():\n    return 1\n\n\ndef orphan_helper():\n    return 2\n")
+    (repo / "runner.py").write_text("from helpers import shared_helper\n\n\ndef run():\n    return shared_helper()\n")
+    _init_git(repo)
+
+    store = _ingest(repo, tmp_path / "data", monkeypatch)
+    nodes, edges = store.fetch_graph(repo)
+    assert any(e.relation == "calls" and e.target == "symbol:helpers.py:shared_helper" for e in edges)
+
+    by_symbol = {item["symbol"]: item for item in analyze_dead_code(repo, store=store, nodes=nodes, edges=edges)["findings"]}
+    assert "shared_helper" not in by_symbol  # credited by the graph, not merely softened by a grep hit
+    assert by_symbol["orphan_helper"]["confidence"] == "high"

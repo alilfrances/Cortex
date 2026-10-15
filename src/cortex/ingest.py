@@ -8,6 +8,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, NamedTuple
 
+from .callresolve import resolve_call_endpoints
 from .config import load_config
 from .gitutils import collect_recent_commits, discover_repo_root
 from .graph import (
@@ -408,7 +409,19 @@ def _ingest_locked(
         # Delta graph writes: delete only the rows owned by changed/deleted
         # files, then append fresh rows for the changed/new files. Rows for
         # every untouched file are never read or rewritten (P0-3 items 1-2).
+        # Call-resolution scope for the merged pass below: the files re-extracted
+        # in this batch plus the callee labels of every symbol the batch adds or
+        # removes, and whether class/inheritance structure moved (see
+        # callresolve.resolve_call_endpoints).
+        call_files: set[str] = set()
+        call_labels: set[str] = set()
+        call_hierarchy = False
         if sources_to_process or stale_paths:
+            call_files = {s.path for s in sources_to_process}
+            if stale_paths:
+                old_labels, old_hierarchy = store.fetch_symbol_summary_for_sources(repo_root, stale_paths)
+                call_labels |= old_labels
+                call_hierarchy |= old_hierarchy
             # P0-4: a signal/slot this batch's emit/connect/handler sites
             # reference may be declared in a file that isn't part of this
             # batch (e.g. an unchanged header). Fetch the store's existing
@@ -430,6 +443,10 @@ def _ingest_locked(
                 connect_names=config.connect_functions,
             )
             annotate_file_nodes(new_nodes, hotspot_overrides)
+            call_labels |= {n.label for n in new_nodes if n.granularity == "symbol"}
+            call_hierarchy = call_hierarchy or any(n.kind == "class" for n in new_nodes) or any(
+                e.relation == "inherits" for e in new_edges
+            )
             if stale_paths:
                 store.delete_graph_for_sources(repo_root, stale_paths)
             store.append_graph(repo_root, new_nodes, new_edges)
@@ -490,9 +507,20 @@ def _ingest_locked(
         # ingest would write, persisting only the rows that actually changed.
         if sources_to_process or stale_paths or commits_changed:
             merged_nodes, merged_edges = store.fetch_graph(repo_root)
-            endpoints_before = {e.edge_id: (e.source, e.target, json.dumps(e.metadata, sort_keys=True)) for e in merged_edges}
+            endpoints_before = {
+                e.edge_id: (e.source, e.target, e.confidence, json.dumps(e.metadata, sort_keys=True))
+                for e in merged_edges
+            }
             degrees_before = {n.node_id: n.metadata.get("degree") for n in merged_nodes}
             resolved_edges = resolve_connect_endpoints(merged_nodes, merged_edges)
+            if call_files or call_labels:
+                resolved_edges = resolve_call_endpoints(
+                    merged_nodes,
+                    resolved_edges,
+                    affected_files=call_files,
+                    changed_labels=call_labels,
+                    widen_typed=call_hierarchy,
+                )
             try:
                 from .structural.qml_resolver import resolve_qml_edges
                 resolve_qml_edges(merged_nodes, resolved_edges, scan.current_paths)
@@ -506,7 +534,7 @@ def _ingest_locked(
             else:
                 changed_edges = [
                     e for e in resolved_edges
-                    if endpoints_before[e.edge_id] != (e.source, e.target, json.dumps(e.metadata, sort_keys=True))
+                    if endpoints_before[e.edge_id] != (e.source, e.target, e.confidence, json.dumps(e.metadata, sort_keys=True))
                 ]
                 changed_nodes = [
                     n for n in merged_nodes

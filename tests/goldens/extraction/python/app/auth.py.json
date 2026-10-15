@@ -2,10 +2,18 @@
   "edges": [
     {
       "confidence": "EXTRACTED",
-      "edge_id": "ast:app/auth.py:calls:AuthService.__init__:AuditLog",
+      "edge_id": "ast:app/auth.py:calls:AuthService.__init__:AuditLog:8",
       "layer": "STRUCTURAL",
       "metadata": {
-        "lineno": 8
+        "callee": "AuditLog",
+        "enclosing_class": "AuthService",
+        "import_module": "app.audit",
+        "lineno": 8,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/auth.py"
       },
       "relation": "calls",
       "source": "symbol:app/auth.py:AuthService.__init__",
@@ -14,10 +22,18 @@
     },
     {
       "confidence": "EXTRACTED",
-      "edge_id": "ast:app/auth.py:calls:AuthService.__init__:SessionStore",
+      "edge_id": "ast:app/auth.py:calls:AuthService.__init__:SessionStore:9",
       "layer": "STRUCTURAL",
       "metadata": {
-        "lineno": 9
+        "callee": "SessionStore",
+        "enclosing_class": "AuthService",
+        "import_module": "app.session",
+        "lineno": 9,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/auth.py"
       },
       "relation": "calls",
       "source": "symbol:app/auth.py:AuthService.__init__",
@@ -26,10 +42,17 @@
     },
     {
       "confidence": "EXTRACTED",
-      "edge_id": "ast:app/auth.py:calls:AuthService.login:ValueError",
+      "edge_id": "ast:app/auth.py:calls:AuthService.login:ValueError:15",
       "layer": "STRUCTURAL",
       "metadata": {
-        "lineno": 15
+        "callee": "ValueError",
+        "enclosing_class": "AuthService",
+        "lineno": 15,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/auth.py"
       },
       "relation": "calls",
       "source": "symbol:app/auth.py:AuthService.login",
@@ -38,26 +61,40 @@
     },
     {
       "confidence": "EXTRACTED",
-      "edge_id": "ast:app/auth.py:calls:AuthService.login:create",
+      "edge_id": "ast:app/auth.py:calls:AuthService.login:self.audit.record:14",
       "layer": "STRUCTURAL",
       "metadata": {
-        "lineno": 16
-      },
-      "relation": "calls",
-      "source": "symbol:app/auth.py:AuthService.login",
-      "target": "name:create",
-      "weight": 1.0
-    },
-    {
-      "confidence": "EXTRACTED",
-      "edge_id": "ast:app/auth.py:calls:AuthService.login:record",
-      "layer": "STRUCTURAL",
-      "metadata": {
-        "lineno": 14
+        "callee": "record",
+        "enclosing_class": "AuthService",
+        "lineno": 14,
+        "receiver": "self.audit",
+        "receiver_kind": "chain",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/auth.py"
       },
       "relation": "calls",
       "source": "symbol:app/auth.py:AuthService.login",
       "target": "name:record",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/auth.py:calls:AuthService.login:self.sessions.create:16",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "create",
+        "enclosing_class": "AuthService",
+        "lineno": 16,
+        "receiver": "self.sessions",
+        "receiver_kind": "chain",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/auth.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/auth.py:AuthService.login",
+      "target": "name:create",
       "weight": 1.0
     },
     {

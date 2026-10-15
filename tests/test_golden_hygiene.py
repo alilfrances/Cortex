@@ -27,6 +27,7 @@ EXPECTED_INVENTORY = {
     "extraction/python": 8,
     "extraction/regex": 25,
     "extraction/treesitter": 25,
+    "graph": 1,
     "graph/regex": 1,
     "graph/treesitter": 1,
     "mcp": 2,

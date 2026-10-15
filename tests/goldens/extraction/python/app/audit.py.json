@@ -2,10 +2,17 @@
   "edges": [
     {
       "confidence": "EXTRACTED",
-      "edge_id": "ast:app/audit.py:calls:AuditLog.record:append",
+      "edge_id": "ast:app/audit.py:calls:AuditLog.record:self.events.append:6",
       "layer": "STRUCTURAL",
       "metadata": {
-        "lineno": 6
+        "callee": "append",
+        "enclosing_class": "AuditLog",
+        "lineno": 6,
+        "receiver": "self.events",
+        "receiver_kind": "chain",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/audit.py"
       },
       "relation": "calls",
       "source": "symbol:app/audit.py:AuditLog.record",

@@ -933,6 +933,28 @@ class CortexStore:
                 [(repo_key, path) for path in paths],
             )
 
+    def fetch_symbol_summary_for_sources(self, repo_path: Path, paths: list[str]) -> tuple[set[str], bool]:
+        """(symbol labels, has class/inheritance rows) currently owned by
+        `paths`. Read before `delete_graph_for_sources` so the incremental
+        call-resolution pass knows which callee labels and member/base
+        relations the delta is about to remove."""
+        repo_key = str(repo_path.resolve())
+        labels: set[str] = set()
+        hierarchy = False
+        for path in paths:
+            for row in self.connection.execute(
+                "SELECT label, kind FROM graph_nodes WHERE repo_path = ? AND source_ref = ? AND granularity = 'symbol'",
+                (repo_key, path),
+            ):
+                labels.add(str(row["label"]))
+                hierarchy = hierarchy or row["kind"] == "class"
+            if not hierarchy:
+                hierarchy = self.connection.execute(
+                    "SELECT 1 FROM graph_edges WHERE repo_path = ? AND source_file = ? AND relation = 'inherits' LIMIT 1",
+                    (repo_key, path),
+                ).fetchone() is not None
+        return labels, hierarchy
+
     def delete_cochange_layer(self, repo_path: Path) -> None:
         """Drop the COCHANGE layer (cochange pair edges, commit nodes, and
         commit->file touches edges) so it can be rebuilt fresh. Used by the
