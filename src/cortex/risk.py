@@ -703,7 +703,10 @@ def analyze_risk(
             "score": int(hotspot.get("score", 0) or 0),
         }
         missing_for_file: list[dict[str, Any]] = []
-        for partner, weight, _edge in cochange.get(item.path, []):
+        # A file renamed in this diff has no history under its new path until
+        # the next ingest; fall back to the co-change partners of its old path.
+        partners = cochange.get(item.path) or (cochange.get(item.previous_path, []) if item.previous_path else [])
+        for partner, weight, _edge in partners:
             if weight <= COCHANGE_THRESHOLD or partner in changed_paths:
                 continue
             record = {"path": partner, "weight": round(weight, 3), "for": item.path}

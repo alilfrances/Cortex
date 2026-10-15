@@ -313,10 +313,15 @@ def _commits_changed(store: CortexStore, repo_root: Path, commits: list[CommitRe
     """True when the freshly-collected commit SHAs differ from what's stored
     — the signal the incremental path uses to decide whether the COCHANGE
     layer (which depends only on commit history, not file contents) needs a
-    rebuild at all (P0-3 item 4)."""
-    stored_shas = {c.sha for c in store.fetch_commits(repo_root)}
-    current_shas = {c.sha for c in commits}
-    return stored_shas != current_shas
+    rebuild at all (P0-3 item 4).
+
+    Also true when the same SHAs carry different rename data: a database
+    written before rename-aware history (0.10.0) stores every commit with no
+    renames, and its COCHANGE layer and churn must be rebuilt once rather
+    than staying rename-blind until the next commit lands."""
+    stored = {c.sha: sorted(c.renames) for c in store.fetch_commits(repo_root)}
+    current = {c.sha: sorted(tuple(pair) for pair in c.renames) for c in commits}
+    return stored != current
 
 
 def _sync_semantic_embeddings(

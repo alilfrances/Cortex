@@ -6,6 +6,7 @@ from typing import NamedTuple
 
 from .ast_extract import extract_python_edges
 from .cochange import build_cochange_edges
+from .gitutils import canonical_commit_files
 from .hotspots import annotate_file_nodes, compute_hotspots
 from .models import CommitRecord, GraphEdge, GraphNode, SourceRecord
 from .structural import extract_structural_edges, supports_path
@@ -405,8 +406,9 @@ def build_cochange_layer(
         ]
     edges: list[GraphEdge] = list(cochange_edges)
 
-    # Commit -> file edges (provenance)
-    for commit in commits:
+    # Commit -> file edges (provenance). Rename-aware: a commit made before a
+    # rename touches the file under its current path.
+    for commit, canonical_files in zip(commits, canonical_commit_files(commits)):
         commit_node_id = f'commit:{commit.sha}'
         nodes.append(
             GraphNode(
@@ -417,7 +419,7 @@ def build_cochange_layer(
                 metadata={'author': commit.author, 'authored_at': commit.authored_at},
             )
         )
-        for file_path in commit.files:
+        for file_path in canonical_files:
             if file_path not in known_paths:
                 continue
             edges.append(

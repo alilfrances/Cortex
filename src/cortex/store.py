@@ -289,6 +289,20 @@ def ingest_lock(
         held.thread_lock.release()
 
 
+def _decode_renames(raw: str | None) -> list[tuple[str, str]]:
+    try:
+        value = json.loads(raw or "[]")
+    except (TypeError, ValueError):
+        return []
+    if not isinstance(value, list):
+        return []
+    return [
+        (str(pair[0]), str(pair[1]))
+        for pair in value
+        if isinstance(pair, (list, tuple)) and len(pair) == 2
+    ]
+
+
 def _configure_connection(connection: sqlite3.Connection, db_path: Path) -> None:
     """Busy timeout + WAL. WAL is skipped for in-memory databases and silently
     left at the current mode when the filesystem cannot support it (read-only
@@ -559,6 +573,8 @@ class CortexStore:
             # don't need a json_extract() scan.
             "ALTER TABLE sources ADD COLUMN mtime_ns INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE graph_edges ADD COLUMN source_file TEXT NOT NULL DEFAULT ''",
+            # 0.10.0 rename-aware history: [[old, new], ...] per commit.
+            "ALTER TABLE commits ADD COLUMN renames_json TEXT NOT NULL DEFAULT '[]'",
         ]
         for sql in migrations:
             try:
@@ -997,11 +1013,19 @@ class CortexStore:
         with self.connection:
             self.connection.executemany(
                 """
-                INSERT OR REPLACE INTO commits(repo_path, sha, summary, author, authored_at, files_json)
-                VALUES(?, ?, ?, ?, ?, ?)
+                INSERT OR REPLACE INTO commits(repo_path, sha, summary, author, authored_at, files_json, renames_json)
+                VALUES(?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
-                    (repo_key, commit.sha, commit.summary, commit.author, commit.authored_at, json.dumps(commit.files))
+                    (
+                        repo_key,
+                        commit.sha,
+                        commit.summary,
+                        commit.author,
+                        commit.authored_at,
+                        json.dumps(commit.files),
+                        json.dumps([list(pair) for pair in commit.renames]),
+                    )
                     for commit in commits
                 ],
             )
@@ -1201,7 +1225,7 @@ class CortexStore:
     def fetch_commits(self, repo_path: Path) -> list[CommitRecord]:
         repo_key = str(repo_path.resolve())
         rows = self.connection.execute(
-            "SELECT sha, summary, author, authored_at, files_json FROM commits WHERE repo_path = ? ORDER BY authored_at DESC",
+            "SELECT sha, summary, author, authored_at, files_json, renames_json FROM commits WHERE repo_path = ? ORDER BY authored_at DESC",
             (repo_key,),
         ).fetchall()
         return [
@@ -1211,6 +1235,7 @@ class CortexStore:
                 author=row["author"],
                 authored_at=row["authored_at"],
                 files=json.loads(row["files_json"]),
+                renames=_decode_renames(row["renames_json"]),
             )
             for row in rows
         ]

@@ -1,21 +1,20 @@
-"""Baseline characterization of ``cortex.gitutils.collect_recent_commits`` at 7b0e6e0.
+"""Characterization of ``cortex.gitutils.collect_recent_commits``.
 
-``collect_recent_commits`` was previously exercised only indirectly through
-``ingest_repository``.  These tests pin what it does *today*, including defects
-found while writing them; Task 4 (rename-aware history) replaces the parser and
-must update the assertions marked ``TASK 4``.
+Task 0 pinned 7b0e6e0 (``git log --name-only``, records split on blank lines).
+Task 4 (0.10.0, rename-aware history) replaced the parser with
+``--name-status -M -z`` and a record separator, and deliberately flipped the
+assertions marked ``TASK 4``.  Defects observed at 7b0e6e0 and their fate:
 
-Observed at 7b0e6e0 (plan assumptions that did NOT hold are called out):
-
-* A commit whose block has **no file list** (a ``--no-ff`` merge, or an empty
-  commit) is not followed by the blank line the parser splits on, so the *next
-  older* commit's header line is glued into that commit's ``files`` and the older
-  commit is dropped from the result.  The plan expected "a merge commit with an
-  empty file list".  An empty file list is only observable when no older commit
-  follows inside ``limit`` (see ``test_merge_commit_alone_has_empty_file_list``).
-* Non-ASCII paths come back git-quoted (``"h\\303\\251llo.py"``, octal escapes with
-  quotes) because the parser does not pass ``-z`` and ``core.quotepath`` is on.
-* ``git mv`` surfaces only the *new* path (``--name-only`` with rename detection).
+* A commit with **no file list** (a ``--no-ff`` merge, or ``--allow-empty``) was not
+  followed by the blank line the old parser split on, so the *next older* commit's
+  header was glued into that commit's ``files`` and the older commit was dropped.
+  FIXED in Task 4: every commit is its own record; file-less commits have
+  ``files == []``.
+* Non-ASCII paths came back git-quoted (``"h\\303\\251llo.py"``) because the parser did
+  not pass ``-z``.  FIXED in Task 4: paths are verbatim (``"héllo.py"``).
+* ``git mv`` surfaced only the *new* path (``--name-only`` with rename detection).
+  Still true for ``files``; Task 4 adds ``renames == [("a.py", "c.py")]`` and makes
+  co-change and churn follow the file across the rename.
 """
 
 from __future__ import annotations
@@ -121,12 +120,10 @@ def test_path_with_spaces_is_returned_verbatim(tmp_path: Path, monkeypatch: pyte
     assert commit.files == ["dir with space/inner file.py", "sp ace.py"]
 
 
-def test_non_ascii_path_is_returned_git_quoted_today(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """DEFECT at 7b0e6e0 (plan did not anticipate it): the path is not the real name.
-
-    TASK 4 rewrites the parser; if it switches to ``-z`` the expected value becomes
-    ``"héllo.py"`` and this test must be updated deliberately.
-    """
+def test_non_ascii_path_is_returned_verbatim(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """TASK 4 FLIP: at 7b0e6e0 this came back as ``'"h\\303\\251llo.py"'`` (git C-quoting,
+    never matching the file on disk).  ``-z`` output is verbatim even with
+    ``core.quotepath=true``."""
     repo = _repo(tmp_path, monkeypatch)
     _write(repo, "héllo.py", "x = 1\n")
     _write(repo, "plain.py", "y = 1\n")
@@ -134,9 +131,8 @@ def test_non_ascii_path_is_returned_git_quoted_today(tmp_path: Path, monkeypatch
 
     (commit,) = collect_recent_commits(repo, 5)
 
-    assert commit.files == ['"h\\303\\251llo.py"', "plain.py"]
-    # Consequence: the quoted form never matches the real path on disk.
-    assert "héllo.py" not in commit.files
+    assert commit.files == ["héllo.py", "plain.py"]
+    assert all((repo / path).is_file() for path in commit.files)
 
 
 def _merge_history(repo: Path) -> None:
@@ -161,13 +157,10 @@ def test_merge_commit_alone_has_empty_file_list(tmp_path: Path, monkeypatch: pyt
     assert merge.files == []
 
 
-def test_merge_commit_swallows_next_commit_today(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """DEFECT at 7b0e6e0: the commit following a file-less merge is lost.
-
-    The merge block has no trailing blank line, so the next commit's raw header
-    (``sha\\x1fauthor\\x1ftime\\x1fsummary``) lands in ``merge.files`` and that commit
-    never appears as its own record.  TASK 4 must fix this (or consciously keep it).
-    """
+def test_merge_commit_is_its_own_record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """TASK 4 FLIP: at 7b0e6e0 the commit after a file-less merge was lost -- its raw
+    header (``sha\\x1fauthor\\x1ftime\\x1fsummary``) landed in ``merge.files`` and it
+    never appeared as its own record (3 of 4 commits returned)."""
     repo = _repo(tmp_path, monkeypatch)
     _merge_history(repo)
     log_order = git(repo, "log", "--format=%H").split()
@@ -175,30 +168,33 @@ def test_merge_commit_swallows_next_commit_today(tmp_path: Path, monkeypatch: py
 
     commits = collect_recent_commits(repo, 10)
 
-    assert len(commits) == len(log_order) - 1
-    merge = commits[0]
-    swallowed_sha = log_order[1]
-    assert merge.sha == log_order[0]
-    assert len(merge.files) == 2
-    assert merge.files[0].startswith(swallowed_sha) and "\x1f" in merge.files[0]
-    assert merge.files[1] in {"mainline.py", "feature.py"}
-    assert swallowed_sha not in {c.sha for c in commits}
-    # The rest of history parses normally.
-    assert [c.summary for c in commits[1:]] and all("\x1f" not in f for c in commits[1:] for f in c.files)
+    assert [c.sha for c in commits] == log_order
+    by_summary = {c.summary: c for c in commits}
+    assert by_summary["merge feature"].files == []
+    assert by_summary["mainline work"].files == ["mainline.py"]
+    assert by_summary["feature work"].files == ["feature.py"]
+    assert by_summary["c1 base"].files == ["base.py"]
+    assert all("\x1f" not in f and "\x1e" not in f for c in commits for f in c.files)
+    assert all(c.renames == [] for c in commits)
 
 
-def test_empty_commit_also_swallows_next_commit_today(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Same defect, triggered by ``git commit --allow-empty`` (no merge involved)."""
+def test_empty_commit_is_its_own_record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """TASK 4 FLIP: at 7b0e6e0 ``--allow-empty`` swallowed the next commit too
+    (only ``["empty marker"]`` came back, carrying the older header in ``files``)."""
     repo = _repo(tmp_path, monkeypatch)
     _write(repo, "a.py", "a = 1\n")
     commit_all(repo, "real change")
     git(repo, "commit", "-q", "--allow-empty", "-m", "empty marker")
-    log_order = git(repo, "log", "--format=%H").split()
+    _write(repo, "b.py", "b = 1\n")
+    commit_all(repo, "after empty")
 
     commits = collect_recent_commits(repo, 10)
 
-    assert [c.summary for c in commits] == ["empty marker"]
-    assert commits[0].files[0].startswith(log_order[1])
+    assert [(c.summary, c.files) for c in commits] == [
+        ("after empty", ["b.py"]),
+        ("empty marker", []),
+        ("real change", ["a.py"]),
+    ]
 
 
 def _rename_history(repo: Path) -> None:
@@ -216,8 +212,8 @@ def _rename_history(repo: Path) -> None:
     commit_all(repo, "change c and b")
 
 
-def test_rename_commit_lists_only_new_path_today(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """TASK 4 replaces this: ``--name-status -M`` yields ``renames=[("a.py", "c.py")]``."""
+def test_rename_commit_lists_new_path_and_records_the_rename(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """TASK 4 FLIP: at 7b0e6e0 ``CommitRecord`` had no ``renames``; ``files`` is unchanged."""
     repo = _repo(tmp_path, monkeypatch)
     _rename_history(repo)
 
@@ -225,41 +221,36 @@ def test_rename_commit_lists_only_new_path_today(tmp_path: Path, monkeypatch: py
     by_summary = {c.summary: c for c in commits}
 
     assert by_summary["rename a to c"].files == ["c.py"]
-    assert not hasattr(by_summary["rename a to c"], "renames")
+    assert by_summary["rename a to c"].renames == [("a.py", "c.py")]
     assert by_summary["add a and b"].files == ["a.py", "b.py"]
     assert by_summary["change c and b"].files == ["b.py", "c.py"]
+    assert all(c.renames == [] for c in commits if c.summary != "rename a to c")
 
 
-def test_rename_severs_cochange_and_churn_today(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """TASK 4 replaces this: a.py history must follow the file to c.py.
-
-    Today ``a.py`` and ``c.py`` are two unrelated paths: the pre-rename co-change
-    with ``b.py`` stays on ``a.py`` and only the post-rename commit counts for ``c.py``.
-    """
+def test_rename_follows_cochange_and_churn(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """TASK 4 FLIP: at 7b0e6e0 ``a.py`` and ``c.py`` were unrelated paths --
+    edges ``cochange:a.py:b.py`` (count 2) and ``cochange:b.py:c.py`` (count 1), churn
+    ``{"a.py": 2, "b.py": 3, "c.py": 2}``.  History now follows the file to ``c.py``."""
     repo = _repo(tmp_path, monkeypatch)
     _rename_history(repo)
     commits = collect_recent_commits(repo, 10)
 
     edges = {edge.edge_id: edge for edge in build_cochange_edges(commits)}
 
-    assert sorted(edges) == ["cochange:a.py:b.py", "cochange:b.py:c.py"]
-    assert edges["cochange:a.py:b.py"].metadata == {"count": 2, "max_count": 2}
-    assert edges["cochange:b.py:c.py"].metadata == {"count": 1, "max_count": 2}
-    assert edges["cochange:a.py:b.py"].weight == 1.0
-    assert edges["cochange:b.py:c.py"].weight == 0.5
-    assert not any("a.py" in e.edge_id and "c.py" in e.edge_id for e in edges.values())
+    assert sorted(edges) == ["cochange:b.py:c.py"]
+    assert edges["cochange:b.py:c.py"].metadata == {"count": 3, "max_count": 3}
+    assert edges["cochange:b.py:c.py"].weight == 1.0
 
-    churn = compute_churn(commits)
-    assert churn == {"a.py": 2, "b.py": 3, "c.py": 2}
+    assert compute_churn(commits) == {"b.py": 3, "c.py": 4}
 
 
 def test_cochange_and_churn_on_hand_built_commits() -> None:
     """Hand-built inputs (git never emits these shapes) pin the counting rules.
 
-    Observed quirks, pinned so a refactor cannot change them silently:
-    ``build_cochange_edges`` neither de-duplicates paths within a commit (a repeated
-    path yields a ``x.py:x.py`` self-pair) nor normalises ``./``, while
-    ``compute_churn`` does both.
+    TASK 4 FLIP: at 7b0e6e0 ``build_cochange_edges`` neither de-duplicated paths within
+    a commit (a repeated path yielded a ``x.py:x.py`` self-pair) nor normalised ``./``
+    (edge ``cochange:./z.py:x.py``), while ``compute_churn`` did both.  Both now share
+    ``gitutils.canonical_commit_files``, so they count the same canonical paths.
     """
     from cortex.cochange import MAX_COMMIT_FILES
     from cortex.models import CommitRecord
@@ -279,8 +270,10 @@ def test_cochange_and_churn_on_hand_built_commits() -> None:
     assert sum(1 for k in churn if k.startswith("bulk")) == MAX_COMMIT_FILES + 1
 
     edges = {edge.edge_id: edge for edge in build_cochange_edges(commits)}
-    assert sorted(edges) == ["cochange:./z.py:x.py", "cochange:x.py:x.py", "cochange:x.py:y.py"]
-    assert edges["cochange:x.py:y.py"].metadata == {"count": 3, "max_count": 3}
+    assert sorted(edges) == ["cochange:x.py:y.py", "cochange:x.py:z.py"]
+    assert edges["cochange:x.py:z.py"].metadata == {"count": 1, "max_count": 2}
+    # 7b0e6e0: count 3 (commit "2" paired x.py with y.py twice through the repeat).
+    assert edges["cochange:x.py:y.py"].metadata == {"count": 2, "max_count": 2}
     assert edges["cochange:x.py:y.py"].weight == 1.0
     assert edges["cochange:x.py:y.py"].layer == "COCHANGE"
     assert edges["cochange:x.py:y.py"].source == "file:x.py"

@@ -9,7 +9,7 @@ Current package and plugin metadata is `0.9.2` (`pyproject.toml` and plugin mani
 ## What Cortex Builds
 
 - STRUCTURAL layer: files, imports, definitions, symbol nodes, and contains edges.
-- COCHANGE layer: git history coupling between files changed together.
+- COCHANGE layer: git history coupling between files changed together. History is rename-aware: after a `git mv`, co-change pairs, churn, and commit provenance recorded under the old name are credited to the file's current path, and a name later reused by an unrelated file does not inherit that history. A database built by an earlier version is rebuilt this way on its next refresh.
 - HEADING layer: Markdown sections for docs and planning context.
 - Ranking: personalized PageRank by default, with BFS available for comparison; optional churn×complexity hotspot boosting is opt-in.
 - Hotspots: deterministic per-language complexity and git touch-count analytics persisted with file nodes.
