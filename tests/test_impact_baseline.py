@@ -264,6 +264,23 @@ def test_symbol_edges_dedupe_call_sites_cap_why_and_skip_same_file() -> None:
     assert [w["symbol"] for w in ranked[0]["why"]] == [f"caller -> f{i}" for i in range(5)]
 
 
+def test_symbol_edges_ignore_commit_endpoints_unindexed_files_and_other_pairs() -> None:
+    nodes = [
+        file_node("a.cpp"), file_node("b.cpp"), file_node("c.cpp"),
+        symbol_node("a.cpp", "caller"), symbol_node("ghost.cpp", "orphan"),  # ghost.cpp has no file node
+        symbol_node("b.cpp", "x"), symbol_node("c.cpp", "y"),
+        commit_node("c" * 40),
+    ]
+    edges = [
+        edge("symbol:a.cpp:caller", "symbol:ghost.cpp:orphan", "calls", "STRUCTURAL", 1.0),
+        edge(f"commit:{'c' * 40}", "symbol:a.cpp:caller", "references", "STRUCTURAL", 1.0),
+        edge("symbol:b.cpp:x", "symbol:c.cpp:y", "calls", "STRUCTURAL", 1.0),  # not the seed's pair
+    ]
+
+    assert rank_file_impact("a.cpp", nodes, edges) == ([], False)
+    assert [i["path"] for i in rank_file_impact("b.cpp", nodes, edges)[0]] == ["c.cpp"]
+
+
 def test_unresolved_name_targets_never_count() -> None:
     nodes = [file_node("a.py"), symbol_node("a.py", "f")]
     edges = [edge("symbol:a.py:f", "name:helper", "calls", "STRUCTURAL", 1.0)]
