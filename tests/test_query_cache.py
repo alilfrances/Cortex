@@ -127,6 +127,30 @@ def test_second_identical_impact_hits_cache(tmp_path, monkeypatch):
     assert calls["n"] == 1, "second identical cortex_impact call must hit the cache"
 
 
+def test_impact_cache_rows_from_before_symbol_aggregation_are_bypassed(tmp_path, monkeypatch):
+    """Task 9: cortex_impact hashes ``impact_v`` into its key, so a row written
+    under the old (unversioned) key is never served after the upgrade."""
+    repo = _repo_with_index(tmp_path, monkeypatch)
+    args = {"repo_path": str(repo), "path": "auth.py"}
+    fingerprint = mcp_tools.compute_repo_fingerprint(repo)
+    store = CortexStore(default_db_path(repo))
+    legacy_key = mcp_tools._cache_key(fingerprint, "cortex_impact", args)
+    stale = {"repo_path": str(repo), "items": [], "truncated": False, "returned_count": 0, "legacy": True}
+    repo_root = mcp_tools._repo_root(args)
+    mcp_tools._cache_set(store, repo_root, legacy_key, stale)
+    assert mcp_tools._cache_get(store, repo_root, legacy_key) == stale  # would have been served
+    assert legacy_key != mcp_tools._cache_key(
+        fingerprint, "cortex_impact", {**args, "impact_v": mcp_tools.IMPACT_CACHE_VERSION}
+    )
+
+    payload = _payload(call_tool("cortex_impact", args))
+
+    assert "legacy" not in payload
+    # billing.py calls auth.login (resolved symbol edge) and imports auth.
+    assert [item["path"] for item in payload["items"]] == ["billing.py"]
+    assert any(why.get("symbol") == "charge -> login" for why in payload["items"][0]["why"])
+
+
 def test_second_identical_overview_hits_cache(tmp_path, monkeypatch):
     repo = _repo_with_index(tmp_path, monkeypatch)
     calls = {"n": 0}

@@ -203,11 +203,15 @@ def test_non_impact_layers_self_edges_and_dangling_edges_are_ignored() -> None:
     assert rank_file_impact("a.py", nodes, edges) == ([], False)
 
 
-def test_symbol_level_structural_edges_contribute_nothing_today() -> None:
-    """TASK 9 FLIP: cross-file symbol->symbol STRUCTURAL edges will be aggregated per file.
+def test_symbol_level_structural_edges_are_aggregated_per_file() -> None:
+    """TASK 9 FLIP (was ``test_symbol_level_structural_edges_contribute_nothing_today``).
 
-    Today only file<->file edges count, so a caller in ``a.cpp`` of a function in
-    ``b.cpp`` gives ``b.cpp`` no impact score at all.
+    At 7b0e6e0 only file<->file edges counted, so a caller in ``a.cpp`` of a
+    function in ``b.cpp`` gave ``b.cpp`` no impact score at all (both calls
+    returned ``([], False)``).  Task 9 aggregates every cross-file symbol-level
+    STRUCTURAL edge onto the two files (``weight * STRUCTURAL_IMPACT_MULTIPLIER``
+    per distinct (source, target, relation)), with a ``symbol`` why-entry.
+    ``contains`` and same-file edges still contribute nothing.
     """
     nodes = [
         file_node("a.cpp"),
@@ -222,12 +226,42 @@ def test_symbol_level_structural_edges_contribute_nothing_today() -> None:
         edge("file:a.cpp", "symbol:a.cpp:caller", "contains", "STRUCTURAL", 1.0),
     ]
 
-    assert rank_file_impact("a.cpp", nodes, edges) == ([], False)
-    assert rank_file_impact("b.cpp", nodes, edges) == ([], False)
+    ranked, truncated = rank_file_impact("a.cpp", nodes, edges)
+    assert truncated is False
+    assert [(i["path"], i["score"]) for i in ranked] == [("b.cpp", 3.0)]
+    assert ranked[0]["why"] == [
+        {"relation": "calls", "symbol": "caller -> callee", "weight": 1.0, "layer": "STRUCTURAL", "confidence": "EXTRACTED"},
+        {"relation": "references", "symbol": "a.cpp -> callee", "weight": 1.0, "layer": "STRUCTURAL", "confidence": "EXTRACTED"},
+        {"relation": "references", "symbol": "caller -> b.cpp", "weight": 1.0, "layer": "STRUCTURAL", "confidence": "EXTRACTED"},
+    ]
+    # Direction-agnostic, like file edges.
+    reverse, _ = rank_file_impact("b.cpp", nodes, edges)
+    assert [(i["path"], i["score"]) for i in reverse] == [("a.cpp", 3.0)]
 
-    # ...while the same pair linked at file level does score.
+    # File-level scoring is untouched: the file edge adds its usual 1.0 and its
+    # why-entry keeps the 7b0e6e0 shape (no ``symbol`` key).
     ranked, _ = rank_file_impact("a.cpp", nodes, [*edges, imports("a.cpp", "b.cpp")])
-    assert [(i["path"], i["score"]) for i in ranked] == [("b.cpp", 1.0)]
+    assert [(i["path"], i["score"]) for i in ranked] == [("b.cpp", 4.0)]
+    assert {"relation": "imports", "weight": 1.0, "layer": "STRUCTURAL", "confidence": "EXTRACTED"} in ranked[0]["why"]
+
+
+def test_symbol_edges_dedupe_call_sites_cap_why_and_skip_same_file() -> None:
+    nodes = [file_node("a.cpp"), file_node("b.cpp"), symbol_node("a.cpp", "caller"), symbol_node("a.cpp", "local")]
+    nodes += [symbol_node("b.cpp", f"f{i}") for i in range(7)]
+    edges = [
+        # Same caller->callee at three lines: one contribution.
+        GraphEdge(edge_id=f"calls:{line}", source="symbol:a.cpp:caller", target="symbol:b.cpp:f0",
+                  relation="calls", layer="STRUCTURAL", weight=1.0)
+        for line in range(3)
+    ]
+    edges += [edge("symbol:a.cpp:caller", f"symbol:b.cpp:f{i}", "calls", "STRUCTURAL", 1.0) for i in range(1, 7)]
+    edges.append(edge("symbol:a.cpp:caller", "symbol:a.cpp:local", "calls", "STRUCTURAL", 5.0))  # same file
+    edges.append(edge("symbol:a.cpp:caller", "name:external", "calls", "STRUCTURAL", 5.0))  # unresolved
+
+    ranked, _ = rank_file_impact("a.cpp", nodes, edges, budget=100_000)
+
+    assert [(i["path"], i["score"]) for i in ranked] == [("b.cpp", 7.0)]
+    assert [w["symbol"] for w in ranked[0]["why"]] == [f"caller -> f{i}" for i in range(5)]
 
 
 def test_unresolved_name_targets_never_count() -> None:

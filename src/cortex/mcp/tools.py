@@ -14,7 +14,7 @@ from ..bundle import _render_skeleton, _render_symbol_skeleton, _tokenize_query,
 from ..deadcode import analyze_dead_code, truncate_dead_code_result
 from ..deadline import DeadlineExceeded, current_deadline, deadline_scope, resolve_budget_seconds
 from ..gitutils import discover_repo_root
-from ..impact import UnknownPathError, rank_file_impact
+from ..impact import IMPACT_CACHE_VERSION, UnknownPathError, rank_file_impact
 from ..ingest import compute_repo_fingerprint, ingest_repository
 from ..pathfind import shortest_paths
 from ..references import find_references
@@ -1027,7 +1027,11 @@ def _call_impact(arguments: dict[str, Any]) -> dict[str, Any]:
     assert store is not None
     status = _ensure_fresh(store, repo_root)
     response_format = _response_format(arguments)
-    cache_key = _cache_key(status["current_fingerprint"], "cortex_impact", arguments)
+    # The version is hashed with the arguments so rows written before symbol
+    # edges were aggregated (unversioned) can never be served again.
+    cache_key = _cache_key(
+        status["current_fingerprint"], "cortex_impact", {**arguments, "impact_v": IMPACT_CACHE_VERSION}
+    )
     cached_payload = _cache_get(store, repo_root, cache_key)
     if cached_payload is not None:
         payload = cached_payload
@@ -1173,6 +1177,20 @@ def _context_structural_neighbors(node: Any, nodes_by_id: dict[str, Any], edges:
         ref.update({"relation": edge.relation, "weight": round(float(edge.weight), 3)})
         result.append(ref)
     return result
+
+
+def _context_call_counts(node: Any, edges: list[Any]) -> dict[str, int]:
+    """Distinct resolved callers/callees of a symbol (unresolved ``name:`` excluded)."""
+    callers: set[str] = set()
+    callees: set[str] = set()
+    for edge in edges:
+        if edge.relation != "calls" or edge.layer != "STRUCTURAL":
+            continue
+        if edge.target == node.node_id and edge.source != node.node_id:
+            callers.add(edge.source)
+        elif edge.source == node.node_id and edge.target != node.node_id and not edge.target.startswith("name:"):
+            callees.add(edge.target)
+    return {"callers": len(callers), "callees": len(callees)}
 
 
 def _context_cochange_partners(
@@ -1349,6 +1367,7 @@ def _context_card(
     files_by_path: dict[str, Any],
     edges: list[Any],
     includes: list[str],
+    response_format: str = "concise",
 ) -> dict[str, Any]:
     file_node = _context_file_for_node(node, files_by_path)
     file_path = node.source_ref
@@ -1393,6 +1412,13 @@ def _context_card(
         card["signatures"] = [item.signature or item.label for item in file_symbols[:signature_limit]]
 
     card.update(_context_qt_details(node, file_path, nodes, nodes_by_id, edges))
+    if response_format == "detailed" and node.granularity == "symbol":
+        # Detailed only: in concise form the counts would cost ~12 tokens per
+        # card, over the 10-token allowance; ``neighbors`` already shows the
+        # strongest caller/callee there.
+        call_counts = _context_call_counts(node, edges)
+        if call_counts["callers"] or call_counts["callees"]:
+            card["calls"] = call_counts
 
     if "impact" in includes:
         try:
@@ -1631,7 +1657,7 @@ def _call_context(arguments: dict[str, Any]) -> dict[str, Any]:
         # source bodies are needed only for file cards (notably Markdown
         # headings and file line spans).
         source = fetch_target_source(node.source_ref) if node.granularity != "symbol" else None
-        cards.append(_context_card(target, node, source, nodes, nodes_by_id, files_by_path, edges, includes))
+        cards.append(_context_card(target, node, source, nodes, nodes_by_id, files_by_path, edges, includes, response_format))
 
     if cards:
         base_share, remainder = divmod(budget, len(cards))
@@ -1997,6 +2023,36 @@ def _edge_origin(edge: Any) -> str:
     return "unknown"
 
 
+def _ambiguous_candidates(edge: Any) -> list[str]:
+    """Sorted resolver candidates of an unresolved ambiguous ``calls`` edge."""
+    metadata = edge.metadata if isinstance(getattr(edge, "metadata", None), dict) else {}
+    if edge.relation != "calls" or not edge.target.startswith("name:") or not metadata.get("ambiguous"):
+        return []
+    raw = metadata.get("candidates")
+    if not isinstance(raw, list):
+        return []
+    return sorted(str(item) for item in raw)
+
+
+def _relation_item(edge: Any, nodes: dict[str, Any], response_format: str) -> dict[str, Any]:
+    item: dict[str, Any] = {
+        "relation": edge.relation,
+        "source": _endpoint(edge.source, nodes),
+        "target": _endpoint(edge.target, nodes),
+        "layer": edge.layer,
+        "confidence": edge.confidence,
+        "origin": _edge_origin(edge),
+    }
+    candidates = _ambiguous_candidates(edge)
+    if candidates:
+        # Only ambiguous call targets change: name it as unresolved and say
+        # how many symbols the resolver could not choose between.
+        item["target"] = f"{edge.target} (ambiguous: {len(candidates)} candidates)"
+        if response_format == "detailed":
+            item["candidates"] = candidates
+    return item
+
+
 def _call_relations(arguments: dict[str, Any]) -> dict[str, Any]:
     repo_root = _repo_root(arguments)
     store, error = _store_or_error(repo_root)
@@ -2014,20 +2070,10 @@ def _call_relations(arguments: dict[str, Any]) -> dict[str, Any]:
     node_ids = sorted({edge.source for edge in edges} | {edge.target for edge in edges})
     nodes = store.get_nodes(repo_root, node_ids)
 
-    all_items: list[dict[str, Any]] = [
-        {
-            "relation": edge.relation,
-            "source": _endpoint(edge.source, nodes),
-            "target": _endpoint(edge.target, nodes),
-            "layer": edge.layer,
-            "confidence": edge.confidence,
-            "origin": _edge_origin(edge),
-        }
-        for edge in edges
-    ]
+    response_format = _response_format(arguments)
+    all_items: list[dict[str, Any]] = [_relation_item(edge, nodes, response_format) for edge in edges]
     budget = int(arguments.get("budget", 2000))
     items, truncated = _prefix_fit_items(all_items, budget)
-    response_format = _response_format(arguments)
     return _content(_format_payload(
         {"repo_path": str(repo_root), "items": items, "truncated": truncated, "returned_count": len(items)},
         status,

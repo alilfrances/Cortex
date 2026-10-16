@@ -8,8 +8,15 @@
       },
       "node_id": "file:app/audit.py",
       "path": "app/audit.py",
-      "score": 3.0,
+      "score": 4.0,
       "why": [
+        {
+          "confidence": "EXTRACTED",
+          "layer": "STRUCTURAL",
+          "relation": "calls",
+          "symbol": "__init__ -> AuditLog",
+          "weight": 1.0
+        },
         {
           "cochange_count": 1,
           "confidence": "EXTRACTED",
@@ -33,8 +40,15 @@
       },
       "node_id": "file:app/session.py",
       "path": "app/session.py",
-      "score": 3.0,
+      "score": 4.0,
       "why": [
+        {
+          "confidence": "EXTRACTED",
+          "layer": "STRUCTURAL",
+          "relation": "calls",
+          "symbol": "__init__ -> SessionStore",
+          "weight": 1.0
+        },
         {
           "cochange_count": 1,
           "confidence": "EXTRACTED",

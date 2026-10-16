@@ -310,3 +310,34 @@ def test_regex_backend_calls_on_qt_fixture_are_name_only_low(tmp_path, monkeypat
     assert items and all(i["confidence"] == "LOW" for i in items)
     assert all("@" not in i["target"] for i in items)  # name-based: never a symbol endpoint
     assert {i["target"] for i in items} >= {"refresh", "normalize_id", "store", "log_event"}
+
+
+# ---------------------------------------------------------------------------
+# Task 9: resolved call edges surface in impact and context.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(not _treesitter_ready(), reason="managed tree-sitter runtime not usable here")
+def test_impact_and_context_surface_cpp_call_edges(tmp_path):
+    repo = _ingest_qt_calls_app(tmp_path)
+    items = _tool_payload(repo, "cortex_impact", path="src/Scanner.cpp", limit=20, budget=9999)["items"]
+    by_path = {item["path"]: item for item in items}
+    helpers_why = [w for w in by_path["src/helpers.cpp"]["why"] if "symbol" in w]
+    assert {w["symbol"] for w in helpers_why} == {"scan -> normalize_id", "onFound -> log_event"}
+    assert all(w["relation"] == "calls" and w["layer"] == "STRUCTURAL" for w in helpers_why)
+    # A header member reached only through a typed QPointer is a neighbour too.
+    assert any(w.get("symbol") == "scan -> store" for w in by_path["include/Cache.hpp"]["why"])
+
+    concise = _tool_payload(repo, "cortex_context", targets=["symbol:src/Scanner.cpp:scan"])["cards"][0]
+    assert {(n["relation"], n["node_id"]) for n in concise["neighbors"]} == {
+        ("calls", "symbol:include/Cache.hpp:store"),
+        ("calls", "symbol:src/Scanner.cpp:refresh"),
+        ("calls", "symbol:src/helpers.cpp:normalize_id"),
+    }
+    assert "calls" not in concise  # counts are detailed-only (token budget)
+    detailed = _tool_payload(
+        repo, "cortex_context", targets=["symbol:src/Scanner.cpp:scan", "symbol:src/helpers.cpp:log_event"],
+        response_format="detailed",
+    )["cards"]
+    assert detailed[0]["calls"] == {"callers": 0, "callees": 3}
+    assert detailed[1]["calls"]["callers"] >= 1  # onFound (and Relay::onFound) call log_event

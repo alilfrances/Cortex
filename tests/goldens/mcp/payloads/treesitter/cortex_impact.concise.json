@@ -8,8 +8,15 @@
       },
       "node_id": "file:include/DeviceManager.hpp",
       "path": "include/DeviceManager.hpp",
-      "score": 2.0,
+      "score": 3.0,
       "why": [
+        {
+          "confidence": "LOW",
+          "layer": "STRUCTURAL",
+          "relation": "emits",
+          "symbol": "scan -> deviceConnected",
+          "weight": 1.0
+        },
         {
           "confidence": "EXTRACTED",
           "layer": "STRUCTURAL",
@@ -33,12 +40,45 @@
       },
       "node_id": "file:include/DeviceModel.hpp",
       "path": "include/DeviceModel.hpp",
+      "score": 3.0,
+      "why": [
+        {
+          "confidence": "EXTRACTED",
+          "layer": "STRUCTURAL",
+          "relation": "calls",
+          "symbol": "DeviceManager -> DeviceModel",
+          "weight": 1.0
+        },
+        {
+          "confidence": "EXTRACTED",
+          "layer": "STRUCTURAL",
+          "relation": "imports",
+          "weight": 1.0
+        },
+        {
+          "cochange_count": 1,
+          "confidence": "EXTRACTED",
+          "layer": "COCHANGE",
+          "relation": "cochange",
+          "weight": 0.5
+        }
+      ]
+    },
+    {
+      "hotspot": {
+        "churn": 1,
+        "complexity": 0,
+        "score": 0
+      },
+      "node_id": "file:CMakeLists.txt",
+      "path": "CMakeLists.txt",
       "score": 2.0,
       "why": [
         {
           "confidence": "EXTRACTED",
           "layer": "STRUCTURAL",
-          "relation": "imports",
+          "relation": "builds",
+          "symbol": "qt_app -> src/DeviceManager.cpp",
           "weight": 1.0
         },
         {
@@ -66,25 +106,6 @@
           "layer": "COCHANGE",
           "relation": "cochange",
           "weight": 1.0
-        }
-      ]
-    },
-    {
-      "hotspot": {
-        "churn": 1,
-        "complexity": 0,
-        "score": 0
-      },
-      "node_id": "file:CMakeLists.txt",
-      "path": "CMakeLists.txt",
-      "score": 1.0,
-      "why": [
-        {
-          "cochange_count": 1,
-          "confidence": "EXTRACTED",
-          "layer": "COCHANGE",
-          "relation": "cochange",
-          "weight": 0.5
         }
       ]
     },

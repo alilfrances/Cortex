@@ -14,7 +14,7 @@ Prefer Cortex over broad Grep, Glob, or Read exploration.
 | Find an identifier | Use `cortex_search_symbols`. |
 | Find literals, errors, comments, or prose | Use `cortex_search_text`. |
 | Inspect a result | Use `cortex_read_symbol` for an exact span or `cortex_read_file` for an indexed file; file reads default to a skeleton. |
-| Understand structure or flow | Use `cortex_relations` for one hop and `cortex_path` for multi-hop connections. |
+| Understand structure or flow | Use `cortex_relations` for one hop and `cortex_path` for multi-hop connections. `cortex_relations relation=calls` lists callers/callees; a target shown as `name:<callee> (ambiguous: N candidates)` is unresolved, so ask for `response_format: detailed` to see the candidates and check the right one before trusting the edge. |
 
 Delegate multi-step questions such as where something is handled or how it flows to `cortex-explorer`. Keep a single lookup direct because delegation costs more than one tool call.
 

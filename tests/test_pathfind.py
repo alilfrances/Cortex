@@ -160,3 +160,94 @@ def test_cortex_relations_items_carry_confidence_and_origin(tmp_path, monkeypatc
         assert item["confidence"] == "EXTRACTED"
         assert item["layer"] == "STRUCTURAL"
         assert item["origin"] == "regex-parser"
+
+
+# ---------------------------------------------------------------------------
+# Task 9: paths through resolved `calls` edges, ambiguous call rendering.
+# ---------------------------------------------------------------------------
+
+
+def _ingested(tmp_path: Path, monkeypatch, files: dict[str, str]) -> Path:
+    from cortex.ingest import ingest_repository
+
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git_init(repo)
+    for rel, text in files.items():
+        (repo / rel).write_text(text, encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-qm", "init"], cwd=repo, check=True, capture_output=True)
+    ingest_repository(repo, commit_limit=0)
+    return repo
+
+
+def test_cortex_path_follows_a_resolved_python_call(tmp_path, monkeypatch):
+    repo = _ingested(tmp_path, monkeypatch, {
+        "app.py": "from helpers import helper\n\n\ndef run(value):\n    return helper(value)\n",
+        "helpers.py": "def helper(value):\n    return value * 2\n",
+    })
+
+    payload = _payload(call_tool("cortex_path", {
+        "repo_path": str(repo), "symbol_a": "symbol:app.py:run", "symbol_b": "symbol:helpers.py:helper",
+        "response_format": "detailed",
+    }))
+
+    shortest = min(payload["paths"], key=len)
+    assert [(hop["relation"], hop["node_id"]) for hop in shortest] == [("calls", "symbol:helpers.py:helper")]
+
+
+def test_cortex_path_follows_a_resolved_cpp_call(tmp_path, monkeypatch):
+    from tests.golden_utils import treesitter_available
+
+    if not treesitter_available():
+        import pytest
+
+        pytest.skip("C++ call edges are resolved only by the tree-sitter backend")
+    repo = _ingested(tmp_path, monkeypatch, {
+        "util.hpp": "#pragma once\nint compute(int x);\n",
+        "util.cpp": '#include "util.hpp"\nint compute(int x) {\n    return x * 2;\n}\n',
+        "engine.cpp": '#include "util.hpp"\nint run() {\n    return compute(21);\n}\n',
+    })
+
+    payload = _payload(call_tool("cortex_path", {
+        "repo_path": str(repo), "symbol_a": "symbol:engine.cpp:run", "symbol_b": "symbol:util.cpp:compute",
+        "response_format": "detailed",
+    }))
+
+    shortest = min(payload["paths"], key=len)
+    assert [(hop["relation"], hop["node_id"]) for hop in shortest] == [("calls", "symbol:util.cpp:compute")]
+
+
+def test_cortex_relations_renders_ambiguous_call_targets(tmp_path, monkeypatch):
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git_init(repo)
+    store = CortexStore(repo / ".cortex" / "cortex.db")
+    nodes = [_symbol("a.cpp", "draw_all"), _symbol("b.cpp", "render"), _symbol("c.cpp", "render"), _symbol("a.cpp", "solo")]
+    edges = [
+        GraphEdge(
+            edge_id="treesitter:a.cpp:calls:draw_all:render:3", source="symbol:a.cpp:draw_all", target="name:render",
+            relation="calls", layer="STRUCTURAL", confidence="LOW",
+            metadata={"ambiguous": True, "candidates": ["symbol:c.cpp:render", "symbol:b.cpp:render"], "callee": "render"},
+        ),
+        # Unresolved but not ambiguous (external): rendered exactly as before.
+        GraphEdge(
+            edge_id="treesitter:a.cpp:calls:draw_all:printf:4", source="symbol:a.cpp:draw_all", target="name:printf",
+            relation="calls", layer="STRUCTURAL", metadata={"callee": "printf"},
+        ),
+    ]
+    store.reset_repo(repo)
+    store.save_graph(repo, nodes, edges)
+    args = {"repo_path": str(repo), "relation": "calls", "symbol": "draw_all"}
+
+    concise = {i["target"]: i for i in _payload(call_tool("cortex_relations", args))["items"]}
+    detailed = {i["target"]: i for i in _payload(call_tool("cortex_relations", {**args, "response_format": "detailed"}))["items"]}
+
+    ambiguous = "name:render (ambiguous: 2 candidates)"
+    assert set(concise) == {ambiguous, "printf"}
+    assert "candidates" not in concise[ambiguous]
+    assert concise[ambiguous]["confidence"] == "LOW"
+    assert detailed[ambiguous]["candidates"] == ["symbol:b.cpp:render", "symbol:c.cpp:render"]
+    assert "candidates" not in detailed["printf"]
