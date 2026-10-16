@@ -187,8 +187,10 @@ def test_cortex_references_shows_graph_tier_read_hits_from_other_files(tmp_path,
     payload = json.loads(result["content"][0]["text"])
     assert not result["isError"], payload
     hits = [h for bucket in payload["items"].values() for h in bucket]
-    graph_reads = [h for h in hits if h["origin"] == "graph" and h["access"] == "read"]
-    # The incoming resolved call edge (from app.ts) makes the graph tier report `Repo.save` as a
-    # `read` (called) location; before call resolution the edge ended at an unmatchable `name:save`.
-    assert [h["text"] for h in graph_reads] == ["lib/repo.ts:2"], hits
-    assert any(h["origin"] == "grep" and h["text"].startswith("app.ts:") for h in hits)
+    graph_reads = sorted(h["text"] for h in hits if h["origin"] == "graph" and h["access"] == "read")
+    # `save()` is called at app.ts:18 (this.repo.save()) and app.ts:37 (r.save()): the graph tier
+    # reports each resolved call as a `read` at the caller's file and line, and the method's own
+    # location as a `definition` (never a `read` of the definition).
+    assert graph_reads == ["app.ts:18", "app.ts:37"], hits
+    assert [h["text"] for h in hits if h["origin"] == "graph" and h["access"] == "definition"] == ["lib/repo.ts:2"]
+    assert not any(h["origin"] == "grep" and h["text"] in graph_reads for h in hits)  # no duplicate grep hit

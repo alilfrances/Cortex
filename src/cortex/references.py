@@ -55,6 +55,15 @@ def _graph_hits(store: CortexStore, repo_root: Path, symbol: str) -> tuple[list[
     return _graph_hits_from_edges(edges, nodes, symbol)
 
 
+def _call_site(edge: GraphEdge) -> tuple[str, int] | None:
+    """(file, line) of a `calls` edge's call site, from the extractor's metadata."""
+    metadata = edge.metadata if isinstance(edge.metadata, dict) else {}
+    path, line = metadata.get("source_file"), metadata.get("lineno")
+    if isinstance(path, str) and path and isinstance(line, int) and not isinstance(line, bool):
+        return path, line
+    return None
+
+
 def _graph_hits_from_edges(
     edges: Sequence[GraphEdge],
     nodes: dict[str, GraphNode],
@@ -68,6 +77,23 @@ def _graph_hits_from_edges(
             node = nodes.get(node_id)
             if node is None or symbol.lower() not in node.label.lower():
                 continue
+            if edge.relation == "calls" and node_id == edge.target:
+                # A resolved call is a read *at the call site* (the caller's file and line), not a
+                # "read" of the callee's definition; the definition is reported by its own
+                # `contains` edge.
+                site = _call_site(edge)
+                if site is not None:
+                    site_key = (site[0], site[1])
+                    covered.add(site_key)
+                    if site_key not in seen_edge_locations:
+                        seen_edge_locations.add(site_key)
+                        hits.append({
+                            "bucket": _bucket(Path(site[0])),
+                            "text": f"{site[0]}:{site[1]}",
+                            "origin": "graph",
+                            "access": "read",
+                        })
+                    continue
             key = (node.source_ref, node.span_start)
             covered.add(key)
             if key in seen_edge_locations:

@@ -99,8 +99,14 @@ def test_cortex_references_sees_the_resolved_incoming_call_edge_and_the_grep_cal
     ]
     payload = _payload(call_tool("cortex_references", {"repo_path": str(repo), "symbol": "compute_invoice_total", "format": "detailed"}))
     hits = payload["items"]["code"]
-    assert ("pkg/billing.py:1", "graph") in {(hit["text"], hit["origin"]) for hit in hits}
-    assert "pkg/service.py:5" in {hit["text"] for hit in hits if hit["origin"] == "grep"}
+    graph = {(hit["text"], hit["access"]) for hit in hits if hit["origin"] == "graph"}
+    # the resolved call is a graph-tier `read` at the *caller's* file and line; the callee's
+    # definition is a `definition` (it used to be reported as a `read` of the definition)
+    assert ("pkg/service.py:5", "read") in graph
+    assert ("pkg/billing.py:1", "definition") in graph
+    assert ("pkg/billing.py:1", "read") not in graph
+    # the graph hit covers the call line, so grep does not repeat it
+    assert "pkg/service.py:5" not in {hit["text"] for hit in hits if hit["origin"] == "grep"}
 
 
 def test_cortex_relations_calls_reports_resolved_targets(repo: Path) -> None:
