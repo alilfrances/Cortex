@@ -26,8 +26,8 @@ EXPECTED_INVENTORY = {
     "evals": 3,
     "extraction/baseline-7b0e6e0": 52,  # frozen pre-calls copy (Task 6); never regenerated
     "extraction/python": 8,
-    "extraction/regex": 39,  # +14: calls_cpp fixture (Task 6)
-    "extraction/treesitter": 39,
+    "extraction/regex": 54,  # +14 calls_cpp (Task 6), +15 calls_js (Task 7)
+    "extraction/treesitter": 54,
     "graph": 1,
     "graph/regex": 1,
     "graph/treesitter": 1,

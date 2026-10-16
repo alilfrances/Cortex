@@ -166,6 +166,48 @@
     },
     {
       "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.js:calls:run:start:9",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "start",
+        "enclosing_class": "AppController",
+        "implicit_receiver": false,
+        "lineno": 9,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.js"
+      },
+      "relation": "calls",
+      "source": "symbol:app.js:run",
+      "target": "name:start",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.js:calls:start:helper:4",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "helper",
+        "enclosing_class": null,
+        "implicit_receiver": false,
+        "import_file": null,
+        "import_spec": "./helper.js",
+        "lineno": 4,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.js"
+      },
+      "relation": "calls",
+      "source": "symbol:app.js:start",
+      "target": "name:helper",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
       "edge_id": "treesitter:app.js:contains:AppController",
       "layer": "STRUCTURAL",
       "metadata": {
@@ -214,6 +256,28 @@
       "relation": "imports",
       "source": "file:app.js",
       "target": "module:./helper.js",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:client.ts:calls:connect:start:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "start",
+        "enclosing_class": "Client",
+        "implicit_receiver": false,
+        "import_file": "app.js",
+        "import_spec": "./app",
+        "lineno": 5,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "client.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:client.ts:connect",
+      "target": "name:start",
       "weight": 1.0
     },
     {

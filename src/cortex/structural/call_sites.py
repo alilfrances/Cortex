@@ -432,6 +432,346 @@ class CppCalls(CallWalker):
         self.emit(node, frame, callee, receiver=receiver, kind="chain")
 
 
+# --------------------------------------------------------------------------- #
+# JavaScript / TypeScript / TSX
+# --------------------------------------------------------------------------- #
+
+_JS_EXTS = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
+_JS_CLASS_NODES = {"class_declaration", "class", "abstract_class_declaration", "class_expression"}
+_JS_METHOD_NODES = {"method_definition", "method_signature", "abstract_method_signature"}
+_JS_FUNCTION_NODES = {"function_declaration", "generator_function_declaration"}
+_JS_INNER_FUNCTIONS = {"arrow_function", "function_expression", "function", "generator_function"}
+_JS_SKIP_CALLEES = frozenset({"require", "super", "import"})
+_NULLISH = {"null", "undefined", "void", "never"}
+
+
+@dataclass(slots=True)
+class Binding:
+    kind: str  # "named" | "default" | "namespace"
+    spec: str
+    file: str | None
+    imported: str  # exported name (named) or local name
+
+
+def resolve_js_spec(importer: str, spec: str, known: set[str]) -> str | None:
+    """Repo file a relative import specifier names (extension/index probing); `None` for
+    bare specifiers (packages) and anything that does not match a known file."""
+    if not spec.startswith("."):
+        return None
+    import posixpath
+
+    base = posixpath.normpath(posixpath.join(posixpath.dirname(importer), spec))
+    stem, ext = posixpath.splitext(base)
+    candidates = [base]
+    if ext in {".js", ".jsx", ".mjs", ".cjs"}:
+        candidates += [stem + e for e in (".ts", ".tsx")]
+    candidates += [base + e for e in _JS_EXTS]
+    candidates += [posixpath.join(base, "index" + e) for e in _JS_EXTS]
+    for candidate in candidates:
+        if candidate in known:
+            return candidate
+    return None
+
+
+class JsCalls(CallWalker):
+    language = "js"
+
+    def __init__(self, ctx: CallContext) -> None:
+        super().__init__(ctx)
+        self.bindings: dict[str, Binding] = {}
+
+    # -- imports ------------------------------------------------------------
+    def _strip(self, node: Any) -> str:
+        return self.text(node).strip("\"'`")
+
+    def collect_imports(self, root: Any) -> None:
+        for child in root.children:
+            if child.type == "import_statement":
+                source = child.child_by_field_name("source")
+                if source is None:
+                    continue
+                spec = self._strip(source)
+                file = resolve_js_spec(self.ctx.path, spec, self.ctx.known_paths)
+                for clause in child.children:
+                    if clause.type != "import_clause":
+                        continue
+                    for part in clause.children:
+                        if part.type == "identifier":
+                            name = self.text(part)
+                            self.bindings[name] = Binding("default", spec, file, name)
+                        elif part.type == "namespace_import":
+                            ident = next((c for c in part.children if c.type == "identifier"), None)
+                            if ident is not None:
+                                name = self.text(ident)
+                                self.bindings[name] = Binding("namespace", spec, file, name)
+                        elif part.type == "named_imports":
+                            for spec_node in part.children:
+                                if spec_node.type != "import_specifier":
+                                    continue
+                                name_node = spec_node.child_by_field_name("name")
+                                alias = spec_node.child_by_field_name("alias")
+                                if name_node is None:
+                                    continue
+                                imported = self.text(name_node)
+                                local = self.text(alias) if alias is not None else imported
+                                self.bindings[local] = Binding("named", spec, file, imported)
+            elif child.type in {"lexical_declaration", "variable_declaration"}:
+                for decl in child.children:
+                    if decl.type == "variable_declarator":
+                        self._collect_require(decl)
+
+    def _collect_require(self, decl: Any) -> None:
+        value = decl.child_by_field_name("value")
+        target = decl.child_by_field_name("name")
+        if value is None or target is None or value.type != "call_expression":
+            return
+        fn = value.child_by_field_name("function")
+        args = value.child_by_field_name("arguments")
+        if fn is None or args is None or self.text(fn) != "require":
+            return
+        first = next(iter(args.named_children), None)
+        if first is None or first.type not in {"string", "template_string"}:
+            return
+        spec = self._strip(first)
+        file = resolve_js_spec(self.ctx.path, spec, self.ctx.known_paths)
+        if target.type == "identifier":
+            name = self.text(target)
+            self.bindings[name] = Binding("namespace", spec, file, name)
+        elif target.type == "object_pattern":
+            for item in target.named_children:
+                if item.type == "shorthand_property_identifier_pattern":
+                    name = self.text(item)
+                    self.bindings[name] = Binding("named", spec, file, name)
+                elif item.type == "pair_pattern":
+                    key, val = item.child_by_field_name("key"), item.child_by_field_name("value")
+                    if key is not None and val is not None and val.type == "identifier":
+                        self.bindings[self.text(val)] = Binding("named", spec, file, self.text(key))
+
+    def run(self, root: Any) -> list[GraphEdge]:
+        self.collect_imports(root)
+        self.run_prescan(root)
+        return super().run(root)
+
+    # -- types --------------------------------------------------------------
+    def type_name(self, node: Any | None) -> str | None:
+        if node is None:
+            return None
+        kind = node.type
+        if kind == "type_annotation":
+            return self.type_name(next(iter(node.named_children), None))
+        if kind == "type_identifier":
+            return self.text(node)
+        if kind == "nested_type_identifier":
+            return self.type_name(node.child_by_field_name("name"))
+        if kind == "generic_type":
+            return self.type_name(node.child_by_field_name("name"))
+        if kind == "parenthesized_type":
+            return self.type_name(next(iter(node.named_children), None))
+        if kind == "union_type":
+            found = {
+                name
+                for child in node.named_children
+                if self.text(child) not in _NULLISH and (name := self.type_name(child))
+            }
+            return next(iter(found)) if len(found) == 1 else None
+        return None
+
+    def constructed(self, value: Any | None) -> str | None:
+        while value is not None and value.type in {"await_expression", "parenthesized_expression"}:
+            value = next(iter(value.named_children), None)
+        if value is not None and value.type == "new_expression":
+            ctor = value.child_by_field_name("constructor")
+            if ctor is not None and ctor.type in {"identifier", "type_identifier"}:
+                return self.text(ctor)
+        return None
+
+    def add_var(self, name_node: Any | None, type_node: Any | None, value: Any | None, vars_: dict[str, str]) -> None:
+        if name_node is None or name_node.type != "identifier":
+            return
+        name = self.text(name_node)
+        resolved = self.type_name(type_node) or self.constructed(value)
+        if resolved:
+            vars_[name] = resolved
+        else:
+            vars_.pop(name, None)
+
+    def add_parameters(self, params: Any | None, vars_: dict[str, str]) -> None:
+        if params is None:
+            return
+        for param in params.named_children:
+            if param.type in {"required_parameter", "optional_parameter"}:
+                self.add_var(param.child_by_field_name("pattern"), param.child_by_field_name("type"), None, vars_)
+            elif param.type == "identifier":
+                vars_.pop(self.text(param), None)
+
+    def class_fields(self, body: Any) -> dict[str, str]:
+        fields: dict[str, str] = {}
+        for member in body.named_children:
+            if member.type in {"public_field_definition", "field_definition"}:
+                name = member.child_by_field_name("name")
+                if name is None:
+                    name = member.child_by_field_name("property")
+                if name is None:
+                    continue
+                kind = self.type_name(member.child_by_field_name("type")) or self.constructed(
+                    member.child_by_field_name("value")
+                )
+                if kind:
+                    fields[self.text(name)] = kind
+            elif member.type == "method_definition":
+                name = member.child_by_field_name("name")
+                if name is not None and self.text(name) == "constructor":
+                    params = member.child_by_field_name("parameters")
+                    for param in (params.named_children if params is not None else []):
+                        # TS parameter properties: constructor(private repo: Repo)
+                        if param.type in {"required_parameter", "optional_parameter"} and any(
+                            c.type in {"accessibility_modifier", "readonly"} for c in param.children
+                        ):
+                            self.add_var(
+                                param.child_by_field_name("pattern"), param.child_by_field_name("type"), None, fields
+                            )
+        return fields
+
+    # -- scope --------------------------------------------------------------
+    def enter(self, node: Any, frame: Frame) -> Frame:
+        kind = node.type
+        if kind in _JS_CLASS_NODES:
+            body = node.child_by_field_name("body")
+            if body is None:
+                return frame
+            name = self.ctx.name_of(node, self.ctx.source) or None
+            return Frame(frame.symbol_id, frame.owner_label, name, {}, False)
+        if kind in _JS_METHOD_NODES and node.type == "method_definition":
+            inner = self.definition_frame(node, frame, class_name=frame.class_name, label="")
+            inner.vars = dict(self.fields_of.get(frame.class_name or "", {}))
+            self.add_parameters(node.child_by_field_name("parameters"), inner.vars)
+            return inner
+        if kind in _JS_FUNCTION_NODES:
+            inner = self.definition_frame(node, frame, class_name=None, label="")
+            inner.vars = {}
+            self.add_parameters(node.child_by_field_name("parameters"), inner.vars)
+            return inner
+        if kind in _JS_INNER_FUNCTIONS:
+            class_name = frame.class_name if kind == "arrow_function" else None
+            inner = Frame(frame.symbol_id, frame.owner_label, class_name, dict(frame.vars), frame.in_function)
+            self.add_parameters(node.child_by_field_name("parameters"), inner.vars)
+            return inner
+        return frame
+
+    fields_of: dict[str, dict[str, str]]
+
+    def run_prescan(self, root: Any) -> None:
+        """Class field types by class name, so methods see fields declared after them."""
+        self.fields_of = {}
+        stack = [root]
+        while stack:
+            node = stack.pop()
+            if node.type in _JS_CLASS_NODES:
+                body = node.child_by_field_name("body")
+                name = self.ctx.name_of(node, self.ctx.source)
+                if body is not None and name:
+                    self.fields_of.setdefault(name, {}).update(self.class_fields(body))
+            stack.extend(node.children)
+
+    # -- sites --------------------------------------------------------------
+    def visit(self, node: Any, frame: Frame) -> None:
+        kind = node.type
+        if kind == "variable_declarator":
+            self.add_var(node.child_by_field_name("name"), node.child_by_field_name("type"), node.child_by_field_name("value"), frame.vars)
+            return
+        if kind == "new_expression":
+            ctor = node.child_by_field_name("constructor")
+            if ctor is not None and ctor.type in {"identifier", "type_identifier"}:
+                self.free_site(node, frame, self.text(ctor), "new")
+            elif ctor is not None and ctor.type == "member_expression":
+                self.member_site(node, ctor, frame, kind_override="new")
+            return
+        if kind != "call_expression":
+            return
+        fn = node.child_by_field_name("function")
+        while fn is not None and fn.type in {"parenthesized_expression", "non_null_expression"}:
+            fn = next(iter(fn.named_children), None)
+        if fn is None:
+            return
+        if fn.type == "identifier":
+            callee = self.text(fn)
+            if callee not in _JS_SKIP_CALLEES:
+                self.free_site(node, frame, callee, "none")
+        elif fn.type == "member_expression":
+            self.member_site(node, fn, frame)
+
+    def free_site(self, node: Any, frame: Frame, name: str, kind: str) -> None:
+        extra: dict[str, Any] = {"implicit_receiver": False} if kind == "none" else {}
+        callee = name
+        binding = self.bindings.get(name)
+        if binding is not None:
+            callee = binding.imported if binding.kind == "named" else name
+            extra.update({"import_spec": binding.spec, "import_file": binding.file})
+            if binding.kind == "default":
+                extra["import_default"] = True
+        self.emit(node, frame, callee, kind=kind, extra=extra or None)
+
+    def type_file(self, type_name: str | None) -> dict[str, Any] | None:
+        """Where an imported type name lives, so duplicate class names pick the imported one."""
+        binding = self.bindings.get(type_name or "")
+        if binding is not None and binding.file and binding.kind in {"named", "default"}:
+            return {"receiver_type_file": binding.file}
+        return None
+
+    def unwrap(self, node: Any) -> Any:
+        while node is not None and node.type in {"parenthesized_expression", "non_null_expression", "await_expression"}:
+            node = next(iter(node.named_children), None)
+        return node
+
+    def member_site(self, node: Any, fn: Any, frame: Frame, kind_override: str | None = None) -> None:
+        prop = fn.child_by_field_name("property")
+        obj = self.unwrap(fn.child_by_field_name("object"))
+        if prop is None or obj is None:
+            return
+        callee = self.text(prop)
+        receiver = self.text(obj)
+        otype = obj.type
+        if otype == "this":
+            self.emit(node, frame, callee, receiver="this", kind="this")
+            return
+        if otype == "super":
+            self.emit(node, frame, callee, receiver="super", kind="this", extra={"super": True})
+            return
+        if otype == "identifier":
+            binding = self.bindings.get(receiver)
+            if binding is not None and receiver not in frame.vars:
+                self.emit(
+                    node, frame, callee, receiver=receiver, kind="scoped", scope=receiver,
+                    extra={
+                        "import_spec": binding.spec, "scope_file": binding.file,
+                        "scope_namespace": binding.kind == "namespace",
+                    },
+                )
+                return
+            rtype = frame.vars.get(receiver)
+            self.emit(node, frame, callee, receiver=receiver, kind="var", receiver_type=rtype, extra=self.type_file(rtype))
+            return
+        if otype == "member_expression":
+            base = self.unwrap(obj.child_by_field_name("object"))
+            member = obj.child_by_field_name("property")
+            if base is not None and base.type == "this" and member is not None:
+                rtype = self.fields_of.get(frame.class_name or "", {}).get(self.text(member))
+                self.emit(node, frame, callee, receiver=receiver, kind="var", receiver_type=rtype, extra=self.type_file(rtype))
+                return
+        if otype == "new_expression":
+            ctor = obj.child_by_field_name("constructor")
+            rtype = self.text(ctor) if ctor is not None and ctor.type in {"identifier", "type_identifier"} else None
+            self.emit(node, frame, callee, receiver=receiver, kind="var", receiver_type=rtype, extra=self.type_file(rtype))
+            return
+        if otype in {"as_expression", "type_assertion"}:
+            type_node = obj.child_by_field_name("type")
+            if type_node is None and obj.named_children:
+                type_node = obj.named_children[-1]
+            self.emit(node, frame, callee, receiver=receiver, kind="var", receiver_type=self.type_name(type_node))
+            return
+        self.emit(node, frame, callee, receiver=receiver, kind="chain")
+
+
 def cpp_member_types(node: Any, source: bytes) -> dict[str, str]:
     """`{member: type}` for the typed fields of a C/C++ class/struct body (sorted)."""
     body = node.child_by_field_name("body")
@@ -446,6 +786,8 @@ def cpp_member_types(node: Any, source: bytes) -> dict[str, str]:
 _WALKERS: dict[str, type[CallWalker]] = {}
 for _suffix in (".c", ".h", ".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx"):
     _WALKERS[_suffix] = CppCalls
+for _suffix in (".js", ".jsx", ".ts", ".tsx"):
+    _WALKERS[_suffix] = JsCalls
 
 
 def supports_calls(suffix: str) -> bool:

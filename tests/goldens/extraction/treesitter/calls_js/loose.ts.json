@@ -1,0 +1,70 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:loose.ts:calls:loose:p.render:2",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "render",
+        "enclosing_class": null,
+        "lineno": 2,
+        "receiver": "p",
+        "receiver_kind": "var",
+        "receiver_type": "Panel",
+        "scope": null,
+        "source_file": "loose.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:loose.ts:loose",
+      "target": "name:render",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:loose.ts:contains:loose",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "loose.ts"
+      },
+      "relation": "contains",
+      "source": "file:loose.ts",
+      "target": "symbol:loose.ts:loose",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "loose.ts",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "ts",
+        "size_bytes": 50
+      },
+      "node_id": "file:loose.ts",
+      "signature": "",
+      "source_ref": "loose.ts",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "loose",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:loose.ts:loose",
+      "signature": "function loose(p: Panel) {",
+      "source_ref": "loose.ts",
+      "span_end": 3,
+      "span_start": 1
+    }
+  ]
+}

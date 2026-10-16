@@ -53,13 +53,6 @@
     },
     {
       "confidence": "low",
-      "file": "app.js",
-      "line": 3,
-      "reason": "no incoming edges; grep refs in code/config",
-      "symbol": "start"
-    },
-    {
-      "confidence": "low",
       "file": "client.ts",
       "line": 3,
       "reason": "no incoming edges; grep refs in code/config",
@@ -151,7 +144,7 @@
     }
   ],
   "repo_path": "<repo>",
-  "returned_count": 21,
+  "returned_count": 20,
   "stale": false,
   "truncated": false
 }

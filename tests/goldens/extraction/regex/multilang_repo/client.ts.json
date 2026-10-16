@@ -2,6 +2,26 @@
   "edges": [
     {
       "confidence": "LOW",
+      "edge_id": "regex:client.ts:calls:Client:start:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "start",
+        "enclosing_class": null,
+        "lineno": 5,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "client.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:client.ts:Client",
+      "target": "name:start",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
       "edge_id": "regex:client.ts:contains:Client",
       "layer": "STRUCTURAL",
       "metadata": {

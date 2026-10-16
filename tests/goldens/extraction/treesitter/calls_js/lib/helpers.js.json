@@ -1,0 +1,51 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib/helpers.js:contains:helper",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/helpers.js"
+      },
+      "relation": "contains",
+      "source": "file:lib/helpers.js",
+      "target": "symbol:lib/helpers.js:helper",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/helpers.js",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "js",
+        "size_bytes": 41
+      },
+      "node_id": "file:lib/helpers.js",
+      "signature": "",
+      "source_ref": "lib/helpers.js",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "helper",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:lib/helpers.js:helper",
+      "signature": "function helper() {",
+      "source_ref": "lib/helpers.js",
+      "span_end": 3,
+      "span_start": 1
+    }
+  ]
+}

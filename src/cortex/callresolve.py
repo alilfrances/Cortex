@@ -373,9 +373,38 @@ def _tier_from_lookup(found: tuple[str, list[str]] | None, direct_tier: str) -> 
     return ("inherited" if kind == "inherited" else direct_tier), ids
 
 
+def _resolve_scope_file(edge: GraphEdge, index: _Index) -> _Outcome:
+    """`ns.f()` / `Cls.m()` where the extractor resolved the import binding to a file."""
+    md = edge.metadata
+    callee = str(md["callee"])
+    path = md.get("scope_file")
+    if not path:
+        return None  # package / unresolved specifier: nothing in the repo to name
+    if md.get("scope_namespace"):
+        found = list(index.exported_by_path_label.get((str(path), callee), ()))
+        return ("scoped", found) if found else None
+    label = _last_segment(str(md.get("scope") or ""))
+    class_ids = [c for c in index.classes_by_label.get(label, []) if index.symbols[c].source_ref == path]
+    return _tier_from_lookup(index.lookup(class_ids, callee), "scoped") if class_ids else None
+
+
+def _resolve_import_binding(edge: GraphEdge, index: _Index) -> _Outcome:
+    """A free call/`new` whose callee is an explicitly imported binding: only the file the
+    import names can define it (an explicit import beats same-file/repo-wide guesses)."""
+    md = edge.metadata
+    path = md.get("import_file")
+    if not path:
+        return None  # external package or unresolved specifier: stays name-based
+    callee = str(md["callee"])
+    found = list(index.exported_by_path_label.get((str(path), callee), ()))
+    return ("import_scoped", found) if found else None
+
+
 def _resolve_scoped(edge: GraphEdge, index: _Index, source_file: str) -> _Outcome:
     md = edge.metadata
     callee = str(md["callee"])
+    if "scope_file" in md:
+        return _resolve_scope_file(edge, index)
     scope_module = md.get("scope_module")
     scope = str(md.get("scope") or "")
     if scope_module:
@@ -489,7 +518,12 @@ def _resolve_one(edge: GraphEdge, index: _Index) -> _Outcome:
         receiver_type = _member_type(edge, index, source_file, str(md["receiver_member"]))
     if receiver_type:
         label = _last_segment(str(receiver_type))
-        classes = index.prefer(index.classes_by_label.get(label, []), source_file)
+        classes = index.classes_by_label.get(label, [])
+        type_file = md.get("receiver_type_file")
+        if type_file:
+            classes = [c for c in classes if index.symbols[c].source_ref == type_file]
+        else:
+            classes = index.prefer(classes, source_file)
         if not classes:
             return None
         return _tier_from_lookup(index.lookup(classes, callee), "declared_type")
@@ -501,12 +535,17 @@ def _resolve_one(edge: GraphEdge, index: _Index) -> _Outcome:
             return _tier_from_lookup(index.lookup([owner.node_id], callee), "scoped")
 
     if kind == "new":
+        if "import_spec" in md:
+            return _resolve_import_binding(edge, index)
         return _resolve_new(edge, index, source_file)
 
     if kind != "none":
         return None  # untyped receiver: nothing static to resolve against
 
-    if not python:
+    if "import_spec" in md:
+        return _resolve_import_binding(edge, index)
+
+    if not python and md.get("implicit_receiver", True):
         classes = _enclosing_classes(edge, index, source_file)
         if classes:
             outcome = _tier_from_lookup(index.lookup(classes, callee), "this")
@@ -533,6 +572,7 @@ def _is_affected(
         or md.get("receiver_member")
         or md.get("scope")
         or md.get("scope_module")
+        or md.get("scope_file")
         or md.get("receiver_kind") in ("this", "self")
     ):
         return True

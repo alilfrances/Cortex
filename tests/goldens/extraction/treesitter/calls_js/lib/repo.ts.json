@@ -1,0 +1,78 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib/repo.ts:contains:Repo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/repo.ts"
+      },
+      "relation": "contains",
+      "source": "file:lib/repo.ts",
+      "target": "symbol:lib/repo.ts:Repo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib/repo.ts:contains:save",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "lib/repo.ts"
+      },
+      "relation": "contains",
+      "source": "file:lib/repo.ts",
+      "target": "symbol:lib/repo.ts:save",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/repo.ts",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "ts",
+        "size_bytes": 43
+      },
+      "node_id": "file:lib/repo.ts",
+      "signature": "",
+      "source_ref": "lib/repo.ts",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Repo",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:lib/repo.ts:Repo",
+      "signature": "class Repo {",
+      "source_ref": "lib/repo.ts",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "save",
+      "metadata": {
+        "lineno": 2,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:lib/repo.ts:save",
+      "signature": "save(): void {",
+      "source_ref": "lib/repo.ts",
+      "span_end": 3,
+      "span_start": 2
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib/service.ts:contains:Service",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/service.ts"
+      },
+      "relation": "contains",
+      "source": "file:lib/service.ts",
+      "target": "symbol:lib/service.ts:Service",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib/service.ts:contains:run",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "lib/service.ts"
+      },
+      "relation": "contains",
+      "source": "file:lib/service.ts",
+      "target": "symbol:lib/service.ts:run",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/service.ts",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "ts",
+        "size_bytes": 53
+      },
+      "node_id": "file:lib/service.ts",
+      "signature": "",
+      "source_ref": "lib/service.ts",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Service",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:lib/service.ts:Service",
+      "signature": "class Service {",
+      "source_ref": "lib/service.ts",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "run",
+      "metadata": {
+        "lineno": 2,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:lib/service.ts:run",
+      "signature": "run(): void {",
+      "source_ref": "lib/service.ts",
+      "span_end": 3,
+      "span_start": 2
+    }
+  ]
+}

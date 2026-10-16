@@ -1,0 +1,52 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:lib/other.js:contains:render",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/other.js"
+      },
+      "relation": "contains",
+      "source": "file:lib/other.js",
+      "target": "symbol:lib/other.js:render",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/other.js",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "js",
+        "size_bytes": 47
+      },
+      "node_id": "file:lib/other.js",
+      "signature": "",
+      "source_ref": "lib/other.js",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "render",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:lib/other.js:render",
+      "signature": "export function render() {",
+      "source_ref": "lib/other.js",
+      "span_end": 3,
+      "span_start": 1
+    }
+  ]
+}

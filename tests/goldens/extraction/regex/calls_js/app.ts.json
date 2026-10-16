@@ -1,0 +1,518 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:Service:20",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Service",
+        "enclosing_class": null,
+        "lineno": 20,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:Service",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:Service:22",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Service",
+        "enclosing_class": null,
+        "lineno": 22,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:Service",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:baz:29",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "baz",
+        "enclosing_class": null,
+        "lineno": 29,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:baz",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:get:28",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "get",
+        "enclosing_class": null,
+        "lineno": 28,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:get",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:go:24",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "go",
+        "enclosing_class": null,
+        "lineno": 24,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:go",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:helper:15",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "helper",
+        "enclosing_class": null,
+        "lineno": 15,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:helper",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:helper:16",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "helper",
+        "enclosing_class": null,
+        "lineno": 16,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:helper",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:render:23",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "render",
+        "enclosing_class": null,
+        "lineno": 23,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:render",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:render:25",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "render",
+        "enclosing_class": null,
+        "lineno": 25,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:render",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:render:27",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "render",
+        "enclosing_class": null,
+        "lineno": 27,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:render",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:run:19",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "run",
+        "enclosing_class": null,
+        "lineno": 19,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:run:21",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "run",
+        "enclosing_class": null,
+        "lineno": 21,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:run:22",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "run",
+        "enclosing_class": null,
+        "lineno": 22,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:save:18",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "save",
+        "enclosing_class": null,
+        "lineno": 18,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:stop:17",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "stop",
+        "enclosing_class": null,
+        "lineno": 17,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:stop",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:useState:26",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "useState",
+        "enclosing_class": null,
+        "lineno": 26,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:useState",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:unimported:render:36",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "render",
+        "enclosing_class": null,
+        "lineno": 36,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:unimported",
+      "target": "name:render",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:unimported:save:37",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "save",
+        "enclosing_class": null,
+        "lineno": 37,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:unimported",
+      "target": "name:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:contains:Controller",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 9,
+        "source_file": "app.ts"
+      },
+      "relation": "contains",
+      "source": "file:app.ts",
+      "target": "symbol:app.ts:Controller",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:contains:unimported",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 35,
+        "source_file": "app.ts"
+      },
+      "relation": "contains",
+      "source": "file:app.ts",
+      "target": "symbol:app.ts:unimported",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:import:1:1:./lib/helpers",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "app.ts"
+      },
+      "relation": "imports",
+      "source": "file:app.ts",
+      "target": "module:./lib/helpers",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:import:2:2:./lib/utils",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "app.ts"
+      },
+      "relation": "imports",
+      "source": "file:app.ts",
+      "target": "module:./lib/utils",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:import:3:3:./lib/service",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "app.ts"
+      },
+      "relation": "imports",
+      "source": "file:app.ts",
+      "target": "module:./lib/service",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:import:4:4:./lib/repo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "app.ts"
+      },
+      "relation": "imports",
+      "source": "file:app.ts",
+      "target": "module:./lib/repo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:import:5:5:./lib/panel_a",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "app.ts"
+      },
+      "relation": "imports",
+      "source": "file:app.ts",
+      "target": "module:./lib/panel_a",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:import:6:6:react",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "app.ts"
+      },
+      "relation": "imports",
+      "source": "file:app.ts",
+      "target": "module:react",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "app.ts",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "ts",
+        "size_bytes": 752
+      },
+      "node_id": "file:app.ts",
+      "signature": "",
+      "source_ref": "app.ts",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Controller",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 9,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:app.ts:Controller",
+      "signature": "export class Controller {",
+      "source_ref": "app.ts",
+      "span_end": 33,
+      "span_start": 9
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "unimported",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 35,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:app.ts:unimported",
+      "signature": "export function unimported(q: Panel, r: Repo) {",
+      "source_ref": "app.ts",
+      "span_end": 38,
+      "span_start": 35
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:lib/repo.ts:contains:Repo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/repo.ts"
+      },
+      "relation": "contains",
+      "source": "file:lib/repo.ts",
+      "target": "symbol:lib/repo.ts:Repo",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/repo.ts",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "ts",
+        "size_bytes": 43
+      },
+      "node_id": "file:lib/repo.ts",
+      "signature": "",
+      "source_ref": "lib/repo.ts",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Repo",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:lib/repo.ts:Repo",
+      "signature": "export class Repo {",
+      "source_ref": "lib/repo.ts",
+      "span_end": 4,
+      "span_start": 1
+    }
+  ]
+}

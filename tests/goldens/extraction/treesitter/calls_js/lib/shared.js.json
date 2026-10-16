@@ -1,0 +1,51 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib/shared.js:contains:render",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/shared.js"
+      },
+      "relation": "contains",
+      "source": "file:lib/shared.js",
+      "target": "symbol:lib/shared.js:render",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/shared.js",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "js",
+        "size_bytes": 48
+      },
+      "node_id": "file:lib/shared.js",
+      "signature": "",
+      "source_ref": "lib/shared.js",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "render",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:lib/shared.js:render",
+      "signature": "function render() {",
+      "source_ref": "lib/shared.js",
+      "span_end": 3,
+      "span_start": 1
+    }
+  ]
+}

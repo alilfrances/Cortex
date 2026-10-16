@@ -1,0 +1,72 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:lib/worker.js:calls:Worker:step:3",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "step",
+        "enclosing_class": null,
+        "lineno": 3,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "lib/worker.js"
+      },
+      "relation": "calls",
+      "source": "symbol:lib/worker.js:Worker",
+      "target": "name:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:lib/worker.js:contains:Worker",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/worker.js"
+      },
+      "relation": "contains",
+      "source": "file:lib/worker.js",
+      "target": "symbol:lib/worker.js:Worker",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/worker.js",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "js",
+        "size_bytes": 85
+      },
+      "node_id": "file:lib/worker.js",
+      "signature": "",
+      "source_ref": "lib/worker.js",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Worker",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:lib/worker.js:Worker",
+      "signature": "export class Worker {",
+      "source_ref": "lib/worker.js",
+      "span_end": 9,
+      "span_start": 1
+    }
+  ]
+}

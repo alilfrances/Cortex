@@ -1103,7 +1103,18 @@ def _extract_qml_cpp_registration(
 # --------------------------------------------------------------------------- #
 
 # Families whose regex fallback emits name-only `calls` edges.
-_NAME_ONLY_CALL_SUFFIXES = frozenset({".c", ".h", ".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx"})
+_NAME_ONLY_CALL_SUFFIXES = frozenset({
+    ".c", ".h", ".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx",  # Task 6
+    ".js", ".jsx", ".ts", ".tsx",  # Task 7
+})
+# Regex symbols exist for functions only in these families (class methods are not symbols),
+# so lines inside a class body but outside any function are owned by the class.
+_CLASS_OWNED_SUFFIXES = frozenset({".js", ".jsx", ".ts", ".tsx"})
+_METHOD_HEADER_RE = re.compile(
+    r"^\s*(?:(?:public|private|protected|static|async|readonly|abstract|override|get|set|declare)\s+)*"
+    r"[\w$]+\s*(?:<[^>]*>)?\s*\([^)]*\)\s*(?::\s*[^{;=]+)?\{"
+)
+_TYPED_SIGNATURE_RE = re.compile(r"\)\s*:\s*[\w$<>\[\]|?. ,]+;?\s*$")
 _CALL_NAME_RE = re.compile(r"(?<![\w$])([A-Za-z_$][\w$]*)\s*\(")
 _DEF_KEYWORD_BEFORE_RE = re.compile(r"\b(?:def|fn|func|function)\s+$")
 _EMIT_BEFORE_RE = re.compile(r"\b(?:emit|Q_EMIT)\s+$")
@@ -1154,10 +1165,13 @@ def _extract_calls_name_only(path: str, content: str, nodes: list[GraphNode], ed
     lines = masked.split("\n")
     # The definition patterns can mistake `switch (x) {`/`while (...) {` for a
     # function; those never own call sites (the enclosing real function does).
+    class_owned = suffix in _CLASS_OWNED_SUFFIXES
     funcs = [
         n for n in nodes
-        if n.granularity == "symbol" and n.kind == "func" and n.span_start is not None
-        and n.label not in _CALL_SKIP
+        if n.granularity == "symbol" and n.span_start is not None and n.label not in _CALL_SKIP
+        and (n.kind == "func" or (class_owned and n.kind == "class" and not n.signature.lstrip().startswith(
+            ("interface", "export interface", "declare")
+        )))
     ]
     if not funcs:
         return
@@ -1178,6 +1192,8 @@ def _extract_calls_name_only(path: str, content: str, nodes: list[GraphNode], ed
         node = owner[line_no]
         if node is None:
             continue
+        if node.kind == "class" and (_METHOD_HEADER_RE.match(text) or _TYPED_SIGNATURE_RE.search(text)):
+            continue  # a method header / signature inside a class body, not a call
         for match in _CALL_NAME_RE.finditer(text):
             callee = match.group(1)
             if _is_skipped_call(callee):

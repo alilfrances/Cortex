@@ -1,0 +1,78 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib/panel_b.ts:contains:Panel",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/panel_b.ts"
+      },
+      "relation": "contains",
+      "source": "file:lib/panel_b.ts",
+      "target": "symbol:lib/panel_b.ts:Panel",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib/panel_b.ts:contains:render",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "lib/panel_b.ts"
+      },
+      "relation": "contains",
+      "source": "file:lib/panel_b.ts",
+      "target": "symbol:lib/panel_b.ts:render",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/panel_b.ts",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "ts",
+        "size_bytes": 46
+      },
+      "node_id": "file:lib/panel_b.ts",
+      "signature": "",
+      "source_ref": "lib/panel_b.ts",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Panel",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:lib/panel_b.ts:Panel",
+      "signature": "class Panel {",
+      "source_ref": "lib/panel_b.ts",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "render",
+      "metadata": {
+        "lineno": 2,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:lib/panel_b.ts:render",
+      "signature": "render(): void {",
+      "source_ref": "lib/panel_b.ts",
+      "span_end": 3,
+      "span_start": 2
+    }
+  ]
+}

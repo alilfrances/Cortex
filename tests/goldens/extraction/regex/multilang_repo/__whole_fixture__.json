@@ -93,6 +93,46 @@
     },
     {
       "confidence": "LOW",
+      "edge_id": "regex:app.js:calls:AppController:start:9",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "start",
+        "enclosing_class": null,
+        "lineno": 9,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.js"
+      },
+      "relation": "calls",
+      "source": "symbol:app.js:AppController",
+      "target": "name:start",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.js:calls:start:helper:4",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "helper",
+        "enclosing_class": null,
+        "lineno": 4,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.js"
+      },
+      "relation": "calls",
+      "source": "symbol:app.js:start",
+      "target": "name:helper",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
       "edge_id": "regex:app.js:contains:AppController",
       "layer": "STRUCTURAL",
       "metadata": {
@@ -128,6 +168,26 @@
       "relation": "imports",
       "source": "file:app.js",
       "target": "module:./helper.js",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:client.ts:calls:Client:start:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "start",
+        "enclosing_class": null,
+        "lineno": 5,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "client.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:client.ts:Client",
+      "target": "name:start",
       "weight": 1.0
     },
     {

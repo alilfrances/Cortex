@@ -2,6 +2,28 @@
   "edges": [
     {
       "confidence": "EXTRACTED",
+      "edge_id": "treesitter:client.ts:calls:connect:start:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "start",
+        "enclosing_class": "Client",
+        "implicit_receiver": false,
+        "import_file": "app.js",
+        "import_spec": "./app",
+        "lineno": 5,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "client.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:client.ts:connect",
+      "target": "name:start",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
       "edge_id": "treesitter:client.ts:contains:Client",
       "layer": "STRUCTURAL",
       "metadata": {

@@ -2,6 +2,48 @@
   "edges": [
     {
       "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.js:calls:run:start:9",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "start",
+        "enclosing_class": "AppController",
+        "implicit_receiver": false,
+        "lineno": 9,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.js"
+      },
+      "relation": "calls",
+      "source": "symbol:app.js:run",
+      "target": "name:start",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.js:calls:start:helper:4",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "helper",
+        "enclosing_class": null,
+        "implicit_receiver": false,
+        "import_file": null,
+        "import_spec": "./helper.js",
+        "lineno": 4,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.js"
+      },
+      "relation": "calls",
+      "source": "symbol:app.js:start",
+      "target": "name:helper",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
       "edge_id": "treesitter:app.js:contains:AppController",
       "layer": "STRUCTURAL",
       "metadata": {

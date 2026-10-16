@@ -1,0 +1,1500 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.ts:calls:start:Service:20",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Service",
+        "enclosing_class": "Controller",
+        "import_default": true,
+        "import_file": "lib/service.ts",
+        "import_spec": "./lib/service",
+        "lineno": 20,
+        "receiver": null,
+        "receiver_kind": "new",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:start",
+      "target": "name:Service",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.ts:calls:start:Service:22",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Service",
+        "enclosing_class": "Controller",
+        "import_default": true,
+        "import_file": "lib/service.ts",
+        "import_spec": "./lib/service",
+        "lineno": 22,
+        "receiver": null,
+        "receiver_kind": "new",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:start",
+      "target": "name:Service",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.ts:calls:start:foo.bar.baz:29",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "baz",
+        "enclosing_class": "Controller",
+        "lineno": 29,
+        "receiver": "foo.bar",
+        "receiver_kind": "chain",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:start",
+      "target": "name:baz",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.ts:calls:start:helper:15",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "helper",
+        "enclosing_class": "Controller",
+        "implicit_receiver": false,
+        "import_file": "lib/helpers.js",
+        "import_spec": "./lib/helpers",
+        "lineno": 15,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:start",
+      "target": "name:helper",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.ts:calls:start:legacy.go:24",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "go",
+        "enclosing_class": "Controller",
+        "import_spec": "./lib/legacy",
+        "lineno": 24,
+        "receiver": "legacy",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "legacy",
+        "scope_file": "lib/legacy.js",
+        "scope_namespace": true,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:start",
+      "target": "name:go",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.ts:calls:start:new Service().run:22",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "run",
+        "enclosing_class": "Controller",
+        "lineno": 22,
+        "receiver": "new Service()",
+        "receiver_kind": "var",
+        "receiver_type": "Service",
+        "receiver_type_file": "lib/service.ts",
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:start",
+      "target": "name:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.ts:calls:start:p.render:23",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "render",
+        "enclosing_class": "Controller",
+        "lineno": 23,
+        "receiver": "p",
+        "receiver_kind": "var",
+        "receiver_type": "Panel",
+        "receiver_type_file": "lib/panel_a.ts",
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:start",
+      "target": "name:render",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.ts:calls:start:p.render:27",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "render",
+        "enclosing_class": "Controller",
+        "lineno": 27,
+        "receiver": "p",
+        "receiver_kind": "var",
+        "receiver_type": "Panel",
+        "receiver_type_file": "lib/panel_a.ts",
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:start",
+      "target": "name:render",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.ts:calls:start:render:25",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "render",
+        "enclosing_class": "Controller",
+        "implicit_receiver": false,
+        "lineno": 25,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:start",
+      "target": "name:render",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.ts:calls:start:s.run:21",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "run",
+        "enclosing_class": "Controller",
+        "lineno": 21,
+        "receiver": "s",
+        "receiver_kind": "var",
+        "receiver_type": "Service",
+        "receiver_type_file": "lib/service.ts",
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:start",
+      "target": "name:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.ts:calls:start:this.cache.get:28",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "get",
+        "enclosing_class": "Controller",
+        "lineno": 28,
+        "receiver": "this.cache",
+        "receiver_kind": "var",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:start",
+      "target": "name:get",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.ts:calls:start:this.repo.save:18",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "save",
+        "enclosing_class": "Controller",
+        "lineno": 18,
+        "receiver": "this.repo",
+        "receiver_kind": "var",
+        "receiver_type": "Repo",
+        "receiver_type_file": "lib/repo.ts",
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:start",
+      "target": "name:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.ts:calls:start:this.stop:17",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "stop",
+        "enclosing_class": "Controller",
+        "lineno": 17,
+        "receiver": "this",
+        "receiver_kind": "this",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:start",
+      "target": "name:stop",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.ts:calls:start:this.svc.run:19",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "run",
+        "enclosing_class": "Controller",
+        "lineno": 19,
+        "receiver": "this.svc",
+        "receiver_kind": "var",
+        "receiver_type": "Service",
+        "receiver_type_file": "lib/service.ts",
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:start",
+      "target": "name:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.ts:calls:start:useState:26",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "useState",
+        "enclosing_class": "Controller",
+        "implicit_receiver": false,
+        "import_file": null,
+        "import_spec": "react",
+        "lineno": 26,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:start",
+      "target": "name:useState",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.ts:calls:start:utils.helper:16",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "helper",
+        "enclosing_class": "Controller",
+        "import_spec": "./lib/utils",
+        "lineno": 16,
+        "receiver": "utils",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "utils",
+        "scope_file": "lib/utils.ts",
+        "scope_namespace": true,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:start",
+      "target": "name:helper",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.ts:calls:unimported:q.render:36",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "render",
+        "enclosing_class": null,
+        "lineno": 36,
+        "receiver": "q",
+        "receiver_kind": "var",
+        "receiver_type": "Panel",
+        "receiver_type_file": "lib/panel_a.ts",
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:unimported",
+      "target": "name:render",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.ts:calls:unimported:r.save:37",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "save",
+        "enclosing_class": null,
+        "lineno": 37,
+        "receiver": "r",
+        "receiver_kind": "var",
+        "receiver_type": "Repo",
+        "receiver_type_file": "lib/repo.ts",
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:unimported",
+      "target": "name:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.ts:contains:Controller",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 9,
+        "source_file": "app.ts"
+      },
+      "relation": "contains",
+      "source": "file:app.ts",
+      "target": "symbol:app.ts:Controller",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.ts:contains:constructor",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 12,
+        "source_file": "app.ts"
+      },
+      "relation": "contains",
+      "source": "file:app.ts",
+      "target": "symbol:app.ts:constructor",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.ts:contains:start",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 14,
+        "source_file": "app.ts"
+      },
+      "relation": "contains",
+      "source": "file:app.ts",
+      "target": "symbol:app.ts:start",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.ts:contains:stop",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 32,
+        "source_file": "app.ts"
+      },
+      "relation": "contains",
+      "source": "file:app.ts",
+      "target": "symbol:app.ts:stop",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.ts:contains:unimported",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 35,
+        "source_file": "app.ts"
+      },
+      "relation": "contains",
+      "source": "file:app.ts",
+      "target": "symbol:app.ts:unimported",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.ts:import:1:./lib/helpers",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "app.ts"
+      },
+      "relation": "imports",
+      "source": "file:app.ts",
+      "target": "module:./lib/helpers",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.ts:import:2:./lib/utils",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "app.ts"
+      },
+      "relation": "imports",
+      "source": "file:app.ts",
+      "target": "module:./lib/utils",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.ts:import:3:./lib/service",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "app.ts"
+      },
+      "relation": "imports",
+      "source": "file:app.ts",
+      "target": "module:./lib/service",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.ts:import:4:./lib/repo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "app.ts"
+      },
+      "relation": "imports",
+      "source": "file:app.ts",
+      "target": "module:./lib/repo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.ts:import:5:./lib/panel_a",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "app.ts"
+      },
+      "relation": "imports",
+      "source": "file:app.ts",
+      "target": "module:./lib/panel_a",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.ts:import:6:react",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "app.ts"
+      },
+      "relation": "imports",
+      "source": "file:app.ts",
+      "target": "module:react",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib/helpers.js:contains:helper",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/helpers.js"
+      },
+      "relation": "contains",
+      "source": "file:lib/helpers.js",
+      "target": "symbol:lib/helpers.js:helper",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib/legacy.js:contains:go",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/legacy.js"
+      },
+      "relation": "contains",
+      "source": "file:lib/legacy.js",
+      "target": "symbol:lib/legacy.js:go",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib/other.js:contains:render",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/other.js"
+      },
+      "relation": "contains",
+      "source": "file:lib/other.js",
+      "target": "symbol:lib/other.js:render",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib/panel_a.ts:contains:Panel",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/panel_a.ts"
+      },
+      "relation": "contains",
+      "source": "file:lib/panel_a.ts",
+      "target": "symbol:lib/panel_a.ts:Panel",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib/panel_a.ts:contains:render",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "lib/panel_a.ts"
+      },
+      "relation": "contains",
+      "source": "file:lib/panel_a.ts",
+      "target": "symbol:lib/panel_a.ts:render",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib/panel_b.ts:contains:Panel",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/panel_b.ts"
+      },
+      "relation": "contains",
+      "source": "file:lib/panel_b.ts",
+      "target": "symbol:lib/panel_b.ts:Panel",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib/panel_b.ts:contains:render",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "lib/panel_b.ts"
+      },
+      "relation": "contains",
+      "source": "file:lib/panel_b.ts",
+      "target": "symbol:lib/panel_b.ts:render",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib/repo.ts:contains:Repo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/repo.ts"
+      },
+      "relation": "contains",
+      "source": "file:lib/repo.ts",
+      "target": "symbol:lib/repo.ts:Repo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib/repo.ts:contains:save",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "lib/repo.ts"
+      },
+      "relation": "contains",
+      "source": "file:lib/repo.ts",
+      "target": "symbol:lib/repo.ts:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib/service.ts:contains:Service",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/service.ts"
+      },
+      "relation": "contains",
+      "source": "file:lib/service.ts",
+      "target": "symbol:lib/service.ts:Service",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib/service.ts:contains:run",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "lib/service.ts"
+      },
+      "relation": "contains",
+      "source": "file:lib/service.ts",
+      "target": "symbol:lib/service.ts:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib/shared.js:contains:render",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/shared.js"
+      },
+      "relation": "contains",
+      "source": "file:lib/shared.js",
+      "target": "symbol:lib/shared.js:render",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib/utils.ts:contains:helper",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/utils.ts"
+      },
+      "relation": "contains",
+      "source": "file:lib/utils.ts",
+      "target": "symbol:lib/utils.ts:helper",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib/worker.js:calls:run:this.step:3",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "step",
+        "enclosing_class": "Worker",
+        "lineno": 3,
+        "receiver": "this",
+        "receiver_kind": "this",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "lib/worker.js"
+      },
+      "relation": "calls",
+      "source": "symbol:lib/worker.js:run",
+      "target": "name:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib/worker.js:contains:Worker",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/worker.js"
+      },
+      "relation": "contains",
+      "source": "file:lib/worker.js",
+      "target": "symbol:lib/worker.js:Worker",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib/worker.js:contains:run",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "lib/worker.js"
+      },
+      "relation": "contains",
+      "source": "file:lib/worker.js",
+      "target": "symbol:lib/worker.js:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib/worker.js:contains:step",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "lib/worker.js"
+      },
+      "relation": "contains",
+      "source": "file:lib/worker.js",
+      "target": "symbol:lib/worker.js:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:loose.ts:calls:loose:p.render:2",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "render",
+        "enclosing_class": null,
+        "lineno": 2,
+        "receiver": "p",
+        "receiver_kind": "var",
+        "receiver_type": "Panel",
+        "scope": null,
+        "source_file": "loose.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:loose.ts:loose",
+      "target": "name:render",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:loose.ts:contains:loose",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "loose.ts"
+      },
+      "relation": "contains",
+      "source": "file:loose.ts",
+      "target": "symbol:loose.ts:loose",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:main.js:calls:boot:Worker:4",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Worker",
+        "enclosing_class": null,
+        "import_file": "lib/worker.js",
+        "import_spec": "./lib/worker.js",
+        "lineno": 4,
+        "receiver": null,
+        "receiver_kind": "new",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "main.js"
+      },
+      "relation": "calls",
+      "source": "symbol:main.js:boot",
+      "target": "name:Worker",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:main.js:calls:boot:w.missing:6",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "missing",
+        "enclosing_class": null,
+        "lineno": 6,
+        "receiver": "w",
+        "receiver_kind": "var",
+        "receiver_type": "Worker",
+        "receiver_type_file": "lib/worker.js",
+        "scope": null,
+        "source_file": "main.js"
+      },
+      "relation": "calls",
+      "source": "symbol:main.js:boot",
+      "target": "name:missing",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:main.js:calls:boot:w.run:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "run",
+        "enclosing_class": null,
+        "lineno": 5,
+        "receiver": "w",
+        "receiver_kind": "var",
+        "receiver_type": "Worker",
+        "receiver_type_file": "lib/worker.js",
+        "scope": null,
+        "source_file": "main.js"
+      },
+      "relation": "calls",
+      "source": "symbol:main.js:boot",
+      "target": "name:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:main.js:contains:boot",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "main.js"
+      },
+      "relation": "contains",
+      "source": "file:main.js",
+      "target": "symbol:main.js:boot",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:main.js:import:1:./lib/worker.js",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "main.js"
+      },
+      "relation": "imports",
+      "source": "file:main.js",
+      "target": "file:lib/worker.js",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:view.tsx:calls:View:helper:4",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "helper",
+        "enclosing_class": null,
+        "implicit_receiver": false,
+        "import_file": "lib/helpers.js",
+        "import_spec": "./lib/helpers",
+        "lineno": 4,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "view.tsx"
+      },
+      "relation": "calls",
+      "source": "symbol:view.tsx:View",
+      "target": "name:helper",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:view.tsx:contains:View",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "view.tsx"
+      },
+      "relation": "contains",
+      "source": "file:view.tsx",
+      "target": "symbol:view.tsx:View",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:view.tsx:import:1:./lib/helpers",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "view.tsx"
+      },
+      "relation": "imports",
+      "source": "file:view.tsx",
+      "target": "module:./lib/helpers",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "app.ts",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "ts",
+        "size_bytes": 752
+      },
+      "node_id": "file:app.ts",
+      "signature": "",
+      "source_ref": "app.ts",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/helpers.js",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "js",
+        "size_bytes": 41
+      },
+      "node_id": "file:lib/helpers.js",
+      "signature": "",
+      "source_ref": "lib/helpers.js",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/legacy.js",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "js",
+        "size_bytes": 56
+      },
+      "node_id": "file:lib/legacy.js",
+      "signature": "",
+      "source_ref": "lib/legacy.js",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/other.js",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "js",
+        "size_bytes": 47
+      },
+      "node_id": "file:lib/other.js",
+      "signature": "",
+      "source_ref": "lib/other.js",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/panel_a.ts",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "ts",
+        "size_bytes": 46
+      },
+      "node_id": "file:lib/panel_a.ts",
+      "signature": "",
+      "source_ref": "lib/panel_a.ts",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/panel_b.ts",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "ts",
+        "size_bytes": 46
+      },
+      "node_id": "file:lib/panel_b.ts",
+      "signature": "",
+      "source_ref": "lib/panel_b.ts",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/repo.ts",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "ts",
+        "size_bytes": 43
+      },
+      "node_id": "file:lib/repo.ts",
+      "signature": "",
+      "source_ref": "lib/repo.ts",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/service.ts",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "ts",
+        "size_bytes": 53
+      },
+      "node_id": "file:lib/service.ts",
+      "signature": "",
+      "source_ref": "lib/service.ts",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/shared.js",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "js",
+        "size_bytes": 48
+      },
+      "node_id": "file:lib/shared.js",
+      "signature": "",
+      "source_ref": "lib/shared.js",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/utils.ts",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "ts",
+        "size_bytes": 49
+      },
+      "node_id": "file:lib/utils.ts",
+      "signature": "",
+      "source_ref": "lib/utils.ts",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/worker.js",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "js",
+        "size_bytes": 85
+      },
+      "node_id": "file:lib/worker.js",
+      "signature": "",
+      "source_ref": "lib/worker.js",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "loose.ts",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "ts",
+        "size_bytes": 50
+      },
+      "node_id": "file:loose.ts",
+      "signature": "",
+      "source_ref": "loose.ts",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "main.js",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "js",
+        "size_bytes": 124
+      },
+      "node_id": "file:main.js",
+      "signature": "",
+      "source_ref": "main.js",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "view.tsx",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "tsx",
+        "size_bytes": 98
+      },
+      "node_id": "file:view.tsx",
+      "signature": "",
+      "source_ref": "view.tsx",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Controller",
+      "metadata": {
+        "lineno": 9,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:app.ts:Controller",
+      "signature": "class Controller {",
+      "source_ref": "app.ts",
+      "span_end": 33,
+      "span_start": 9
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "constructor",
+      "metadata": {
+        "lineno": 12,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:app.ts:constructor",
+      "signature": "constructor(private svc: Service) {}",
+      "source_ref": "app.ts",
+      "span_end": 12,
+      "span_start": 12
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "start",
+      "metadata": {
+        "lineno": 14,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:app.ts:start",
+      "signature": "start(p: Panel) {",
+      "source_ref": "app.ts",
+      "span_end": 30,
+      "span_start": 14
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "stop",
+      "metadata": {
+        "lineno": 32,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:app.ts:stop",
+      "signature": "stop() {}",
+      "source_ref": "app.ts",
+      "span_end": 32,
+      "span_start": 32
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "unimported",
+      "metadata": {
+        "lineno": 35,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:app.ts:unimported",
+      "signature": "function unimported(q: Panel, r: Repo) {",
+      "source_ref": "app.ts",
+      "span_end": 38,
+      "span_start": 35
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "helper",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:lib/helpers.js:helper",
+      "signature": "function helper() {",
+      "source_ref": "lib/helpers.js",
+      "span_end": 3,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "go",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:lib/legacy.js:go",
+      "signature": "function go() {",
+      "source_ref": "lib/legacy.js",
+      "span_end": 3,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "render",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:lib/other.js:render",
+      "signature": "function render() {",
+      "source_ref": "lib/other.js",
+      "span_end": 3,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Panel",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:lib/panel_a.ts:Panel",
+      "signature": "class Panel {",
+      "source_ref": "lib/panel_a.ts",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "render",
+      "metadata": {
+        "lineno": 2,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:lib/panel_a.ts:render",
+      "signature": "render(): void {",
+      "source_ref": "lib/panel_a.ts",
+      "span_end": 3,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Panel",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:lib/panel_b.ts:Panel",
+      "signature": "class Panel {",
+      "source_ref": "lib/panel_b.ts",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "render",
+      "metadata": {
+        "lineno": 2,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:lib/panel_b.ts:render",
+      "signature": "render(): void {",
+      "source_ref": "lib/panel_b.ts",
+      "span_end": 3,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Repo",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:lib/repo.ts:Repo",
+      "signature": "class Repo {",
+      "source_ref": "lib/repo.ts",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "save",
+      "metadata": {
+        "lineno": 2,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:lib/repo.ts:save",
+      "signature": "save(): void {",
+      "source_ref": "lib/repo.ts",
+      "span_end": 3,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Service",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:lib/service.ts:Service",
+      "signature": "class Service {",
+      "source_ref": "lib/service.ts",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "run",
+      "metadata": {
+        "lineno": 2,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:lib/service.ts:run",
+      "signature": "run(): void {",
+      "source_ref": "lib/service.ts",
+      "span_end": 3,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "render",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:lib/shared.js:render",
+      "signature": "function render() {",
+      "source_ref": "lib/shared.js",
+      "span_end": 3,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "helper",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:lib/utils.ts:helper",
+      "signature": "function helper(): number {",
+      "source_ref": "lib/utils.ts",
+      "span_end": 3,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Worker",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:lib/worker.js:Worker",
+      "signature": "class Worker {",
+      "source_ref": "lib/worker.js",
+      "span_end": 9,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "run",
+      "metadata": {
+        "lineno": 2,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:lib/worker.js:run",
+      "signature": "run() {",
+      "source_ref": "lib/worker.js",
+      "span_end": 4,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "step",
+      "metadata": {
+        "lineno": 6,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:lib/worker.js:step",
+      "signature": "step() {",
+      "source_ref": "lib/worker.js",
+      "span_end": 8,
+      "span_start": 6
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "loose",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:loose.ts:loose",
+      "signature": "function loose(p: Panel) {",
+      "source_ref": "loose.ts",
+      "span_end": 3,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "boot",
+      "metadata": {
+        "lineno": 3,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:main.js:boot",
+      "signature": "function boot() {",
+      "source_ref": "main.js",
+      "span_end": 7,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "View",
+      "metadata": {
+        "lineno": 3,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:view.tsx:View",
+      "signature": "function View() {",
+      "source_ref": "view.tsx",
+      "span_end": 6,
+      "span_start": 3
+    }
+  ]
+}

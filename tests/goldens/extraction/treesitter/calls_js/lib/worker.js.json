@@ -1,0 +1,124 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib/worker.js:calls:run:this.step:3",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "step",
+        "enclosing_class": "Worker",
+        "lineno": 3,
+        "receiver": "this",
+        "receiver_kind": "this",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "lib/worker.js"
+      },
+      "relation": "calls",
+      "source": "symbol:lib/worker.js:run",
+      "target": "name:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib/worker.js:contains:Worker",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/worker.js"
+      },
+      "relation": "contains",
+      "source": "file:lib/worker.js",
+      "target": "symbol:lib/worker.js:Worker",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib/worker.js:contains:run",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "lib/worker.js"
+      },
+      "relation": "contains",
+      "source": "file:lib/worker.js",
+      "target": "symbol:lib/worker.js:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib/worker.js:contains:step",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "lib/worker.js"
+      },
+      "relation": "contains",
+      "source": "file:lib/worker.js",
+      "target": "symbol:lib/worker.js:step",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/worker.js",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "js",
+        "size_bytes": 85
+      },
+      "node_id": "file:lib/worker.js",
+      "signature": "",
+      "source_ref": "lib/worker.js",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Worker",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:lib/worker.js:Worker",
+      "signature": "class Worker {",
+      "source_ref": "lib/worker.js",
+      "span_end": 9,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "run",
+      "metadata": {
+        "lineno": 2,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:lib/worker.js:run",
+      "signature": "run() {",
+      "source_ref": "lib/worker.js",
+      "span_end": 4,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "step",
+      "metadata": {
+        "lineno": 6,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:lib/worker.js:step",
+      "signature": "step() {",
+      "source_ref": "lib/worker.js",
+      "span_end": 8,
+      "span_start": 6
+    }
+  ]
+}
