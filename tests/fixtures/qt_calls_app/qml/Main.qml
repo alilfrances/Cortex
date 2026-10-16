@@ -1,7 +1,10 @@
 import QtQuick 2.15
 
 Item {
-    Scanner {
+    ScannerView {
         onFound: console.log("found", id)
+    }
+
+    Scanner {
     }
 }

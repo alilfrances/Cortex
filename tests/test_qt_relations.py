@@ -242,10 +242,10 @@ def test_relations_calls_returns_resolved_targets_for_a_qobject(tmp_path):
     repo = _ingest_qt_calls_app(tmp_path)
     items = _tool_payload(repo, "cortex_relations", relation="calls", symbol="Scanner", limit=50)["items"]
     pairs = {(i["source"], i["target"]) for i in items}
-    assert ("scan @ src/Scanner.cpp:8", "refresh @ src/Scanner.cpp:15") in pairs  # implicit this
-    assert ("scan @ src/Scanner.cpp:8", "normalize_id @ src/helpers.cpp:3") in pairs  # include-scoped helper
-    assert ("scan @ src/Scanner.cpp:8", "store @ include/Cache.hpp:8") in pairs  # QPointer<Cache> header member
-    assert ("onFound @ src/Scanner.cpp:19", "log_event @ src/helpers.cpp:7") in pairs
+    assert ("scan @ src/Scanner.cpp:9", "refresh @ src/Scanner.cpp:16") in pairs  # implicit this
+    assert ("scan @ src/Scanner.cpp:9", "normalize_id @ src/helpers.cpp:3") in pairs  # include-scoped helper
+    assert ("scan @ src/Scanner.cpp:9", "store @ include/Cache.hpp:8") in pairs  # QPointer<Cache> header member
+    assert ("onFound @ src/Scanner.cpp:20", "log_event @ src/helpers.cpp:7") in pairs
     # emit/connect keep their own relations and never double as calls
     assert all(i["target"] != "found" for i in items)
     emits = _tool_payload(repo, "cortex_relations", relation="emits", symbol="Scanner")["items"]
@@ -275,21 +275,31 @@ def test_cortex_path_walks_emits_then_calls_from_the_signal_to_the_helper(tmp_pa
 
 
 @pytest.mark.skipif(not _treesitter_ready(), reason="managed tree-sitter runtime not usable here")
-def test_qml_handler_reaches_the_cpp_helper_graph_and_dead_code_stays_clean(tmp_path):
-    """The QML `onFound` handler is linked to the instantiated C++ type (instantiates/registers);
-    its `handles` edge to a *C++* signal stays the pre-existing `module:found` placeholder, so a
-    handler -> slot -> helper path is not claimed -- only that the handler reaches the helper."""
+def test_qml_handler_to_slot_to_helper_path_uses_handles_connects_and_calls(tmp_path):
+    """`ScannerView { onFound: ... }` (QML) -handles-> `ScannerView.found` (QML signal) -connects->
+    `Relay::onFound` (C++ slot, `connect(view_, &ScannerView::found, relay_, &Relay::onFound)`)
+    -calls-> `log_event`.  Every hop is produced by the existing QML/Qt
+    resolution plus the C++ call resolver; nothing is special-cased for the test."""
     repo = _ingest_qt_calls_app(tmp_path)
-    payload = _tool_payload(
-        repo, "cortex_path",
-        symbol_a="symbol:qml/Main.qml:Main.Scanner.onFound", symbol_b="symbol:src/helpers.cpp:normalize_id",
-        format="detailed",
-    )
-    assert payload["paths"]
+    handler = "symbol:qml/Main.qml:Main.ScannerView.onFound"
+    path = _tool_payload(
+        repo, "cortex_path", symbol_a=handler, symbol_b="symbol:src/helpers.cpp:log_event", format="detailed",
+    )["paths"]
+    shortest = min(path, key=len)
+    assert [(h["relation"], h["node_id"]) for h in shortest] == [
+        ("handles", "symbol:qml/ScannerView.qml:ScannerView.found"),
+        ("connects", "symbol:src/Relay.cpp:onFound"),
+        ("calls", "symbol:src/helpers.cpp:log_event"),
+    ]
+
+
+@pytest.mark.skipif(not _treesitter_ready(), reason="managed tree-sitter runtime not usable here")
+def test_qt_dead_code_stays_clean_with_call_edges(tmp_path):
+    repo = _ingest_qt_calls_app(tmp_path)
     detailed = _tool_payload(repo, "cortex_dead_code", format="detailed", budget=9999)
     flagged = {item["symbol"]: item["confidence"] for item in detailed["findings"]}
-    # connected slot, emitted signal, QML-instantiated type and called helpers are never `high`
-    for name in ("onFound", "found", "Scanner", "normalize_id", "log_event", "refresh", "store"):
+    # connected slots, emitted/QML-handled signals, QML-instantiated types and called helpers are never `high`
+    for name in ("onFound", "found", "Scanner", "ScannerView", "Relay", "normalize_id", "log_event", "refresh", "store"):
         assert flagged.get(name) != "high", (name, flagged)
 
 

@@ -3,6 +3,7 @@
 
 Scanner::Scanner(QObject *parent) : QObject(parent) {
     connect(this, &Scanner::found, this, &Scanner::onFound);
+    connect(view_, &ScannerView::found, relay_, &Relay::onFound);
 }
 
 void Scanner::scan() {
