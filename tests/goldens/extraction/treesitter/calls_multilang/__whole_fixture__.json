@@ -1,0 +1,3768 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:go/a/w.go:contains:Do",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "go/a/w.go"
+      },
+      "relation": "contains",
+      "source": "file:go/a/w.go",
+      "target": "symbol:go/a/w.go:Do",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:go/b/w.go:contains:Do",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "go/b/w.go"
+      },
+      "relation": "contains",
+      "source": "file:go/b/w.go",
+      "target": "symbol:go/b/w.go:Do",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:go/main.go:calls:Run:fmt.Println:22",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Println",
+        "enclosing_class": "Svc",
+        "lineno": 22,
+        "receiver": "fmt",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "fmt",
+        "scope_dir": null,
+        "scope_file": null,
+        "scope_namespace": true,
+        "source_file": "go/main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:go/main.go:Run",
+      "target": "name:Println",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:go/main.go:calls:Run:helpers.Help:15",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Help",
+        "enclosing_class": "Svc",
+        "lineno": 15,
+        "receiver": "helpers",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "helpers",
+        "scope_dir": "go/util",
+        "scope_file": null,
+        "scope_namespace": true,
+        "source_file": "go/main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:go/main.go:Run",
+      "target": "name:Help",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:go/main.go:calls:Run:local:20",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "local",
+        "enclosing_class": "Svc",
+        "implicit_receiver": false,
+        "lineno": 20,
+        "package_scoped": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "go/main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:go/main.go:Run",
+      "target": "name:local",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:go/main.go:calls:Run:r.Save:23",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Save",
+        "enclosing_class": "Svc",
+        "lineno": 23,
+        "receiver": "r",
+        "receiver_kind": "var",
+        "receiver_type": "Repo",
+        "scope": null,
+        "source_file": "go/main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:go/main.go:Run",
+      "target": "name:Save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:go/main.go:calls:Run:s.Step:13",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Step",
+        "enclosing_class": "Svc",
+        "lineno": 13,
+        "receiver": "s",
+        "receiver_kind": "this",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "go/main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:go/main.go:Run",
+      "target": "name:Step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:go/main.go:calls:Run:s.repo.Save:14",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Save",
+        "enclosing_class": "Svc",
+        "lineno": 14,
+        "receiver": "s.repo",
+        "receiver_kind": "var",
+        "receiver_type": "Repo",
+        "scope": null,
+        "source_file": "go/main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:go/main.go:Run",
+      "target": "name:Save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:go/main.go:calls:Run:shared:21",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "shared",
+        "enclosing_class": "Svc",
+        "implicit_receiver": false,
+        "lineno": 21,
+        "package_scoped": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "go/main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:go/main.go:Run",
+      "target": "name:shared",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:go/main.go:calls:Run:w.Do:25",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Do",
+        "enclosing_class": "Svc",
+        "lineno": 25,
+        "receiver": "w",
+        "receiver_kind": "var",
+        "receiver_type": "Worker",
+        "scope": null,
+        "source_file": "go/main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:go/main.go:Run",
+      "target": "name:Do",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:go/main.go:calls:Run:x.M:17",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "M",
+        "enclosing_class": "Svc",
+        "lineno": 17,
+        "receiver": "x",
+        "receiver_kind": "var",
+        "receiver_type": "Foo",
+        "scope": null,
+        "source_file": "go/main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:go/main.go:Run",
+      "target": "name:M",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:go/main.go:calls:Run:y.M:19",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "M",
+        "enclosing_class": "Svc",
+        "lineno": 19,
+        "receiver": "y",
+        "receiver_kind": "var",
+        "receiver_type": "Foo",
+        "scope": null,
+        "source_file": "go/main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:go/main.go:Run",
+      "target": "name:M",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:go/main.go:contains:Run",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 12,
+        "source_file": "go/main.go"
+      },
+      "relation": "contains",
+      "source": "file:go/main.go",
+      "target": "symbol:go/main.go:Run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:go/main.go:contains:Step",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 28,
+        "source_file": "go/main.go"
+      },
+      "relation": "contains",
+      "source": "file:go/main.go",
+      "target": "symbol:go/main.go:Step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:go/main.go:contains:local",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 31,
+        "source_file": "go/main.go"
+      },
+      "relation": "contains",
+      "source": "file:go/main.go",
+      "target": "symbol:go/main.go:local",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:go/main.go:import:3:(",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "go/main.go"
+      },
+      "relation": "imports",
+      "source": "file:go/main.go",
+      "target": "module:(",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:go/store.go:contains:M",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 10,
+        "source_file": "go/store.go"
+      },
+      "relation": "contains",
+      "source": "file:go/store.go",
+      "target": "symbol:go/store.go:M",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:go/store.go:contains:Save",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 7,
+        "source_file": "go/store.go"
+      },
+      "relation": "contains",
+      "source": "file:go/store.go",
+      "target": "symbol:go/store.go:Save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:go/store.go:contains:shared",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 13,
+        "source_file": "go/store.go"
+      },
+      "relation": "contains",
+      "source": "file:go/store.go",
+      "target": "symbol:go/store.go:shared",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:go/util/util.go:contains:Help",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "go/util/util.go"
+      },
+      "relation": "contains",
+      "source": "file:go/util/util.go",
+      "target": "symbol:go/util/util.go:Help",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Amb.java:calls:go:p.draw:3",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "draw",
+        "enclosing_class": "Amb",
+        "lineno": 3,
+        "receiver": "p",
+        "receiver_kind": "var",
+        "receiver_type": "Panel",
+        "scope": null,
+        "source_file": "java/Amb.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Amb.java:go",
+      "target": "name:draw",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Amb.java:contains:Amb",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "java/Amb.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Amb.java",
+      "target": "symbol:java/Amb.java:Amb",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Amb.java:contains:go",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "java/Amb.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Amb.java",
+      "target": "symbol:java/Amb.java:go",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Bar.java:contains:Bar",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "java/Bar.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Bar.java",
+      "target": "symbol:java/Bar.java:Bar",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Bar.java:contains:n",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "java/Bar.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Bar.java",
+      "target": "symbol:java/Bar.java:n",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Base.java:contains:Base",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "java/Base.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Base.java",
+      "target": "symbol:java/Base.java:Base",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Base.java:contains:inheritedOp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "java/Base.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Base.java",
+      "target": "symbol:java/Base.java:inheritedOp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Baz.java:contains:Baz",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "java/Baz.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Baz.java",
+      "target": "symbol:java/Baz.java:Baz",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Baz.java:contains:q",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "java/Baz.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Baz.java",
+      "target": "symbol:java/Baz.java:q",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Foo.java:contains:Foo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "java/Foo.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Foo.java",
+      "target": "symbol:java/Foo.java:Foo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Foo.java:contains:m",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "java/Foo.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Foo.java",
+      "target": "symbol:java/Foo.java:m",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Repo.java:contains:Repo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "java/Repo.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Repo.java",
+      "target": "symbol:java/Repo.java:Repo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Repo.java:contains:save",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "java/Repo.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Repo.java",
+      "target": "symbol:java/Repo.java:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Svc.java:calls:run:Bar:14",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Bar",
+        "enclosing_class": "Svc",
+        "lineno": 14,
+        "receiver": null,
+        "receiver_kind": "new",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:Bar",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Svc.java:calls:run:Baz:17",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Baz",
+        "enclosing_class": "Svc",
+        "lineno": 17,
+        "receiver": null,
+        "receiver_kind": "new",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:Baz",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Svc.java:calls:run:Foo:12",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Foo",
+        "enclosing_class": "Svc",
+        "lineno": 12,
+        "receiver": null,
+        "receiver_kind": "new",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:Foo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Svc.java:calls:run:Svc.make:11",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "make",
+        "enclosing_class": "Svc",
+        "lineno": 11,
+        "receiver": "Svc",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "Svc",
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:make",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Svc.java:calls:run:Util.help:10",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "help",
+        "enclosing_class": "Svc",
+        "lineno": 10,
+        "receiver": "Util",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "Util",
+        "scope_file": "java/com/x/Util.java",
+        "scope_namespace": false,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:help",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Svc.java:calls:run:inheritedOp:18",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "inheritedOp",
+        "enclosing_class": "Svc",
+        "lineno": 18,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:inheritedOp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Svc.java:calls:run:new Baz().q:17",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "q",
+        "enclosing_class": "Svc",
+        "lineno": 17,
+        "receiver": "new Baz()",
+        "receiver_kind": "var",
+        "receiver_type": "Baz",
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:q",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Svc.java:calls:run:r.save:16",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "save",
+        "enclosing_class": "Svc",
+        "lineno": 16,
+        "receiver": "r",
+        "receiver_kind": "var",
+        "receiver_type": "Repo",
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Svc.java:calls:run:repo.save:9",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "save",
+        "enclosing_class": "Svc",
+        "lineno": 9,
+        "receiver": "repo",
+        "receiver_kind": "var",
+        "receiver_type": "Repo",
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Svc.java:calls:run:step:7",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "step",
+        "enclosing_class": "Svc",
+        "lineno": 7,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Svc.java:calls:run:super.inheritedOp:19",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "inheritedOp",
+        "enclosing_class": "Svc",
+        "lineno": 19,
+        "receiver": "super",
+        "receiver_kind": "this",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java",
+        "super": true
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:inheritedOp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Svc.java:calls:run:this.step:8",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "step",
+        "enclosing_class": "Svc",
+        "lineno": 8,
+        "receiver": "this",
+        "receiver_kind": "this",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Svc.java:calls:run:x.m:13",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "m",
+        "enclosing_class": "Svc",
+        "lineno": 13,
+        "receiver": "x",
+        "receiver_kind": "var",
+        "receiver_type": "Foo",
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:m",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Svc.java:calls:run:y.n:15",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "n",
+        "enclosing_class": "Svc",
+        "lineno": 15,
+        "receiver": "y",
+        "receiver_kind": "var",
+        "receiver_type": "Bar",
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:n",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Svc.java:contains:Svc",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Svc.java",
+      "target": "symbol:java/Svc.java:Svc",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Svc.java:contains:make",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 25,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Svc.java",
+      "target": "symbol:java/Svc.java:make",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Svc.java:contains:run",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Svc.java",
+      "target": "symbol:java/Svc.java:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Svc.java:contains:step",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 22,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Svc.java",
+      "target": "symbol:java/Svc.java:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Svc.java:import:1:com.x.Util",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "imports",
+      "source": "file:java/Svc.java",
+      "target": "module:com.x.Util",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/a/Panel.java:contains:Panel",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "java/a/Panel.java"
+      },
+      "relation": "contains",
+      "source": "file:java/a/Panel.java",
+      "target": "symbol:java/a/Panel.java:Panel",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/a/Panel.java:contains:draw",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "java/a/Panel.java"
+      },
+      "relation": "contains",
+      "source": "file:java/a/Panel.java",
+      "target": "symbol:java/a/Panel.java:draw",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/b/Panel.java:contains:Panel",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "java/b/Panel.java"
+      },
+      "relation": "contains",
+      "source": "file:java/b/Panel.java",
+      "target": "symbol:java/b/Panel.java:Panel",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/b/Panel.java:contains:draw",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "java/b/Panel.java"
+      },
+      "relation": "contains",
+      "source": "file:java/b/Panel.java",
+      "target": "symbol:java/b/Panel.java:draw",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/com/x/Util.java:contains:Util",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "java/com/x/Util.java"
+      },
+      "relation": "contains",
+      "source": "file:java/com/x/Util.java",
+      "target": "symbol:java/com/x/Util.java:Util",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/com/x/Util.java:contains:help",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "java/com/x/Util.java"
+      },
+      "relation": "contains",
+      "source": "file:java/com/x/Util.java",
+      "target": "symbol:java/com/x/Util.java:help",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/a.rb:contains:Widget",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "ruby/a.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/a.rb",
+      "target": "symbol:ruby/a.rb:Widget",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/b.rb:contains:Widget",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "ruby/b.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/b.rb",
+      "target": "symbol:ruby/b.rb:Widget",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/foo.rb:contains:Foo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "ruby/foo.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/foo.rb",
+      "target": "symbol:ruby/foo.rb:Foo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/svc.rb:calls:Svc:@repo.save:7",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "save",
+        "enclosing_class": "Svc",
+        "lineno": 7,
+        "receiver": "@repo",
+        "receiver_kind": "var",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "ruby/svc.rb"
+      },
+      "relation": "calls",
+      "source": "symbol:ruby/svc.rb:Svc",
+      "target": "name:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/svc.rb:calls:Svc:Foo.Foo:10",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Foo",
+        "enclosing_class": "Svc",
+        "lineno": 10,
+        "receiver": "Foo",
+        "receiver_kind": "new",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "ruby/svc.rb"
+      },
+      "relation": "calls",
+      "source": "symbol:ruby/svc.rb:Svc",
+      "target": "name:Foo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/svc.rb:calls:Svc:Util.help:8",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "help",
+        "enclosing_class": "Svc",
+        "lineno": 8,
+        "receiver": "Util",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "Util",
+        "source_file": "ruby/svc.rb"
+      },
+      "relation": "calls",
+      "source": "symbol:ruby/svc.rb:Svc",
+      "target": "name:help",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/svc.rb:calls:Svc:Util::Inner.go:9",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "go",
+        "enclosing_class": "Svc",
+        "lineno": 9,
+        "receiver": "Util::Inner",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "Inner",
+        "source_file": "ruby/svc.rb"
+      },
+      "relation": "calls",
+      "source": "symbol:ruby/svc.rb:Svc",
+      "target": "name:go",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/svc.rb:calls:Svc:Widget.Widget:13",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Widget",
+        "enclosing_class": "Svc",
+        "lineno": 13,
+        "receiver": "Widget",
+        "receiver_kind": "new",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "ruby/svc.rb"
+      },
+      "relation": "calls",
+      "source": "symbol:ruby/svc.rb:Svc",
+      "target": "name:Widget",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/svc.rb:calls:Svc:helper:12",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "helper",
+        "enclosing_class": "Svc",
+        "lineno": 12,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "ruby/svc.rb"
+      },
+      "relation": "calls",
+      "source": "symbol:ruby/svc.rb:Svc",
+      "target": "name:helper",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/svc.rb:calls:Svc:self.step:6",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "step",
+        "enclosing_class": "Svc",
+        "lineno": 6,
+        "receiver": "self",
+        "receiver_kind": "self",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "ruby/svc.rb"
+      },
+      "relation": "calls",
+      "source": "symbol:ruby/svc.rb:Svc",
+      "target": "name:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/svc.rb:calls:Svc:step:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "step",
+        "enclosing_class": "Svc",
+        "lineno": 5,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "ruby/svc.rb"
+      },
+      "relation": "calls",
+      "source": "symbol:ruby/svc.rb:Svc",
+      "target": "name:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/svc.rb:calls:Svc:x.m:11",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "m",
+        "enclosing_class": "Svc",
+        "lineno": 11,
+        "receiver": "x",
+        "receiver_kind": "var",
+        "receiver_type": "Foo",
+        "scope": null,
+        "source_file": "ruby/svc.rb"
+      },
+      "relation": "calls",
+      "source": "symbol:ruby/svc.rb:Svc",
+      "target": "name:m",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/svc.rb:contains:Svc",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "ruby/svc.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/svc.rb",
+      "target": "symbol:ruby/svc.rb:Svc",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/svc.rb:import:1:require_relative",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "ruby/svc.rb"
+      },
+      "relation": "imports",
+      "source": "file:ruby/svc.rb",
+      "target": "module:require_relative",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/util.rb:contains:Util",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "ruby/util.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/util.rb",
+      "target": "symbol:ruby/util.rb:Util",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/a.rs:contains:Widget",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "rust/src/a.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/a.rs",
+      "target": "symbol:rust/src/a.rs:Widget",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/a.rs:contains:draw",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "rust/src/a.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/a.rs",
+      "target": "symbol:rust/src/a.rs:draw",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/b.rs:contains:Widget",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "rust/src/b.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/b.rs",
+      "target": "symbol:rust/src/b.rs:Widget",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/b.rs:contains:draw",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "rust/src/b.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/b.rs",
+      "target": "symbol:rust/src/b.rs:draw",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:calls:amb:w.draw:34",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "draw",
+        "enclosing_class": null,
+        "lineno": 34,
+        "receiver": "w",
+        "receiver_kind": "var",
+        "receiver_type": "Widget",
+        "scope": null,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:amb",
+      "target": "name:draw",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:calls:run:Bar.default:17",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "default",
+        "enclosing_class": "Svc",
+        "lineno": 17,
+        "receiver": "Bar",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "Bar",
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:default",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:calls:run:Foo.new:15",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "new",
+        "enclosing_class": "Svc",
+        "lineno": 15,
+        "receiver": "Foo",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "Foo",
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:new",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:calls:run:Svc.make:12",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "make",
+        "enclosing_class": "Svc",
+        "lineno": 12,
+        "receiver": "Svc",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "Svc",
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:make",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:calls:run:helper:14",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "helper",
+        "enclosing_class": "Svc",
+        "implicit_receiver": false,
+        "import_file": "rust/src/util.rs",
+        "import_spec": "util::helper",
+        "lineno": 14,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:helper",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:calls:run:local:20",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "local",
+        "enclosing_class": "Svc",
+        "implicit_receiver": false,
+        "lineno": 20,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:local",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:calls:run:r.save:19",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "save",
+        "enclosing_class": "Svc",
+        "lineno": 19,
+        "receiver": "r",
+        "receiver_kind": "var",
+        "receiver_type": "Repo",
+        "scope": null,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:calls:run:self.repo.save:11",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "save",
+        "enclosing_class": "Svc",
+        "lineno": 11,
+        "receiver": "self.repo",
+        "receiver_kind": "var",
+        "receiver_type": "Repo",
+        "scope": null,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:calls:run:self.step:10",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "step",
+        "enclosing_class": "Svc",
+        "lineno": 10,
+        "receiver": "self",
+        "receiver_kind": "self",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:calls:run:util.free:13",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "free",
+        "enclosing_class": "Svc",
+        "lineno": 13,
+        "receiver": "util",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "util",
+        "scope_file": "rust/src/util.rs",
+        "scope_namespace": true,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:free",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:calls:run:x.m:16",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "m",
+        "enclosing_class": "Svc",
+        "lineno": 16,
+        "receiver": "x",
+        "receiver_kind": "var",
+        "receiver_type": "Foo",
+        "scope": null,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:m",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:calls:run:y.n:18",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "n",
+        "enclosing_class": "Svc",
+        "lineno": 18,
+        "receiver": "y",
+        "receiver_kind": "var",
+        "receiver_type": "Bar",
+        "scope": null,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:n",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:contains:Svc",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/main.rs",
+      "target": "symbol:rust/src/main.rs:Svc",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:contains:amb",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 33,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/main.rs",
+      "target": "symbol:rust/src/main.rs:amb",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:contains:local",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 30,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/main.rs",
+      "target": "symbol:rust/src/main.rs:local",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:contains:make",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 26,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/main.rs",
+      "target": "symbol:rust/src/main.rs:make",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:contains:run",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 9,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/main.rs",
+      "target": "symbol:rust/src/main.rs:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:contains:step",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 23,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/main.rs",
+      "target": "symbol:rust/src/main.rs:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:import:2:crate::util::helper",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "imports",
+      "source": "file:rust/src/main.rs",
+      "target": "module:crate::util::helper",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/store.rs:contains:Bar",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "rust/src/store.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/store.rs",
+      "target": "symbol:rust/src/store.rs:Bar",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/store.rs:contains:Foo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "rust/src/store.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/store.rs",
+      "target": "symbol:rust/src/store.rs:Foo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/store.rs:contains:Repo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "rust/src/store.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/store.rs",
+      "target": "symbol:rust/src/store.rs:Repo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/store.rs:contains:default",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 20,
+        "source_file": "rust/src/store.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/store.rs",
+      "target": "symbol:rust/src/store.rs:default",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/store.rs:contains:m",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 15,
+        "source_file": "rust/src/store.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/store.rs",
+      "target": "symbol:rust/src/store.rs:m",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/store.rs:contains:n",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 24,
+        "source_file": "rust/src/store.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/store.rs",
+      "target": "symbol:rust/src/store.rs:n",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/store.rs:contains:new",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 11,
+        "source_file": "rust/src/store.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/store.rs",
+      "target": "symbol:rust/src/store.rs:new",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/store.rs:contains:save",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "rust/src/store.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/store.rs",
+      "target": "symbol:rust/src/store.rs:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/util.rs:contains:free",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "rust/src/util.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/util.rs",
+      "target": "symbol:rust/src/util.rs:free",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/util.rs:contains:helper",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "rust/src/util.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/util.rs",
+      "target": "symbol:rust/src/util.rs:helper",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Models.swift:contains:Bar",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 16,
+        "source_file": "swift/Models.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Models.swift",
+      "target": "symbol:swift/Models.swift:Bar",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Models.swift:contains:Base",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "swift/Models.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Models.swift",
+      "target": "symbol:swift/Models.swift:Base",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Models.swift:contains:Foo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 11,
+        "source_file": "swift/Models.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Models.swift",
+      "target": "symbol:swift/Models.swift:Foo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Models.swift:contains:Repo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "swift/Models.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Models.swift",
+      "target": "symbol:swift/Models.swift:Repo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Models.swift:contains:free",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 21,
+        "source_file": "swift/Models.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Models.swift",
+      "target": "symbol:swift/Models.swift:free",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Models.swift:contains:inheritedOp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "swift/Models.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Models.swift",
+      "target": "symbol:swift/Models.swift:inheritedOp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Models.swift:contains:m",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 12,
+        "source_file": "swift/Models.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Models.swift",
+      "target": "symbol:swift/Models.swift:m",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Models.swift:contains:n",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 17,
+        "source_file": "swift/Models.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Models.swift",
+      "target": "symbol:swift/Models.swift:n",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Models.swift:contains:save",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 7,
+        "source_file": "swift/Models.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Models.swift",
+      "target": "symbol:swift/Models.swift:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/PanelA.swift:contains:Panel",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "swift/PanelA.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/PanelA.swift",
+      "target": "symbol:swift/PanelA.swift:Panel",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/PanelA.swift:contains:draw",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "swift/PanelA.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/PanelA.swift",
+      "target": "symbol:swift/PanelA.swift:draw",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/PanelB.swift:contains:Panel",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "swift/PanelB.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/PanelB.swift",
+      "target": "symbol:swift/PanelB.swift:Panel",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/PanelB.swift:contains:draw",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "swift/PanelB.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/PanelB.swift",
+      "target": "symbol:swift/PanelB.swift:draw",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:calls:amb:p.draw:32",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "draw",
+        "enclosing_class": null,
+        "lineno": 32,
+        "receiver": "p",
+        "receiver_kind": "var",
+        "receiver_type": "Panel",
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:amb",
+      "target": "name:draw",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:calls:ext:step:27",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "step",
+        "enclosing_class": "Svc",
+        "lineno": 27,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:ext",
+      "target": "name:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:calls:run:Bar:11",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Bar",
+        "enclosing_class": "Svc",
+        "lineno": 11,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:Bar",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:calls:run:Foo:9",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Foo",
+        "enclosing_class": "Svc",
+        "lineno": 9,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:Foo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:calls:run:Svc.make:8",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "make",
+        "enclosing_class": "Svc",
+        "lineno": 8,
+        "receiver": "Svc",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "Svc",
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:make",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:calls:run:free:14",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "free",
+        "enclosing_class": "Svc",
+        "lineno": 14,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:free",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:calls:run:inheritedOp:15",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "inheritedOp",
+        "enclosing_class": "Svc",
+        "lineno": 15,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:inheritedOp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:calls:run:r.save:13",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "save",
+        "enclosing_class": "Svc",
+        "lineno": 13,
+        "receiver": "r",
+        "receiver_kind": "var",
+        "receiver_type": "Repo",
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:calls:run:repo.save:7",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "save",
+        "enclosing_class": "Svc",
+        "lineno": 7,
+        "receiver": "repo",
+        "receiver_kind": "var",
+        "receiver_type": "Repo",
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:calls:run:self.step:6",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "step",
+        "enclosing_class": "Svc",
+        "lineno": 6,
+        "receiver": "self",
+        "receiver_kind": "self",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:calls:run:step:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "step",
+        "enclosing_class": "Svc",
+        "lineno": 5,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:calls:run:x.m:10",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "m",
+        "enclosing_class": "Svc",
+        "lineno": 10,
+        "receiver": "x",
+        "receiver_kind": "var",
+        "receiver_type": "Foo",
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:m",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:calls:run:y.n:12",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "n",
+        "enclosing_class": "Svc",
+        "lineno": 12,
+        "receiver": "y",
+        "receiver_kind": "var",
+        "receiver_type": "Bar",
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:n",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:contains:Svc",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Sample.swift",
+      "target": "symbol:swift/Sample.swift:Svc",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:contains:amb",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 31,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Sample.swift",
+      "target": "symbol:swift/Sample.swift:amb",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:contains:ext",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 26,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Sample.swift",
+      "target": "symbol:swift/Sample.swift:ext",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:contains:make",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 21,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Sample.swift",
+      "target": "symbol:swift/Sample.swift:make",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:contains:run",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Sample.swift",
+      "target": "symbol:swift/Sample.swift:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:contains:step",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 18,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Sample.swift",
+      "target": "symbol:swift/Sample.swift:step",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "go/a/w.go",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "go",
+        "size_bytes": 58
+      },
+      "node_id": "file:go/a/w.go",
+      "signature": "",
+      "source_ref": "go/a/w.go",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "go/b/w.go",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "go",
+        "size_bytes": 58
+      },
+      "node_id": "file:go/b/w.go",
+      "signature": "",
+      "source_ref": "go/b/w.go",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "go/main.go",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "go",
+        "size_bytes": 328
+      },
+      "node_id": "file:go/main.go",
+      "signature": "",
+      "source_ref": "go/main.go",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "go/store.go",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "go",
+        "size_bytes": 120
+      },
+      "node_id": "file:go/store.go",
+      "signature": "",
+      "source_ref": "go/store.go",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "go/util/util.go",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "go",
+        "size_bytes": 30
+      },
+      "node_id": "file:go/util/util.go",
+      "signature": "",
+      "source_ref": "go/util/util.go",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "java/Amb.java",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "java",
+        "size_bytes": 75
+      },
+      "node_id": "file:java/Amb.java",
+      "signature": "",
+      "source_ref": "java/Amb.java",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "java/Bar.java",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "java",
+        "size_bytes": 49
+      },
+      "node_id": "file:java/Bar.java",
+      "signature": "",
+      "source_ref": "java/Bar.java",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "java/Base.java",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "java",
+        "size_bytes": 60
+      },
+      "node_id": "file:java/Base.java",
+      "signature": "",
+      "source_ref": "java/Base.java",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "java/Baz.java",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "java",
+        "size_bytes": 49
+      },
+      "node_id": "file:java/Baz.java",
+      "signature": "",
+      "source_ref": "java/Baz.java",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "java/Foo.java",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "java",
+        "size_bytes": 49
+      },
+      "node_id": "file:java/Foo.java",
+      "signature": "",
+      "source_ref": "java/Foo.java",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "java/Repo.java",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "java",
+        "size_bytes": 53
+      },
+      "node_id": "file:java/Repo.java",
+      "signature": "",
+      "source_ref": "java/Repo.java",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "java/Svc.java",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "java",
+        "size_bytes": 461
+      },
+      "node_id": "file:java/Svc.java",
+      "signature": "",
+      "source_ref": "java/Svc.java",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "java/a/Panel.java",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "java",
+        "size_bytes": 54
+      },
+      "node_id": "file:java/a/Panel.java",
+      "signature": "",
+      "source_ref": "java/a/Panel.java",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "java/b/Panel.java",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "java",
+        "size_bytes": 54
+      },
+      "node_id": "file:java/b/Panel.java",
+      "signature": "",
+      "source_ref": "java/b/Panel.java",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "java/com/x/Util.java",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "java",
+        "size_bytes": 76
+      },
+      "node_id": "file:java/com/x/Util.java",
+      "signature": "",
+      "source_ref": "java/com/x/Util.java",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "ruby/a.rb",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "rb",
+        "size_bytes": 17
+      },
+      "node_id": "file:ruby/a.rb",
+      "signature": "",
+      "source_ref": "ruby/a.rb",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "ruby/b.rb",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "rb",
+        "size_bytes": 17
+      },
+      "node_id": "file:ruby/b.rb",
+      "signature": "",
+      "source_ref": "ruby/b.rb",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "ruby/foo.rb",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "rb",
+        "size_bytes": 28
+      },
+      "node_id": "file:ruby/foo.rb",
+      "signature": "",
+      "source_ref": "ruby/foo.rb",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "ruby/svc.rb",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "rb",
+        "size_bytes": 197
+      },
+      "node_id": "file:ruby/svc.rb",
+      "signature": "",
+      "source_ref": "ruby/svc.rb",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "ruby/util.rb",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "rb",
+        "size_bytes": 38
+      },
+      "node_id": "file:ruby/util.rb",
+      "signature": "",
+      "source_ref": "ruby/util.rb",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "rust/src/a.rs",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "rs",
+        "size_bytes": 67
+      },
+      "node_id": "file:rust/src/a.rs",
+      "signature": "",
+      "source_ref": "rust/src/a.rs",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "rust/src/b.rs",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "rs",
+        "size_bytes": 67
+      },
+      "node_id": "file:rust/src/b.rs",
+      "signature": "",
+      "source_ref": "rust/src/b.rs",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "rust/src/main.rs",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "rs",
+        "size_bytes": 459
+      },
+      "node_id": "file:rust/src/main.rs",
+      "signature": "",
+      "source_ref": "rust/src/main.rs",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "rust/src/store.rs",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "rs",
+        "size_bytes": 273
+      },
+      "node_id": "file:rust/src/store.rs",
+      "signature": "",
+      "source_ref": "rust/src/store.rs",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "rust/src/util.rs",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "rs",
+        "size_bytes": 39
+      },
+      "node_id": "file:rust/src/util.rs",
+      "signature": "",
+      "source_ref": "rust/src/util.rs",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "swift/Models.swift",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "swift",
+        "size_bytes": 175
+      },
+      "node_id": "file:swift/Models.swift",
+      "signature": "",
+      "source_ref": "swift/Models.swift",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "swift/PanelA.swift",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "swift",
+        "size_bytes": 40
+      },
+      "node_id": "file:swift/PanelA.swift",
+      "signature": "",
+      "source_ref": "swift/PanelA.swift",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "swift/PanelB.swift",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "swift",
+        "size_bytes": 40
+      },
+      "node_id": "file:swift/PanelB.swift",
+      "signature": "",
+      "source_ref": "swift/PanelB.swift",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "swift/Sample.swift",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "swift",
+        "size_bytes": 426
+      },
+      "node_id": "file:swift/Sample.swift",
+      "signature": "",
+      "source_ref": "swift/Sample.swift",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "Do",
+      "metadata": {
+        "lineno": 5,
+        "parser_backend": "treesitter",
+        "qualifier": "Worker"
+      },
+      "node_id": "symbol:go/a/w.go:Do",
+      "signature": "func (w Worker) Do() {",
+      "source_ref": "go/a/w.go",
+      "span_end": 6,
+      "span_start": 5
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "Do",
+      "metadata": {
+        "lineno": 5,
+        "parser_backend": "treesitter",
+        "qualifier": "Worker"
+      },
+      "node_id": "symbol:go/b/w.go:Do",
+      "signature": "func (w Worker) Do() {",
+      "source_ref": "go/b/w.go",
+      "span_end": 6,
+      "span_start": 5
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "Run",
+      "metadata": {
+        "lineno": 12,
+        "parser_backend": "treesitter",
+        "qualifier": "Svc"
+      },
+      "node_id": "symbol:go/main.go:Run",
+      "signature": "func (s *Svc) Run(r *Repo) {",
+      "source_ref": "go/main.go",
+      "span_end": 26,
+      "span_start": 12
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "Step",
+      "metadata": {
+        "lineno": 28,
+        "parser_backend": "treesitter",
+        "qualifier": "Svc"
+      },
+      "node_id": "symbol:go/main.go:Step",
+      "signature": "func (s *Svc) Step() {",
+      "source_ref": "go/main.go",
+      "span_end": 29,
+      "span_start": 28
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "local",
+      "metadata": {
+        "lineno": 31,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:go/main.go:local",
+      "signature": "func local() {",
+      "source_ref": "go/main.go",
+      "span_end": 32,
+      "span_start": 31
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "M",
+      "metadata": {
+        "lineno": 10,
+        "parser_backend": "treesitter",
+        "qualifier": "Foo"
+      },
+      "node_id": "symbol:go/store.go:M",
+      "signature": "func (f Foo) M() {",
+      "source_ref": "go/store.go",
+      "span_end": 11,
+      "span_start": 10
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "Save",
+      "metadata": {
+        "lineno": 7,
+        "parser_backend": "treesitter",
+        "qualifier": "Repo"
+      },
+      "node_id": "symbol:go/store.go:Save",
+      "signature": "func (r *Repo) Save() {",
+      "source_ref": "go/store.go",
+      "span_end": 8,
+      "span_start": 7
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "shared",
+      "metadata": {
+        "lineno": 13,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:go/store.go:shared",
+      "signature": "func shared() {",
+      "source_ref": "go/store.go",
+      "span_end": 14,
+      "span_start": 13
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "Help",
+      "metadata": {
+        "lineno": 3,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:go/util/util.go:Help",
+      "signature": "func Help() {",
+      "source_ref": "go/util/util.go",
+      "span_end": 4,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Amb",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/Amb.java:Amb",
+      "signature": "public class Amb {",
+      "source_ref": "java/Amb.java",
+      "span_end": 5,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "go",
+      "metadata": {
+        "lineno": 2,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/Amb.java:go",
+      "signature": "public void go(Panel p) {",
+      "source_ref": "java/Amb.java",
+      "span_end": 4,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Bar",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/Bar.java:Bar",
+      "signature": "public class Bar {",
+      "source_ref": "java/Bar.java",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "n",
+      "metadata": {
+        "lineno": 2,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/Bar.java:n",
+      "signature": "public void n() {",
+      "source_ref": "java/Bar.java",
+      "span_end": 3,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Base",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/Base.java:Base",
+      "signature": "public class Base {",
+      "source_ref": "java/Base.java",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "inheritedOp",
+      "metadata": {
+        "lineno": 2,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/Base.java:inheritedOp",
+      "signature": "public void inheritedOp() {",
+      "source_ref": "java/Base.java",
+      "span_end": 3,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Baz",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/Baz.java:Baz",
+      "signature": "public class Baz {",
+      "source_ref": "java/Baz.java",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "q",
+      "metadata": {
+        "lineno": 2,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/Baz.java:q",
+      "signature": "public void q() {",
+      "source_ref": "java/Baz.java",
+      "span_end": 3,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Foo",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/Foo.java:Foo",
+      "signature": "public class Foo {",
+      "source_ref": "java/Foo.java",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "m",
+      "metadata": {
+        "lineno": 2,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/Foo.java:m",
+      "signature": "public void m() {",
+      "source_ref": "java/Foo.java",
+      "span_end": 3,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Repo",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/Repo.java:Repo",
+      "signature": "public class Repo {",
+      "source_ref": "java/Repo.java",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "save",
+      "metadata": {
+        "lineno": 2,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/Repo.java:save",
+      "signature": "public void save() {",
+      "source_ref": "java/Repo.java",
+      "span_end": 3,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Svc",
+      "metadata": {
+        "bases": [
+          "Base"
+        ],
+        "lineno": 3,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/Svc.java:Svc",
+      "signature": "public class Svc extends Base {",
+      "source_ref": "java/Svc.java",
+      "span_end": 27,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "make",
+      "metadata": {
+        "lineno": 25,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/Svc.java:make",
+      "signature": "public static void make() {",
+      "source_ref": "java/Svc.java",
+      "span_end": 26,
+      "span_start": 25
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "run",
+      "metadata": {
+        "lineno": 6,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/Svc.java:run",
+      "signature": "public void run(Repo r) {",
+      "source_ref": "java/Svc.java",
+      "span_end": 20,
+      "span_start": 6
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "step",
+      "metadata": {
+        "lineno": 22,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/Svc.java:step",
+      "signature": "public void step() {",
+      "source_ref": "java/Svc.java",
+      "span_end": 23,
+      "span_start": 22
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Panel",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/a/Panel.java:Panel",
+      "signature": "public class Panel {",
+      "source_ref": "java/a/Panel.java",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "draw",
+      "metadata": {
+        "lineno": 2,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/a/Panel.java:draw",
+      "signature": "public void draw() {",
+      "source_ref": "java/a/Panel.java",
+      "span_end": 3,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Panel",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/b/Panel.java:Panel",
+      "signature": "public class Panel {",
+      "source_ref": "java/b/Panel.java",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "draw",
+      "metadata": {
+        "lineno": 2,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/b/Panel.java:draw",
+      "signature": "public void draw() {",
+      "source_ref": "java/b/Panel.java",
+      "span_end": 3,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Util",
+      "metadata": {
+        "lineno": 3,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/com/x/Util.java:Util",
+      "signature": "public class Util {",
+      "source_ref": "java/com/x/Util.java",
+      "span_end": 6,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "help",
+      "metadata": {
+        "lineno": 4,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/com/x/Util.java:help",
+      "signature": "public static void help() {",
+      "source_ref": "java/com/x/Util.java",
+      "span_end": 5,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Widget",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:ruby/a.rb:Widget",
+      "signature": "class Widget",
+      "source_ref": "ruby/a.rb",
+      "span_end": 2,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Widget",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:ruby/b.rb:Widget",
+      "signature": "class Widget",
+      "source_ref": "ruby/b.rb",
+      "span_end": 2,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Foo",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:ruby/foo.rb:Foo",
+      "signature": "class Foo",
+      "source_ref": "ruby/foo.rb",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Svc",
+      "metadata": {
+        "lineno": 3,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:ruby/svc.rb:Svc",
+      "signature": "class Svc < Base",
+      "source_ref": "ruby/svc.rb",
+      "span_end": 16,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Util",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:ruby/util.rb:Util",
+      "signature": "module Util",
+      "source_ref": "ruby/util.rb",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Widget",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:rust/src/a.rs:Widget",
+      "signature": "pub struct Widget;",
+      "source_ref": "rust/src/a.rs",
+      "span_end": 1,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "draw",
+      "metadata": {
+        "lineno": 4,
+        "parser_backend": "treesitter",
+        "qualifier": "Widget"
+      },
+      "node_id": "symbol:rust/src/a.rs:draw",
+      "signature": "pub fn draw(&self) {",
+      "source_ref": "rust/src/a.rs",
+      "span_end": 5,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Widget",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:rust/src/b.rs:Widget",
+      "signature": "pub struct Widget;",
+      "source_ref": "rust/src/b.rs",
+      "span_end": 1,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "draw",
+      "metadata": {
+        "lineno": 4,
+        "parser_backend": "treesitter",
+        "qualifier": "Widget"
+      },
+      "node_id": "symbol:rust/src/b.rs:draw",
+      "signature": "pub fn draw(&self) {",
+      "source_ref": "rust/src/b.rs",
+      "span_end": 5,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Svc",
+      "metadata": {
+        "lineno": 4,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:rust/src/main.rs:Svc",
+      "signature": "struct Svc {",
+      "source_ref": "rust/src/main.rs",
+      "span_end": 6,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "amb",
+      "metadata": {
+        "lineno": 33,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:rust/src/main.rs:amb",
+      "signature": "fn amb(w: Widget) {",
+      "source_ref": "rust/src/main.rs",
+      "span_end": 35,
+      "span_start": 33
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "local",
+      "metadata": {
+        "lineno": 30,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:rust/src/main.rs:local",
+      "signature": "fn local() {",
+      "source_ref": "rust/src/main.rs",
+      "span_end": 31,
+      "span_start": 30
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "make",
+      "metadata": {
+        "lineno": 26,
+        "parser_backend": "treesitter",
+        "qualifier": "Svc"
+      },
+      "node_id": "symbol:rust/src/main.rs:make",
+      "signature": "fn make() {",
+      "source_ref": "rust/src/main.rs",
+      "span_end": 27,
+      "span_start": 26
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "run",
+      "metadata": {
+        "lineno": 9,
+        "parser_backend": "treesitter",
+        "qualifier": "Svc"
+      },
+      "node_id": "symbol:rust/src/main.rs:run",
+      "signature": "fn run(&self, r: &Repo) {",
+      "source_ref": "rust/src/main.rs",
+      "span_end": 21,
+      "span_start": 9
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "step",
+      "metadata": {
+        "lineno": 23,
+        "parser_backend": "treesitter",
+        "qualifier": "Svc"
+      },
+      "node_id": "symbol:rust/src/main.rs:step",
+      "signature": "fn step(&self) {",
+      "source_ref": "rust/src/main.rs",
+      "span_end": 24,
+      "span_start": 23
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Bar",
+      "metadata": {
+        "lineno": 3,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:rust/src/store.rs:Bar",
+      "signature": "pub struct Bar;",
+      "source_ref": "rust/src/store.rs",
+      "span_end": 3,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Foo",
+      "metadata": {
+        "lineno": 2,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:rust/src/store.rs:Foo",
+      "signature": "pub struct Foo;",
+      "source_ref": "rust/src/store.rs",
+      "span_end": 2,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Repo",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:rust/src/store.rs:Repo",
+      "signature": "pub struct Repo;",
+      "source_ref": "rust/src/store.rs",
+      "span_end": 1,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "default",
+      "metadata": {
+        "lineno": 20,
+        "parser_backend": "treesitter",
+        "qualifier": "Bar"
+      },
+      "node_id": "symbol:rust/src/store.rs:default",
+      "signature": "pub fn default() -> Bar {",
+      "source_ref": "rust/src/store.rs",
+      "span_end": 22,
+      "span_start": 20
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "m",
+      "metadata": {
+        "lineno": 15,
+        "parser_backend": "treesitter",
+        "qualifier": "Foo"
+      },
+      "node_id": "symbol:rust/src/store.rs:m",
+      "signature": "pub fn m(&self) {",
+      "source_ref": "rust/src/store.rs",
+      "span_end": 16,
+      "span_start": 15
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "n",
+      "metadata": {
+        "lineno": 24,
+        "parser_backend": "treesitter",
+        "qualifier": "Bar"
+      },
+      "node_id": "symbol:rust/src/store.rs:n",
+      "signature": "pub fn n(&self) {",
+      "source_ref": "rust/src/store.rs",
+      "span_end": 25,
+      "span_start": 24
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "new",
+      "metadata": {
+        "lineno": 11,
+        "parser_backend": "treesitter",
+        "qualifier": "Foo"
+      },
+      "node_id": "symbol:rust/src/store.rs:new",
+      "signature": "pub fn new() -> Foo {",
+      "source_ref": "rust/src/store.rs",
+      "span_end": 13,
+      "span_start": 11
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "save",
+      "metadata": {
+        "lineno": 6,
+        "parser_backend": "treesitter",
+        "qualifier": "Repo"
+      },
+      "node_id": "symbol:rust/src/store.rs:save",
+      "signature": "pub fn save(&self) {",
+      "source_ref": "rust/src/store.rs",
+      "span_end": 7,
+      "span_start": 6
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "free",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:rust/src/util.rs:free",
+      "signature": "pub fn free() {",
+      "source_ref": "rust/src/util.rs",
+      "span_end": 2,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "helper",
+      "metadata": {
+        "lineno": 4,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:rust/src/util.rs:helper",
+      "signature": "pub fn helper() {",
+      "source_ref": "rust/src/util.rs",
+      "span_end": 5,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Bar",
+      "metadata": {
+        "lineno": 16,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:swift/Models.swift:Bar",
+      "signature": "class Bar {",
+      "source_ref": "swift/Models.swift",
+      "span_end": 19,
+      "span_start": 16
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Base",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:swift/Models.swift:Base",
+      "signature": "class Base {",
+      "source_ref": "swift/Models.swift",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Foo",
+      "metadata": {
+        "lineno": 11,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:swift/Models.swift:Foo",
+      "signature": "class Foo {",
+      "source_ref": "swift/Models.swift",
+      "span_end": 14,
+      "span_start": 11
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Repo",
+      "metadata": {
+        "lineno": 6,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:swift/Models.swift:Repo",
+      "signature": "class Repo {",
+      "source_ref": "swift/Models.swift",
+      "span_end": 9,
+      "span_start": 6
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "free",
+      "metadata": {
+        "lineno": 21,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:swift/Models.swift:free",
+      "signature": "func free() {",
+      "source_ref": "swift/Models.swift",
+      "span_end": 22,
+      "span_start": 21
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "inheritedOp",
+      "metadata": {
+        "lineno": 2,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:swift/Models.swift:inheritedOp",
+      "signature": "func inheritedOp() {",
+      "source_ref": "swift/Models.swift",
+      "span_end": 3,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "m",
+      "metadata": {
+        "lineno": 12,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:swift/Models.swift:m",
+      "signature": "func m() {",
+      "source_ref": "swift/Models.swift",
+      "span_end": 13,
+      "span_start": 12
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "n",
+      "metadata": {
+        "lineno": 17,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:swift/Models.swift:n",
+      "signature": "func n() {",
+      "source_ref": "swift/Models.swift",
+      "span_end": 18,
+      "span_start": 17
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "save",
+      "metadata": {
+        "lineno": 7,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:swift/Models.swift:save",
+      "signature": "func save() {",
+      "source_ref": "swift/Models.swift",
+      "span_end": 8,
+      "span_start": 7
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Panel",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:swift/PanelA.swift:Panel",
+      "signature": "class Panel {",
+      "source_ref": "swift/PanelA.swift",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "draw",
+      "metadata": {
+        "lineno": 2,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:swift/PanelA.swift:draw",
+      "signature": "func draw() {",
+      "source_ref": "swift/PanelA.swift",
+      "span_end": 3,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Panel",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:swift/PanelB.swift:Panel",
+      "signature": "class Panel {",
+      "source_ref": "swift/PanelB.swift",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "draw",
+      "metadata": {
+        "lineno": 2,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:swift/PanelB.swift:draw",
+      "signature": "func draw() {",
+      "source_ref": "swift/PanelB.swift",
+      "span_end": 3,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Svc",
+      "metadata": {
+        "bases": [
+          "Base"
+        ],
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:swift/Sample.swift:Svc",
+      "signature": "class Svc: Base {",
+      "source_ref": "swift/Sample.swift",
+      "span_end": 23,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "amb",
+      "metadata": {
+        "lineno": 31,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:swift/Sample.swift:amb",
+      "signature": "func amb(p: Panel) {",
+      "source_ref": "swift/Sample.swift",
+      "span_end": 33,
+      "span_start": 31
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "ext",
+      "metadata": {
+        "lineno": 26,
+        "parser_backend": "treesitter",
+        "qualifier": "Svc"
+      },
+      "node_id": "symbol:swift/Sample.swift:ext",
+      "signature": "func ext() {",
+      "source_ref": "swift/Sample.swift",
+      "span_end": 28,
+      "span_start": 26
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "make",
+      "metadata": {
+        "lineno": 21,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:swift/Sample.swift:make",
+      "signature": "static func make() {",
+      "source_ref": "swift/Sample.swift",
+      "span_end": 22,
+      "span_start": 21
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "run",
+      "metadata": {
+        "lineno": 4,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:swift/Sample.swift:run",
+      "signature": "func run(r: Repo) {",
+      "source_ref": "swift/Sample.swift",
+      "span_end": 16,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "step",
+      "metadata": {
+        "lineno": 18,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:swift/Sample.swift:step",
+      "signature": "func step() {",
+      "source_ref": "swift/Sample.swift",
+      "span_end": 19,
+      "span_start": 18
+    }
+  ]
+}

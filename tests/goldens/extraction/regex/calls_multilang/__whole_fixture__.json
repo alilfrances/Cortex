@@ -1,0 +1,3924 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/a/w.go:contains:Do",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "go/a/w.go"
+      },
+      "relation": "contains",
+      "source": "file:go/a/w.go",
+      "target": "symbol:go/a/w.go:Do",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/a/w.go:contains:Worker",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "go/a/w.go"
+      },
+      "relation": "contains",
+      "source": "file:go/a/w.go",
+      "target": "symbol:go/a/w.go:Worker",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/b/w.go:contains:Do",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "go/b/w.go"
+      },
+      "relation": "contains",
+      "source": "file:go/b/w.go",
+      "target": "symbol:go/b/w.go:Do",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/b/w.go:contains:Worker",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "go/b/w.go"
+      },
+      "relation": "contains",
+      "source": "file:go/b/w.go",
+      "target": "symbol:go/b/w.go:Worker",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/main.go:calls:Run:Do:25",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Do",
+        "enclosing_class": null,
+        "lineno": 25,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "go/main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:go/main.go:Run",
+      "target": "name:Do",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/main.go:calls:Run:Help:15",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Help",
+        "enclosing_class": null,
+        "lineno": 15,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "go/main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:go/main.go:Run",
+      "target": "name:Help",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/main.go:calls:Run:M:17",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "M",
+        "enclosing_class": null,
+        "lineno": 17,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "go/main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:go/main.go:Run",
+      "target": "name:M",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/main.go:calls:Run:M:19",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "M",
+        "enclosing_class": null,
+        "lineno": 19,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "go/main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:go/main.go:Run",
+      "target": "name:M",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/main.go:calls:Run:Println:22",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Println",
+        "enclosing_class": null,
+        "lineno": 22,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "go/main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:go/main.go:Run",
+      "target": "name:Println",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/main.go:calls:Run:Save:14",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Save",
+        "enclosing_class": null,
+        "lineno": 14,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "go/main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:go/main.go:Run",
+      "target": "name:Save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/main.go:calls:Run:Save:23",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Save",
+        "enclosing_class": null,
+        "lineno": 23,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "go/main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:go/main.go:Run",
+      "target": "name:Save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/main.go:calls:Run:Step:13",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Step",
+        "enclosing_class": null,
+        "lineno": 13,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "go/main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:go/main.go:Run",
+      "target": "name:Step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/main.go:calls:Run:local:20",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "local",
+        "enclosing_class": null,
+        "lineno": 20,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "go/main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:go/main.go:Run",
+      "target": "name:local",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/main.go:calls:Run:shared:21",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "shared",
+        "enclosing_class": null,
+        "lineno": 21,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "go/main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:go/main.go:Run",
+      "target": "name:shared",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/main.go:contains:Run",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 12,
+        "source_file": "go/main.go"
+      },
+      "relation": "contains",
+      "source": "file:go/main.go",
+      "target": "symbol:go/main.go:Run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/main.go:contains:Step",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 28,
+        "source_file": "go/main.go"
+      },
+      "relation": "contains",
+      "source": "file:go/main.go",
+      "target": "symbol:go/main.go:Step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/main.go:contains:Svc",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 8,
+        "source_file": "go/main.go"
+      },
+      "relation": "contains",
+      "source": "file:go/main.go",
+      "target": "symbol:go/main.go:Svc",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/main.go:contains:local",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 31,
+        "source_file": "go/main.go"
+      },
+      "relation": "contains",
+      "source": "file:go/main.go",
+      "target": "symbol:go/main.go:local",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/main.go:import:2:1:fmt",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "go/main.go"
+      },
+      "relation": "imports",
+      "source": "file:go/main.go",
+      "target": "module:fmt",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/store.go:contains:Foo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "go/store.go"
+      },
+      "relation": "contains",
+      "source": "file:go/store.go",
+      "target": "symbol:go/store.go:Foo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/store.go:contains:M",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 10,
+        "source_file": "go/store.go"
+      },
+      "relation": "contains",
+      "source": "file:go/store.go",
+      "target": "symbol:go/store.go:M",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/store.go:contains:Repo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "go/store.go"
+      },
+      "relation": "contains",
+      "source": "file:go/store.go",
+      "target": "symbol:go/store.go:Repo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/store.go:contains:Save",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 7,
+        "source_file": "go/store.go"
+      },
+      "relation": "contains",
+      "source": "file:go/store.go",
+      "target": "symbol:go/store.go:Save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/store.go:contains:shared",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 13,
+        "source_file": "go/store.go"
+      },
+      "relation": "contains",
+      "source": "file:go/store.go",
+      "target": "symbol:go/store.go:shared",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/util/util.go:contains:Help",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "go/util/util.go"
+      },
+      "relation": "contains",
+      "source": "file:go/util/util.go",
+      "target": "symbol:go/util/util.go:Help",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Amb.java:calls:go:draw:3",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "draw",
+        "enclosing_class": null,
+        "lineno": 3,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Amb.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Amb.java:go",
+      "target": "name:draw",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Amb.java:contains:Amb",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "java/Amb.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Amb.java",
+      "target": "symbol:java/Amb.java:Amb",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Amb.java:contains:go",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "java/Amb.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Amb.java",
+      "target": "symbol:java/Amb.java:go",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Bar.java:contains:Bar",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "java/Bar.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Bar.java",
+      "target": "symbol:java/Bar.java:Bar",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Bar.java:contains:n",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "java/Bar.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Bar.java",
+      "target": "symbol:java/Bar.java:n",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Base.java:contains:Base",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "java/Base.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Base.java",
+      "target": "symbol:java/Base.java:Base",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Base.java:contains:inheritedOp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "java/Base.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Base.java",
+      "target": "symbol:java/Base.java:inheritedOp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Baz.java:contains:Baz",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "java/Baz.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Baz.java",
+      "target": "symbol:java/Baz.java:Baz",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Baz.java:contains:q",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "java/Baz.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Baz.java",
+      "target": "symbol:java/Baz.java:q",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Foo.java:contains:Foo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "java/Foo.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Foo.java",
+      "target": "symbol:java/Foo.java:Foo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Foo.java:contains:m",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "java/Foo.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Foo.java",
+      "target": "symbol:java/Foo.java:m",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Repo.java:contains:Repo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "java/Repo.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Repo.java",
+      "target": "symbol:java/Repo.java:Repo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Repo.java:contains:save",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "java/Repo.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Repo.java",
+      "target": "symbol:java/Repo.java:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:calls:run:Bar:14",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Bar",
+        "enclosing_class": null,
+        "lineno": 14,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:Bar",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:calls:run:Baz:17",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Baz",
+        "enclosing_class": null,
+        "lineno": 17,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:Baz",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:calls:run:Foo:12",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Foo",
+        "enclosing_class": null,
+        "lineno": 12,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:Foo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:calls:run:help:10",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "help",
+        "enclosing_class": null,
+        "lineno": 10,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:help",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:calls:run:inheritedOp:18",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "inheritedOp",
+        "enclosing_class": null,
+        "lineno": 18,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:inheritedOp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:calls:run:inheritedOp:19",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "inheritedOp",
+        "enclosing_class": null,
+        "lineno": 19,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:inheritedOp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:calls:run:m:13",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "m",
+        "enclosing_class": null,
+        "lineno": 13,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:m",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:calls:run:make:11",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "make",
+        "enclosing_class": null,
+        "lineno": 11,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:make",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:calls:run:n:15",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "n",
+        "enclosing_class": null,
+        "lineno": 15,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:n",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:calls:run:q:17",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "q",
+        "enclosing_class": null,
+        "lineno": 17,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:q",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:calls:run:save:16",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "save",
+        "enclosing_class": null,
+        "lineno": 16,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:calls:run:save:9",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "save",
+        "enclosing_class": null,
+        "lineno": 9,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:calls:run:step:7",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "step",
+        "enclosing_class": null,
+        "lineno": 7,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:calls:run:step:8",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "step",
+        "enclosing_class": null,
+        "lineno": 8,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:contains:Svc",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Svc.java",
+      "target": "symbol:java/Svc.java:Svc",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:contains:inheritedOp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 18,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Svc.java",
+      "target": "symbol:java/Svc.java:inheritedOp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:contains:make",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 25,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Svc.java",
+      "target": "symbol:java/Svc.java:make",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:contains:run",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Svc.java",
+      "target": "symbol:java/Svc.java:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:contains:step",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 7,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Svc.java",
+      "target": "symbol:java/Svc.java:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:import:1:1:com.x.Util",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "imports",
+      "source": "file:java/Svc.java",
+      "target": "module:com.x.Util",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/a/Panel.java:contains:Panel",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "java/a/Panel.java"
+      },
+      "relation": "contains",
+      "source": "file:java/a/Panel.java",
+      "target": "symbol:java/a/Panel.java:Panel",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/a/Panel.java:contains:draw",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "java/a/Panel.java"
+      },
+      "relation": "contains",
+      "source": "file:java/a/Panel.java",
+      "target": "symbol:java/a/Panel.java:draw",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/b/Panel.java:contains:Panel",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "java/b/Panel.java"
+      },
+      "relation": "contains",
+      "source": "file:java/b/Panel.java",
+      "target": "symbol:java/b/Panel.java:Panel",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/b/Panel.java:contains:draw",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "java/b/Panel.java"
+      },
+      "relation": "contains",
+      "source": "file:java/b/Panel.java",
+      "target": "symbol:java/b/Panel.java:draw",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/com/x/Util.java:contains:Util",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "java/com/x/Util.java"
+      },
+      "relation": "contains",
+      "source": "file:java/com/x/Util.java",
+      "target": "symbol:java/com/x/Util.java:Util",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/com/x/Util.java:contains:help",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "java/com/x/Util.java"
+      },
+      "relation": "contains",
+      "source": "file:java/com/x/Util.java",
+      "target": "symbol:java/com/x/Util.java:help",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:ruby/a.rb:contains:Widget",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "ruby/a.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/a.rb",
+      "target": "symbol:ruby/a.rb:Widget",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:ruby/b.rb:contains:Widget",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "ruby/b.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/b.rb",
+      "target": "symbol:ruby/b.rb:Widget",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:ruby/foo.rb:contains:Foo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "ruby/foo.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/foo.rb",
+      "target": "symbol:ruby/foo.rb:Foo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:ruby/foo.rb:contains:m",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "ruby/foo.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/foo.rb",
+      "target": "symbol:ruby/foo.rb:m",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:ruby/svc.rb:calls:run:helper:12",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "helper",
+        "enclosing_class": null,
+        "lineno": 12,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "ruby/svc.rb"
+      },
+      "relation": "calls",
+      "source": "symbol:ruby/svc.rb:run",
+      "target": "name:helper",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:ruby/svc.rb:contains:Svc",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "ruby/svc.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/svc.rb",
+      "target": "symbol:ruby/svc.rb:Svc",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:ruby/svc.rb:contains:run",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "ruby/svc.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/svc.rb",
+      "target": "symbol:ruby/svc.rb:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:ruby/svc.rb:import:1:1:util",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "ruby/svc.rb"
+      },
+      "relation": "imports",
+      "source": "file:ruby/svc.rb",
+      "target": "module:util",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:ruby/util.rb:contains:Util",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "ruby/util.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/util.rb",
+      "target": "symbol:ruby/util.rb:Util",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:ruby/util.rb:contains:self",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "ruby/util.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/util.rb",
+      "target": "symbol:ruby/util.rb:self",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/a.rs:contains:Widget",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "rust/src/a.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/a.rs",
+      "target": "symbol:rust/src/a.rs:Widget",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/a.rs:contains:draw",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "rust/src/a.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/a.rs",
+      "target": "symbol:rust/src/a.rs:draw",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/b.rs:contains:Widget",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "rust/src/b.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/b.rs",
+      "target": "symbol:rust/src/b.rs:Widget",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/b.rs:contains:draw",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "rust/src/b.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/b.rs",
+      "target": "symbol:rust/src/b.rs:draw",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/main.rs:calls:amb:draw:34",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "draw",
+        "enclosing_class": null,
+        "lineno": 34,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:amb",
+      "target": "name:draw",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/main.rs:calls:run:default:17",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "default",
+        "enclosing_class": null,
+        "lineno": 17,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:default",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/main.rs:calls:run:free:13",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "free",
+        "enclosing_class": null,
+        "lineno": 13,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:free",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/main.rs:calls:run:helper:14",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "helper",
+        "enclosing_class": null,
+        "lineno": 14,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:helper",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/main.rs:calls:run:local:20",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "local",
+        "enclosing_class": null,
+        "lineno": 20,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:local",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/main.rs:calls:run:m:16",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "m",
+        "enclosing_class": null,
+        "lineno": 16,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:m",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/main.rs:calls:run:make:12",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "make",
+        "enclosing_class": null,
+        "lineno": 12,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:make",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/main.rs:calls:run:n:18",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "n",
+        "enclosing_class": null,
+        "lineno": 18,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:n",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/main.rs:calls:run:new:15",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "new",
+        "enclosing_class": null,
+        "lineno": 15,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:new",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/main.rs:calls:run:save:11",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "save",
+        "enclosing_class": null,
+        "lineno": 11,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/main.rs:calls:run:save:19",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "save",
+        "enclosing_class": null,
+        "lineno": 19,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/main.rs:calls:run:step:10",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "step",
+        "enclosing_class": null,
+        "lineno": 10,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/main.rs:contains:Svc",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/main.rs",
+      "target": "symbol:rust/src/main.rs:Svc",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/main.rs:contains:amb",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 33,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/main.rs",
+      "target": "symbol:rust/src/main.rs:amb",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/main.rs:contains:local",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 30,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/main.rs",
+      "target": "symbol:rust/src/main.rs:local",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/main.rs:contains:make",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 26,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/main.rs",
+      "target": "symbol:rust/src/main.rs:make",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/main.rs:contains:run",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 9,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/main.rs",
+      "target": "symbol:rust/src/main.rs:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/main.rs:contains:step",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 23,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/main.rs",
+      "target": "symbol:rust/src/main.rs:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/main.rs:import:2:1:crate::util::helper",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "imports",
+      "source": "file:rust/src/main.rs",
+      "target": "module:crate::util::helper",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/store.rs:contains:Bar",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "rust/src/store.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/store.rs",
+      "target": "symbol:rust/src/store.rs:Bar",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/store.rs:contains:Foo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "rust/src/store.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/store.rs",
+      "target": "symbol:rust/src/store.rs:Foo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/store.rs:contains:Repo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "rust/src/store.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/store.rs",
+      "target": "symbol:rust/src/store.rs:Repo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/store.rs:contains:default",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 20,
+        "source_file": "rust/src/store.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/store.rs",
+      "target": "symbol:rust/src/store.rs:default",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/store.rs:contains:m",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 15,
+        "source_file": "rust/src/store.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/store.rs",
+      "target": "symbol:rust/src/store.rs:m",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/store.rs:contains:n",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 24,
+        "source_file": "rust/src/store.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/store.rs",
+      "target": "symbol:rust/src/store.rs:n",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/store.rs:contains:new",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 11,
+        "source_file": "rust/src/store.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/store.rs",
+      "target": "symbol:rust/src/store.rs:new",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/store.rs:contains:save",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "rust/src/store.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/store.rs",
+      "target": "symbol:rust/src/store.rs:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/util.rs:contains:free",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "rust/src/util.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/util.rs",
+      "target": "symbol:rust/src/util.rs:free",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/util.rs:contains:helper",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "rust/src/util.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/util.rs",
+      "target": "symbol:rust/src/util.rs:helper",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Models.swift:contains:Bar",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 16,
+        "source_file": "swift/Models.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Models.swift",
+      "target": "symbol:swift/Models.swift:Bar",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Models.swift:contains:Base",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "swift/Models.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Models.swift",
+      "target": "symbol:swift/Models.swift:Base",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Models.swift:contains:Foo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 11,
+        "source_file": "swift/Models.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Models.swift",
+      "target": "symbol:swift/Models.swift:Foo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Models.swift:contains:Repo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "swift/Models.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Models.swift",
+      "target": "symbol:swift/Models.swift:Repo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Models.swift:contains:free",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 21,
+        "source_file": "swift/Models.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Models.swift",
+      "target": "symbol:swift/Models.swift:free",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Models.swift:contains:inheritedOp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "swift/Models.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Models.swift",
+      "target": "symbol:swift/Models.swift:inheritedOp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Models.swift:contains:m",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 12,
+        "source_file": "swift/Models.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Models.swift",
+      "target": "symbol:swift/Models.swift:m",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Models.swift:contains:n",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 17,
+        "source_file": "swift/Models.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Models.swift",
+      "target": "symbol:swift/Models.swift:n",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Models.swift:contains:save",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 7,
+        "source_file": "swift/Models.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Models.swift",
+      "target": "symbol:swift/Models.swift:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/PanelA.swift:contains:Panel",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "swift/PanelA.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/PanelA.swift",
+      "target": "symbol:swift/PanelA.swift:Panel",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/PanelA.swift:contains:draw",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "swift/PanelA.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/PanelA.swift",
+      "target": "symbol:swift/PanelA.swift:draw",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/PanelB.swift:contains:Panel",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "swift/PanelB.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/PanelB.swift",
+      "target": "symbol:swift/PanelB.swift:Panel",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/PanelB.swift:contains:draw",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "swift/PanelB.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/PanelB.swift",
+      "target": "symbol:swift/PanelB.swift:draw",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Sample.swift:calls:amb:draw:32",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "draw",
+        "enclosing_class": null,
+        "lineno": 32,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:amb",
+      "target": "name:draw",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Sample.swift:calls:ext:step:27",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "step",
+        "enclosing_class": null,
+        "lineno": 27,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:ext",
+      "target": "name:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Sample.swift:calls:run:Bar:11",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Bar",
+        "enclosing_class": null,
+        "lineno": 11,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:Bar",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Sample.swift:calls:run:Foo:9",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Foo",
+        "enclosing_class": null,
+        "lineno": 9,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:Foo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Sample.swift:calls:run:free:14",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "free",
+        "enclosing_class": null,
+        "lineno": 14,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:free",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Sample.swift:calls:run:inheritedOp:15",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "inheritedOp",
+        "enclosing_class": null,
+        "lineno": 15,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:inheritedOp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Sample.swift:calls:run:m:10",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "m",
+        "enclosing_class": null,
+        "lineno": 10,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:m",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Sample.swift:calls:run:make:8",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "make",
+        "enclosing_class": null,
+        "lineno": 8,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:make",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Sample.swift:calls:run:n:12",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "n",
+        "enclosing_class": null,
+        "lineno": 12,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:n",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Sample.swift:calls:run:save:13",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "save",
+        "enclosing_class": null,
+        "lineno": 13,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Sample.swift:calls:run:save:7",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "save",
+        "enclosing_class": null,
+        "lineno": 7,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Sample.swift:calls:run:step:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "step",
+        "enclosing_class": null,
+        "lineno": 5,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Sample.swift:calls:run:step:6",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "step",
+        "enclosing_class": null,
+        "lineno": 6,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Sample.swift:contains:Svc",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Sample.swift",
+      "target": "symbol:swift/Sample.swift:Svc",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Sample.swift:contains:amb",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 31,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Sample.swift",
+      "target": "symbol:swift/Sample.swift:amb",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Sample.swift:contains:ext",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 26,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Sample.swift",
+      "target": "symbol:swift/Sample.swift:ext",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Sample.swift:contains:run",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Sample.swift",
+      "target": "symbol:swift/Sample.swift:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Sample.swift:contains:step",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 18,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Sample.swift",
+      "target": "symbol:swift/Sample.swift:step",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "go/a/w.go",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "go",
+        "size_bytes": 58
+      },
+      "node_id": "file:go/a/w.go",
+      "signature": "",
+      "source_ref": "go/a/w.go",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "go/b/w.go",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "go",
+        "size_bytes": 58
+      },
+      "node_id": "file:go/b/w.go",
+      "signature": "",
+      "source_ref": "go/b/w.go",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "go/main.go",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "go",
+        "size_bytes": 328
+      },
+      "node_id": "file:go/main.go",
+      "signature": "",
+      "source_ref": "go/main.go",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "go/store.go",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "go",
+        "size_bytes": 120
+      },
+      "node_id": "file:go/store.go",
+      "signature": "",
+      "source_ref": "go/store.go",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "go/util/util.go",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "go",
+        "size_bytes": 30
+      },
+      "node_id": "file:go/util/util.go",
+      "signature": "",
+      "source_ref": "go/util/util.go",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "java/Amb.java",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "java",
+        "size_bytes": 75
+      },
+      "node_id": "file:java/Amb.java",
+      "signature": "",
+      "source_ref": "java/Amb.java",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "java/Bar.java",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "java",
+        "size_bytes": 49
+      },
+      "node_id": "file:java/Bar.java",
+      "signature": "",
+      "source_ref": "java/Bar.java",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "java/Base.java",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "java",
+        "size_bytes": 60
+      },
+      "node_id": "file:java/Base.java",
+      "signature": "",
+      "source_ref": "java/Base.java",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "java/Baz.java",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "java",
+        "size_bytes": 49
+      },
+      "node_id": "file:java/Baz.java",
+      "signature": "",
+      "source_ref": "java/Baz.java",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "java/Foo.java",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "java",
+        "size_bytes": 49
+      },
+      "node_id": "file:java/Foo.java",
+      "signature": "",
+      "source_ref": "java/Foo.java",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "java/Repo.java",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "java",
+        "size_bytes": 53
+      },
+      "node_id": "file:java/Repo.java",
+      "signature": "",
+      "source_ref": "java/Repo.java",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "java/Svc.java",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "java",
+        "size_bytes": 461
+      },
+      "node_id": "file:java/Svc.java",
+      "signature": "",
+      "source_ref": "java/Svc.java",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "java/a/Panel.java",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "java",
+        "size_bytes": 54
+      },
+      "node_id": "file:java/a/Panel.java",
+      "signature": "",
+      "source_ref": "java/a/Panel.java",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "java/b/Panel.java",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "java",
+        "size_bytes": 54
+      },
+      "node_id": "file:java/b/Panel.java",
+      "signature": "",
+      "source_ref": "java/b/Panel.java",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "java/com/x/Util.java",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "java",
+        "size_bytes": 76
+      },
+      "node_id": "file:java/com/x/Util.java",
+      "signature": "",
+      "source_ref": "java/com/x/Util.java",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "ruby/a.rb",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "rb",
+        "size_bytes": 17
+      },
+      "node_id": "file:ruby/a.rb",
+      "signature": "",
+      "source_ref": "ruby/a.rb",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "ruby/b.rb",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "rb",
+        "size_bytes": 17
+      },
+      "node_id": "file:ruby/b.rb",
+      "signature": "",
+      "source_ref": "ruby/b.rb",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "ruby/foo.rb",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "rb",
+        "size_bytes": 28
+      },
+      "node_id": "file:ruby/foo.rb",
+      "signature": "",
+      "source_ref": "ruby/foo.rb",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "ruby/svc.rb",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "rb",
+        "size_bytes": 197
+      },
+      "node_id": "file:ruby/svc.rb",
+      "signature": "",
+      "source_ref": "ruby/svc.rb",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "ruby/util.rb",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "rb",
+        "size_bytes": 38
+      },
+      "node_id": "file:ruby/util.rb",
+      "signature": "",
+      "source_ref": "ruby/util.rb",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "rust/src/a.rs",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "rs",
+        "size_bytes": 67
+      },
+      "node_id": "file:rust/src/a.rs",
+      "signature": "",
+      "source_ref": "rust/src/a.rs",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "rust/src/b.rs",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "rs",
+        "size_bytes": 67
+      },
+      "node_id": "file:rust/src/b.rs",
+      "signature": "",
+      "source_ref": "rust/src/b.rs",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "rust/src/main.rs",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "rs",
+        "size_bytes": 459
+      },
+      "node_id": "file:rust/src/main.rs",
+      "signature": "",
+      "source_ref": "rust/src/main.rs",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "rust/src/store.rs",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "rs",
+        "size_bytes": 273
+      },
+      "node_id": "file:rust/src/store.rs",
+      "signature": "",
+      "source_ref": "rust/src/store.rs",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "rust/src/util.rs",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "rs",
+        "size_bytes": 39
+      },
+      "node_id": "file:rust/src/util.rs",
+      "signature": "",
+      "source_ref": "rust/src/util.rs",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "swift/Models.swift",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "swift",
+        "size_bytes": 175
+      },
+      "node_id": "file:swift/Models.swift",
+      "signature": "",
+      "source_ref": "swift/Models.swift",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "swift/PanelA.swift",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "swift",
+        "size_bytes": 40
+      },
+      "node_id": "file:swift/PanelA.swift",
+      "signature": "",
+      "source_ref": "swift/PanelA.swift",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "swift/PanelB.swift",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "swift",
+        "size_bytes": 40
+      },
+      "node_id": "file:swift/PanelB.swift",
+      "signature": "",
+      "source_ref": "swift/PanelB.swift",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "swift/Sample.swift",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "swift",
+        "size_bytes": 426
+      },
+      "node_id": "file:swift/Sample.swift",
+      "signature": "",
+      "source_ref": "swift/Sample.swift",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "Do",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 5,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:go/a/w.go:Do",
+      "signature": "func (w Worker) Do() {",
+      "source_ref": "go/a/w.go",
+      "span_end": 6,
+      "span_start": 5
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Worker",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 3,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:go/a/w.go:Worker",
+      "signature": "type Worker struct{}",
+      "source_ref": "go/a/w.go",
+      "span_end": 3,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "Do",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 5,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:go/b/w.go:Do",
+      "signature": "func (w Worker) Do() {",
+      "source_ref": "go/b/w.go",
+      "span_end": 6,
+      "span_start": 5
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Worker",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 3,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:go/b/w.go:Worker",
+      "signature": "type Worker struct{}",
+      "source_ref": "go/b/w.go",
+      "span_end": 3,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "Run",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 12,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:go/main.go:Run",
+      "signature": "func (s *Svc) Run(r *Repo) {",
+      "source_ref": "go/main.go",
+      "span_end": 26,
+      "span_start": 12
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "Step",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 28,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:go/main.go:Step",
+      "signature": "func (s *Svc) Step() {",
+      "source_ref": "go/main.go",
+      "span_end": 29,
+      "span_start": 28
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Svc",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 8,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:go/main.go:Svc",
+      "signature": "type Svc struct {",
+      "source_ref": "go/main.go",
+      "span_end": 10,
+      "span_start": 8
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "local",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 31,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:go/main.go:local",
+      "signature": "func local() {",
+      "source_ref": "go/main.go",
+      "span_end": 32,
+      "span_start": 31
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Foo",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 5,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:go/store.go:Foo",
+      "signature": "type Foo struct{}",
+      "source_ref": "go/store.go",
+      "span_end": 5,
+      "span_start": 5
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "M",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 10,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:go/store.go:M",
+      "signature": "func (f Foo) M() {",
+      "source_ref": "go/store.go",
+      "span_end": 11,
+      "span_start": 10
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Repo",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 3,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:go/store.go:Repo",
+      "signature": "type Repo struct{}",
+      "source_ref": "go/store.go",
+      "span_end": 3,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "Save",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 7,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:go/store.go:Save",
+      "signature": "func (r *Repo) Save() {",
+      "source_ref": "go/store.go",
+      "span_end": 8,
+      "span_start": 7
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "shared",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 13,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:go/store.go:shared",
+      "signature": "func shared() {",
+      "source_ref": "go/store.go",
+      "span_end": 14,
+      "span_start": 13
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "Help",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 3,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:go/util/util.go:Help",
+      "signature": "func Help() {",
+      "source_ref": "go/util/util.go",
+      "span_end": 4,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Amb",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/Amb.java:Amb",
+      "signature": "public class Amb {",
+      "source_ref": "java/Amb.java",
+      "span_end": 5,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "go",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 2,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/Amb.java:go",
+      "signature": "public void go(Panel p) {",
+      "source_ref": "java/Amb.java",
+      "span_end": 4,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Bar",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/Bar.java:Bar",
+      "signature": "public class Bar {",
+      "source_ref": "java/Bar.java",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "n",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 2,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/Bar.java:n",
+      "signature": "public void n() {",
+      "source_ref": "java/Bar.java",
+      "span_end": 3,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Base",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/Base.java:Base",
+      "signature": "public class Base {",
+      "source_ref": "java/Base.java",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "inheritedOp",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 2,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/Base.java:inheritedOp",
+      "signature": "public void inheritedOp() {",
+      "source_ref": "java/Base.java",
+      "span_end": 3,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Baz",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/Baz.java:Baz",
+      "signature": "public class Baz {",
+      "source_ref": "java/Baz.java",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "q",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 2,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/Baz.java:q",
+      "signature": "public void q() {",
+      "source_ref": "java/Baz.java",
+      "span_end": 3,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Foo",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/Foo.java:Foo",
+      "signature": "public class Foo {",
+      "source_ref": "java/Foo.java",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "m",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 2,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/Foo.java:m",
+      "signature": "public void m() {",
+      "source_ref": "java/Foo.java",
+      "span_end": 3,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Repo",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/Repo.java:Repo",
+      "signature": "public class Repo {",
+      "source_ref": "java/Repo.java",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "save",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 2,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/Repo.java:save",
+      "signature": "public void save() {",
+      "source_ref": "java/Repo.java",
+      "span_end": 3,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Svc",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 3,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/Svc.java:Svc",
+      "signature": "public class Svc extends Base {",
+      "source_ref": "java/Svc.java",
+      "span_end": 27,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "inheritedOp",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 18,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/Svc.java:inheritedOp",
+      "signature": "inheritedOp();",
+      "source_ref": "java/Svc.java",
+      "span_end": 18,
+      "span_start": 18
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "make",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 25,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/Svc.java:make",
+      "signature": "public static void make() {",
+      "source_ref": "java/Svc.java",
+      "span_end": 26,
+      "span_start": 25
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "run",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 6,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/Svc.java:run",
+      "signature": "public void run(Repo r) {",
+      "source_ref": "java/Svc.java",
+      "span_end": 20,
+      "span_start": 6
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "step",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 7,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/Svc.java:step",
+      "signature": "step();",
+      "source_ref": "java/Svc.java",
+      "span_end": 7,
+      "span_start": 7
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Panel",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/a/Panel.java:Panel",
+      "signature": "public class Panel {",
+      "source_ref": "java/a/Panel.java",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "draw",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 2,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/a/Panel.java:draw",
+      "signature": "public void draw() {",
+      "source_ref": "java/a/Panel.java",
+      "span_end": 3,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Panel",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/b/Panel.java:Panel",
+      "signature": "public class Panel {",
+      "source_ref": "java/b/Panel.java",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "draw",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 2,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/b/Panel.java:draw",
+      "signature": "public void draw() {",
+      "source_ref": "java/b/Panel.java",
+      "span_end": 3,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Util",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 3,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/com/x/Util.java:Util",
+      "signature": "public class Util {",
+      "source_ref": "java/com/x/Util.java",
+      "span_end": 6,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "help",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 4,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/com/x/Util.java:help",
+      "signature": "public static void help() {",
+      "source_ref": "java/com/x/Util.java",
+      "span_end": 5,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Widget",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:ruby/a.rb:Widget",
+      "signature": "class Widget",
+      "source_ref": "ruby/a.rb",
+      "span_end": 1,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Widget",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:ruby/b.rb:Widget",
+      "signature": "class Widget",
+      "source_ref": "ruby/b.rb",
+      "span_end": 1,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Foo",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:ruby/foo.rb:Foo",
+      "signature": "class Foo",
+      "source_ref": "ruby/foo.rb",
+      "span_end": 1,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "m",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 2,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:ruby/foo.rb:m",
+      "signature": "def m",
+      "source_ref": "ruby/foo.rb",
+      "span_end": 2,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Svc",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 3,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:ruby/svc.rb:Svc",
+      "signature": "class Svc < Base",
+      "source_ref": "ruby/svc.rb",
+      "span_end": 3,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "run",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 4,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:ruby/svc.rb:run",
+      "signature": "def run(r)",
+      "source_ref": "ruby/svc.rb",
+      "span_end": 4,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Util",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:ruby/util.rb:Util",
+      "signature": "module Util",
+      "source_ref": "ruby/util.rb",
+      "span_end": 1,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "self",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 2,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:ruby/util.rb:self",
+      "signature": "def self.help",
+      "source_ref": "ruby/util.rb",
+      "span_end": 2,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Widget",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:rust/src/a.rs:Widget",
+      "signature": "pub struct Widget;",
+      "source_ref": "rust/src/a.rs",
+      "span_end": 1,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "draw",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 4,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:rust/src/a.rs:draw",
+      "signature": "pub fn draw(&self) {",
+      "source_ref": "rust/src/a.rs",
+      "span_end": 5,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Widget",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:rust/src/b.rs:Widget",
+      "signature": "pub struct Widget;",
+      "source_ref": "rust/src/b.rs",
+      "span_end": 1,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "draw",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 4,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:rust/src/b.rs:draw",
+      "signature": "pub fn draw(&self) {",
+      "source_ref": "rust/src/b.rs",
+      "span_end": 5,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Svc",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 4,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:rust/src/main.rs:Svc",
+      "signature": "struct Svc {",
+      "source_ref": "rust/src/main.rs",
+      "span_end": 6,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "amb",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 33,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:rust/src/main.rs:amb",
+      "signature": "fn amb(w: Widget) {",
+      "source_ref": "rust/src/main.rs",
+      "span_end": 35,
+      "span_start": 33
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "local",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 30,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:rust/src/main.rs:local",
+      "signature": "fn local() {",
+      "source_ref": "rust/src/main.rs",
+      "span_end": 31,
+      "span_start": 30
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "make",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 26,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:rust/src/main.rs:make",
+      "signature": "fn make() {",
+      "source_ref": "rust/src/main.rs",
+      "span_end": 27,
+      "span_start": 26
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "run",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 9,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:rust/src/main.rs:run",
+      "signature": "fn run(&self, r: &Repo) {",
+      "source_ref": "rust/src/main.rs",
+      "span_end": 21,
+      "span_start": 9
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "step",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 23,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:rust/src/main.rs:step",
+      "signature": "fn step(&self) {",
+      "source_ref": "rust/src/main.rs",
+      "span_end": 24,
+      "span_start": 23
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Bar",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 3,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:rust/src/store.rs:Bar",
+      "signature": "pub struct Bar;",
+      "source_ref": "rust/src/store.rs",
+      "span_end": 3,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Foo",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 2,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:rust/src/store.rs:Foo",
+      "signature": "pub struct Foo;",
+      "source_ref": "rust/src/store.rs",
+      "span_end": 2,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Repo",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:rust/src/store.rs:Repo",
+      "signature": "pub struct Repo;",
+      "source_ref": "rust/src/store.rs",
+      "span_end": 1,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "default",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 20,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:rust/src/store.rs:default",
+      "signature": "pub fn default() -> Bar {",
+      "source_ref": "rust/src/store.rs",
+      "span_end": 22,
+      "span_start": 20
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "m",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 15,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:rust/src/store.rs:m",
+      "signature": "pub fn m(&self) {",
+      "source_ref": "rust/src/store.rs",
+      "span_end": 16,
+      "span_start": 15
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "n",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 24,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:rust/src/store.rs:n",
+      "signature": "pub fn n(&self) {",
+      "source_ref": "rust/src/store.rs",
+      "span_end": 25,
+      "span_start": 24
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "new",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 11,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:rust/src/store.rs:new",
+      "signature": "pub fn new() -> Foo {",
+      "source_ref": "rust/src/store.rs",
+      "span_end": 13,
+      "span_start": 11
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "save",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 6,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:rust/src/store.rs:save",
+      "signature": "pub fn save(&self) {",
+      "source_ref": "rust/src/store.rs",
+      "span_end": 7,
+      "span_start": 6
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "free",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:rust/src/util.rs:free",
+      "signature": "pub fn free() {",
+      "source_ref": "rust/src/util.rs",
+      "span_end": 2,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "helper",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 4,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:rust/src/util.rs:helper",
+      "signature": "pub fn helper() {",
+      "source_ref": "rust/src/util.rs",
+      "span_end": 5,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Bar",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 16,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:swift/Models.swift:Bar",
+      "signature": "class Bar {",
+      "source_ref": "swift/Models.swift",
+      "span_end": 19,
+      "span_start": 16
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Base",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:swift/Models.swift:Base",
+      "signature": "class Base {",
+      "source_ref": "swift/Models.swift",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Foo",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 11,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:swift/Models.swift:Foo",
+      "signature": "class Foo {",
+      "source_ref": "swift/Models.swift",
+      "span_end": 14,
+      "span_start": 11
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Repo",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 6,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:swift/Models.swift:Repo",
+      "signature": "class Repo {",
+      "source_ref": "swift/Models.swift",
+      "span_end": 9,
+      "span_start": 6
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "free",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 21,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:swift/Models.swift:free",
+      "signature": "func free() {",
+      "source_ref": "swift/Models.swift",
+      "span_end": 22,
+      "span_start": 21
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "inheritedOp",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 2,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:swift/Models.swift:inheritedOp",
+      "signature": "func inheritedOp() {",
+      "source_ref": "swift/Models.swift",
+      "span_end": 3,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "m",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 12,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:swift/Models.swift:m",
+      "signature": "func m() {",
+      "source_ref": "swift/Models.swift",
+      "span_end": 13,
+      "span_start": 12
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "n",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 17,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:swift/Models.swift:n",
+      "signature": "func n() {",
+      "source_ref": "swift/Models.swift",
+      "span_end": 18,
+      "span_start": 17
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "save",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 7,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:swift/Models.swift:save",
+      "signature": "func save() {",
+      "source_ref": "swift/Models.swift",
+      "span_end": 8,
+      "span_start": 7
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Panel",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:swift/PanelA.swift:Panel",
+      "signature": "class Panel {",
+      "source_ref": "swift/PanelA.swift",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "draw",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 2,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:swift/PanelA.swift:draw",
+      "signature": "func draw() {",
+      "source_ref": "swift/PanelA.swift",
+      "span_end": 3,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Panel",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:swift/PanelB.swift:Panel",
+      "signature": "class Panel {",
+      "source_ref": "swift/PanelB.swift",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "draw",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 2,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:swift/PanelB.swift:draw",
+      "signature": "func draw() {",
+      "source_ref": "swift/PanelB.swift",
+      "span_end": 3,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Svc",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:swift/Sample.swift:Svc",
+      "signature": "class Svc: Base {",
+      "source_ref": "swift/Sample.swift",
+      "span_end": 23,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "amb",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 31,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:swift/Sample.swift:amb",
+      "signature": "func amb(p: Panel) {",
+      "source_ref": "swift/Sample.swift",
+      "span_end": 33,
+      "span_start": 31
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "ext",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 26,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:swift/Sample.swift:ext",
+      "signature": "func ext() {",
+      "source_ref": "swift/Sample.swift",
+      "span_end": 28,
+      "span_start": 26
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "run",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 4,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:swift/Sample.swift:run",
+      "signature": "func run(r: Repo) {",
+      "source_ref": "swift/Sample.swift",
+      "span_end": 16,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "step",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 18,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:swift/Sample.swift:step",
+      "signature": "func step() {",
+      "source_ref": "swift/Sample.swift",
+      "span_end": 19,
+      "span_start": 18
+    }
+  ]
+}

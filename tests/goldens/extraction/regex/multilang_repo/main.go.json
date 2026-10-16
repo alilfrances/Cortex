@@ -2,6 +2,26 @@
   "edges": [
     {
       "confidence": "LOW",
+      "edge_id": "regex:main.go:calls:Run:Println:6",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Println",
+        "enclosing_class": null,
+        "lineno": 6,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:main.go:Run",
+      "target": "name:Println",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
       "edge_id": "regex:main.go:contains:Run",
       "layer": "STRUCTURAL",
       "metadata": {

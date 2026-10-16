@@ -1106,6 +1106,7 @@ def _extract_qml_cpp_registration(
 _NAME_ONLY_CALL_SUFFIXES = frozenset({
     ".c", ".h", ".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx",  # Task 6
     ".js", ".jsx", ".ts", ".tsx",  # Task 7
+    ".go", ".rs", ".swift", ".java", ".rb",  # Task 8
 })
 # Regex symbols exist for functions only in these families (class methods are not symbols),
 # so lines inside a class body but outside any function are owned by the class.
@@ -1169,6 +1170,8 @@ def _extract_calls_name_only(path: str, content: str, nodes: list[GraphNode], ed
     funcs = [
         n for n in nodes
         if n.granularity == "symbol" and n.span_start is not None and n.label not in _CALL_SKIP
+        # `step();` read as a definition by the loose Java pattern: a call statement, not an owner
+        and not n.signature.rstrip().endswith(";")
         and (n.kind == "func" or (class_owned and n.kind == "class" and not n.signature.lstrip().startswith(
             ("interface", "export interface", "declare")
         )))

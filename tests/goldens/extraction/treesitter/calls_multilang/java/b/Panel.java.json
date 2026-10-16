@@ -1,0 +1,78 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/b/Panel.java:contains:Panel",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "java/b/Panel.java"
+      },
+      "relation": "contains",
+      "source": "file:java/b/Panel.java",
+      "target": "symbol:java/b/Panel.java:Panel",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/b/Panel.java:contains:draw",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "java/b/Panel.java"
+      },
+      "relation": "contains",
+      "source": "file:java/b/Panel.java",
+      "target": "symbol:java/b/Panel.java:draw",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "java/b/Panel.java",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "java",
+        "size_bytes": 54
+      },
+      "node_id": "file:java/b/Panel.java",
+      "signature": "",
+      "source_ref": "java/b/Panel.java",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Panel",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/b/Panel.java:Panel",
+      "signature": "public class Panel {",
+      "source_ref": "java/b/Panel.java",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "draw",
+      "metadata": {
+        "lineno": 2,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/b/Panel.java:draw",
+      "signature": "public void draw() {",
+      "source_ref": "java/b/Panel.java",
+      "span_end": 3,
+      "span_start": 2
+    }
+  ]
+}

@@ -358,6 +358,8 @@ def extract_treesitter_edges(
         member_name = ""
         if suffix in _CPP_SUFFIXES and node.type == "function_definition":
             qualifier, member_name = _cpp_member_for_definition(node, source)
+        if qualifier is None and suffix in {".go", ".rs", ".swift"}:
+            qualifier = call_sites.method_qualifier(suffix, node, source)
         name = member_name or _name_for_node(node, source)
         if name and name in seen_symbols:
             # Same-named definitions share one node (documented non-goal); calls
@@ -382,6 +384,11 @@ def extract_treesitter_edges(
                 # Declared member types let the call resolver type `m_x->f()` in an
                 # out-of-line `Foo::bar()` whose class body lives in this file.
                 metadata["member_types"] = member_types
+        if suffix in {".js", ".jsx", ".ts", ".tsx", ".java", ".swift"} and _DEF_TYPES[node.type] == "class":
+            bases = call_sites.class_bases(suffix, node, source)
+            if bases:
+                # These extractors emit no `inherits` edges; the resolver reads bases here.
+                metadata["bases"] = bases
         nodes.append(
             GraphNode(
                 node_id=symbol_id,

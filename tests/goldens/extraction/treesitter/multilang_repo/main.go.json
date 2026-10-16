@@ -2,6 +2,28 @@
   "edges": [
     {
       "confidence": "EXTRACTED",
+      "edge_id": "treesitter:main.go:calls:Run:fmt.Println:6",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Println",
+        "enclosing_class": null,
+        "lineno": 6,
+        "receiver": "fmt",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "fmt",
+        "scope_dir": null,
+        "scope_file": null,
+        "scope_namespace": true,
+        "source_file": "main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:main.go:Run",
+      "target": "name:Println",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
       "edge_id": "treesitter:main.go:contains:Run",
       "layer": "STRUCTURAL",
       "metadata": {

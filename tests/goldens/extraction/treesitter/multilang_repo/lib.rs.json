@@ -2,6 +2,25 @@
   "edges": [
     {
       "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib.rs:calls:run:fmt.format:6",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "format",
+        "enclosing_class": null,
+        "lineno": 6,
+        "receiver": "fmt",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "fmt",
+        "source_file": "lib.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:lib.rs:run",
+      "target": "name:format",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
       "edge_id": "treesitter:lib.rs:contains:Worker",
       "layer": "STRUCTURAL",
       "metadata": {

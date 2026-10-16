@@ -2,6 +2,26 @@
   "edges": [
     {
       "confidence": "LOW",
+      "edge_id": "regex:worker.rb:calls:run:generate:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "generate",
+        "enclosing_class": null,
+        "lineno": 5,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "worker.rb"
+      },
+      "relation": "calls",
+      "source": "symbol:worker.rb:run",
+      "target": "name:generate",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
       "edge_id": "regex:worker.rb:contains:Worker",
       "layer": "STRUCTURAL",
       "metadata": {

@@ -1,0 +1,78 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/util.rs:contains:free",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "rust/src/util.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/util.rs",
+      "target": "symbol:rust/src/util.rs:free",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/util.rs:contains:helper",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "rust/src/util.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/util.rs",
+      "target": "symbol:rust/src/util.rs:helper",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "rust/src/util.rs",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "rs",
+        "size_bytes": 39
+      },
+      "node_id": "file:rust/src/util.rs",
+      "signature": "",
+      "source_ref": "rust/src/util.rs",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "free",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:rust/src/util.rs:free",
+      "signature": "pub fn free() {",
+      "source_ref": "rust/src/util.rs",
+      "span_end": 2,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "helper",
+      "metadata": {
+        "lineno": 4,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:rust/src/util.rs:helper",
+      "signature": "pub fn helper() {",
+      "source_ref": "rust/src/util.rs",
+      "span_end": 5,
+      "span_start": 4
+    }
+  ]
+}

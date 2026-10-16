@@ -127,6 +127,25 @@
     },
     {
       "confidence": "EXTRACTED",
+      "edge_id": "treesitter:App.java:calls:run:List.of:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "of",
+        "enclosing_class": "App",
+        "lineno": 5,
+        "receiver": "List",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "List",
+        "source_file": "App.java"
+      },
+      "relation": "calls",
+      "source": "symbol:App.java:run",
+      "target": "name:of",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
       "edge_id": "treesitter:App.java:contains:App",
       "layer": "STRUCTURAL",
       "metadata": {
@@ -399,6 +418,25 @@
     },
     {
       "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib.rs:calls:run:fmt.format:6",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "format",
+        "enclosing_class": null,
+        "lineno": 6,
+        "receiver": "fmt",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "fmt",
+        "source_file": "lib.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:lib.rs:run",
+      "target": "name:format",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
       "edge_id": "treesitter:lib.rs:contains:Worker",
       "layer": "STRUCTURAL",
       "metadata": {
@@ -477,6 +515,28 @@
     },
     {
       "confidence": "EXTRACTED",
+      "edge_id": "treesitter:main.go:calls:Run:fmt.Println:6",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Println",
+        "enclosing_class": null,
+        "lineno": 6,
+        "receiver": "fmt",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "fmt",
+        "scope_dir": null,
+        "scope_file": null,
+        "scope_namespace": true,
+        "source_file": "main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:main.go:Run",
+      "target": "name:Println",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
       "edge_id": "treesitter:main.go:contains:Run",
       "layer": "STRUCTURAL",
       "metadata": {
@@ -499,6 +559,25 @@
       "relation": "imports",
       "source": "file:main.go",
       "target": "module:fmt",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:worker.rb:calls:Worker:JSON.generate:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "generate",
+        "enclosing_class": "Worker",
+        "lineno": 5,
+        "receiver": "JSON",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "JSON",
+        "source_file": "worker.rb"
+      },
+      "relation": "calls",
+      "source": "symbol:worker.rb:Worker",
+      "target": "name:generate",
       "weight": 1.0
     },
     {

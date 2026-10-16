@@ -1,0 +1,80 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/b/w.go:contains:Do",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "go/b/w.go"
+      },
+      "relation": "contains",
+      "source": "file:go/b/w.go",
+      "target": "symbol:go/b/w.go:Do",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/b/w.go:contains:Worker",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "go/b/w.go"
+      },
+      "relation": "contains",
+      "source": "file:go/b/w.go",
+      "target": "symbol:go/b/w.go:Worker",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "go/b/w.go",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "go",
+        "size_bytes": 58
+      },
+      "node_id": "file:go/b/w.go",
+      "signature": "",
+      "source_ref": "go/b/w.go",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "Do",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 5,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:go/b/w.go:Do",
+      "signature": "func (w Worker) Do() {",
+      "source_ref": "go/b/w.go",
+      "span_end": 6,
+      "span_start": 5
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Worker",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 3,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:go/b/w.go:Worker",
+      "signature": "type Worker struct{}",
+      "source_ref": "go/b/w.go",
+      "span_end": 3,
+      "span_start": 3
+    }
+  ]
+}

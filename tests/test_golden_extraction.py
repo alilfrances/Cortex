@@ -39,7 +39,7 @@ from evals.run_evals import _build_python_app, _build_qt_app
 # `calls_*` fixtures are call-specific additions (Tasks 6-8): the two original fixtures
 # are frozen in tests/goldens/extraction/baseline-7b0e6e0 and may only gain `calls` edges
 # (see tests/test_additive_baseline.py), so call sites live in their own fixtures.
-FIXTURE_NAMES = ("multilang_repo", "qml_full_repo", "calls_cpp", "calls_js")
+FIXTURE_NAMES = ("multilang_repo", "qml_full_repo", "calls_cpp", "calls_js", "calls_multilang")
 
 # Always extracted through the regex-based module-metadata path, in both backends.
 _METADATA_ONLY_NAMES = {"cmakelists.txt", "qmldir"}
@@ -188,37 +188,28 @@ def _calls(edges) -> list:
     return [edge for edge in edges if edge.relation == "calls"]
 
 
-# Families whose tree-sitter and regex extractors emit `calls` edges (flipped per task).
-# Task 6: C/C++.  Task 7: JS/TS/TSX.  Task 8 extends this set and retires the "none today" tests.
+# Every code family now emits `calls` edges (Tasks 6-8 flipped the "no `calls` outside Python/QML"
+# characterization).  `multilang_repo` files with a call site -- the frozen definitions are never
+# edited, so call-specific additions live in `calls_*` fixtures (see tests/test_additive_baseline.py).
+_MULTILANG_CALLING_FILES = ["app.js", "client.ts", "main.go", "lib.rs", "App.java", "worker.rb"]
 _CALL_FAMILY_SUFFIXES = {
-    ".c", ".h", ".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx",  # Task 6
-    ".js", ".jsx", ".ts", ".tsx",  # Task 7
+    ".c", ".h", ".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx", ".js", ".jsx", ".ts", ".tsx",
+    ".go", ".rs", ".swift", ".java", ".rb",
 }
 
 
-def _non_python_non_qml_cases():
-    return [
-        c for c in CASES
-        if Path(c.values[1]).suffix not in {".py", ".qml"} | _CALL_FAMILY_SUFFIXES
-    ]
-
-
 @TREE_SITTER_ONLY
-@pytest.mark.parametrize("fixture,rel", _non_python_non_qml_cases())
-def test_no_calls_edges_outside_python_and_qml_treesitter_today(fixture: str, rel: str) -> None:
-    """Tasks 6-7 flipped C/C++ and JS/TS/TSX; Task 8 flips Go/Rust/Swift/Java/Ruby."""
-    _, edges = _layer(fixture, rel)
-    assert _calls(edges) == []
+@pytest.mark.parametrize("rel", _MULTILANG_CALLING_FILES)
+def test_every_code_fixture_file_with_a_call_site_has_calls_treesitter(rel: str) -> None:
+    _, edges = _layer("multilang_repo", rel)
+    assert _calls(edges), rel
 
 
-@pytest.mark.parametrize("fixture,rel", _non_python_non_qml_cases())
-def test_no_calls_edges_outside_python_and_qml_regex_today(
-    fixture: str, rel: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Task 6-8 flip: the regex fallback gains name-only `calls` edges."""
+@pytest.mark.parametrize("rel", _MULTILANG_CALLING_FILES)
+def test_every_code_fixture_file_with_a_call_site_has_calls_regex(rel: str, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CORTEX_FORCE_REGEX", "1")
-    _, edges = _layer(fixture, rel)
-    assert _calls(edges) == []
+    _, edges = _layer("multilang_repo", rel)
+    assert _calls(edges), rel
 
 
 CALL_CONTRACT_KEYS = {
@@ -293,6 +284,9 @@ def test_treesitter_dedupes_same_named_symbols_per_file_today() -> None:
 _CALLING_FILES = {
     "calls_cpp": {"app.cpp", "util.cpp", "worker.hpp", "diamond.cpp", "gateway.cpp"},
     "calls_js": {"app.ts", "loose.ts", "main.js", "view.tsx", "lib/worker.js"},
+    "calls_multilang": {
+        "go/main.go", "rust/src/main.rs", "swift/Sample.swift", "java/Svc.java", "java/Amb.java", "ruby/svc.rb",
+    },
 }
 
 
@@ -306,7 +300,7 @@ def _code_call_cases():
 @TREE_SITTER_ONLY
 @pytest.mark.parametrize("fixture,rel", _code_call_cases())
 def test_call_fixture_files_with_call_sites_have_calls_treesitter(fixture: str, rel: str) -> None:
-    """Tasks 6-7 flip: every `calls_*` C/C++/JS/TS file with a call site has >= 1 `calls` edge."""
+    """Tasks 6-8: every `calls_*` code file with a call site has >= 1 `calls` edge."""
     if rel not in _CALLING_FILES[fixture]:
         pytest.skip("no call site in this file")
     _, edges = _layer(fixture, rel)

@@ -34,6 +34,7 @@ at least one symbol::
     declared_type  receiver whose declared/constructed type is known
     inherited      the above, via ``inherits`` edges (BFS, depth <= 6)
     same_file      free callee defined in the caller's file
+    same_package   Go only: free callee in the caller's directory (package)
     import_scoped  free callee defined in a file the caller imports/includes
     repo_unique    free callee with exactly one definition repo-wide
 
@@ -69,6 +70,29 @@ def is_contract_call(edge: GraphEdge) -> bool:
         # resolver must never promote them to a symbol id.
         and not edge.metadata.get("name_only")
     )
+
+
+_FAMILIES = {
+    ".c": "c", ".h": "c", ".cpp": "c", ".cc": "c", ".cxx": "c", ".hpp": "c", ".hh": "c", ".hxx": "c",
+    ".js": "js", ".jsx": "js", ".mjs": "js", ".cjs": "js", ".ts": "js", ".tsx": "js",
+    ".py": "py", ".go": "go", ".rs": "rs", ".swift": "swift", ".java": "java", ".rb": "rb",
+}
+
+
+def language_family(path: str) -> str:
+    """Resolution never crosses language families: a Java call is never matched against a
+    Swift or Rust symbol that happens to share a name (each family gets its own index)."""
+    suffix = PurePosixPath(path).suffix.lower()
+    return _FAMILIES.get(suffix, suffix or "?")
+
+
+def _edge_path(edge: GraphEdge) -> str:
+    if edge.source.startswith("file:"):
+        return edge.source.removeprefix("file:")
+    if edge.source.startswith("symbol:"):
+        return edge.source.removeprefix("symbol:").partition(":")[0]
+    source_file = edge.metadata.get("source_file") if isinstance(edge.metadata, dict) else None
+    return str(source_file or "")
 
 
 def _symbol_path(node_id: str) -> tuple[str, str]:
@@ -198,6 +222,10 @@ class _Index:
                     self.free_by_label[node.label].append(node_id)
                     self.exported_by_path_label[(node.source_ref, node.label)].append(node_id)
 
+        self.free_by_dir_label: defaultdict[tuple[str, str], list[str]] = defaultdict(list)
+        for (path, label), ids in self.exported_by_path_label.items():
+            self.free_by_dir_label[(str(PurePosixPath(path).parent), label)].extend(ids)
+
         imports: defaultdict[str, set[str]] = defaultdict(set)
         inherits: list[GraphEdge] = []
         for edge in edges:
@@ -227,11 +255,30 @@ class _Index:
                 preferred = self.prefer(candidates, path)
                 candidates = preferred
             bases[edge.source].update(candidates)
+        for cid, node in symbols.items():
+            declared = node.metadata.get("bases") if isinstance(node.metadata, dict) else None
+            if node.kind == "class" and isinstance(declared, list) and not bases.get(cid):
+                for base in declared:
+                    found = self.classes_by_label.get(_last_segment(str(base)), [])
+                    if len(found) > 1:
+                        found = self.prefer(found, node.source_ref)
+                    bases[cid].update(found)
         self.bases: dict[str, list[str]] = {cid: sorted(ids - {cid}) for cid, ids in bases.items()}
 
     def is_namespace(self, class_id: str) -> bool:
         node = self.symbols.get(class_id)
         return node is not None and node.signature.lstrip().startswith("namespace")
+
+    def narrow(self, candidate_ids: list[str], from_path: str) -> list[str]:
+        """Same file, else same directory (package/module), else unchanged."""
+        if len(candidate_ids) < 2:
+            return list(candidate_ids)
+        same = [c for c in candidate_ids if self.symbols[c].source_ref == from_path]
+        if same:
+            return same
+        here = str(PurePosixPath(from_path).parent)
+        near = [c for c in candidate_ids if str(PurePosixPath(self.symbols[c].source_ref).parent) == here]
+        return near or list(candidate_ids)
 
     def reachable(self, from_path: str) -> list[str]:
         """Files the caller imports/includes (one hop), plus the implementation
@@ -366,6 +413,19 @@ def _member_type(edge: GraphEdge, index: _Index, source_file: str, member: str) 
     return None
 
 
+def _members(index: _Index, class_ids: list[str], label: str, callee: str, source_file: str, tier: str) -> _Outcome:
+    """Members of `class_ids`; with no class node (Go types, Rust/Swift impl blocks whose type
+    node lives elsewhere) fall back to methods whose `qualifier` names the type."""
+    if class_ids:
+        outcome = _tier_from_lookup(index.lookup(class_ids, callee), tier)
+        if outcome is not None:
+            return outcome
+    virtual = index.qualified_defs.get(label, {}).get(callee)
+    if virtual:
+        return tier, index.narrow(list(virtual), source_file)
+    return None
+
+
 def _tier_from_lookup(found: tuple[str, list[str]] | None, direct_tier: str) -> _Outcome:
     if found is None:
         return None
@@ -377,6 +437,9 @@ def _resolve_scope_file(edge: GraphEdge, index: _Index) -> _Outcome:
     """`ns.f()` / `Cls.m()` where the extractor resolved the import binding to a file."""
     md = edge.metadata
     callee = str(md["callee"])
+    if md.get("scope_dir"):  # Go `pkg.F()`: exported free symbols of the package directory
+        found = list(index.free_by_dir_label.get((str(md["scope_dir"]), callee), ()))
+        return ("scoped", found) if found else None
     path = md.get("scope_file")
     if not path:
         return None  # package / unresolved specifier: nothing in the repo to name
@@ -431,11 +494,7 @@ def _resolve_scoped(edge: GraphEdge, index: _Index, source_file: str) -> _Outcom
     label = _last_segment(scope)
     if label:
         class_ids = index.prefer(index.classes_by_label.get(label, []), source_file)
-        if class_ids:
-            return _tier_from_lookup(index.lookup(class_ids, callee), "scoped")
-        qualified = index.qualified_defs.get(label, {}).get(callee)
-        if qualified:
-            return "scoped", list(qualified)
+        return _members(index, class_ids, label, callee, source_file, "scoped")
     return None
 
 
@@ -456,6 +515,11 @@ def _resolve_free(edge: GraphEdge, index: _Index, source_file: str) -> _Outcome:
         ]
     if same:
         return "same_file", index.collapse(same)
+
+    if md.get("package_scoped"):
+        # Go: unqualified names live in the same package (directory) and nowhere else.
+        package = list(index.free_by_dir_label.get((str(PurePosixPath(source_file).parent), callee), ()))
+        return ("same_package", package) if package else None
 
     imported: list[str] = []
     import_module = md.get("import_module")
@@ -508,10 +572,10 @@ def _resolve_one(edge: GraphEdge, index: _Index) -> _Outcome:
 
     if kind in ("this", "self"):
         classes = _enclosing_classes(edge, index, source_file)
-        if not classes:
-            return None
-        found = index.lookup(classes, callee, skip_direct=bool(md.get("super")))
-        return _tier_from_lookup(found, "this")
+        if md.get("super"):
+            return _tier_from_lookup(index.lookup(classes, callee, skip_direct=True), "this") if classes else None
+        label = _last_segment(str(md.get("enclosing_class") or ""))
+        return _members(index, classes, label, callee, source_file, "this") if label else None
 
     receiver_type = md.get("receiver_type")
     if not receiver_type and kind == "var" and md.get("receiver_member"):
@@ -524,9 +588,7 @@ def _resolve_one(edge: GraphEdge, index: _Index) -> _Outcome:
             classes = [c for c in classes if index.symbols[c].source_ref == type_file]
         else:
             classes = index.prefer(classes, source_file)
-        if not classes:
-            return None
-        return _tier_from_lookup(index.lookup(classes, callee), "declared_type")
+        return _members(index, classes, label, callee, source_file, "declared_type")
 
     if kind == "var" and python and md.get("receiver"):
         # `Cls.method()` on a class defined in this same file (not imported)
@@ -546,9 +608,9 @@ def _resolve_one(edge: GraphEdge, index: _Index) -> _Outcome:
         return _resolve_import_binding(edge, index)
 
     if not python and md.get("implicit_receiver", True):
-        classes = _enclosing_classes(edge, index, source_file)
-        if classes:
-            outcome = _tier_from_lookup(index.lookup(classes, callee), "this")
+        label = _last_segment(str(md.get("enclosing_class") or ""))
+        if label:
+            outcome = _members(index, _enclosing_classes(edge, index, source_file), label, callee, source_file, "this")
             if outcome is not None:
                 return outcome
     return _resolve_free(edge, index, source_file)
@@ -573,6 +635,7 @@ def _is_affected(
         or md.get("scope")
         or md.get("scope_module")
         or md.get("scope_file")
+        or md.get("scope_dir")
         or md.get("receiver_kind") in ("this", "self")
     ):
         return True
@@ -608,21 +671,46 @@ def resolve_call_endpoints(
         calls = [edge for edge in calls if _is_affected(edge, node_ids, files, labels, widen_typed)]
         if not calls:
             return edges
-    index = _Index(nodes, edges)
+    by_family: dict[str, list[GraphEdge]] = defaultdict(list)
     for edge in calls:
-        _reset(edge)
-        outcome = _resolve_one(edge, index)
-        if outcome is None:
-            continue
-        tier, candidate_ids = outcome
-        candidate_ids = sorted(set(candidate_ids))
-        if len(candidate_ids) == 1:
-            edge.target = candidate_ids[0]
-            edge.metadata["resolution"] = tier
-        elif len(candidate_ids) > 1:
-            if edge.confidence != "LOW":
-                edge.metadata["extracted_confidence"] = edge.confidence
-                edge.confidence = "LOW"
-            edge.metadata["candidates"] = candidate_ids[:MAX_CANDIDATES]
-            edge.metadata["ambiguous"] = True
+        by_family[language_family(_call_path(edge))].append(edge)
+    if len(by_family) == 1 and len({language_family(n.source_ref) for n in nodes if n.source_ref}) == 1:
+        partitions = {next(iter(by_family)): (nodes, edges)}
+    else:
+        node_buckets: dict[str, list[GraphNode]] = defaultdict(list)
+        for node in nodes:
+            node_buckets[language_family(node.source_ref)].append(node)
+        edge_buckets: dict[str, list[GraphEdge]] = defaultdict(list)
+        for edge in edges:
+            if edge.relation in ("imports", "inherits"):
+                edge_buckets[language_family(_edge_path(edge))].append(edge)
+        partitions = {fam: (node_buckets.get(fam, []), edge_buckets.get(fam, [])) for fam in by_family}
+    for family, family_calls in by_family.items():
+        fam_nodes, fam_edges = partitions[family]
+        index = _Index(fam_nodes, fam_edges)
+        for edge in family_calls:
+            _resolve_into(edge, index)
     return edges
+
+
+def _call_path(edge: GraphEdge) -> str:
+    source_file = edge.metadata.get("source_file")
+    return str(source_file) if source_file else _edge_path(edge)
+
+
+def _resolve_into(edge: GraphEdge, index: _Index) -> None:
+    _reset(edge)
+    outcome = _resolve_one(edge, index)
+    if outcome is None:
+        return
+    tier, candidate_ids = outcome
+    candidate_ids = sorted(set(candidate_ids))
+    if len(candidate_ids) == 1:
+        edge.target = candidate_ids[0]
+        edge.metadata["resolution"] = tier
+    elif len(candidate_ids) > 1:
+        if edge.confidence != "LOW":
+            edge.metadata["extracted_confidence"] = edge.confidence
+            edge.confidence = "LOW"
+        edge.metadata["candidates"] = candidate_ids[:MAX_CANDIDATES]
+        edge.metadata["ambiguous"] = True

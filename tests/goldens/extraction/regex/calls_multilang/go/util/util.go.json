@@ -1,0 +1,52 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/util/util.go:contains:Help",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "go/util/util.go"
+      },
+      "relation": "contains",
+      "source": "file:go/util/util.go",
+      "target": "symbol:go/util/util.go:Help",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "go/util/util.go",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "go",
+        "size_bytes": 30
+      },
+      "node_id": "file:go/util/util.go",
+      "signature": "",
+      "source_ref": "go/util/util.go",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "Help",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 3,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:go/util/util.go:Help",
+      "signature": "func Help() {",
+      "source_ref": "go/util/util.go",
+      "span_end": 4,
+      "span_start": 3
+    }
+  ]
+}

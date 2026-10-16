@@ -2,6 +2,25 @@
   "edges": [
     {
       "confidence": "EXTRACTED",
+      "edge_id": "treesitter:App.java:calls:run:List.of:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "of",
+        "enclosing_class": "App",
+        "lineno": 5,
+        "receiver": "List",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "List",
+        "source_file": "App.java"
+      },
+      "relation": "calls",
+      "source": "symbol:App.java:run",
+      "target": "name:of",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
       "edge_id": "treesitter:App.java:contains:App",
       "layer": "STRUCTURAL",
       "metadata": {

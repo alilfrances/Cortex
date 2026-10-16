@@ -1,0 +1,436 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:calls:amb:w.draw:34",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "draw",
+        "enclosing_class": null,
+        "lineno": 34,
+        "receiver": "w",
+        "receiver_kind": "var",
+        "receiver_type": "Widget",
+        "scope": null,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:amb",
+      "target": "name:draw",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:calls:run:Bar.default:17",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "default",
+        "enclosing_class": "Svc",
+        "lineno": 17,
+        "receiver": "Bar",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "Bar",
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:default",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:calls:run:Foo.new:15",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "new",
+        "enclosing_class": "Svc",
+        "lineno": 15,
+        "receiver": "Foo",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "Foo",
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:new",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:calls:run:Svc.make:12",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "make",
+        "enclosing_class": "Svc",
+        "lineno": 12,
+        "receiver": "Svc",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "Svc",
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:make",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:calls:run:helper:14",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "helper",
+        "enclosing_class": "Svc",
+        "implicit_receiver": false,
+        "import_file": "rust/src/util.rs",
+        "import_spec": "util::helper",
+        "lineno": 14,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:helper",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:calls:run:local:20",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "local",
+        "enclosing_class": "Svc",
+        "implicit_receiver": false,
+        "lineno": 20,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:local",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:calls:run:r.save:19",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "save",
+        "enclosing_class": "Svc",
+        "lineno": 19,
+        "receiver": "r",
+        "receiver_kind": "var",
+        "receiver_type": "Repo",
+        "scope": null,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:calls:run:self.repo.save:11",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "save",
+        "enclosing_class": "Svc",
+        "lineno": 11,
+        "receiver": "self.repo",
+        "receiver_kind": "var",
+        "receiver_type": "Repo",
+        "scope": null,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:calls:run:self.step:10",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "step",
+        "enclosing_class": "Svc",
+        "lineno": 10,
+        "receiver": "self",
+        "receiver_kind": "self",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:calls:run:util.free:13",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "free",
+        "enclosing_class": "Svc",
+        "lineno": 13,
+        "receiver": "util",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "util",
+        "scope_file": "rust/src/util.rs",
+        "scope_namespace": true,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:free",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:calls:run:x.m:16",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "m",
+        "enclosing_class": "Svc",
+        "lineno": 16,
+        "receiver": "x",
+        "receiver_kind": "var",
+        "receiver_type": "Foo",
+        "scope": null,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:m",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:calls:run:y.n:18",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "n",
+        "enclosing_class": "Svc",
+        "lineno": 18,
+        "receiver": "y",
+        "receiver_kind": "var",
+        "receiver_type": "Bar",
+        "scope": null,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:rust/src/main.rs:run",
+      "target": "name:n",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:contains:Svc",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/main.rs",
+      "target": "symbol:rust/src/main.rs:Svc",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:contains:amb",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 33,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/main.rs",
+      "target": "symbol:rust/src/main.rs:amb",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:contains:local",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 30,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/main.rs",
+      "target": "symbol:rust/src/main.rs:local",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:contains:make",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 26,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/main.rs",
+      "target": "symbol:rust/src/main.rs:make",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:contains:run",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 9,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/main.rs",
+      "target": "symbol:rust/src/main.rs:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:contains:step",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 23,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/main.rs",
+      "target": "symbol:rust/src/main.rs:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:rust/src/main.rs:import:2:crate::util::helper",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "rust/src/main.rs"
+      },
+      "relation": "imports",
+      "source": "file:rust/src/main.rs",
+      "target": "module:crate::util::helper",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "rust/src/main.rs",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "rs",
+        "size_bytes": 459
+      },
+      "node_id": "file:rust/src/main.rs",
+      "signature": "",
+      "source_ref": "rust/src/main.rs",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Svc",
+      "metadata": {
+        "lineno": 4,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:rust/src/main.rs:Svc",
+      "signature": "struct Svc {",
+      "source_ref": "rust/src/main.rs",
+      "span_end": 6,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "amb",
+      "metadata": {
+        "lineno": 33,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:rust/src/main.rs:amb",
+      "signature": "fn amb(w: Widget) {",
+      "source_ref": "rust/src/main.rs",
+      "span_end": 35,
+      "span_start": 33
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "local",
+      "metadata": {
+        "lineno": 30,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:rust/src/main.rs:local",
+      "signature": "fn local() {",
+      "source_ref": "rust/src/main.rs",
+      "span_end": 31,
+      "span_start": 30
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "make",
+      "metadata": {
+        "lineno": 26,
+        "parser_backend": "treesitter",
+        "qualifier": "Svc"
+      },
+      "node_id": "symbol:rust/src/main.rs:make",
+      "signature": "fn make() {",
+      "source_ref": "rust/src/main.rs",
+      "span_end": 27,
+      "span_start": 26
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "run",
+      "metadata": {
+        "lineno": 9,
+        "parser_backend": "treesitter",
+        "qualifier": "Svc"
+      },
+      "node_id": "symbol:rust/src/main.rs:run",
+      "signature": "fn run(&self, r: &Repo) {",
+      "source_ref": "rust/src/main.rs",
+      "span_end": 21,
+      "span_start": 9
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "step",
+      "metadata": {
+        "lineno": 23,
+        "parser_backend": "treesitter",
+        "qualifier": "Svc"
+      },
+      "node_id": "symbol:rust/src/main.rs:step",
+      "signature": "fn step(&self) {",
+      "source_ref": "rust/src/main.rs",
+      "span_end": 24,
+      "span_start": 23
+    }
+  ]
+}

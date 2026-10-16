@@ -1,0 +1,78 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/com/x/Util.java:contains:Util",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "java/com/x/Util.java"
+      },
+      "relation": "contains",
+      "source": "file:java/com/x/Util.java",
+      "target": "symbol:java/com/x/Util.java:Util",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/com/x/Util.java:contains:help",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "java/com/x/Util.java"
+      },
+      "relation": "contains",
+      "source": "file:java/com/x/Util.java",
+      "target": "symbol:java/com/x/Util.java:help",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "java/com/x/Util.java",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "java",
+        "size_bytes": 76
+      },
+      "node_id": "file:java/com/x/Util.java",
+      "signature": "",
+      "source_ref": "java/com/x/Util.java",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Util",
+      "metadata": {
+        "lineno": 3,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/com/x/Util.java:Util",
+      "signature": "public class Util {",
+      "source_ref": "java/com/x/Util.java",
+      "span_end": 6,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "help",
+      "metadata": {
+        "lineno": 4,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/com/x/Util.java:help",
+      "signature": "public static void help() {",
+      "source_ref": "java/com/x/Util.java",
+      "span_end": 5,
+      "span_start": 4
+    }
+  ]
+}

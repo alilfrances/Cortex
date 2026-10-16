@@ -1,0 +1,52 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:go/a/w.go:contains:Do",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "go/a/w.go"
+      },
+      "relation": "contains",
+      "source": "file:go/a/w.go",
+      "target": "symbol:go/a/w.go:Do",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "go/a/w.go",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "go",
+        "size_bytes": 58
+      },
+      "node_id": "file:go/a/w.go",
+      "signature": "",
+      "source_ref": "go/a/w.go",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "Do",
+      "metadata": {
+        "lineno": 5,
+        "parser_backend": "treesitter",
+        "qualifier": "Worker"
+      },
+      "node_id": "symbol:go/a/w.go:Do",
+      "signature": "func (w Worker) Do() {",
+      "source_ref": "go/a/w.go",
+      "span_end": 6,
+      "span_start": 5
+    }
+  ]
+}

@@ -51,6 +51,7 @@ class Frame:
     # classic `Q_OBJECT` + `public:` mis-parse turns the next declaration into a
     # bogus call expression, so nothing there is a call site.
     suppressed: bool = False
+    locals: set[str] = field(default_factory=set)  # Ruby: names that are variables, not bare calls
 
 
 def _text(node: Any, source: bytes) -> str:
@@ -772,6 +773,836 @@ class JsCalls(CallWalker):
         self.emit(node, frame, callee, receiver=receiver, kind="chain")
 
 
+# --------------------------------------------------------------------------- #
+# Go / Rust / Swift / Java / Ruby
+# --------------------------------------------------------------------------- #
+
+import posixpath
+
+_CACHE: dict[str, tuple[int, int, Any]] = {}
+
+
+def _memo(name: str, known: set[str], build: Callable[[set[str]], Any]) -> Any:
+    """Per-batch index over `known_paths` (identity+size keyed) so per-file walkers stay O(1)."""
+    hit = _CACHE.get(name)
+    if hit is not None and hit[0] == id(known) and hit[1] == len(known):
+        return hit[2]
+    value = build(known)
+    _CACHE[name] = (id(known), len(known), value)
+    return value
+
+
+def _suffix_index(known: set[str], ext: str) -> dict[str, list[str]]:
+    index: dict[str, list[str]] = {}
+    for path in sorted(known):
+        if path.endswith(ext):
+            parts = path[: -len(ext)].split("/")
+            for i in range(len(parts)):
+                index.setdefault("/".join(parts[i:]), []).append(path)
+    return index
+
+
+def _is_type_name(name: str) -> bool:
+    return bool(name) and name[0].isupper()
+
+
+def _field(node: Any | None, *names: str) -> Any | None:
+    if node is None:
+        return None
+    for name in names:
+        child = node.child_by_field_name(name)
+        if child is not None:
+            return child
+    return None
+
+
+def _first_named(node: Any | None) -> Any | None:
+    return next(iter(node.named_children), None) if node is not None else None
+
+
+def method_qualifier(suffix: str, node: Any, source: bytes) -> str | None:
+    """Owning type of a method that is *not* contained by its type's span (Go receivers, Rust
+    `impl` blocks, Swift `extension`s): recorded as the node's `qualifier` so the resolver can
+    find members without a class node."""
+    def text(n: Any) -> str:
+        return _text(n, source)
+
+    if suffix == ".go" and node.type == "method_declaration":
+        recv = node.child_by_field_name("receiver")
+        param = _first_named(recv)
+        typ = param.child_by_field_name("type") if param is not None else None
+        while typ is not None and typ.type in {"pointer_type", "generic_type", "parenthesized_type"}:
+            typ = typ.child_by_field_name("type") if typ.type == "generic_type" else _first_named(typ)
+        return text(typ) if typ is not None and typ.type == "type_identifier" else None
+    if suffix == ".rs" and node.type == "function_item":
+        cursor = node.parent
+        while cursor is not None and cursor.type != "impl_item":
+            if cursor.type in {"function_item", "source_file"}:
+                return None
+            cursor = cursor.parent
+        typ = cursor.child_by_field_name("type") if cursor is not None else None
+        while typ is not None and typ.type in {"generic_type", "reference_type"}:
+            typ = typ.child_by_field_name("type")
+        return text(typ).split("::")[-1] if typ is not None and typ.type in {"type_identifier", "scoped_type_identifier"} else None
+    if suffix == ".swift" and node.type == "function_declaration":
+        cursor = node.parent
+        while cursor is not None and cursor.type != "class_declaration":
+            cursor = cursor.parent
+        if cursor is not None and any(c.type == "extension" or text(c) == "extension" for c in cursor.children if not c.is_named):
+            name = cursor.child_by_field_name("name")
+            inner = name
+            while inner is not None and inner.type != "type_identifier":
+                inner = _first_named(inner)
+            return text(inner) if inner is not None else None
+    return None
+
+
+def class_bases(suffix: str, node: Any, source: bytes) -> list[str]:
+    """Declared base type names of a JS/TS/Java/Swift class (recorded as `bases` metadata:
+    those extractors emit no `inherits` edges)."""
+    names: list[str] = []
+
+    def collect(n: Any) -> None:
+        if n.type in {"type_identifier", "identifier"}:
+            names.append(_text(n, source))
+            return
+        for child in n.named_children:
+            collect(child)
+
+    if suffix in {".js", ".jsx", ".ts", ".tsx"}:
+        for child in node.children:
+            if child.type == "class_heritage":
+                for clause in child.children:
+                    if clause.type in {"extends_clause"}:
+                        for value in clause.named_children:
+                            if value.type in {"identifier", "type_identifier"}:
+                                names.append(_text(value, source))
+                            elif value.type == "member_expression":
+                                names.append(_text(value, source).split(".")[-1])
+                    elif clause.type in {"identifier", "type_identifier"}:
+                        names.append(_text(clause, source))  # JS: `class A extends B`
+    elif suffix == ".java":
+        for field_name in ("superclass", "interfaces"):
+            child = node.child_by_field_name(field_name)
+            if child is not None:
+                collect(child)
+    elif suffix == ".swift":
+        for child in node.children:
+            if child.type == "inheritance_specifier":
+                collect(child)
+    seen: list[str] = []
+    for n in names:
+        if n and n not in seen:
+            seen.append(n)
+    return seen
+
+
+# -- Go ----------------------------------------------------------------------
+
+_GO_BUILTINS = frozenset({
+    "len", "cap", "make", "new", "append", "copy", "delete", "panic", "recover", "print", "println",
+    "close", "complex", "real", "imag", "min", "max", "clear", "string", "int", "int8", "int16", "int32",
+    "int64", "uint", "uint8", "uint16", "uint32", "uint64", "float32", "float64", "bool", "byte", "rune",
+    "error", "any",
+})
+
+
+def _go_dirs(known: set[str]) -> list[str]:
+    dirs = {posixpath.dirname(p) for p in known if p.endswith(".go")}
+    return sorted(dirs, key=lambda d: (-len(d), d))
+
+
+class GoCalls(CallWalker):
+    language = "go"
+
+    def __init__(self, ctx: CallContext) -> None:
+        super().__init__(ctx)
+        self.imports: dict[str, str | None] = {}  # alias -> repo dir (None: external)
+        self.fields_of: dict[str, dict[str, str]] = {}
+        self.recv: dict[int, str] = {}
+
+    def go_type(self, node: Any | None) -> str | None:
+        while node is not None and node.type in {"pointer_type", "parenthesized_type", "slice_type", "array_type"}:
+            node = node.child_by_field_name("element") if node.type in {"slice_type", "array_type"} else _first_named(node)
+        if node is not None and node.type in {"type_identifier"}:
+            return self.text(node)
+        if node is not None and node.type == "generic_type":
+            return self.go_type(node.child_by_field_name("type"))
+        return None
+
+    def collect(self, root: Any) -> None:
+        dirs = _memo("go_dirs", self.ctx.known_paths, _go_dirs)
+        stack = [root]
+        while stack:
+            node = stack.pop()
+            if node.type == "import_spec":
+                path_node = node.child_by_field_name("path")
+                name_node = node.child_by_field_name("name")
+                if path_node is not None:
+                    spec = self.text(path_node).strip('"`')
+                    alias = self.text(name_node) if name_node is not None else spec.rstrip("/").split("/")[-1]
+                    if re.fullmatch(r"v\d+", alias) and "/" in spec:
+                        alias = spec.split("/")[-2]
+                    if alias not in {"_", "."}:
+                        self.imports[alias] = next((d for d in dirs if spec == d or spec.endswith("/" + d)), None) if dirs else None
+                        if self.imports[alias] == "":
+                            self.imports[alias] = None
+            elif node.type == "type_spec":
+                name = node.child_by_field_name("name")
+                typ = node.child_by_field_name("type")
+                if name is not None and typ is not None and typ.type == "struct_type":
+                    fields: dict[str, str] = {}
+                    for decl in typ.named_children:
+                        for field in decl.named_children:
+                            if field.type == "field_declaration":
+                                ftype = self.go_type(field.child_by_field_name("type"))
+                                for fname in field.children_by_field_name("name"):
+                                    if ftype:
+                                        fields[self.text(fname)] = ftype
+                    self.fields_of[self.text(name)] = fields
+            stack.extend(node.children)
+
+    def run(self, root: Any) -> list[GraphEdge]:
+        self.collect(root)
+        return super().run(root)
+
+    def add_params(self, params: Any | None, vars_: dict[str, str]) -> None:
+        if params is None:
+            return
+        for decl in params.named_children:
+            if decl.type in {"parameter_declaration", "variadic_parameter_declaration"}:
+                typ = self.go_type(decl.child_by_field_name("type"))
+                for name in decl.children_by_field_name("name"):
+                    if typ:
+                        vars_[self.text(name)] = typ
+                    else:
+                        vars_.pop(self.text(name), None)
+
+    def enter(self, node: Any, frame: Frame) -> Frame:
+        if node.type == "method_declaration":
+            key = (node.start_byte, node.end_byte)
+            cls = self.ctx.def_qualifiers.get(key) or method_qualifier(".go", node, self.ctx.source)
+            inner = self.definition_frame(node, frame, class_name=cls, label="")
+            inner.vars = {}
+            recv = node.child_by_field_name("receiver")
+            param = _first_named(recv)
+            if param is not None and cls:
+                for name in param.children_by_field_name("name"):
+                    inner.vars[self.text(name)] = cls
+                    self.recv[id(inner)] = self.text(name)
+            self.add_params(node.child_by_field_name("parameters"), inner.vars)
+            return inner
+        if node.type == "function_declaration":
+            inner = self.definition_frame(node, frame, class_name=None, label="")
+            inner.vars = {}
+            self.add_params(node.child_by_field_name("parameters"), inner.vars)
+            return inner
+        if node.type == "func_literal":
+            inner = Frame(frame.symbol_id, frame.owner_label, frame.class_name, dict(frame.vars), frame.in_function)
+            if id(frame) in self.recv:
+                self.recv[id(inner)] = self.recv[id(frame)]
+            self.add_params(node.child_by_field_name("parameters"), inner.vars)
+            return inner
+        return frame
+
+    def visit(self, node: Any, frame: Frame) -> None:
+        kind = node.type
+        if kind == "var_spec":
+            typ = self.go_type(node.child_by_field_name("type"))
+            for name in node.children_by_field_name("name"):
+                if typ:
+                    frame.vars[self.text(name)] = typ
+            return
+        if kind == "short_var_declaration":
+            left, right = node.child_by_field_name("left"), node.child_by_field_name("right")
+            if left is not None and right is not None:
+                for lhs, rhs in zip(left.named_children, right.named_children):
+                    lit = rhs
+                    if lit.type == "unary_expression":
+                        lit = _field(lit, "operand") if _field(lit, "operand") is not None else lit
+                    typ = self.go_type(lit.child_by_field_name("type")) if lit.type == "composite_literal" else None
+                    if lhs.type == "identifier":
+                        if typ:
+                            frame.vars[self.text(lhs)] = typ
+                        else:
+                            frame.vars.pop(self.text(lhs), None)
+            return
+        if kind != "call_expression":
+            return
+        fn = node.child_by_field_name("function")
+        if fn is None:
+            return
+        if fn.type == "identifier":
+            name = self.text(fn)
+            if name not in _GO_BUILTINS:
+                self.emit(node, frame, name, extra={"implicit_receiver": False, "package_scoped": True})
+            return
+        if fn.type != "selector_expression":
+            return
+        operand, field_node = fn.child_by_field_name("operand"), fn.child_by_field_name("field")
+        if operand is None or field_node is None:
+            return
+        callee, receiver = self.text(field_node), self.text(operand)
+        if operand.type == "identifier":
+            if receiver in self.imports and receiver not in frame.vars:
+                self.emit(
+                    node, frame, callee, receiver=receiver, kind="scoped", scope=receiver,
+                    extra={"scope_dir": self.imports[receiver], "scope_namespace": True, "scope_file": None}
+                    if self.imports[receiver] else {"scope_dir": None, "scope_namespace": True, "scope_file": None},
+                )
+            elif self.recv.get(id(frame)) == receiver:
+                self.emit(node, frame, callee, receiver=receiver, kind="this")
+            else:
+                self.emit(node, frame, callee, receiver=receiver, kind="var", receiver_type=frame.vars.get(receiver))
+            return
+        if operand.type == "selector_expression":
+            base, member = operand.child_by_field_name("operand"), operand.child_by_field_name("field")
+            if base is not None and member is not None and base.type == "identifier":
+                owner = frame.vars.get(self.text(base))
+                rtype = self.fields_of.get(owner or "", {}).get(self.text(member))
+                self.emit(node, frame, callee, receiver=receiver, kind="var", receiver_type=rtype)
+                return
+        self.emit(node, frame, callee, receiver=receiver, kind="chain")
+
+
+# -- Rust --------------------------------------------------------------------
+
+_RUST_WRAPPERS = frozenset({"Box", "Rc", "Arc", "RefCell", "Mutex", "Option", "RwLock", "Cell"})
+_RUST_FACTORIES = frozenset({"new", "default", "create", "build", "from", "open", "with_capacity"})
+_RUST_SKIP = frozenset({"Some", "Ok", "Err", "None", "drop", "Box"})
+
+
+def _rust_modules(known: set[str]) -> dict[str, list[str]]:
+    index: dict[str, list[str]] = {}
+    for path in sorted(known):
+        if path.endswith("/mod.rs"):
+            index.setdefault(posixpath.basename(posixpath.dirname(path)), []).append(path)
+        elif path.endswith(".rs"):
+            index.setdefault(posixpath.basename(path)[:-3], []).append(path)
+    return index
+
+
+class RustCalls(CallWalker):
+    language = "rust"
+
+    def __init__(self, ctx: CallContext) -> None:
+        super().__init__(ctx)
+        self.uses: dict[str, tuple[str, str]] = {}  # local -> (module segment, item)
+        self.fields_of: dict[str, dict[str, str]] = {}
+
+    def module_file(self, name: str) -> str | None:
+        paths = _memo("rust_modules", self.ctx.known_paths, _rust_modules).get(name, [])
+        if len(paths) > 1:
+            here = posixpath.dirname(self.ctx.path)
+            near = [p for p in paths if posixpath.dirname(p) == here or posixpath.dirname(posixpath.dirname(p)) == here]
+            paths = near or paths
+        return paths[0] if len(paths) == 1 else None
+
+    def rust_type(self, node: Any | None) -> str | None:
+        while node is not None and node.type in {"reference_type", "pointer_type", "array_type", "slice_type"}:
+            node = _field(node, "type", "element")
+        if node is None:
+            return None
+        if node.type == "type_identifier":
+            return self.text(node)
+        if node.type == "scoped_type_identifier":
+            return self.text(node).split("::")[-1]
+        if node.type == "generic_type":
+            base = self.rust_type(node.child_by_field_name("type"))
+            if base in _RUST_WRAPPERS:
+                args = node.child_by_field_name("type_arguments")
+                return self.rust_type(_first_named(args))
+            return base
+        return None
+
+    def collect_use(self, node: Any, prefix: list[str]) -> None:
+        if node.type == "scoped_identifier":
+            parts = prefix + self.text(node).split("::")
+            if len(parts) >= 2:
+                self.uses[parts[-1]] = (parts[-2], parts[-1])
+        elif node.type == "use_as_clause":
+            path, alias = node.child_by_field_name("path"), node.child_by_field_name("alias")
+            if path is not None and alias is not None:
+                parts = prefix + self.text(path).split("::")
+                if len(parts) >= 2:
+                    self.uses[self.text(alias)] = (parts[-2], parts[-1])
+        elif node.type == "scoped_use_list":
+            path = node.child_by_field_name("path")
+            lst = node.child_by_field_name("list")
+            base = prefix + (self.text(path).split("::") if path is not None else [])
+            for item in (lst.named_children if lst is not None else []):
+                if item.type == "identifier" and len(base) >= 1:
+                    self.uses[self.text(item)] = (base[-1], self.text(item))
+                else:
+                    self.collect_use(item, base)
+
+    def run(self, root: Any) -> list[GraphEdge]:
+        stack = [root]
+        while stack:
+            node = stack.pop()
+            if node.type == "use_declaration":
+                arg = node.child_by_field_name("argument")
+                if arg is not None:
+                    self.collect_use(arg, [])
+            elif node.type == "struct_item":
+                name, body = node.child_by_field_name("name"), node.child_by_field_name("body")
+                if name is not None and body is not None:
+                    fields: dict[str, str] = {}
+                    for fld in body.named_children:
+                        if fld.type == "field_declaration":
+                            ftype = self.rust_type(fld.child_by_field_name("type"))
+                            fname = fld.child_by_field_name("name")
+                            if ftype and fname is not None:
+                                fields[self.text(fname)] = ftype
+                    self.fields_of[self.text(name)] = fields
+            stack.extend(node.children)
+        return super().run(root)
+
+    def add_params(self, params: Any | None, vars_: dict[str, str]) -> None:
+        for param in (params.named_children if params is not None else []):
+            if param.type == "parameter":
+                pat = param.child_by_field_name("pattern")
+                typ = self.rust_type(param.child_by_field_name("type"))
+                if pat is not None and pat.type == "identifier":
+                    if typ:
+                        vars_[self.text(pat)] = typ
+                    else:
+                        vars_.pop(self.text(pat), None)
+
+    def enter(self, node: Any, frame: Frame) -> Frame:
+        if node.type == "impl_item":
+            typ = node.child_by_field_name("type")
+            name = self.rust_type(typ)
+            return Frame(frame.symbol_id, frame.owner_label, name, {}, False)
+        if node.type == "function_item":
+            inner = self.definition_frame(node, frame, class_name=frame.class_name, label="")
+            inner.vars = {}
+            self.add_params(node.child_by_field_name("parameters"), inner.vars)
+            return inner
+        return frame
+
+    def visit(self, node: Any, frame: Frame) -> None:
+        kind = node.type
+        if kind == "let_declaration":
+            pat = node.child_by_field_name("pattern")
+            typ = self.rust_type(node.child_by_field_name("type")) or self.constructed(node.child_by_field_name("value"))
+            if pat is not None and pat.type == "identifier":
+                if typ:
+                    frame.vars[self.text(pat)] = typ
+                else:
+                    frame.vars.pop(self.text(pat), None)
+            return
+        if kind != "call_expression":
+            return
+        fn = node.child_by_field_name("function")
+        if fn is None:
+            return
+        if fn.type == "identifier":
+            name = self.text(fn)
+            if name in _RUST_SKIP:
+                return
+            extra: dict[str, Any] = {"implicit_receiver": False}
+            use = self.uses.get(name)
+            if use is not None:
+                extra.update({"import_spec": "::".join(use), "import_file": self.module_file(use[0])})
+                name = use[1]
+            self.emit(node, frame, name, extra=extra)
+        elif fn.type == "scoped_identifier":
+            path, name_node = fn.child_by_field_name("path"), fn.child_by_field_name("name")
+            if path is None or name_node is None:
+                return
+            callee, scope = self.text(name_node), self.text(path).split("::")[-1]
+            if scope in {"crate", "self", "super"} or callee in _RUST_SKIP:
+                self.emit(node, frame, callee, extra={"implicit_receiver": False})
+            elif scope == "Self" and frame.class_name:
+                self.emit(node, frame, callee, receiver="Self", kind="this")
+            elif _is_type_name(scope):
+                self.emit(node, frame, callee, receiver=self.text(path), kind="scoped", scope=scope)
+            else:
+                file = self.module_file(scope)
+                self.emit(
+                    node, frame, callee, receiver=self.text(path), kind="scoped", scope=scope,
+                    extra={"scope_file": file, "scope_namespace": True} if file else None,
+                )
+        elif fn.type == "field_expression":
+            value, field_node = fn.child_by_field_name("value"), fn.child_by_field_name("field")
+            if value is None or field_node is None:
+                return
+            callee, receiver = self.text(field_node), self.text(value)
+            if value.type == "self":
+                self.emit(node, frame, callee, receiver="self", kind="self")
+            elif value.type == "identifier":
+                self.emit(node, frame, callee, receiver=receiver, kind="var", receiver_type=frame.vars.get(receiver))
+            elif value.type == "field_expression":
+                base, member = value.child_by_field_name("value"), value.child_by_field_name("field")
+                if base is not None and base.type == "self" and member is not None:
+                    rtype = self.fields_of.get(frame.class_name or "", {}).get(self.text(member))
+                    self.emit(node, frame, callee, receiver=receiver, kind="var", receiver_type=rtype)
+                else:
+                    self.emit(node, frame, callee, receiver=receiver, kind="chain")
+            else:
+                self.emit(node, frame, callee, receiver=receiver, kind="chain")
+
+    def constructed(self, value: Any | None) -> str | None:
+        if value is not None and value.type == "call_expression":
+            fn = value.child_by_field_name("function")
+            if fn is not None and fn.type == "scoped_identifier":
+                path, name = fn.child_by_field_name("path"), fn.child_by_field_name("name")
+                if path is not None and name is not None and self.text(name) in _RUST_FACTORIES:
+                    scope = self.text(path).split("::")[-1]
+                    return scope if _is_type_name(scope) else None
+        return None
+
+
+# -- Swift -------------------------------------------------------------------
+
+
+class SwiftCalls(CallWalker):
+    language = "swift"
+
+    def __init__(self, ctx: CallContext) -> None:
+        super().__init__(ctx)
+        self.fields_of: dict[str, dict[str, str]] = {}
+
+    def swift_type(self, node: Any | None) -> str | None:
+        while node is not None and node.type in {"type_annotation", "optional_type", "parenthesized_type", "user_type"}:
+            if node.type == "user_type":
+                ident = next((c for c in node.named_children if c.type == "type_identifier"), None)
+                return self.text(ident) if ident is not None else None
+            node = _field(node, "name") if _field(node, "name") is not None else _first_named(node)
+        if node is not None and node.type == "type_identifier":
+            return self.text(node)
+        return None
+
+    def class_name(self, node: Any) -> str | None:
+        name = node.child_by_field_name("name")
+        while name is not None and name.type != "type_identifier":
+            name = _first_named(name)
+        return self.text(name) if name is not None else None
+
+    def declared(self, node: Any, vars_: dict[str, str]) -> None:
+        pat = node.child_by_field_name("name")
+        ident = None
+        if pat is not None:
+            ident = _field(pat, "bound_identifier") if _field(pat, "bound_identifier") is not None else _first_named(pat)
+        if ident is None or ident.type != "simple_identifier":
+            return
+        typ = None
+        for child in node.children:
+            if child.type == "type_annotation":
+                typ = self.swift_type(child)
+        value = node.child_by_field_name("value")
+        if typ is None and value is not None and value.type == "call_expression":
+            head = _first_named(value)
+            if head is not None and head.type == "simple_identifier" and _is_type_name(self.text(head)):
+                typ = self.text(head)
+        if typ:
+            vars_[self.text(ident)] = typ
+        else:
+            vars_.pop(self.text(ident), None)
+
+    def run(self, root: Any) -> list[GraphEdge]:
+        stack = [root]
+        while stack:
+            node = stack.pop()
+            if node.type == "class_declaration":
+                name = self.class_name(node)
+                body = node.child_by_field_name("body")
+                if name and body is not None:
+                    fields = self.fields_of.setdefault(name, {})
+                    for member in body.named_children:
+                        if member.type == "property_declaration":
+                            self.declared(member, fields)
+            stack.extend(node.children)
+        return super().run(root)
+
+    def enter(self, node: Any, frame: Frame) -> Frame:
+        kind = node.type
+        if kind == "class_declaration":
+            name = self.class_name(node)
+            sym = self.ctx.def_symbols.get((node.start_byte, node.end_byte), frame.symbol_id)
+            return Frame(sym, frame.owner_label if sym == frame.symbol_id else sym.split(":", 2)[-1], name, {}, False)
+        if kind in {"function_declaration", "init_declaration", "deinit_declaration"}:
+            if kind == "function_declaration":
+                cls = self.ctx.def_qualifiers.get((node.start_byte, node.end_byte)) or frame.class_name
+                inner = self.definition_frame(node, frame, class_name=cls, label="")
+            else:
+                inner = Frame(frame.symbol_id, frame.owner_label, frame.class_name, {}, True)
+            inner.vars = dict(self.fields_of.get(inner.class_name or "", {}))
+            for param in node.children:
+                if param.type == "parameter":
+                    names = list(param.children_by_field_name("name"))
+                    typ = self.swift_type(names[-1]) if len(names) > 1 else None
+                    ident = next((n for n in names if n.type == "simple_identifier"), None)
+                    if ident is not None:
+                        if typ:
+                            inner.vars[self.text(ident)] = typ
+                        else:
+                            inner.vars.pop(self.text(ident), None)
+            return inner
+        return frame
+
+    def visit(self, node: Any, frame: Frame) -> None:
+        if node.type == "property_declaration" and frame.in_function:
+            self.declared(node, frame.vars)
+            return
+        if node.type != "call_expression":
+            return
+        head = _first_named(node)
+        if head is None:
+            return
+        if head.type == "simple_identifier":
+            self.emit(node, frame, self.text(head))
+            return
+        if head.type != "navigation_expression":
+            return
+        target = head.child_by_field_name("target")
+        suffix = head.child_by_field_name("suffix")
+        callee_node = suffix.child_by_field_name("suffix") if suffix is not None else None
+        if target is None or callee_node is None:
+            return
+        callee, receiver = self.text(callee_node), self.text(target)
+        if target.type == "self_expression":
+            self.emit(node, frame, callee, receiver="self", kind="self")
+        elif target.type == "super_expression":
+            self.emit(node, frame, callee, receiver="super", kind="self", extra={"super": True})
+        elif target.type == "simple_identifier":
+            if receiver in frame.vars:
+                self.emit(node, frame, callee, receiver=receiver, kind="var", receiver_type=frame.vars[receiver])
+            elif _is_type_name(receiver):
+                self.emit(node, frame, callee, receiver=receiver, kind="scoped", scope=receiver)
+            else:
+                self.emit(node, frame, callee, receiver=receiver, kind="var")
+        else:
+            self.emit(node, frame, callee, receiver=receiver, kind="chain")
+
+
+# -- Java --------------------------------------------------------------------
+
+_JAVA_CLASSES = {"class_declaration", "interface_declaration", "enum_declaration", "record_declaration"}
+
+
+class JavaCalls(CallWalker):
+    language = "java"
+
+    def __init__(self, ctx: CallContext) -> None:
+        super().__init__(ctx)
+        self.fields_of: dict[str, dict[str, str]] = {}
+        self.imports: dict[str, str | None] = {}
+
+    def java_type(self, node: Any | None) -> str | None:
+        if node is None:
+            return None
+        if node.type in {"type_identifier"}:
+            name = self.text(node)
+            return None if name == "var" else name
+        if node.type == "generic_type":
+            return self.java_type(_first_named(node))
+        if node.type == "scoped_type_identifier":
+            return self.text(node).split(".")[-1]
+        return None
+
+    def run(self, root: Any) -> list[GraphEdge]:
+        index = _memo("java_suffixes", self.ctx.known_paths, lambda k: _suffix_index(k, ".java"))
+        stack = [root]
+        while stack:
+            node = stack.pop()
+            if node.type == "import_declaration":
+                text = self.text(node).replace("import", "", 1).replace("static", "", 1).strip().rstrip(";").strip()
+                if not text.endswith("*"):
+                    dotted = text.replace(".", "/")
+                    paths = index.get(dotted, [])
+                    self.imports[text.split(".")[-1]] = paths[0] if len(paths) == 1 else None
+            elif node.type in _JAVA_CLASSES:
+                name, body = node.child_by_field_name("name"), node.child_by_field_name("body")
+                if name is not None and body is not None:
+                    fields = self.fields_of.setdefault(self.text(name), {})
+                    for member in body.named_children:
+                        if member.type == "field_declaration":
+                            typ = self.java_type(member.child_by_field_name("type"))
+                            for decl in member.children_by_field_name("declarator"):
+                                ident = decl.child_by_field_name("name")
+                                if typ and ident is not None:
+                                    fields[self.text(ident)] = typ
+            stack.extend(node.children)
+        return super().run(root)
+
+    def type_file(self, name: str | None) -> dict[str, Any] | None:
+        file = self.imports.get(name or "")
+        return {"receiver_type_file": file} if file else None
+
+    def enter(self, node: Any, frame: Frame) -> Frame:
+        kind = node.type
+        if kind in _JAVA_CLASSES:
+            name = self.ctx.name_of(node, self.ctx.source) or None
+            sym = self.ctx.def_symbols.get((node.start_byte, node.end_byte), frame.symbol_id)
+            return Frame(sym, frame.owner_label if sym == frame.symbol_id else sym.split(":", 2)[-1], name, {}, False)
+        if kind in {"method_declaration", "constructor_declaration", "lambda_expression", "static_initializer"}:
+            if kind == "method_declaration":
+                inner = self.definition_frame(node, frame, class_name=frame.class_name, label="")
+            else:
+                inner = Frame(frame.symbol_id, frame.owner_label, frame.class_name, {}, True)
+            inner.vars = dict(self.fields_of.get(inner.class_name or "", {})) if kind != "lambda_expression" else dict(frame.vars)
+            params = node.child_by_field_name("parameters")
+            for param in (params.named_children if params is not None else []):
+                if param.type in {"formal_parameter", "spread_parameter"}:
+                    typ = self.java_type(param.child_by_field_name("type"))
+                    name = param.child_by_field_name("name")
+                    if name is not None and typ:
+                        inner.vars[self.text(name)] = typ
+            return inner
+        return frame
+
+    def visit(self, node: Any, frame: Frame) -> None:
+        kind = node.type
+        if kind == "local_variable_declaration":
+            typ = self.java_type(node.child_by_field_name("type"))
+            for decl in node.children_by_field_name("declarator"):
+                ident, value = decl.child_by_field_name("name"), decl.child_by_field_name("value")
+                resolved = typ
+                if resolved is None and value is not None and value.type == "object_creation_expression":
+                    resolved = self.java_type(value.child_by_field_name("type"))
+                if ident is not None:
+                    if resolved:
+                        frame.vars[self.text(ident)] = resolved
+                    else:
+                        frame.vars.pop(self.text(ident), None)
+            return
+        if kind == "object_creation_expression":
+            name = self.java_type(node.child_by_field_name("type"))
+            if name:
+                file = self.imports.get(name)
+                self.emit(node, frame, name, kind="new", extra={"import_spec": name, "import_file": file} if file else None)
+            return
+        if kind != "method_invocation":
+            return
+        name_node, obj = node.child_by_field_name("name"), node.child_by_field_name("object")
+        if name_node is None:
+            return
+        callee = self.text(name_node)
+        if obj is None:
+            self.emit(node, frame, callee)
+            return
+        receiver = self.text(obj)
+        if obj.type == "this":
+            self.emit(node, frame, callee, receiver="this", kind="this")
+        elif obj.type == "super":
+            self.emit(node, frame, callee, receiver="super", kind="this", extra={"super": True})
+        elif obj.type == "identifier":
+            if receiver in frame.vars:
+                rtype = frame.vars[receiver]
+                self.emit(node, frame, callee, receiver=receiver, kind="var", receiver_type=rtype, extra=self.type_file(rtype))
+            elif _is_type_name(receiver):
+                file = self.imports.get(receiver)
+                self.emit(
+                    node, frame, callee, receiver=receiver, kind="scoped", scope=receiver,
+                    extra={"scope_file": file, "scope_namespace": False} if file else None,
+                )
+            else:
+                self.emit(node, frame, callee, receiver=receiver, kind="var")
+        elif obj.type == "field_access":
+            base, member = obj.child_by_field_name("object"), obj.child_by_field_name("field")
+            if base is not None and base.type == "this" and member is not None:
+                rtype = self.fields_of.get(frame.class_name or "", {}).get(self.text(member))
+                self.emit(node, frame, callee, receiver=receiver, kind="var", receiver_type=rtype, extra=self.type_file(rtype))
+            else:
+                self.emit(node, frame, callee, receiver=receiver, kind="chain")
+        elif obj.type == "object_creation_expression":
+            rtype = self.java_type(obj.child_by_field_name("type"))
+            self.emit(node, frame, callee, receiver=receiver, kind="var", receiver_type=rtype, extra=self.type_file(rtype))
+        else:
+            self.emit(node, frame, callee, receiver=receiver, kind="chain")
+
+
+# -- Ruby --------------------------------------------------------------------
+
+_RUBY_SKIP = frozenset({
+    "require", "require_relative", "load", "attr_accessor", "attr_reader", "attr_writer", "private", "public",
+    "protected", "include", "extend", "prepend", "raise", "puts", "print", "p", "pp", "module_function",
+    "private_constant", "alias_method", "lambda", "proc", "block_given?", "loop",
+})
+
+
+class RubyCalls(CallWalker):
+    """Call sites only: the tree-sitter extractor records `class`/`module` symbols but no `def`
+    symbols, so only `Const.new` (-> the class) can resolve; everything else stays `name:`."""
+
+    language = "ruby"
+
+    def const_name(self, node: Any | None) -> str | None:
+        if node is None:
+            return None
+        if node.type == "constant":
+            return self.text(node)
+        if node.type == "scope_resolution":
+            return self.const_name(node.child_by_field_name("name"))
+        return None
+
+    def enter(self, node: Any, frame: Frame) -> Frame:
+        kind = node.type
+        if kind in {"class", "module"}:
+            name = self.const_name(node.child_by_field_name("name"))
+            sym = self.ctx.def_symbols.get((node.start_byte, node.end_byte), frame.symbol_id)
+            return Frame(sym, frame.owner_label if sym == frame.symbol_id else sym.split(":", 2)[-1], name, {}, False)
+        if kind in {"method", "singleton_method"}:
+            inner = Frame(frame.symbol_id, frame.owner_label, frame.class_name, dict(frame.vars), True)
+            params = node.child_by_field_name("parameters")
+            for param in (params.named_children if params is not None else []):
+                if param.type == "identifier":
+                    inner.vars.pop(self.text(param), None)
+                    inner.locals.add(self.text(param))
+            return inner
+        return frame
+
+    def visit(self, node: Any, frame: Frame) -> None:
+        kind = node.type
+        if kind == "assignment":
+            left, right = node.child_by_field_name("left"), node.child_by_field_name("right")
+            if left is not None and left.type in {"identifier", "instance_variable"}:
+                name = self.text(left)
+                frame.locals.add(name)
+                typ = None
+                if right is not None and right.type == "call":
+                    meth, recv = right.child_by_field_name("method"), right.child_by_field_name("receiver")
+                    if meth is not None and self.text(meth) == "new":
+                        typ = self.const_name(recv)
+                if typ:
+                    frame.vars[name] = typ
+                else:
+                    frame.vars.pop(name, None)
+            return
+        if kind == "identifier" and node.parent is not None and node.parent.type in {"body_statement", "then", "else"}:
+            name = self.text(node)
+            if name not in frame.locals and name not in _RUBY_SKIP:
+                self.emit(node, frame, name)
+            return
+        if kind != "call":
+            return
+        meth, recv = node.child_by_field_name("method"), node.child_by_field_name("receiver")
+        if meth is None:
+            return
+        callee = self.text(meth)
+        if callee in _RUBY_SKIP:
+            return
+        if recv is None:
+            self.emit(node, frame, callee)
+            return
+        receiver = self.text(recv)
+        if callee == "new" and recv.type in {"constant", "scope_resolution"}:
+            name = self.const_name(recv)
+            if name:
+                self.emit(node, frame, name, receiver=receiver, kind="new")
+            return
+        if recv.type == "self":
+            self.emit(node, frame, callee, receiver="self", kind="self")
+        elif recv.type in {"constant", "scope_resolution"}:
+            self.emit(node, frame, callee, receiver=receiver, kind="scoped", scope=self.const_name(recv))
+        elif recv.type in {"identifier", "instance_variable"}:
+            self.emit(node, frame, callee, receiver=receiver, kind="var", receiver_type=frame.vars.get(receiver))
+        else:
+            self.emit(node, frame, callee, receiver=receiver, kind="chain")
+
+
 def cpp_member_types(node: Any, source: bytes) -> dict[str, str]:
     """`{member: type}` for the typed fields of a C/C++ class/struct body (sorted)."""
     body = node.child_by_field_name("body")
@@ -788,6 +1619,7 @@ for _suffix in (".c", ".h", ".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx"):
     _WALKERS[_suffix] = CppCalls
 for _suffix in (".js", ".jsx", ".ts", ".tsx"):
     _WALKERS[_suffix] = JsCalls
+_WALKERS.update({".go": GoCalls, ".rs": RustCalls, ".swift": SwiftCalls, ".java": JavaCalls, ".rb": RubyCalls})
 
 
 def supports_calls(suffix: str) -> bool:

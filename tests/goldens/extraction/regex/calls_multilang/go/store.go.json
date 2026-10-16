@@ -1,0 +1,164 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/store.go:contains:Foo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "go/store.go"
+      },
+      "relation": "contains",
+      "source": "file:go/store.go",
+      "target": "symbol:go/store.go:Foo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/store.go:contains:M",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 10,
+        "source_file": "go/store.go"
+      },
+      "relation": "contains",
+      "source": "file:go/store.go",
+      "target": "symbol:go/store.go:M",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/store.go:contains:Repo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "go/store.go"
+      },
+      "relation": "contains",
+      "source": "file:go/store.go",
+      "target": "symbol:go/store.go:Repo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/store.go:contains:Save",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 7,
+        "source_file": "go/store.go"
+      },
+      "relation": "contains",
+      "source": "file:go/store.go",
+      "target": "symbol:go/store.go:Save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/store.go:contains:shared",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 13,
+        "source_file": "go/store.go"
+      },
+      "relation": "contains",
+      "source": "file:go/store.go",
+      "target": "symbol:go/store.go:shared",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "go/store.go",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "go",
+        "size_bytes": 120
+      },
+      "node_id": "file:go/store.go",
+      "signature": "",
+      "source_ref": "go/store.go",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Foo",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 5,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:go/store.go:Foo",
+      "signature": "type Foo struct{}",
+      "source_ref": "go/store.go",
+      "span_end": 5,
+      "span_start": 5
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "M",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 10,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:go/store.go:M",
+      "signature": "func (f Foo) M() {",
+      "source_ref": "go/store.go",
+      "span_end": 11,
+      "span_start": 10
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Repo",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 3,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:go/store.go:Repo",
+      "signature": "type Repo struct{}",
+      "source_ref": "go/store.go",
+      "span_end": 3,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "Save",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 7,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:go/store.go:Save",
+      "signature": "func (r *Repo) Save() {",
+      "source_ref": "go/store.go",
+      "span_end": 8,
+      "span_start": 7
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "shared",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 13,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:go/store.go:shared",
+      "signature": "func shared() {",
+      "source_ref": "go/store.go",
+      "span_end": 14,
+      "span_start": 13
+    }
+  ]
+}

@@ -2,6 +2,26 @@
   "edges": [
     {
       "confidence": "LOW",
+      "edge_id": "regex:App.java:calls:run:of:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "of",
+        "enclosing_class": null,
+        "lineno": 5,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "App.java"
+      },
+      "relation": "calls",
+      "source": "symbol:App.java:run",
+      "target": "name:of",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
       "edge_id": "regex:App.java:contains:App",
       "layer": "STRUCTURAL",
       "metadata": {
@@ -296,6 +316,26 @@
     },
     {
       "confidence": "LOW",
+      "edge_id": "regex:lib.rs:calls:run:format:6",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "format",
+        "enclosing_class": null,
+        "lineno": 6,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "lib.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:lib.rs:run",
+      "target": "name:format",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
       "edge_id": "regex:lib.rs:contains:Worker",
       "layer": "STRUCTURAL",
       "metadata": {
@@ -374,6 +414,26 @@
     },
     {
       "confidence": "LOW",
+      "edge_id": "regex:main.go:calls:Run:Println:6",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Println",
+        "enclosing_class": null,
+        "lineno": 6,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:main.go:Run",
+      "target": "name:Println",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
       "edge_id": "regex:main.go:contains:Run",
       "layer": "STRUCTURAL",
       "metadata": {
@@ -396,6 +456,26 @@
       "relation": "imports",
       "source": "file:main.go",
       "target": "module:fmt",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:worker.rb:calls:run:generate:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "generate",
+        "enclosing_class": null,
+        "lineno": 5,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "worker.rb"
+      },
+      "relation": "calls",
+      "source": "symbol:worker.rb:run",
+      "target": "name:generate",
       "weight": 1.0
     },
     {

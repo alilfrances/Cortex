@@ -1,0 +1,437 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:calls:amb:p.draw:32",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "draw",
+        "enclosing_class": null,
+        "lineno": 32,
+        "receiver": "p",
+        "receiver_kind": "var",
+        "receiver_type": "Panel",
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:amb",
+      "target": "name:draw",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:calls:ext:step:27",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "step",
+        "enclosing_class": "Svc",
+        "lineno": 27,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:ext",
+      "target": "name:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:calls:run:Bar:11",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Bar",
+        "enclosing_class": "Svc",
+        "lineno": 11,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:Bar",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:calls:run:Foo:9",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Foo",
+        "enclosing_class": "Svc",
+        "lineno": 9,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:Foo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:calls:run:Svc.make:8",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "make",
+        "enclosing_class": "Svc",
+        "lineno": 8,
+        "receiver": "Svc",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "Svc",
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:make",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:calls:run:free:14",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "free",
+        "enclosing_class": "Svc",
+        "lineno": 14,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:free",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:calls:run:inheritedOp:15",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "inheritedOp",
+        "enclosing_class": "Svc",
+        "lineno": 15,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:inheritedOp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:calls:run:r.save:13",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "save",
+        "enclosing_class": "Svc",
+        "lineno": 13,
+        "receiver": "r",
+        "receiver_kind": "var",
+        "receiver_type": "Repo",
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:calls:run:repo.save:7",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "save",
+        "enclosing_class": "Svc",
+        "lineno": 7,
+        "receiver": "repo",
+        "receiver_kind": "var",
+        "receiver_type": "Repo",
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:calls:run:self.step:6",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "step",
+        "enclosing_class": "Svc",
+        "lineno": 6,
+        "receiver": "self",
+        "receiver_kind": "self",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:calls:run:step:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "step",
+        "enclosing_class": "Svc",
+        "lineno": 5,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:calls:run:x.m:10",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "m",
+        "enclosing_class": "Svc",
+        "lineno": 10,
+        "receiver": "x",
+        "receiver_kind": "var",
+        "receiver_type": "Foo",
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:m",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:calls:run:y.n:12",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "n",
+        "enclosing_class": "Svc",
+        "lineno": 12,
+        "receiver": "y",
+        "receiver_kind": "var",
+        "receiver_type": "Bar",
+        "scope": null,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "calls",
+      "source": "symbol:swift/Sample.swift:run",
+      "target": "name:n",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:contains:Svc",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Sample.swift",
+      "target": "symbol:swift/Sample.swift:Svc",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:contains:amb",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 31,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Sample.swift",
+      "target": "symbol:swift/Sample.swift:amb",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:contains:ext",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 26,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Sample.swift",
+      "target": "symbol:swift/Sample.swift:ext",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:contains:make",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 21,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Sample.swift",
+      "target": "symbol:swift/Sample.swift:make",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:contains:run",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Sample.swift",
+      "target": "symbol:swift/Sample.swift:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/Sample.swift:contains:step",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 18,
+        "source_file": "swift/Sample.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Sample.swift",
+      "target": "symbol:swift/Sample.swift:step",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "swift/Sample.swift",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "swift",
+        "size_bytes": 426
+      },
+      "node_id": "file:swift/Sample.swift",
+      "signature": "",
+      "source_ref": "swift/Sample.swift",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Svc",
+      "metadata": {
+        "bases": [
+          "Base"
+        ],
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:swift/Sample.swift:Svc",
+      "signature": "class Svc: Base {",
+      "source_ref": "swift/Sample.swift",
+      "span_end": 23,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "amb",
+      "metadata": {
+        "lineno": 31,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:swift/Sample.swift:amb",
+      "signature": "func amb(p: Panel) {",
+      "source_ref": "swift/Sample.swift",
+      "span_end": 33,
+      "span_start": 31
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "ext",
+      "metadata": {
+        "lineno": 26,
+        "parser_backend": "treesitter",
+        "qualifier": "Svc"
+      },
+      "node_id": "symbol:swift/Sample.swift:ext",
+      "signature": "func ext() {",
+      "source_ref": "swift/Sample.swift",
+      "span_end": 28,
+      "span_start": 26
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "make",
+      "metadata": {
+        "lineno": 21,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:swift/Sample.swift:make",
+      "signature": "static func make() {",
+      "source_ref": "swift/Sample.swift",
+      "span_end": 22,
+      "span_start": 21
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "run",
+      "metadata": {
+        "lineno": 4,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:swift/Sample.swift:run",
+      "signature": "func run(r: Repo) {",
+      "source_ref": "swift/Sample.swift",
+      "span_end": 16,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "step",
+      "metadata": {
+        "lineno": 18,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:swift/Sample.swift:step",
+      "signature": "func step() {",
+      "source_ref": "swift/Sample.swift",
+      "span_end": 19,
+      "span_start": 18
+    }
+  ]
+}

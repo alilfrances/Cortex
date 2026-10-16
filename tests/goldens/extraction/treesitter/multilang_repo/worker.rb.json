@@ -2,6 +2,25 @@
   "edges": [
     {
       "confidence": "EXTRACTED",
+      "edge_id": "treesitter:worker.rb:calls:Worker:JSON.generate:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "generate",
+        "enclosing_class": "Worker",
+        "lineno": 5,
+        "receiver": "JSON",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "JSON",
+        "source_file": "worker.rb"
+      },
+      "relation": "calls",
+      "source": "symbol:worker.rb:Worker",
+      "target": "name:generate",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
       "edge_id": "treesitter:worker.rb:contains:Worker",
       "layer": "STRUCTURAL",
       "metadata": {

@@ -1,0 +1,80 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/PanelA.swift:contains:Panel",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "swift/PanelA.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/PanelA.swift",
+      "target": "symbol:swift/PanelA.swift:Panel",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/PanelA.swift:contains:draw",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "swift/PanelA.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/PanelA.swift",
+      "target": "symbol:swift/PanelA.swift:draw",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "swift/PanelA.swift",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "swift",
+        "size_bytes": 40
+      },
+      "node_id": "file:swift/PanelA.swift",
+      "signature": "",
+      "source_ref": "swift/PanelA.swift",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Panel",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:swift/PanelA.swift:Panel",
+      "signature": "class Panel {",
+      "source_ref": "swift/PanelA.swift",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "draw",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 2,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:swift/PanelA.swift:draw",
+      "signature": "func draw() {",
+      "source_ref": "swift/PanelA.swift",
+      "span_end": 3,
+      "span_start": 2
+    }
+  ]
+}
