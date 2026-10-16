@@ -1,0 +1,56 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qmlmeta:resources.qrc:registers:file:resources.qrc:file:Main.qml:1",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "alias": "Main.qml",
+        "lineno": 1,
+        "prefix": "/qt/qml/Demo/Controls",
+        "resource_path": "/qt/qml/Demo/Controls/Main.qml",
+        "source_file": "resources.qrc"
+      },
+      "relation": "registers",
+      "source": "file:resources.qrc",
+      "target": "file:Main.qml",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qmlmeta:resources.qrc:registers:file:resources.qrc:file:helpers.js:1",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "alias": "helpers.js",
+        "lineno": 1,
+        "prefix": "/qt/qml/Demo/Controls",
+        "resource_path": "/qt/qml/Demo/Controls/helpers.js",
+        "source_file": "resources.qrc"
+      },
+      "relation": "registers",
+      "source": "file:resources.qrc",
+      "target": "file:helpers.js",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "resources.qrc",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "qrc",
+        "size_bytes": 127
+      },
+      "node_id": "file:resources.qrc",
+      "signature": "",
+      "source_ref": "resources.qrc",
+      "span_end": null,
+      "span_start": null
+    }
+  ]
+}

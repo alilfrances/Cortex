@@ -1,0 +1,52 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:helpers.js:contains:log",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "helpers.js"
+      },
+      "relation": "contains",
+      "source": "file:helpers.js",
+      "target": "symbol:helpers.js:log",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "helpers.js",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "js",
+        "size_bytes": 37
+      },
+      "node_id": "file:helpers.js",
+      "signature": "",
+      "source_ref": "helpers.js",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "log",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:helpers.js:log",
+      "signature": "function log(value) { return value }",
+      "source_ref": "helpers.js",
+      "span_end": 1,
+      "span_start": 1
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:util.hpp:contains:clamp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "util.hpp"
+      },
+      "relation": "contains",
+      "source": "file:util.hpp",
+      "target": "symbol:util.hpp:clamp",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "util.hpp",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "hpp",
+        "size_bytes": 96
+      },
+      "node_id": "file:util.hpp",
+      "signature": "",
+      "source_ref": "util.hpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "clamp",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 5,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:util.hpp:clamp",
+      "signature": "inline int clamp(int value) {",
+      "source_ref": "util.hpp",
+      "span_end": 7,
+      "span_start": 5
+    }
+  ]
+}

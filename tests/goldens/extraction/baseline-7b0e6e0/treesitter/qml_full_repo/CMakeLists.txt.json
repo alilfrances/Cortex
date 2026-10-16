@@ -1,0 +1,172 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qmlmeta:CMakeLists.txt:exports:target:demo:module:Demo.Controls:1",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "cmake_command": "qt_add_qml_module",
+        "lineno": 1,
+        "source_file": "CMakeLists.txt",
+        "uri": "Demo.Controls",
+        "version": "1.0"
+      },
+      "relation": "exports",
+      "source": "target:demo",
+      "target": "module:Demo.Controls",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qmlmeta:CMakeLists.txt:imports:target:demo:module:QtQml:1",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "dependency": true,
+        "lineno": 1,
+        "source_file": "CMakeLists.txt",
+        "unverified": true
+      },
+      "relation": "imports",
+      "source": "target:demo",
+      "target": "module:QtQml",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qmlmeta:CMakeLists.txt:imports:target:demo:module:QtQuick:1",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "dependency": false,
+        "lineno": 1,
+        "source_file": "CMakeLists.txt",
+        "unverified": true
+      },
+      "relation": "imports",
+      "source": "target:demo",
+      "target": "module:QtQuick",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qmlmeta:CMakeLists.txt:registers:target:demo:file:Card.qml:1",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "category": "qml_files",
+        "lineno": 1,
+        "source_file": "CMakeLists.txt",
+        "uri": "Demo.Controls",
+        "version": "1.0"
+      },
+      "relation": "registers",
+      "source": "target:demo",
+      "target": "file:Card.qml",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qmlmeta:CMakeLists.txt:registers:target:demo:file:Main.qml:1",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "category": "qml_files",
+        "lineno": 1,
+        "source_file": "CMakeLists.txt",
+        "uri": "Demo.Controls",
+        "version": "1.0"
+      },
+      "relation": "registers",
+      "source": "target:demo",
+      "target": "file:Main.qml",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qmlmeta:CMakeLists.txt:registers:target:demo:file:Theme.qml:1",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "category": "qml_files",
+        "lineno": 1,
+        "source_file": "CMakeLists.txt",
+        "uri": "Demo.Controls",
+        "version": "1.0"
+      },
+      "relation": "registers",
+      "source": "target:demo",
+      "target": "file:Theme.qml",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "regex:CMakeLists.txt:registers:target:demo:file:Card.qml",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "CMakeLists.txt"
+      },
+      "relation": "registers",
+      "source": "target:demo",
+      "target": "file:Card.qml",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "regex:CMakeLists.txt:registers:target:demo:file:Main.qml",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "CMakeLists.txt"
+      },
+      "relation": "registers",
+      "source": "target:demo",
+      "target": "file:Main.qml",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "regex:CMakeLists.txt:registers:target:demo:file:Theme.qml",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "CMakeLists.txt"
+      },
+      "relation": "registers",
+      "source": "target:demo",
+      "target": "file:Theme.qml",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "CMakeLists.txt",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "txt",
+        "size_bytes": 139
+      },
+      "node_id": "file:CMakeLists.txt",
+      "signature": "",
+      "source_ref": "CMakeLists.txt",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "target",
+      "label": "demo",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "regex",
+        "qml_kind": "cmake_target"
+      },
+      "node_id": "target:demo",
+      "signature": "",
+      "source_ref": "CMakeLists.txt",
+      "span_end": 1,
+      "span_start": 1
+    }
+  ]
+}

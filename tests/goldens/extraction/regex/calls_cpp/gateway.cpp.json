@@ -1,0 +1,126 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:gateway.cpp:calls:send:warm:4",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "warm",
+        "enclosing_class": null,
+        "lineno": 4,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "gateway.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:gateway.cpp:send",
+      "target": "name:warm",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:gateway.cpp:calls:send:warm:6",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "warm",
+        "enclosing_class": null,
+        "lineno": 6,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "gateway.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:gateway.cpp:send",
+      "target": "name:warm",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:gateway.cpp:calls:send:work:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "work",
+        "enclosing_class": null,
+        "lineno": 5,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "gateway.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:gateway.cpp:send",
+      "target": "name:work",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:gateway.cpp:contains:send",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "gateway.cpp"
+      },
+      "relation": "contains",
+      "source": "file:gateway.cpp",
+      "target": "symbol:gateway.cpp:send",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:gateway.cpp:import:1:1:gateway.hpp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "gateway.cpp"
+      },
+      "relation": "imports",
+      "source": "file:gateway.cpp",
+      "target": "file:gateway.hpp",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "gateway.cpp",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "cpp",
+        "size_bytes": 118
+      },
+      "node_id": "file:gateway.cpp",
+      "signature": "",
+      "source_ref": "gateway.cpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "send",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 3,
+        "parser_backend": "regex",
+        "qualifier": "Gateway"
+      },
+      "node_id": "symbol:gateway.cpp:send",
+      "signature": "void Gateway::send() {",
+      "source_ref": "gateway.cpp",
+      "span_end": 7,
+      "span_start": 3
+    }
+  ]
+}

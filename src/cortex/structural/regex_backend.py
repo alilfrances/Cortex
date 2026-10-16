@@ -1098,6 +1098,124 @@ def _extract_qml_cpp_registration(
                 _upsert_qt_symbol(path, f"{owner}.{match.group(1)}", "func", line.strip(), lineno, "invokable", nodes, edges, seen, file_node_id)
 
 
+# --------------------------------------------------------------------------- #
+# Name-only call extraction (the regex fallback for every call-graph family)
+# --------------------------------------------------------------------------- #
+
+# Families whose regex fallback emits name-only `calls` edges.
+_NAME_ONLY_CALL_SUFFIXES = frozenset({".c", ".h", ".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx"})
+_CALL_NAME_RE = re.compile(r"(?<![\w$])([A-Za-z_$][\w$]*)\s*\(")
+_DEF_KEYWORD_BEFORE_RE = re.compile(r"\b(?:def|fn|func|function)\s+$")
+_EMIT_BEFORE_RE = re.compile(r"\b(?:emit|Q_EMIT)\s+$")
+_CALL_SKIP = frozenset({
+    "if", "else", "for", "foreach", "while", "do", "switch", "case", "return", "sizeof", "alignof",
+    "decltype", "typeid", "typeof", "noexcept", "throw", "catch", "try", "defined", "static_assert",
+    "_Static_assert", "__attribute__", "__declspec", "offsetof", "delete", "operator", "assert_never",
+    "function", "def", "fn", "func", "elif", "unless", "until", "when", "guard", "in", "is", "as",
+    "synchronized", "match", "with", "lambda", "yield", "await", "async", "super", "this",
+    # Qt: connect()/emit/SIGNAL/SLOT already produce `connects`/`emits` edges.
+    "connect", "emit", "SIGNAL", "SLOT",
+})
+
+
+def _is_skipped_call(name: str) -> bool:
+    return (
+        name in _CALL_SKIP
+        or name.endswith("_cast")
+        or re.fullmatch(r"Q_[A-Z_]+", name) is not None
+    )
+
+
+def _ruby_span_end(lines: list[str], start_line: int) -> int:
+    """`def`..`end` span for a Ruby method (the brace matcher does not apply)."""
+    first = lines[start_line - 1]
+    indent = len(first) - len(first.lstrip())
+    for offset in range(start_line, len(lines)):
+        text = lines[offset]
+        if text.strip() and len(text) - len(text.lstrip()) <= indent and text.lstrip().startswith("end"):
+            return offset + 1
+    return start_line
+
+
+def _extract_calls_name_only(path: str, content: str, nodes: list[GraphNode], edges: list[GraphEdge]) -> None:
+    """Regex fallback: one name-based `calls` edge per `name(` inside a function.
+
+    Edges carry the full call-site contract but are *name only*: receiver kind
+    ``none``, no receiver, scope or declared type, confidence ``LOW``, and
+    ``name_only`` so the repo-wide resolver leaves the ``name:<callee>`` target
+    alone.  Comments and strings are masked; the callee's own definition line,
+    control-flow keywords and Qt macros (``connect``/``emit``/``Q_*``) are
+    dropped.  Attribution is to the innermost function symbol.
+    """
+    suffix = PurePosixPath(path).suffix.lower()
+    if suffix not in _NAME_ONLY_CALL_SUFFIXES:
+        return
+    masked = _mask_comments_and_strings(content, hash_comments=suffix == ".rb")
+    lines = masked.split("\n")
+    # The definition patterns can mistake `switch (x) {`/`while (...) {` for a
+    # function; those never own call sites (the enclosing real function does).
+    funcs = [
+        n for n in nodes
+        if n.granularity == "symbol" and n.kind == "func" and n.span_start is not None
+        and n.label not in _CALL_SKIP
+    ]
+    if not funcs:
+        return
+    spans: dict[str, tuple[int, int]] = {}
+    for node in funcs:
+        start = int(node.span_start or 1)
+        end = int(node.span_end or start)
+        if suffix == ".rb" and end <= start:
+            end = _ruby_span_end(lines, start)
+        spans[node.node_id] = (start, end)
+    owner: list[GraphNode | None] = [None] * (len(lines) + 2)
+    for node in sorted(funcs, key=lambda n: (spans[n.node_id][1] - spans[n.node_id][0], n.node_id), reverse=True):
+        start, end = spans[node.node_id]
+        for line_no in range(start, min(end, len(lines)) + 1):
+            owner[line_no] = node
+    seen: set[str] = set()
+    for line_no, text in enumerate(lines, start=1):
+        node = owner[line_no]
+        if node is None:
+            continue
+        for match in _CALL_NAME_RE.finditer(text):
+            callee = match.group(1)
+            if _is_skipped_call(callee):
+                continue
+            if line_no == spans[node.node_id][0] and callee == node.label:
+                continue  # the definition itself
+            before = text[: match.start()]
+            if _DEF_KEYWORD_BEFORE_RE.search(before) or _EMIT_BEFORE_RE.search(before):
+                continue  # a definition, or an `emit sig()` that is already an `emits` edge
+            owner_label = node.node_id.split(":", 2)[-1]
+            edge_id = f"regex:{path}:calls:{owner_label}:{callee}:{line_no}"
+            if edge_id in seen:
+                continue
+            seen.add(edge_id)
+            edges.append(
+                GraphEdge(
+                    edge_id=edge_id,
+                    source=node.node_id,
+                    target=f"name:{callee}",
+                    relation="calls",
+                    layer="STRUCTURAL",
+                    confidence="LOW",
+                    weight=1.0,
+                    metadata={
+                        "lineno": line_no,
+                        "source_file": path,
+                        "callee": callee,
+                        "receiver": None,
+                        "receiver_kind": "none",
+                        "scope": None,
+                        "receiver_type": None,
+                        "enclosing_class": None,
+                        "name_only": True,
+                    },
+                )
+            )
+
+
 def extract_regex_edges(
     path: str,
     content: str,
@@ -1177,6 +1295,9 @@ def extract_regex_edges(
                     metadata={"lineno": line, "source_file": path},
                 )
             )
+
+    # Before the Qt pass: only definition-pattern symbols own call sites.
+    _extract_calls_name_only(path, content, nodes, edges)
 
     if suffix in _CPP_SUFFIXES:
         _extract_cpp_inheritance_edges(path, content, edges)

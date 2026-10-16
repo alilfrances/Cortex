@@ -1,0 +1,178 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qmlmeta:module.qmltypes:contains:symbol:module.qmltypes:Card:symbol:module.qmltypes:Card.Mode:3",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "module.qmltypes"
+      },
+      "relation": "contains",
+      "source": "symbol:module.qmltypes:Card",
+      "target": "symbol:module.qmltypes:Card.Mode",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qmlmeta:module.qmltypes:contains:symbol:module.qmltypes:Card:symbol:module.qmltypes:Card.selected:3",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "module.qmltypes"
+      },
+      "relation": "contains",
+      "source": "symbol:module.qmltypes:Card",
+      "target": "symbol:module.qmltypes:Card.selected",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qmlmeta:module.qmltypes:contains:symbol:module.qmltypes:Card:symbol:module.qmltypes:Card.update:3",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "module.qmltypes"
+      },
+      "relation": "contains",
+      "source": "symbol:module.qmltypes:Card",
+      "target": "symbol:module.qmltypes:Card.update",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qmlmeta:module.qmltypes:contains:symbol:module.qmltypes:Card:symbol:module.qmltypes:Card.value:3",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "module.qmltypes"
+      },
+      "relation": "contains",
+      "source": "symbol:module.qmltypes:Card",
+      "target": "symbol:module.qmltypes:Card.value",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qmlmeta:module.qmltypes:exports:symbol:module.qmltypes:Card:module:Demo.Controls/Card 1.0:3",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "exported_name": "Card",
+        "lineno": 3,
+        "source_file": "module.qmltypes",
+        "unverified": true
+      },
+      "relation": "exports",
+      "source": "symbol:module.qmltypes:Card",
+      "target": "module:Demo.Controls/Card 1.0",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "module.qmltypes",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "qmltypes",
+        "size_bytes": 237
+      },
+      "node_id": "file:module.qmltypes",
+      "signature": "",
+      "source_ref": "module.qmltypes",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Card",
+      "metadata": {
+        "lineno": 3,
+        "metadata_file": ".qmltypes",
+        "parser_backend": "regex",
+        "qml_kind": "qmltypes_component",
+        "type_name": "Card"
+      },
+      "node_id": "symbol:module.qmltypes:Card",
+      "signature": "",
+      "source_ref": "module.qmltypes",
+      "span_end": 3,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "enum",
+      "label": "Mode",
+      "metadata": {
+        "lineno": 3,
+        "parser_backend": "regex",
+        "qml_kind": "enum",
+        "qml_owner": "Card",
+        "qmltypes": true
+      },
+      "node_id": "symbol:module.qmltypes:Card.Mode",
+      "signature": "",
+      "source_ref": "module.qmltypes",
+      "span_end": 3,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "selected",
+      "metadata": {
+        "lineno": 3,
+        "parser_backend": "regex",
+        "qml_kind": "signal",
+        "qml_owner": "Card",
+        "qmltypes": true,
+        "qt": "signal"
+      },
+      "node_id": "symbol:module.qmltypes:Card.selected",
+      "signature": "",
+      "source_ref": "module.qmltypes",
+      "span_end": 3,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "update",
+      "metadata": {
+        "lineno": 3,
+        "parser_backend": "regex",
+        "qml_kind": "method",
+        "qml_owner": "Card",
+        "qmltypes": true
+      },
+      "node_id": "symbol:module.qmltypes:Card.update",
+      "signature": "",
+      "source_ref": "module.qmltypes",
+      "span_end": 3,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "property",
+      "label": "value",
+      "metadata": {
+        "lineno": 3,
+        "parser_backend": "regex",
+        "qml_kind": "property",
+        "qml_owner": "Card",
+        "qmltypes": true,
+        "type": "int"
+      },
+      "node_id": "symbol:module.qmltypes:Card.value",
+      "signature": "",
+      "source_ref": "module.qmltypes",
+      "span_end": 3,
+      "span_start": 3
+    }
+  ]
+}

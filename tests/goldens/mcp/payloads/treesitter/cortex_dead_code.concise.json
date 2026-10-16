@@ -11,13 +11,6 @@
     },
     {
       "confidence": "low",
-      "file": "include/DeviceModel.hpp",
-      "line": 4,
-      "reason": "no incoming edges; grep refs in code/config",
-      "symbol": "DeviceModel"
-    },
-    {
-      "confidence": "low",
       "file": "qml/DeviceDelegate.qml",
       "line": 1,
       "reason": "no incoming edges; grep refs in code/config",
@@ -81,13 +74,6 @@
     },
     {
       "confidence": "low",
-      "file": "src/DeviceManager.cpp",
-      "line": 9,
-      "reason": "no incoming edges; grep refs in code/config",
-      "symbol": "scan"
-    },
-    {
-      "confidence": "low",
       "file": "src/DeviceModel.cpp",
       "line": 3,
       "reason": "no incoming edges; grep refs in code/config",
@@ -95,7 +81,7 @@
     }
   ],
   "repo_path": "<repo>",
-  "returned_count": 13,
+  "returned_count": 11,
   "stale": false,
   "truncated": false
 }

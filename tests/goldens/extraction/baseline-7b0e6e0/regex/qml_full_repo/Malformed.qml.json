@@ -1,0 +1,95 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:Malformed.qml:contains:Malformed",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "Malformed.qml"
+      },
+      "relation": "contains",
+      "source": "file:Malformed.qml",
+      "target": "symbol:Malformed.qml:Malformed",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:Malformed.qml:contains:Malformed.ok",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "Malformed.qml"
+      },
+      "relation": "contains",
+      "source": "file:Malformed.qml",
+      "target": "symbol:Malformed.qml:Malformed.ok",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:Malformed.qml:import:1:1:QtQuick",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "Malformed.qml"
+      },
+      "relation": "imports",
+      "source": "file:Malformed.qml",
+      "target": "module:QtQuick",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "Malformed.qml",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "qml",
+        "size_bytes": 138
+      },
+      "node_id": "file:Malformed.qml",
+      "signature": "",
+      "source_ref": "Malformed.qml",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Malformed",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 2,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:Malformed.qml:Malformed",
+      "signature": "Item {",
+      "source_ref": "Malformed.qml",
+      "span_end": 2,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "ok",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 4,
+        "parser_backend": "regex",
+        "qml_kind": "method",
+        "qml_owner": "Malformed"
+      },
+      "node_id": "symbol:Malformed.qml:Malformed.ok",
+      "signature": "function ok() { return retained }",
+      "source_ref": "Malformed.qml",
+      "span_end": 4,
+      "span_start": 4
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:misc.cpp:contains:name",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "misc.cpp"
+      },
+      "relation": "contains",
+      "source": "file:misc.cpp",
+      "target": "symbol:misc.cpp:name",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "misc.cpp",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "cpp",
+        "size_bytes": 29
+      },
+      "node_id": "file:misc.cpp",
+      "signature": "",
+      "source_ref": "misc.cpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "name",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:misc.cpp:name",
+      "signature": "int name() {",
+      "source_ref": "misc.cpp",
+      "span_end": 3,
+      "span_start": 1
+    }
+  ]
+}

@@ -28,12 +28,12 @@
       ]
     },
     {
-      "degree": 1,
+      "degree": 2,
       "granularity": "symbol",
       "kind": "func",
       "label": "DeviceManager",
       "metadata": {
-        "degree": 1,
+        "degree": 2,
         "lineno": 4,
         "parser_backend": "treesitter",
         "qualifier": "DeviceManager"
@@ -106,12 +106,12 @@
       ]
     },
     {
-      "degree": 2,
+      "degree": 3,
       "granularity": "symbol",
       "kind": "class",
       "label": "DeviceModel",
       "metadata": {
-        "degree": 2,
+        "degree": 3,
         "lineno": 4,
         "parser_backend": "treesitter",
         "qt": "qobject"

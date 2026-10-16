@@ -951,6 +951,26 @@
     },
     {
       "confidence": "LOW",
+      "edge_id": "regex:src/DeviceManager.cpp:calls:onDeviceConnected:scan:24",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "scan",
+        "enclosing_class": null,
+        "lineno": 24,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "src/DeviceManager.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:src/DeviceManager.cpp:onDeviceConnected",
+      "target": "name:scan",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
       "edge_id": "regex:src/DeviceManager.cpp:connects:6:1:deviceConnected:onDeviceConnected",
       "layer": "STRUCTURAL",
       "metadata": {
@@ -1585,7 +1605,7 @@
       "label": "onDeviceConnected",
       "metadata": {
         "degraded_reason": "forced-fallback",
-        "degree": 1,
+        "degree": 2,
         "lineno": 23,
         "parser_backend": "regex",
         "qualifier": "DeviceManager"

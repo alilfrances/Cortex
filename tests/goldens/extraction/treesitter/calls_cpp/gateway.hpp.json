@@ -1,0 +1,94 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:gateway.hpp:contains:Gateway",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 7,
+        "source_file": "gateway.hpp"
+      },
+      "relation": "contains",
+      "source": "file:gateway.hpp",
+      "target": "symbol:gateway.hpp:Gateway",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:gateway.hpp:import:2:memory",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "gateway.hpp"
+      },
+      "relation": "imports",
+      "source": "file:gateway.hpp",
+      "target": "module:memory",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:gateway.hpp:import:3:worker.hpp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "gateway.hpp"
+      },
+      "relation": "imports",
+      "source": "file:gateway.hpp",
+      "target": "file:worker.hpp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:gateway.hpp:inherits:Gateway:Worker",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 7,
+        "source_file": "gateway.hpp"
+      },
+      "relation": "inherits",
+      "source": "symbol:gateway.hpp:Gateway",
+      "target": "name:Worker",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "gateway.hpp",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "hpp",
+        "size_bytes": 197
+      },
+      "node_id": "file:gateway.hpp",
+      "signature": "",
+      "source_ref": "gateway.hpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Gateway",
+      "metadata": {
+        "lineno": 7,
+        "member_types": {
+          "engine_": "Engine",
+          "worker_": "Worker"
+        },
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:gateway.hpp:Gateway",
+      "signature": "class Gateway : public Worker {",
+      "source_ref": "gateway.hpp",
+      "span_end": 14,
+      "span_start": 7
+    }
+  ]
+}

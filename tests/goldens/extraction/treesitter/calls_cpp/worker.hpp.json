@@ -1,0 +1,123 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:worker.hpp:calls:work:ping:7",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "ping",
+        "enclosing_class": "Worker",
+        "lineno": 7,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "worker.hpp"
+      },
+      "relation": "calls",
+      "source": "symbol:worker.hpp:work",
+      "target": "name:ping",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:worker.hpp:contains:Worker",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "worker.hpp"
+      },
+      "relation": "contains",
+      "source": "file:worker.hpp",
+      "target": "symbol:worker.hpp:Worker",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:worker.hpp:contains:work",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "worker.hpp"
+      },
+      "relation": "contains",
+      "source": "file:worker.hpp",
+      "target": "symbol:worker.hpp:work",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:worker.hpp:import:2:base.hpp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "worker.hpp"
+      },
+      "relation": "imports",
+      "source": "file:worker.hpp",
+      "target": "file:base.hpp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:worker.hpp:inherits:Worker:Base",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "worker.hpp"
+      },
+      "relation": "inherits",
+      "source": "symbol:worker.hpp:Worker",
+      "target": "name:Base",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "worker.hpp",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "hpp",
+        "size_bytes": 114
+      },
+      "node_id": "file:worker.hpp",
+      "signature": "",
+      "source_ref": "worker.hpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Worker",
+      "metadata": {
+        "lineno": 4,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:worker.hpp:Worker",
+      "signature": "class Worker : public Base {",
+      "source_ref": "worker.hpp",
+      "span_end": 9,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "work",
+      "metadata": {
+        "lineno": 6,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:worker.hpp:work",
+      "signature": "void work() {",
+      "source_ref": "worker.hpp",
+      "span_end": 8,
+      "span_start": 6
+    }
+  ]
+}

@@ -1471,6 +1471,46 @@
     },
     {
       "confidence": "EXTRACTED",
+      "edge_id": "treesitter:src/DeviceManager.cpp:calls:DeviceManager:DeviceModel:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "DeviceModel",
+        "enclosing_class": "DeviceManager",
+        "lineno": 5,
+        "receiver": null,
+        "receiver_kind": "new",
+        "receiver_type": null,
+        "resolution": "import_scoped",
+        "scope": null,
+        "source_file": "src/DeviceManager.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:src/DeviceManager.cpp:DeviceManager",
+      "target": "symbol:include/DeviceModel.hpp:DeviceModel",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:src/DeviceManager.cpp:calls:onDeviceConnected:scan:24",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "scan",
+        "enclosing_class": "DeviceManager",
+        "lineno": 24,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "resolution": "this",
+        "scope": null,
+        "source_file": "src/DeviceManager.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:src/DeviceManager.cpp:onDeviceConnected",
+      "target": "symbol:src/DeviceManager.cpp:scan",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
       "edge_id": "treesitter:src/DeviceManager.cpp:contains:DeviceManager",
       "layer": "STRUCTURAL",
       "metadata": {
@@ -2000,7 +2040,7 @@
       "kind": "class",
       "label": "DeviceModel",
       "metadata": {
-        "degree": 2,
+        "degree": 3,
         "lineno": 4,
         "parser_backend": "treesitter",
         "qt": "qobject"
@@ -2325,7 +2365,7 @@
       "kind": "func",
       "label": "DeviceManager",
       "metadata": {
-        "degree": 1,
+        "degree": 2,
         "lineno": 4,
         "parser_backend": "treesitter",
         "qualifier": "DeviceManager"
@@ -2341,7 +2381,7 @@
       "kind": "func",
       "label": "onDeviceConnected",
       "metadata": {
-        "degree": 1,
+        "degree": 2,
         "lineno": 23,
         "parser_backend": "treesitter",
         "qualifier": "DeviceManager"
@@ -2357,7 +2397,7 @@
       "kind": "func",
       "label": "scan",
       "metadata": {
-        "degree": 3,
+        "degree": 4,
         "lineno": 9,
         "parser_backend": "treesitter",
         "qualifier": "DeviceManager"

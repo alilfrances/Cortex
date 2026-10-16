@@ -36,7 +36,10 @@ from tests.baseline_helpers import (
 from tests.golden_utils import TREE_SITTER_ONLY, assert_golden, canonical_graph
 from evals.run_evals import _build_python_app, _build_qt_app
 
-FIXTURE_NAMES = ("multilang_repo", "qml_full_repo")
+# `calls_*` fixtures are call-specific additions (Tasks 6-8): the two original fixtures
+# are frozen in tests/goldens/extraction/baseline-7b0e6e0 and may only gain `calls` edges
+# (see tests/test_additive_baseline.py), so call sites live in their own fixtures.
+FIXTURE_NAMES = ("multilang_repo", "qml_full_repo", "calls_cpp")
 
 # Always extracted through the regex-based module-metadata path, in both backends.
 _METADATA_ONLY_NAMES = {"cmakelists.txt", "qmldir"}
@@ -185,14 +188,22 @@ def _calls(edges) -> list:
     return [edge for edge in edges if edge.relation == "calls"]
 
 
+# Families whose tree-sitter and regex extractors emit `calls` edges (flipped per task).
+# Task 6: C/C++.  Tasks 7/8 extend this set and finally retire the "none today" tests.
+_CALL_FAMILY_SUFFIXES = {".c", ".h", ".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx"}
+
+
 def _non_python_non_qml_cases():
-    return [c for c in CASES if Path(c.values[1]).suffix not in {".py", ".qml"}]
+    return [
+        c for c in CASES
+        if Path(c.values[1]).suffix not in {".py", ".qml"} | _CALL_FAMILY_SUFFIXES
+    ]
 
 
 @TREE_SITTER_ONLY
 @pytest.mark.parametrize("fixture,rel", _non_python_non_qml_cases())
 def test_no_calls_edges_outside_python_and_qml_treesitter_today(fixture: str, rel: str) -> None:
-    """Task 6-8 flip: C/C++/JS/TS/Go/Rust/Swift/Java/Ruby gain `calls` edges."""
+    """Task 6 flipped C/C++; Tasks 7-8 flip JS/TS/Go/Rust/Swift/Java/Ruby."""
     _, edges = _layer(fixture, rel)
     assert _calls(edges) == []
 
@@ -273,3 +284,38 @@ def test_treesitter_dedupes_same_named_symbols_per_file_today() -> None:
     symbol_ids = [node.node_id for node in nodes if node.node_id.startswith("symbol:")]
     assert len(symbol_ids) == len(set(symbol_ids))
     assert all(sid.startswith("symbol:engine.cpp:") for sid in symbol_ids)
+
+
+# Files of the call-specific fixtures that contain call sites (declaration-only files do not).
+_CALLING_FILES = {"calls_cpp": {"app.cpp", "util.cpp", "worker.hpp", "diamond.cpp"}}
+
+
+def _code_call_cases():
+    return [
+        c for c in CASES
+        if Path(c.values[1]).suffix in _CALL_FAMILY_SUFFIXES and c.values[0].startswith("calls_")
+    ]
+
+
+@TREE_SITTER_ONLY
+@pytest.mark.parametrize("fixture,rel", _code_call_cases())
+def test_call_fixture_files_with_call_sites_have_calls_treesitter(fixture: str, rel: str) -> None:
+    """Task 6 flip: every `calls_*` C/C++ file with a call site has >= 1 `calls` edge."""
+    if rel not in _CALLING_FILES[fixture]:
+        pytest.skip("no call site in this file")
+    _, edges = _layer(fixture, rel)
+    calls = _calls(edges)
+    assert calls and all(CALL_CONTRACT_KEYS <= set(e.metadata) for e in calls)
+    assert len({e.edge_id for e in calls}) == len(calls)
+
+
+@pytest.mark.parametrize("fixture,rel", _code_call_cases())
+def test_call_fixture_files_regex_calls_are_name_only_low(
+    fixture: str, rel: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("CORTEX_FORCE_REGEX", "1")
+    _, edges = _layer(fixture, rel)
+    for edge in _calls(edges):
+        assert edge.confidence == "LOW" and edge.target == f"name:{edge.metadata['callee']}"
+        assert edge.metadata["receiver_kind"] == "none" and edge.metadata["name_only"] is True
+        assert edge.metadata["receiver_type"] is None and edge.metadata["scope"] is None

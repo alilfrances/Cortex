@@ -4,7 +4,7 @@ from pathlib import PurePosixPath
 from typing import Any
 
 from ..models import GraphEdge, GraphNode
-from . import regex_backend
+from . import call_sites, regex_backend
 
 _PACK_NAMES = {
     ".js": "javascript", ".jsx": "javascript", ".ts": "typescript", ".tsx": "tsx",
@@ -318,6 +318,8 @@ def extract_treesitter_edges(
     nodes: list[GraphNode] = []
     edges: list[GraphEdge] = []
     seen_symbols: set[str] = set()
+    def_symbols: dict[tuple[int, int], str] = {}
+    def_qualifiers: dict[tuple[int, int], str] = {}
     qml_object_index = 0
 
     if suffix == ".qml":
@@ -357,14 +359,29 @@ def extract_treesitter_edges(
         if suffix in _CPP_SUFFIXES and node.type == "function_definition":
             qualifier, member_name = _cpp_member_for_definition(node, source)
         name = member_name or _name_for_node(node, source)
+        if name and name in seen_symbols:
+            # Same-named definitions share one node (documented non-goal); calls
+            # inside the duplicate are attributed to that node.
+            def_symbols.setdefault((node.start_byte, node.end_byte), f"symbol:{path}:{name}")
+            if qualifier:
+                def_qualifiers[(node.start_byte, node.end_byte)] = qualifier
         if not name or name in seen_symbols:
             continue
         seen_symbols.add(name)
         line = node.start_point[0] + 1
         symbol_id = f"symbol:{path}:{name}"
+        def_symbols[(node.start_byte, node.end_byte)] = symbol_id
+        if qualifier:
+            def_qualifiers[(node.start_byte, node.end_byte)] = qualifier
         metadata: dict[str, Any] = {"lineno": line}
         if qualifier:
             metadata["qualifier"] = qualifier
+        if suffix in _CPP_SUFFIXES | {".c"} and node.type in {"class_specifier", "struct_specifier"}:
+            member_types = call_sites.cpp_member_types(node, source)
+            if member_types:
+                # Declared member types let the call resolver type `m_x->f()` in an
+                # out-of-line `Foo::bar()` whose class body lives in this file.
+                metadata["member_types"] = member_types
         nodes.append(
             GraphNode(
                 node_id=symbol_id,
@@ -392,6 +409,26 @@ def extract_treesitter_edges(
         )
         if suffix in _CPP_SUFFIXES and node.type in {"class_specifier", "struct_specifier"}:
             _extract_cpp_inheritance_edges(path, node, source, symbol_id, name, edges)
+
+    if call_sites.supports_calls(suffix):
+        # Additive pass: describes call sites only; resolution is callresolve's job.
+        # Runs before the Qt regex pass so `emit`/`connect` keep their own edges.
+        edges.extend(
+            call_sites.extract_calls(
+                suffix,
+                root,
+                call_sites.CallContext(
+                    path=path,
+                    source=source,
+                    file_node_id=file_node_id,
+                    def_symbols=def_symbols,
+                    def_qualifiers=def_qualifiers,
+                    name_of=_name_for_node,
+                    member_of=_cpp_member_for_definition,
+                    known_paths=known_paths,
+                ),
+            )
+        )
 
     if suffix in _CPP_SUFFIXES:
         regex_backend._extract_qt_cpp_edges(path, content, file_node_id, nodes, edges, seen_symbols, connect_names)

@@ -24,9 +24,10 @@ ALL_GOLDENS = sorted(p for p in GOLDEN_ROOT.rglob("*") if p.is_file())
 # are counted under ``mcp``).  Update deliberately when a task adds or removes a golden.
 EXPECTED_INVENTORY = {
     "evals": 3,
+    "extraction/baseline-7b0e6e0": 52,  # frozen pre-calls copy (Task 6); never regenerated
     "extraction/python": 8,
-    "extraction/regex": 25,
-    "extraction/treesitter": 25,
+    "extraction/regex": 39,  # +14: calls_cpp fixture (Task 6)
+    "extraction/treesitter": 39,
     "graph": 1,
     "graph/regex": 1,
     "graph/treesitter": 1,

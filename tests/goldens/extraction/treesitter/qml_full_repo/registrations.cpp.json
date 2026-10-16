@@ -34,6 +34,25 @@
     },
     {
       "confidence": "EXTRACTED",
+      "edge_id": "treesitter:registrations.cpp:calls:registerTypes:qmlRegisterType:3",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "qmlRegisterType",
+        "enclosing_class": null,
+        "lineno": 3,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "registrations.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:registrations.cpp:registerTypes",
+      "target": "name:qmlRegisterType",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
       "edge_id": "treesitter:registrations.cpp:contains:registerTypes",
       "layer": "STRUCTURAL",
       "metadata": {

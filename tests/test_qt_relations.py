@@ -205,3 +205,98 @@ def test_incremental_reingest_of_cpp_alone_still_resolves_emit_to_header_signal(
     assert scan_edges, edges
     assert any(e.target == "symbol:include/DeviceManager.hpp:deviceConnected" for e in scan_edges), scan_edges
     assert not any(e.target == "module:deviceConnected" for e in scan_edges), scan_edges
+
+
+# ---------------------------------------------------------------------------
+# Task 6: C++ call edges on the Qt fixture.  `tests/fixtures/qt_calls_app` is a
+# call-specific addition (the `_build_qt_app` eval fixture and its frozen goldens
+# stay as they were); it has a QObject with a signal, a connected slot, an
+# `emit`, a `connect`, a QPointer member declared in the header and used from
+# the .cpp, an implicit-this call and a free helper in another file.
+# ---------------------------------------------------------------------------
+
+
+def _ingest_qt_calls_app(tmp_path: Path) -> Path:
+    from tests.baseline_helpers import FIXTURES, copy_fixture_repo
+
+    repo = copy_fixture_repo(FIXTURES / "qt_calls_app", tmp_path / "qt_calls_app")
+    ingest_repository(repo, commit_limit=5)
+    return repo
+
+
+def _tool_payload(repo: Path, name: str, **kwargs) -> dict:
+    result = call_tool(name, {"repo_path": str(repo), **kwargs})
+    payload = json.loads(result["content"][0]["text"])
+    assert not result["isError"], payload
+    return payload
+
+
+def _treesitter_ready() -> bool:
+    from tests.golden_utils import treesitter_available
+
+    return treesitter_available()
+
+
+@pytest.mark.skipif(not _treesitter_ready(), reason="managed tree-sitter runtime not usable here")
+def test_relations_calls_returns_resolved_targets_for_a_qobject(tmp_path):
+    repo = _ingest_qt_calls_app(tmp_path)
+    items = _tool_payload(repo, "cortex_relations", relation="calls", symbol="Scanner", limit=50)["items"]
+    pairs = {(i["source"], i["target"]) for i in items}
+    assert ("scan @ src/Scanner.cpp:8", "refresh @ src/Scanner.cpp:15") in pairs  # implicit this
+    assert ("scan @ src/Scanner.cpp:8", "normalize_id @ src/helpers.cpp:3") in pairs  # include-scoped helper
+    assert ("scan @ src/Scanner.cpp:8", "store @ include/Cache.hpp:8") in pairs  # QPointer<Cache> header member
+    assert ("onFound @ src/Scanner.cpp:19", "log_event @ src/helpers.cpp:7") in pairs
+    # emit/connect keep their own relations and never double as calls
+    assert all(i["target"] != "found" for i in items)
+    emits = _tool_payload(repo, "cortex_relations", relation="emits", symbol="Scanner")["items"]
+    assert any("found" in i["target"] for i in emits)
+    connects = _tool_payload(repo, "cortex_relations", relation="connects", symbol="found")["items"]
+    assert connects
+
+
+@pytest.mark.skipif(not _treesitter_ready(), reason="managed tree-sitter runtime not usable here")
+def test_cortex_path_walks_emits_then_calls_from_the_signal_to_the_helper(tmp_path):
+    repo = _ingest_qt_calls_app(tmp_path)
+    payload = _tool_payload(
+        repo, "cortex_path",
+        symbol_a="symbol:include/Scanner.hpp:found", symbol_b="symbol:src/helpers.cpp:normalize_id", format="detailed",
+    )
+    shortest = min(payload["paths"], key=len)
+    assert [(h["relation"], h["node_id"]) for h in shortest] == [
+        ("emits", "symbol:src/Scanner.cpp:scan"),
+        ("calls", "symbol:src/helpers.cpp:normalize_id"),
+    ]
+    # slot body -> helper chain through two resolved call edges
+    chain = _tool_payload(
+        repo, "cortex_path",
+        symbol_a="symbol:src/Scanner.cpp:onFound", symbol_b="symbol:src/helpers.cpp:normalize_id", format="detailed",
+    )["paths"]
+    assert [h["relation"] for h in min(chain, key=len)] == ["calls", "calls"]
+
+
+@pytest.mark.skipif(not _treesitter_ready(), reason="managed tree-sitter runtime not usable here")
+def test_qml_handler_reaches_the_cpp_helper_graph_and_dead_code_stays_clean(tmp_path):
+    """The QML `onFound` handler is linked to the instantiated C++ type (instantiates/registers);
+    its `handles` edge to a *C++* signal stays the pre-existing `module:found` placeholder, so a
+    handler -> slot -> helper path is not claimed -- only that the handler reaches the helper."""
+    repo = _ingest_qt_calls_app(tmp_path)
+    payload = _tool_payload(
+        repo, "cortex_path",
+        symbol_a="symbol:qml/Main.qml:Main.Scanner.onFound", symbol_b="symbol:src/helpers.cpp:normalize_id",
+        format="detailed",
+    )
+    assert payload["paths"]
+    detailed = _tool_payload(repo, "cortex_dead_code", format="detailed", budget=9999)
+    flagged = {item["symbol"]: item["confidence"] for item in detailed["findings"]}
+    # connected slot, emitted signal, QML-instantiated type and called helpers are never `high`
+    for name in ("onFound", "found", "Scanner", "normalize_id", "log_event", "refresh", "store"):
+        assert flagged.get(name) != "high", (name, flagged)
+
+
+def test_regex_backend_calls_on_qt_fixture_are_name_only_low(tmp_path, monkeypatch):
+    monkeypatch.setenv("CORTEX_FORCE_REGEX", "1")
+    repo = _ingest_qt_calls_app(tmp_path)
+    items = _tool_payload(repo, "cortex_relations", relation="calls", symbol="Scanner", limit=50)["items"]
+    assert items and all(i["confidence"] == "LOW" for i in items)
+    assert all("@" not in i["target"] for i in items)  # name-based: never a symbol endpoint
+    assert {i["target"] for i in items} >= {"refresh", "normalize_id", "store", "log_event"}

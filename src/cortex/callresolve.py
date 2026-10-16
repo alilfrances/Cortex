@@ -54,6 +54,7 @@ from .models import GraphEdge, GraphNode
 MAX_CANDIDATES = 8
 MAX_INHERIT_DEPTH = 6
 _HEADER_SUFFIXES = {".h", ".hpp", ".hh", ".hxx"}
+_IMPL_SUFFIXES = {".c", ".cc", ".cpp", ".cxx"}
 _PY_BUILTINS = frozenset(dir(builtins))
 _RESOLUTION_KEYS = ("resolution", "candidates", "ambiguous")
 
@@ -64,6 +65,9 @@ def is_contract_call(edge: GraphEdge) -> bool:
         and isinstance(edge.metadata, dict)
         and "receiver_kind" in edge.metadata
         and bool(edge.metadata.get("callee"))
+        # Regex-fallback calls are name-only by contract (LOW, no typing): the
+        # resolver must never promote them to a symbol id.
+        and not edge.metadata.get("name_only")
     )
 
 
@@ -102,12 +106,25 @@ class _Index:
         self.node_ids: set[str] = set()
         symbols: dict[str, GraphNode] = {}
         py_files: list[str] = []
+        stems: defaultdict[str, list[str]] = defaultdict(list)
         for node in nodes:
             self.node_ids.add(node.node_id)
             if node.granularity == "symbol":
                 symbols.setdefault(node.node_id, node)
-            elif node.kind == "file" and node.source_ref.endswith(".py"):
-                py_files.append(node.source_ref)
+            elif node.kind == "file":
+                if node.source_ref.endswith(".py"):
+                    py_files.append(node.source_ref)
+                pure = PurePosixPath(node.source_ref)
+                stems[pure.stem].append(node.source_ref)
+        # A header's implementation files (same stem, any directory: `include/x.hpp` / `src/x.cpp`): an include
+        # of `util.hpp` makes definitions in `util.cpp` reachable.
+        self.impl_siblings: dict[str, list[str]] = {}
+        for paths in stems.values():
+            headers = [p for p in paths if PurePosixPath(p).suffix.lower() in _HEADER_SUFFIXES]
+            impls = sorted(p for p in paths if PurePosixPath(p).suffix.lower() in _IMPL_SUFFIXES)
+            if impls:
+                for header in headers:
+                    self.impl_siblings[header] = impls
         self.symbols = symbols
         self.by_path_qual: dict[tuple[str, str], GraphNode] = {}
         self.classes_by_label: defaultdict[str, list[str]] = defaultdict(list)
@@ -148,6 +165,15 @@ class _Index:
                         if owner is not None and owner.kind == "class":
                             self.container[node.node_id] = owner.node_id
 
+        # Declared member variable types recorded on class nodes (`member_types`
+        # metadata), so `m_model->f()` in an out-of-line `Foo::bar()` can be typed
+        # from the header that declares `m_model`.
+        self.member_types: dict[str, dict[str, str]] = {}
+        for node_id, node in symbols.items():
+            mt = node.metadata.get("member_types") if isinstance(node.metadata, dict) else None
+            if node.kind == "class" and isinstance(mt, dict) and mt:
+                self.member_types[node_id] = {str(k): str(v) for k, v in mt.items()}
+
         self.declared_members: defaultdict[str, defaultdict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
         self.qualified_defs: defaultdict[str, defaultdict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
         self.free_by_label: defaultdict[str, list[str]] = defaultdict(list)
@@ -165,7 +191,8 @@ class _Index:
                 self.declared_members[owner][node.label].append(node_id)
             if isinstance(qualifier, str) and qualifier:
                 self.qualified_defs[_last_segment(qualifier)][node.label].append(node_id)
-            if owner is None and not (isinstance(qualifier, str) and qualifier):
+            namespaced = owner is not None and self.is_namespace(owner)
+            if (owner is None or namespaced) and not (isinstance(qualifier, str) and qualifier):
                 self.free_by_path_label[(node.source_ref, node.label)].append(node_id)
                 if not (node.source_ref.endswith(".py") and "." in _symbol_path(node_id)[1]):
                     self.free_by_label[node.label].append(node_id)
@@ -202,6 +229,17 @@ class _Index:
             bases[edge.source].update(candidates)
         self.bases: dict[str, list[str]] = {cid: sorted(ids - {cid}) for cid, ids in bases.items()}
 
+    def is_namespace(self, class_id: str) -> bool:
+        node = self.symbols.get(class_id)
+        return node is not None and node.signature.lstrip().startswith("namespace")
+
+    def reachable(self, from_path: str) -> list[str]:
+        """Files the caller imports/includes (one hop), plus the implementation
+        files of every imported header."""
+        paths = list(self.imports.get(from_path, ()))
+        extra = [impl for path in paths for impl in self.impl_siblings.get(path, ())]
+        return sorted(set(paths) | set(extra))
+
     # -- candidate narrowing ------------------------------------------------
 
     def prefer(self, candidate_ids: list[str], from_path: str) -> list[str]:
@@ -211,7 +249,7 @@ class _Index:
         same = [c for c in candidate_ids if self.symbols[c].source_ref == from_path]
         if same:
             return same
-        imported = set(self.imports.get(from_path, ()))
+        imported = set(self.reachable(from_path))
         near = [c for c in candidate_ids if self.symbols[c].source_ref in imported]
         return near or candidate_ids
 
@@ -305,6 +343,29 @@ def _enclosing_classes(edge: GraphEdge, index: _Index, source_file: str) -> list
     return index.prefer(index.classes_by_label.get(_last_segment(str(name)), []), source_file)
 
 
+def _member_type(edge: GraphEdge, index: _Index, source_file: str, member: str) -> str | None:
+    """Declared type of member variable `member` of the enclosing class (or a base)."""
+    classes = _enclosing_classes(edge, index, source_file)
+    if not classes:
+        return None
+    frontier = sorted(set(classes))
+    visited = set(frontier)
+    depth = 0
+    while frontier and depth <= MAX_INHERIT_DEPTH:
+        found = sorted({index.member_types[c][member] for c in frontier if member in index.member_types.get(c, {})})
+        if found:
+            return found[0] if len(found) == 1 else None
+        nxt: list[str] = []
+        for cid in frontier:
+            for base in index.bases.get(cid, ()):
+                if base not in visited:
+                    visited.add(base)
+                    nxt.append(base)
+        frontier = sorted(nxt)
+        depth += 1
+    return None
+
+
 def _tier_from_lookup(found: tuple[str, list[str]] | None, direct_tier: str) -> _Outcome:
     if found is None:
         return None
@@ -376,7 +437,7 @@ def _resolve_free(edge: GraphEdge, index: _Index, source_file: str) -> _Outcome:
                 hit = [c for hop in index.imports.get(path, ()) for c in index.exported_by_path_label.get((hop, callee), ())]
             imported.extend(hit)
     if not imported:
-        for path in index.imports.get(source_file, ()):
+        for path in index.reachable(source_file):
             imported.extend(index.exported_by_path_label.get((path, callee), ()))
     if imported:
         return "import_scoped", index.collapse(sorted(set(imported)))
@@ -387,6 +448,23 @@ def _resolve_free(edge: GraphEdge, index: _Index, source_file: str) -> _Outcome:
     if unique:
         return "repo_unique", index.collapse(list(unique))
     return None
+
+
+def _resolve_new(edge: GraphEdge, index: _Index, source_file: str) -> _Outcome:
+    """`new T(...)` / `T(...)` construction: the class named T."""
+    callee = str(edge.metadata["callee"])
+    classes = index.classes_by_label.get(callee, [])
+    if not classes:
+        return None
+    near = index.prefer(classes, source_file)
+    reachable = set(index.reachable(source_file))
+    if all(index.symbols[c].source_ref == source_file for c in near):
+        tier = "same_file"
+    elif all(index.symbols[c].source_ref in reachable for c in near):
+        tier = "import_scoped"
+    else:
+        tier = "repo_unique"
+    return tier, index.collapse(list(near))
 
 
 def _resolve_one(edge: GraphEdge, index: _Index) -> _Outcome:
@@ -406,8 +484,11 @@ def _resolve_one(edge: GraphEdge, index: _Index) -> _Outcome:
         found = index.lookup(classes, callee, skip_direct=bool(md.get("super")))
         return _tier_from_lookup(found, "this")
 
-    if md.get("receiver_type"):
-        label = _last_segment(str(md["receiver_type"]))
+    receiver_type = md.get("receiver_type")
+    if not receiver_type and kind == "var" and md.get("receiver_member"):
+        receiver_type = _member_type(edge, index, source_file, str(md["receiver_member"]))
+    if receiver_type:
+        label = _last_segment(str(receiver_type))
         classes = index.prefer(index.classes_by_label.get(label, []), source_file)
         if not classes:
             return None
@@ -418,6 +499,9 @@ def _resolve_one(edge: GraphEdge, index: _Index) -> _Outcome:
         owner = index.by_path_qual.get((source_file, str(md["receiver"])))
         if owner is not None and owner.kind == "class":
             return _tier_from_lookup(index.lookup([owner.node_id], callee), "scoped")
+
+    if kind == "new":
+        return _resolve_new(edge, index, source_file)
 
     if kind != "none":
         return None  # untyped receiver: nothing static to resolve against
@@ -446,6 +530,7 @@ def _is_affected(
     if widen_typed and (
         md.get("enclosing_class")
         or md.get("receiver_type")
+        or md.get("receiver_member")
         or md.get("scope")
         or md.get("scope_module")
         or md.get("receiver_kind") in ("this", "self")
