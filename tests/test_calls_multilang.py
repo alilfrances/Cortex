@@ -6,10 +6,9 @@ the same name; ``test_resolution_never_crosses_language_families`` pins that).
 
 Known extractor limits pinned here rather than hidden:
 
-* Ruby: the tree-sitter extractor records ``class``/``module`` symbols but no ``def`` symbols (and
-  adding them would change frozen extraction), so only ``Const.new`` resolves (to the class);
-  receiver/self/implicit-self sites carry the full contract but stay ``name:``.  The resolver tiers
-  themselves are exercised for Ruby-shaped graphs in ``test_ruby_member_tiers_with_method_symbols``.
+* Ruby: ``def``/``def self.x`` are symbols (approved narrow exception to the frozen baseline: only
+  newly missing Ruby method symbols and their ``contains`` edges), owned lexically by their
+  class/module; ``@x = T.new`` types instance variables; superclass/``include`` are ``bases``.
 * Go/Rust methods are not contained by their type's span, so their nodes carry a ``qualifier``
   (owning type) that the resolver uses; Swift does the same for ``extension`` methods.
 """
@@ -102,14 +101,20 @@ CASES = {
     },
     "ruby": {
         "resolved": [
-            ("ruby/svc.rb", 10, "Foo", "symbol:ruby/foo.rb:Foo", "repo_unique"),             # x = Foo.new
+            ("ruby/svc.rb", 7, "Repo", "symbol:ruby/repo.rb:Repo", "repo_unique"),          # @repo = Repo.new
+            ("ruby/svc.rb", 11, "step", "symbol:ruby/svc.rb:step", "this"),                # bare `step`: implicit self
+            ("ruby/svc.rb", 12, "step", "symbol:ruby/svc.rb:step", "this"),                # self.step
+            ("ruby/svc.rb", 13, "save", "symbol:ruby/repo.rb:save", "declared_type"),      # @repo typed by `@repo = Repo.new`
+            ("ruby/svc.rb", 14, "help", "symbol:ruby/util.rb:help", "scoped"),             # Util.help (def self.help)
+            ("ruby/svc.rb", 15, "go", "symbol:ruby/util.rb:go", "scoped"),                 # Util::Inner.go
+            ("ruby/svc.rb", 16, "Foo", "symbol:ruby/foo.rb:Foo", "repo_unique"),           # x = Foo.new
+            ("ruby/svc.rb", 17, "m", "symbol:ruby/foo.rb:m", "declared_type"),             # x.m, x = Foo.new
+            ("ruby/svc.rb", 18, "helper", "symbol:ruby/helpers.rb:helper", "repo_unique"),  # top-level def in another file
+            ("ruby/svc.rb", 20, "inherited_op", "symbol:ruby/base.rb:inherited_op", "inherited"),  # class Svc < Base
+            ("ruby/svc.rb", 21, "mixed", "symbol:ruby/mixin.rb:mixed", "inherited"),       # include Mixin
         ],
-        # No `def` symbols exist for Ruby under tree-sitter: member sites stay name-based.
-        "unresolved": [
-            ("ruby/svc.rb", 5, "step"), ("ruby/svc.rb", 6, "step"), ("ruby/svc.rb", 7, "save"),
-            ("ruby/svc.rb", 8, "help"), ("ruby/svc.rb", 9, "go"), ("ruby/svc.rb", 11, "m"), ("ruby/svc.rb", 12, "helper"),
-        ],
-        "ambiguous": [("ruby/svc.rb", 13, "Widget", ["symbol:ruby/a.rb:Widget", "symbol:ruby/b.rb:Widget"])],
+        "unresolved": [("ruby/svc.rb", 22, "other")],                                       # untyped parameter receiver
+        "ambiguous": [("ruby/svc.rb", 19, "Widget", ["symbol:ruby/a.rb:Widget", "symbol:ruby/b.rb:Widget"])],
     },
 }
 LANGS = sorted(CASES)
@@ -159,9 +164,12 @@ def test_contract_and_edge_ids(ts_edges) -> None:
     assert sites[("swift/Sample.swift", 27, "step")].metadata["enclosing_class"] == "Svc"
     assert sites[("java/Svc.java", 19, "inheritedOp")].metadata["super"] is True
     assert sites[("java/Svc.java", 12, "Foo")].metadata["receiver_kind"] == "new"
-    assert sites[("ruby/svc.rb", 6, "step")].metadata["receiver_kind"] == "self"
-    assert sites[("ruby/svc.rb", 5, "step")].metadata["enclosing_class"] == "Svc"
-    assert sites[("ruby/svc.rb", 11, "m")].metadata["receiver_type"] == "Foo"  # x = Foo.new
+    assert sites[("ruby/svc.rb", 12, "step")].metadata["receiver_kind"] == "self"
+    assert sites[("ruby/svc.rb", 11, "step")].metadata["enclosing_class"] == "Svc"
+    assert sites[("ruby/svc.rb", 11, "step")].source == "symbol:ruby/svc.rb:run"      # method owns its calls
+    assert sites[("ruby/svc.rb", 7, "Repo")].source == "symbol:ruby/svc.rb:initialize"
+    assert sites[("ruby/svc.rb", 17, "m")].metadata["receiver_type"] == "Foo"  # x = Foo.new
+    assert sites[("ruby/svc.rb", 13, "save")].metadata["receiver_type"] == "Repo"  # @repo = Repo.new (class field)
 
 
 @TREE_SITTER_ONLY
@@ -172,6 +180,7 @@ def test_method_qualifiers_and_bases_are_the_only_added_node_metadata() -> None:
     assert by_id["symbol:rust/src/store.rs:save"].metadata["qualifier"] == "Repo"
     assert by_id["symbol:swift/Sample.swift:ext"].metadata["qualifier"] == "Svc"
     assert "qualifier" not in by_id["symbol:swift/Sample.swift:step"].metadata  # contained by its class
+    assert by_id["symbol:ruby/svc.rb:Svc"].metadata["bases"] == ["Base", "Mixin"]
     assert by_id["symbol:java/Svc.java:Svc"].metadata["bases"] == ["Base"]
     assert by_id["symbol:swift/Sample.swift:Svc"].metadata["bases"] == ["Base"]
 
@@ -188,8 +197,8 @@ def test_resolution_never_crosses_language_families(ts_edges) -> None:
             assert language_family(cand.split(":")[1]) == language_family(edge.metadata["source_file"])
 
 
-def test_ruby_member_tiers_with_method_symbols() -> None:
-    """The resolver's tiers for Ruby-shaped graphs (method symbols present, e.g. once extracted)."""
+def test_ruby_member_tiers_on_a_handcrafted_graph() -> None:
+    """Unit-level tier check; the parser-backed end-to-end Ruby cases are in CASES above."""
     def n(path, name, kind, span):
         return GraphNode(f"symbol:{path}:{name}", kind, name, path, "symbol", "", span[0], span[1], {})
 
@@ -226,7 +235,7 @@ def _regex_sites() -> set[tuple[str, int, str]]:
         sites |= set(rows["unresolved"])
         sites |= {(f, line, c) for f, line, c, _ in rows["ambiguous"]}
     # Ruby's paren-less calls (`step`, `self.step`, `Foo.new`) have no `name(` for a regex to see.
-    return {s for s in sites if s[0] != "ruby/svc.rb"} | {("ruby/svc.rb", 12, "helper")}
+    return {s for s in sites if s[0] != "ruby/svc.rb"} | {("ruby/svc.rb", 18, "helper")}
 
 
 def test_regex_fallback_is_name_only_low_for_all_families(monkeypatch: pytest.MonkeyPatch) -> None:

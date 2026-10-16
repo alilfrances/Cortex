@@ -1,0 +1,51 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/helpers.rb:contains:helper",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "ruby/helpers.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/helpers.rb",
+      "target": "symbol:ruby/helpers.rb:helper",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "ruby/helpers.rb",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "rb",
+        "size_bytes": 34
+      },
+      "node_id": "file:ruby/helpers.rb",
+      "signature": "",
+      "source_ref": "ruby/helpers.rb",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "helper",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:ruby/helpers.rb:helper",
+      "signature": "def helper(count)",
+      "source_ref": "ruby/helpers.rb",
+      "span_end": 3,
+      "span_start": 1
+    }
+  ]
+}

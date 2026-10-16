@@ -890,6 +890,23 @@ def class_bases(suffix: str, node: Any, source: bytes) -> list[str]:
         for child in node.children:
             if child.type == "inheritance_specifier":
                 collect(child)
+    elif suffix == ".rb":
+        def const(n: Any) -> str:
+            text = _text(n, source)
+            return text.rsplit("::", 1)[-1]
+
+        parent = node.child_by_field_name("superclass")
+        if parent is not None:
+            for child in parent.named_children:
+                if child.type in {"constant", "scope_resolution"}:
+                    names.append(const(child))
+        body = node.child_by_field_name("body")
+        for stmt in (body.named_children if body is not None else []):
+            if stmt.type == "call" and stmt.child_by_field_name("receiver") is None:
+                meth = stmt.child_by_field_name("method")
+                args = stmt.child_by_field_name("arguments")
+                if meth is not None and _text(meth, source) in {"include", "prepend"} and args is not None:
+                    names.extend(const(a) for a in args.named_children if a.type in {"constant", "scope_resolution"})
     seen: list[str] = []
     for n in names:
         if n and n not in seen:
@@ -1524,10 +1541,39 @@ _RUBY_SKIP = frozenset({
 
 
 class RubyCalls(CallWalker):
-    """Call sites only: the tree-sitter extractor records `class`/`module` symbols but no `def`
-    symbols, so only `Const.new` (-> the class) can resolve; everything else stays `name:`."""
+    """Ruby call sites.  `def`/`def self.x` are symbols (see `_extract_ruby_method_symbols`), a
+    method's calls are attributed to it, `@x = T.new` types instance variables per class, and
+    `include`d modules / superclasses are `bases` metadata on the class node."""
 
     language = "ruby"
+
+    def __init__(self, ctx: CallContext) -> None:
+        super().__init__(ctx)
+        self.fields_of: dict[str, dict[str, str]] = {}
+
+    def run(self, root: Any) -> list[GraphEdge]:
+        stack = [root]
+        while stack:
+            node = stack.pop()
+            if node.type in {"class", "module"}:
+                cname = self.const_name(node.child_by_field_name("name"))
+                if cname:
+                    fields = self.fields_of.setdefault(cname, {})
+                    inner = [node]
+                    while inner:
+                        cur = inner.pop()
+                        if cur.type == "assignment":
+                            left, right = cur.child_by_field_name("left"), cur.child_by_field_name("right")
+                            if left is not None and left.type == "instance_variable" and right is not None and right.type == "call":
+                                meth = right.child_by_field_name("method")
+                                if meth is not None and self.text(meth) == "new":
+                                    typ = self.const_name(right.child_by_field_name("receiver"))
+                                    if typ:
+                                        fields[self.text(left)] = typ
+                        if cur is node or cur.type not in {"class", "module"}:
+                            inner.extend(cur.children)
+            stack.extend(node.children)
+        return super().run(root)
 
     def const_name(self, node: Any | None) -> str | None:
         if node is None:
@@ -1545,7 +1591,9 @@ class RubyCalls(CallWalker):
             sym = self.ctx.def_symbols.get((node.start_byte, node.end_byte), frame.symbol_id)
             return Frame(sym, frame.owner_label if sym == frame.symbol_id else sym.split(":", 2)[-1], name, {}, False)
         if kind in {"method", "singleton_method"}:
-            inner = Frame(frame.symbol_id, frame.owner_label, frame.class_name, dict(frame.vars), True)
+            sym = self.ctx.def_symbols.get((node.start_byte, node.end_byte), frame.symbol_id)
+            owner = frame.owner_label if sym == frame.symbol_id else sym.split(":", 2)[-1]
+            inner = Frame(sym, owner, frame.class_name, dict(self.fields_of.get(frame.class_name or "", {})), True)
             params = node.child_by_field_name("parameters")
             for param in (params.named_children if params is not None else []):
                 if param.type == "identifier":

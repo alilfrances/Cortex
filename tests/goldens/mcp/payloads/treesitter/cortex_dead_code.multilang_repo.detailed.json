@@ -145,11 +145,18 @@
       "line": 3,
       "reason": "no incoming edges; grep refs in code/config",
       "symbol": "Worker"
+    },
+    {
+      "confidence": "low",
+      "file": "worker.rb",
+      "line": 4,
+      "reason": "no incoming edges; grep refs in code/config",
+      "symbol": "run"
     }
   ],
   "refresh_hint": "",
   "repo_path": "<repo>",
-  "returned_count": 20,
+  "returned_count": 21,
   "stale": false,
   "truncated": false
 }

@@ -1035,6 +1035,32 @@
     },
     {
       "confidence": "LOW",
+      "edge_id": "regex:ruby/base.rb:contains:Base",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "ruby/base.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/base.rb",
+      "target": "symbol:ruby/base.rb:Base",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:ruby/base.rb:contains:inherited_op",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "ruby/base.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/base.rb",
+      "target": "symbol:ruby/base.rb:inherited_op",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
       "edge_id": "regex:ruby/foo.rb:contains:Foo",
       "layer": "STRUCTURAL",
       "metadata": {
@@ -1061,12 +1087,77 @@
     },
     {
       "confidence": "LOW",
-      "edge_id": "regex:ruby/svc.rb:calls:run:helper:12",
+      "edge_id": "regex:ruby/helpers.rb:contains:helper",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "ruby/helpers.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/helpers.rb",
+      "target": "symbol:ruby/helpers.rb:helper",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:ruby/mixin.rb:contains:Mixin",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "ruby/mixin.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/mixin.rb",
+      "target": "symbol:ruby/mixin.rb:Mixin",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:ruby/mixin.rb:contains:mixed",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "ruby/mixin.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/mixin.rb",
+      "target": "symbol:ruby/mixin.rb:mixed",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:ruby/repo.rb:contains:Repo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "ruby/repo.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/repo.rb",
+      "target": "symbol:ruby/repo.rb:Repo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:ruby/repo.rb:contains:save",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "ruby/repo.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/repo.rb",
+      "target": "symbol:ruby/repo.rb:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:ruby/svc.rb:calls:run:helper:18",
       "layer": "STRUCTURAL",
       "metadata": {
         "callee": "helper",
         "enclosing_class": null,
-        "lineno": 12,
+        "lineno": 18,
         "name_only": true,
         "receiver": null,
         "receiver_kind": "none",
@@ -1094,15 +1185,41 @@
     },
     {
       "confidence": "LOW",
+      "edge_id": "regex:ruby/svc.rb:contains:initialize",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "ruby/svc.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/svc.rb",
+      "target": "symbol:ruby/svc.rb:initialize",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
       "edge_id": "regex:ruby/svc.rb:contains:run",
       "layer": "STRUCTURAL",
       "metadata": {
-        "lineno": 4,
+        "lineno": 10,
         "source_file": "ruby/svc.rb"
       },
       "relation": "contains",
       "source": "file:ruby/svc.rb",
       "target": "symbol:ruby/svc.rb:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:ruby/svc.rb:contains:step",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 25,
+        "source_file": "ruby/svc.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/svc.rb",
+      "target": "symbol:ruby/svc.rb:step",
       "weight": 1.0
     },
     {
@@ -1116,6 +1233,19 @@
       "relation": "imports",
       "source": "file:ruby/svc.rb",
       "target": "module:util",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:ruby/util.rb:contains:Inner",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "ruby/util.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/util.rb",
+      "target": "symbol:ruby/util.rb:Inner",
       "weight": 1.0
     },
     {
@@ -2462,6 +2592,24 @@
     {
       "granularity": "file",
       "kind": "file",
+      "label": "ruby/base.rb",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "rb",
+        "size_bytes": 40
+      },
+      "node_id": "file:ruby/base.rb",
+      "signature": "",
+      "source_ref": "ruby/base.rb",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
       "label": "ruby/foo.rb",
       "metadata": {
         "degraded_reason": "forced-fallback",
@@ -2480,6 +2628,60 @@
     {
       "granularity": "file",
       "kind": "file",
+      "label": "ruby/helpers.rb",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "rb",
+        "size_bytes": 34
+      },
+      "node_id": "file:ruby/helpers.rb",
+      "signature": "",
+      "source_ref": "ruby/helpers.rb",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "ruby/mixin.rb",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "rb",
+        "size_bytes": 35
+      },
+      "node_id": "file:ruby/mixin.rb",
+      "signature": "",
+      "source_ref": "ruby/mixin.rb",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "ruby/repo.rb",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "rb",
+        "size_bytes": 32
+      },
+      "node_id": "file:ruby/repo.rb",
+      "signature": "",
+      "source_ref": "ruby/repo.rb",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
       "label": "ruby/svc.rb",
       "metadata": {
         "degraded_reason": "forced-fallback",
@@ -2487,7 +2689,7 @@
         "parser_backend": "regex",
         "parser_diagnostics": [],
         "parser_language": "rb",
-        "size_bytes": 197
+        "size_bytes": 308
       },
       "node_id": "file:ruby/svc.rb",
       "signature": "",
@@ -2505,7 +2707,7 @@
         "parser_backend": "regex",
         "parser_diagnostics": [],
         "parser_language": "rb",
-        "size_bytes": 38
+        "size_bytes": 84
       },
       "node_id": "file:ruby/util.rb",
       "signature": "",
@@ -3263,6 +3465,36 @@
     {
       "granularity": "symbol",
       "kind": "class",
+      "label": "Base",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:ruby/base.rb:Base",
+      "signature": "class Base",
+      "source_ref": "ruby/base.rb",
+      "span_end": 1,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "inherited_op",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 2,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:ruby/base.rb:inherited_op",
+      "signature": "def inherited_op",
+      "source_ref": "ruby/base.rb",
+      "span_end": 2,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
       "label": "Foo",
       "metadata": {
         "degraded_reason": "forced-fallback",
@@ -3292,6 +3524,81 @@
     },
     {
       "granularity": "symbol",
+      "kind": "func",
+      "label": "helper",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:ruby/helpers.rb:helper",
+      "signature": "def helper(count)",
+      "source_ref": "ruby/helpers.rb",
+      "span_end": 1,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Mixin",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:ruby/mixin.rb:Mixin",
+      "signature": "module Mixin",
+      "source_ref": "ruby/mixin.rb",
+      "span_end": 1,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "mixed",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 2,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:ruby/mixin.rb:mixed",
+      "signature": "def mixed",
+      "source_ref": "ruby/mixin.rb",
+      "span_end": 2,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Repo",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:ruby/repo.rb:Repo",
+      "signature": "class Repo",
+      "source_ref": "ruby/repo.rb",
+      "span_end": 1,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "save",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 2,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:ruby/repo.rb:save",
+      "signature": "def save",
+      "source_ref": "ruby/repo.rb",
+      "span_end": 2,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
       "kind": "class",
       "label": "Svc",
       "metadata": {
@@ -3308,17 +3615,62 @@
     {
       "granularity": "symbol",
       "kind": "func",
+      "label": "initialize",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 6,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:ruby/svc.rb:initialize",
+      "signature": "def initialize",
+      "source_ref": "ruby/svc.rb",
+      "span_end": 6,
+      "span_start": 6
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
       "label": "run",
       "metadata": {
         "degraded_reason": "forced-fallback",
-        "lineno": 4,
+        "lineno": 10,
         "parser_backend": "regex"
       },
       "node_id": "symbol:ruby/svc.rb:run",
       "signature": "def run(r)",
       "source_ref": "ruby/svc.rb",
-      "span_end": 4,
-      "span_start": 4
+      "span_end": 10,
+      "span_start": 10
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "step",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 25,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:ruby/svc.rb:step",
+      "signature": "def step",
+      "source_ref": "ruby/svc.rb",
+      "span_end": 25,
+      "span_start": 25
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Inner",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 5,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:ruby/util.rb:Inner",
+      "signature": "module Inner",
+      "source_ref": "ruby/util.rb",
+      "span_end": 5,
+      "span_start": 5
     },
     {
       "granularity": "symbol",

@@ -2,12 +2,12 @@
   "edges": [
     {
       "confidence": "LOW",
-      "edge_id": "regex:ruby/svc.rb:calls:run:helper:12",
+      "edge_id": "regex:ruby/svc.rb:calls:run:helper:18",
       "layer": "STRUCTURAL",
       "metadata": {
         "callee": "helper",
         "enclosing_class": null,
-        "lineno": 12,
+        "lineno": 18,
         "name_only": true,
         "receiver": null,
         "receiver_kind": "none",
@@ -35,15 +35,41 @@
     },
     {
       "confidence": "LOW",
+      "edge_id": "regex:ruby/svc.rb:contains:initialize",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "ruby/svc.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/svc.rb",
+      "target": "symbol:ruby/svc.rb:initialize",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
       "edge_id": "regex:ruby/svc.rb:contains:run",
       "layer": "STRUCTURAL",
       "metadata": {
-        "lineno": 4,
+        "lineno": 10,
         "source_file": "ruby/svc.rb"
       },
       "relation": "contains",
       "source": "file:ruby/svc.rb",
       "target": "symbol:ruby/svc.rb:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:ruby/svc.rb:contains:step",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 25,
+        "source_file": "ruby/svc.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/svc.rb",
+      "target": "symbol:ruby/svc.rb:step",
       "weight": 1.0
     },
     {
@@ -71,7 +97,7 @@
         "parser_backend": "regex",
         "parser_diagnostics": [],
         "parser_language": "rb",
-        "size_bytes": 197
+        "size_bytes": 308
       },
       "node_id": "file:ruby/svc.rb",
       "signature": "",
@@ -97,17 +123,47 @@
     {
       "granularity": "symbol",
       "kind": "func",
+      "label": "initialize",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 6,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:ruby/svc.rb:initialize",
+      "signature": "def initialize",
+      "source_ref": "ruby/svc.rb",
+      "span_end": 6,
+      "span_start": 6
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
       "label": "run",
       "metadata": {
         "degraded_reason": "forced-fallback",
-        "lineno": 4,
+        "lineno": 10,
         "parser_backend": "regex"
       },
       "node_id": "symbol:ruby/svc.rb:run",
       "signature": "def run(r)",
       "source_ref": "ruby/svc.rb",
-      "span_end": 4,
-      "span_start": 4
+      "span_end": 10,
+      "span_start": 10
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "step",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 25,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:ruby/svc.rb:step",
+      "signature": "def step",
+      "source_ref": "ruby/svc.rb",
+      "span_end": 25,
+      "span_start": 25
     }
   ]
 }

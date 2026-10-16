@@ -2,6 +2,19 @@
   "edges": [
     {
       "confidence": "LOW",
+      "edge_id": "regex:ruby/util.rb:contains:Inner",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "ruby/util.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/util.rb",
+      "target": "symbol:ruby/util.rb:Inner",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
       "edge_id": "regex:ruby/util.rb:contains:Util",
       "layer": "STRUCTURAL",
       "metadata": {
@@ -38,13 +51,28 @@
         "parser_backend": "regex",
         "parser_diagnostics": [],
         "parser_language": "rb",
-        "size_bytes": 38
+        "size_bytes": 84
       },
       "node_id": "file:ruby/util.rb",
       "signature": "",
       "source_ref": "ruby/util.rb",
       "span_end": null,
       "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Inner",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 5,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:ruby/util.rb:Inner",
+      "signature": "module Inner",
+      "source_ref": "ruby/util.rb",
+      "span_end": 5,
+      "span_start": 5
     },
     {
       "granularity": "symbol",

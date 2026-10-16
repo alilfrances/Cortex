@@ -1,0 +1,80 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:ruby/repo.rb:contains:Repo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "ruby/repo.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/repo.rb",
+      "target": "symbol:ruby/repo.rb:Repo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:ruby/repo.rb:contains:save",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "ruby/repo.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/repo.rb",
+      "target": "symbol:ruby/repo.rb:save",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "ruby/repo.rb",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "rb",
+        "size_bytes": 32
+      },
+      "node_id": "file:ruby/repo.rb",
+      "signature": "",
+      "source_ref": "ruby/repo.rb",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Repo",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:ruby/repo.rb:Repo",
+      "signature": "class Repo",
+      "source_ref": "ruby/repo.rb",
+      "span_end": 1,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "save",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 2,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:ruby/repo.rb:save",
+      "signature": "def save",
+      "source_ref": "ruby/repo.rb",
+      "span_end": 2,
+      "span_start": 2
+    }
+  ]
+}

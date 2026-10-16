@@ -2,6 +2,19 @@
   "edges": [
     {
       "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/util.rb:contains:Inner",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "ruby/util.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/util.rb",
+      "target": "symbol:ruby/util.rb:Inner",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
       "edge_id": "treesitter:ruby/util.rb:contains:Util",
       "layer": "STRUCTURAL",
       "metadata": {
@@ -11,6 +24,32 @@
       "relation": "contains",
       "source": "file:ruby/util.rb",
       "target": "symbol:ruby/util.rb:Util",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/util.rb:contains:go",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "ruby/util.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/util.rb",
+      "target": "symbol:ruby/util.rb:go",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/util.rb:contains:help",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "ruby/util.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/util.rb",
+      "target": "symbol:ruby/util.rb:help",
       "weight": 1.0
     }
   ],
@@ -25,13 +64,27 @@
         "parser_backend": "treesitter",
         "parser_diagnostics": [],
         "parser_language": "rb",
-        "size_bytes": 38
+        "size_bytes": 84
       },
       "node_id": "file:ruby/util.rb",
       "signature": "",
       "source_ref": "ruby/util.rb",
       "span_end": null,
       "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Inner",
+      "metadata": {
+        "lineno": 5,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:ruby/util.rb:Inner",
+      "signature": "module Inner",
+      "source_ref": "ruby/util.rb",
+      "span_end": 8,
+      "span_start": 5
     },
     {
       "granularity": "symbol",
@@ -44,8 +97,36 @@
       "node_id": "symbol:ruby/util.rb:Util",
       "signature": "module Util",
       "source_ref": "ruby/util.rb",
-      "span_end": 4,
+      "span_end": 9,
       "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "go",
+      "metadata": {
+        "lineno": 6,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:ruby/util.rb:go",
+      "signature": "def self.go",
+      "source_ref": "ruby/util.rb",
+      "span_end": 7,
+      "span_start": 6
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "help",
+      "metadata": {
+        "lineno": 2,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:ruby/util.rb:help",
+      "signature": "def self.help",
+      "source_ref": "ruby/util.rb",
+      "span_end": 3,
+      "span_start": 2
     }
   ]
 }

@@ -563,7 +563,7 @@
     },
     {
       "confidence": "EXTRACTED",
-      "edge_id": "treesitter:worker.rb:calls:Worker:JSON.generate:5",
+      "edge_id": "treesitter:worker.rb:calls:run:JSON.generate:5",
       "layer": "STRUCTURAL",
       "metadata": {
         "callee": "generate",
@@ -576,7 +576,7 @@
         "source_file": "worker.rb"
       },
       "relation": "calls",
-      "source": "symbol:worker.rb:Worker",
+      "source": "symbol:worker.rb:run",
       "target": "name:generate",
       "weight": 1.0
     },
@@ -591,6 +591,19 @@
       "relation": "contains",
       "source": "file:worker.rb",
       "target": "symbol:worker.rb:Worker",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:worker.rb:contains:run",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "worker.rb"
+      },
+      "relation": "contains",
+      "source": "file:worker.rb",
+      "target": "symbol:worker.rb:run",
       "weight": 1.0
     },
     {
@@ -1120,6 +1133,20 @@
       "source_ref": "worker.rb",
       "span_end": 7,
       "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "run",
+      "metadata": {
+        "lineno": 4,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:worker.rb:run",
+      "signature": "def run",
+      "source_ref": "worker.rb",
+      "span_end": 6,
+      "span_start": 4
     }
   ]
 }

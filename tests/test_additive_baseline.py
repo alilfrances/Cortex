@@ -43,7 +43,41 @@ def _strip(nodes: list[dict], drop: set[str]) -> list[dict]:
     return out
 
 
+def _ruby_method_exception(old: dict, new: dict) -> tuple[set[str], set[str]]:
+    """The one approved, narrow exception to node-equality: Ruby `def`/`def self.x` symbols.
+
+    The generic tree-sitter table had no Ruby `method` node type, so frozen Ruby files lack their
+    method symbols.  Allowed, and nothing else: new nodes that are ``func`` symbols of a ``.rb``
+    file (id scheme unchanged, ``symbol:<path>:<name>``, not previously present) and the
+    ``contains`` edge from that same file to each.  Every frozen node and edge must still be
+    present unchanged; non-Ruby files get no exemption at all."""
+    old_ids = {n["node_id"] for n in old["nodes"]}
+    added_nodes = {
+        n["node_id"]
+        for n in new["nodes"]
+        if n["node_id"] not in old_ids
+        and n["kind"] == "func"
+        and n["source_ref"].endswith(".rb")
+        and n["node_id"] == f"symbol:{n['source_ref']}:{n['label']}"
+    }
+    old_edge_ids = {e["edge_id"] for e in old["edges"]}
+    added_edges = {
+        e["edge_id"]
+        for e in new["edges"]
+        if e["edge_id"] not in old_edge_ids
+        and e["relation"] == "contains"
+        and e["target"] in added_nodes
+        and e["source"] == "file:" + e["target"].split(":", 2)[1]
+    }
+    return added_nodes, added_edges
+
+
 def _assert_additive(old: dict, new: dict, *, drop: set[str] = frozenset()) -> None:
+    ruby_nodes, ruby_edges = _ruby_method_exception(old, new)
+    new = {
+        "nodes": [n for n in new["nodes"] if n["node_id"] not in ruby_nodes],
+        "edges": [e for e in new["edges"] if e["edge_id"] not in ruby_edges],
+    }
     ignored = set(drop) | _ALLOWED_NEW_NODE_KEYS
     assert _strip(new["nodes"], ignored) == _strip(old["nodes"], ignored), "call extraction changed nodes"
     for node in old["nodes"]:
@@ -57,6 +91,31 @@ def _assert_additive(old: dict, new: dict, *, drop: set[str] = frozenset()) -> N
     added = [e for k, e in new_edges.items() if k not in old_edges]
     assert all(e["relation"] == "calls" for e in added), "call extraction added a non-call edge"
     assert [e for e in new["edges"] if e["relation"] != "calls"] == [e for e in old["edges"] if e["relation"] != "calls"]
+
+
+def test_ruby_exception_is_narrow() -> None:
+    """The exemption admits exactly Ruby func symbols + their file `contains` edge, nothing else."""
+    old = {"nodes": [{"node_id": "symbol:a.rb:A", "kind": "class", "source_ref": "a.rb", "label": "A", "metadata": {}}], "edges": []}
+
+    def node(nid, kind="func", ref="a.rb", label="m"):
+        return {"node_id": nid, "kind": kind, "source_ref": ref, "label": label, "metadata": {}}
+
+    def edge(eid, rel, src, dst):
+        return {"edge_id": eid, "relation": rel, "source": src, "target": dst, "metadata": {}}
+
+    ok = {"nodes": old["nodes"] + [node("symbol:a.rb:m")], "edges": [edge("c", "contains", "file:a.rb", "symbol:a.rb:m")]}
+    _assert_additive(old, ok)
+    for bad_node in (
+        node("symbol:a.py:m", ref="a.py"),            # not Ruby
+        node("symbol:a.rb:m", kind="class"),          # not a func symbol
+        node("symbol:a.rb:Other:m"),                  # id scheme changed
+    ):
+        with pytest.raises(AssertionError):
+            _assert_additive(old, {"nodes": old["nodes"] + [bad_node], "edges": []})
+    with pytest.raises(AssertionError):                # an extra edge of another kind
+        _assert_additive(old, {"nodes": ok["nodes"], "edges": ok["edges"] + [edge("i", "imports", "file:a.rb", "file:b.rb")]})
+    with pytest.raises(AssertionError):                # a changed frozen node
+        _assert_additive(old, {"nodes": [dict(old["nodes"][0], label="B")] + ok["nodes"][1:], "edges": ok["edges"]})
 
 
 def _backend_cases(backend: str):

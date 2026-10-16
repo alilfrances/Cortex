@@ -2,31 +2,50 @@
   "edges": [
     {
       "confidence": "EXTRACTED",
-      "edge_id": "treesitter:ruby/svc.rb:calls:Svc:@repo.save:7",
+      "edge_id": "treesitter:ruby/svc.rb:calls:initialize:Repo.Repo:7",
       "layer": "STRUCTURAL",
       "metadata": {
-        "callee": "save",
+        "callee": "Repo",
         "enclosing_class": "Svc",
         "lineno": 7,
-        "receiver": "@repo",
-        "receiver_kind": "var",
+        "receiver": "Repo",
+        "receiver_kind": "new",
         "receiver_type": null,
         "scope": null,
         "source_file": "ruby/svc.rb"
       },
       "relation": "calls",
-      "source": "symbol:ruby/svc.rb:Svc",
+      "source": "symbol:ruby/svc.rb:initialize",
+      "target": "name:Repo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/svc.rb:calls:run:@repo.save:13",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "save",
+        "enclosing_class": "Svc",
+        "lineno": 13,
+        "receiver": "@repo",
+        "receiver_kind": "var",
+        "receiver_type": "Repo",
+        "scope": null,
+        "source_file": "ruby/svc.rb"
+      },
+      "relation": "calls",
+      "source": "symbol:ruby/svc.rb:run",
       "target": "name:save",
       "weight": 1.0
     },
     {
       "confidence": "EXTRACTED",
-      "edge_id": "treesitter:ruby/svc.rb:calls:Svc:Foo.Foo:10",
+      "edge_id": "treesitter:ruby/svc.rb:calls:run:Foo.Foo:16",
       "layer": "STRUCTURAL",
       "metadata": {
         "callee": "Foo",
         "enclosing_class": "Svc",
-        "lineno": 10,
+        "lineno": 16,
         "receiver": "Foo",
         "receiver_kind": "new",
         "receiver_type": null,
@@ -34,18 +53,18 @@
         "source_file": "ruby/svc.rb"
       },
       "relation": "calls",
-      "source": "symbol:ruby/svc.rb:Svc",
+      "source": "symbol:ruby/svc.rb:run",
       "target": "name:Foo",
       "weight": 1.0
     },
     {
       "confidence": "EXTRACTED",
-      "edge_id": "treesitter:ruby/svc.rb:calls:Svc:Util.help:8",
+      "edge_id": "treesitter:ruby/svc.rb:calls:run:Util.help:14",
       "layer": "STRUCTURAL",
       "metadata": {
         "callee": "help",
         "enclosing_class": "Svc",
-        "lineno": 8,
+        "lineno": 14,
         "receiver": "Util",
         "receiver_kind": "scoped",
         "receiver_type": null,
@@ -53,18 +72,18 @@
         "source_file": "ruby/svc.rb"
       },
       "relation": "calls",
-      "source": "symbol:ruby/svc.rb:Svc",
+      "source": "symbol:ruby/svc.rb:run",
       "target": "name:help",
       "weight": 1.0
     },
     {
       "confidence": "EXTRACTED",
-      "edge_id": "treesitter:ruby/svc.rb:calls:Svc:Util::Inner.go:9",
+      "edge_id": "treesitter:ruby/svc.rb:calls:run:Util::Inner.go:15",
       "layer": "STRUCTURAL",
       "metadata": {
         "callee": "go",
         "enclosing_class": "Svc",
-        "lineno": 9,
+        "lineno": 15,
         "receiver": "Util::Inner",
         "receiver_kind": "scoped",
         "receiver_type": null,
@@ -72,18 +91,18 @@
         "source_file": "ruby/svc.rb"
       },
       "relation": "calls",
-      "source": "symbol:ruby/svc.rb:Svc",
+      "source": "symbol:ruby/svc.rb:run",
       "target": "name:go",
       "weight": 1.0
     },
     {
       "confidence": "EXTRACTED",
-      "edge_id": "treesitter:ruby/svc.rb:calls:Svc:Widget.Widget:13",
+      "edge_id": "treesitter:ruby/svc.rb:calls:run:Widget.Widget:19",
       "layer": "STRUCTURAL",
       "metadata": {
         "callee": "Widget",
         "enclosing_class": "Svc",
-        "lineno": 13,
+        "lineno": 19,
         "receiver": "Widget",
         "receiver_kind": "new",
         "receiver_type": null,
@@ -91,18 +110,18 @@
         "source_file": "ruby/svc.rb"
       },
       "relation": "calls",
-      "source": "symbol:ruby/svc.rb:Svc",
+      "source": "symbol:ruby/svc.rb:run",
       "target": "name:Widget",
       "weight": 1.0
     },
     {
       "confidence": "EXTRACTED",
-      "edge_id": "treesitter:ruby/svc.rb:calls:Svc:helper:12",
+      "edge_id": "treesitter:ruby/svc.rb:calls:run:helper:18",
       "layer": "STRUCTURAL",
       "metadata": {
         "callee": "helper",
         "enclosing_class": "Svc",
-        "lineno": 12,
+        "lineno": 18,
         "receiver": null,
         "receiver_kind": "none",
         "receiver_type": null,
@@ -110,18 +129,75 @@
         "source_file": "ruby/svc.rb"
       },
       "relation": "calls",
-      "source": "symbol:ruby/svc.rb:Svc",
+      "source": "symbol:ruby/svc.rb:run",
       "target": "name:helper",
       "weight": 1.0
     },
     {
       "confidence": "EXTRACTED",
-      "edge_id": "treesitter:ruby/svc.rb:calls:Svc:self.step:6",
+      "edge_id": "treesitter:ruby/svc.rb:calls:run:inherited_op:20",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "inherited_op",
+        "enclosing_class": "Svc",
+        "lineno": 20,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "ruby/svc.rb"
+      },
+      "relation": "calls",
+      "source": "symbol:ruby/svc.rb:run",
+      "target": "name:inherited_op",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/svc.rb:calls:run:mixed:21",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "mixed",
+        "enclosing_class": "Svc",
+        "lineno": 21,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "ruby/svc.rb"
+      },
+      "relation": "calls",
+      "source": "symbol:ruby/svc.rb:run",
+      "target": "name:mixed",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/svc.rb:calls:run:r.other:22",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "other",
+        "enclosing_class": "Svc",
+        "lineno": 22,
+        "receiver": "r",
+        "receiver_kind": "var",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "ruby/svc.rb"
+      },
+      "relation": "calls",
+      "source": "symbol:ruby/svc.rb:run",
+      "target": "name:other",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/svc.rb:calls:run:self.step:12",
       "layer": "STRUCTURAL",
       "metadata": {
         "callee": "step",
         "enclosing_class": "Svc",
-        "lineno": 6,
+        "lineno": 12,
         "receiver": "self",
         "receiver_kind": "self",
         "receiver_type": null,
@@ -129,18 +205,18 @@
         "source_file": "ruby/svc.rb"
       },
       "relation": "calls",
-      "source": "symbol:ruby/svc.rb:Svc",
+      "source": "symbol:ruby/svc.rb:run",
       "target": "name:step",
       "weight": 1.0
     },
     {
       "confidence": "EXTRACTED",
-      "edge_id": "treesitter:ruby/svc.rb:calls:Svc:step:5",
+      "edge_id": "treesitter:ruby/svc.rb:calls:run:step:11",
       "layer": "STRUCTURAL",
       "metadata": {
         "callee": "step",
         "enclosing_class": "Svc",
-        "lineno": 5,
+        "lineno": 11,
         "receiver": null,
         "receiver_kind": "none",
         "receiver_type": null,
@@ -148,18 +224,18 @@
         "source_file": "ruby/svc.rb"
       },
       "relation": "calls",
-      "source": "symbol:ruby/svc.rb:Svc",
+      "source": "symbol:ruby/svc.rb:run",
       "target": "name:step",
       "weight": 1.0
     },
     {
       "confidence": "EXTRACTED",
-      "edge_id": "treesitter:ruby/svc.rb:calls:Svc:x.m:11",
+      "edge_id": "treesitter:ruby/svc.rb:calls:run:x.m:17",
       "layer": "STRUCTURAL",
       "metadata": {
         "callee": "m",
         "enclosing_class": "Svc",
-        "lineno": 11,
+        "lineno": 17,
         "receiver": "x",
         "receiver_kind": "var",
         "receiver_type": "Foo",
@@ -167,7 +243,7 @@
         "source_file": "ruby/svc.rb"
       },
       "relation": "calls",
-      "source": "symbol:ruby/svc.rb:Svc",
+      "source": "symbol:ruby/svc.rb:run",
       "target": "name:m",
       "weight": 1.0
     },
@@ -182,6 +258,45 @@
       "relation": "contains",
       "source": "file:ruby/svc.rb",
       "target": "symbol:ruby/svc.rb:Svc",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/svc.rb:contains:initialize",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "ruby/svc.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/svc.rb",
+      "target": "symbol:ruby/svc.rb:initialize",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/svc.rb:contains:run",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 10,
+        "source_file": "ruby/svc.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/svc.rb",
+      "target": "symbol:ruby/svc.rb:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/svc.rb:contains:step",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 25,
+        "source_file": "ruby/svc.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/svc.rb",
+      "target": "symbol:ruby/svc.rb:step",
       "weight": 1.0
     },
     {
@@ -209,7 +324,7 @@
         "parser_backend": "treesitter",
         "parser_diagnostics": [],
         "parser_language": "rb",
-        "size_bytes": 197
+        "size_bytes": 308
       },
       "node_id": "file:ruby/svc.rb",
       "signature": "",
@@ -222,14 +337,60 @@
       "kind": "class",
       "label": "Svc",
       "metadata": {
+        "bases": [
+          "Base",
+          "Mixin"
+        ],
         "lineno": 3,
         "parser_backend": "treesitter"
       },
       "node_id": "symbol:ruby/svc.rb:Svc",
       "signature": "class Svc < Base",
       "source_ref": "ruby/svc.rb",
-      "span_end": 16,
+      "span_end": 27,
       "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "initialize",
+      "metadata": {
+        "lineno": 6,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:ruby/svc.rb:initialize",
+      "signature": "def initialize",
+      "source_ref": "ruby/svc.rb",
+      "span_end": 8,
+      "span_start": 6
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "run",
+      "metadata": {
+        "lineno": 10,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:ruby/svc.rb:run",
+      "signature": "def run(r)",
+      "source_ref": "ruby/svc.rb",
+      "span_end": 23,
+      "span_start": 10
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "step",
+      "metadata": {
+        "lineno": 25,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:ruby/svc.rb:step",
+      "signature": "def step",
+      "source_ref": "ruby/svc.rb",
+      "span_end": 26,
+      "span_start": 25
     }
   ]
 }
