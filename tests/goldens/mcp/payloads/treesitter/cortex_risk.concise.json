@@ -99,6 +99,9 @@
   "staged": false,
   "stale": false,
   "status": "ok",
+  "tests_run_all": true,
+  "tests_run_all_reason": "no test files are indexed",
+  "tests_to_run": [],
   "truncated": false,
   "unindexed": false,
   "unindexed_files": []

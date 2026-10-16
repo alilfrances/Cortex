@@ -17,6 +17,7 @@ import subprocess
 from typing import Any, Iterable, Mapping, Sequence
 
 from .gitutils import discover_repo_root
+from .impacted_tests import select_tests
 from .report import _looks_like_src_test_pair
 from .store import CortexStore, default_db_path
 from .testpatterns import is_test_path
@@ -630,6 +631,7 @@ def _directive_strings(
     qt_instantiations: Sequence[dict[str, Any]],
     qt_signal_sites: Sequence[dict[str, Any]],
     build_system_misses: Sequence[dict[str, Any]],
+    tests_to_run: Sequence[dict[str, Any]] = (),
 ) -> list[str]:
     directives: list[str] = []
     for item in missing_cochange:
@@ -644,6 +646,8 @@ def _directive_strings(
         directives.append(f"missing_qt_site: {item['site']} ({item['relation']} {item['signal']})")
     for item in build_system_misses:
         directives.append(f"build_system_miss: {item['qml']}")
+    for item in tests_to_run:
+        directives.append(f"tests_to_run: {item['test']} ({','.join(item['via'])})")
     return sorted(directives)
 
 
@@ -775,7 +779,19 @@ def analyze_risk(
 
     file_payloads.sort(key=lambda value: (-float(value["risk_score"]), str(value["path"]), str(value.get("previous_path", ""))))
     missing_cochange.sort(key=lambda value: (value["for"], -float(value["weight"]), value["path"]))
-    directives = _directive_strings(missing_cochange, missing_tests, qt_pairs, qt_instantiations, qt_signal_sites, build_system_misses)
+    tests_to_run, tests_run_all, tests_run_all_reason = select_tests(
+        diff.files,
+        diff.raw_zero_context,
+        graph_nodes,
+        graph_edges,
+        all_paths=all_paths,
+        indexed_paths=indexed_paths,
+        cochange=cochange,
+        index_status=index_status,
+    )
+    directives = _directive_strings(
+        missing_cochange, missing_tests, qt_pairs, qt_instantiations, qt_signal_sites, build_system_misses, tests_to_run
+    )
 
     unindexed_files = sorted(path for path in changed_paths if path not in indexed_paths and not (next((f.previous_path for f in diff.files if f.path == path), None) in indexed_paths))
     status = "ok" if index_status == "available" and not unindexed_files else "partial"
@@ -809,6 +825,9 @@ def analyze_risk(
         "unindexed": bool(unindexed_files or index_status != "available"),
         "unindexed_files": unindexed_files,
         "analysis_errors": (["Cortex index is unavailable; graph/hotspot analysis was skipped."] if index_status != "available" else []),
+        "tests_to_run": tests_to_run,
+        "tests_run_all": tests_run_all,
+        "tests_run_all_reason": tests_run_all_reason,
     }
     return result
 
@@ -858,6 +877,16 @@ def truncate_risk_result(result: Mapping[str, Any], budget: int) -> dict[str, An
         while output.get("directives") and count_text_tokens(json.dumps(output, sort_keys=True)) > limit:
             output["directives"].pop()
             output["truncated"] = True
+    if count_text_tokens(json.dumps(output, sort_keys=True)) > limit and output.get("tests_to_run"):
+        # The impacted-test list goes last, lowest score first.  A shortened
+        # list can no longer be vouched for, so it switches to run-all;
+        # ``tests_run_all``/``tests_run_all_reason`` themselves are never dropped.
+        while output.get("tests_to_run") and count_text_tokens(json.dumps(output, sort_keys=True)) > limit:
+            output["tests_to_run"].pop()
+            output["truncated"] = True
+            if not output.get("tests_run_all"):
+                output["tests_run_all"] = True
+                output["tests_run_all_reason"] = "tests_to_run was truncated to fit the response budget"
     output["returned_count"] = len(output.get("files", []))
     output["budget_feasible"] = count_text_tokens(json.dumps(output, sort_keys=True)) <= limit
     return output

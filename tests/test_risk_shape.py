@@ -4,6 +4,10 @@ Pins the exact top-level key set, the ``files[]`` item key set, the directive st
 formats and ``truncate_risk_result`` drop order so Task 10 (``tests_to_run``) can add
 fields without altering anything pre-existing.  Task 10 must update
 ``TOP_LEVEL_KEYS`` and ``DIRECTIVE_PREFIXES`` -- and nothing else here.
+
+Task 10 did exactly that, plus the unavoidable additive consequences: the real-diff
+directive list gains its ``tests_to_run:`` string (the two 7b0e6e0 strings are
+unchanged) and the all-prefix check passes one ``tests_to_run`` record.
 """
 
 from __future__ import annotations
@@ -38,6 +42,9 @@ TOP_LEVEL_KEYS = [
     "score_formula",
     "staged",
     "status",
+    "tests_run_all",  # Task 10 (additive)
+    "tests_run_all_reason",  # Task 10 (additive)
+    "tests_to_run",  # Task 10 (additive)
     "unindexed",
     "unindexed_files",
 ]
@@ -71,6 +78,7 @@ DIRECTIVE_PREFIXES = [
     "missing_qt_pair:",
     "missing_qt_site:",
     "missing_tests:",
+    "tests_to_run:",  # Task 10 (additive)
 ]
 
 ERROR_KEYS_NOT_GIT = ["directives", "error", "files", "message", "status"]
@@ -150,10 +158,20 @@ def test_rename_items_carry_extra_keys(tmp_path: Path) -> None:
 def test_directive_prefixes_and_formats_from_a_real_diff(tmp_path: Path) -> None:
     result = analyze_risk(make_repo(tmp_path))
 
+    # Task 10 adds the third string; the two 7b0e6e0 strings are byte-identical.
     assert result["directives"] == [
         "missing_cochange: src/b.py (1.00) for src/a.py",
         "missing_tests: tests/test_a.py for src/a.py",
+        "tests_to_run: tests/test_a.py (cochange,pair)",
     ]
+    # test_a.py co-changed with a.py in 1 of the 2 commits of the strongest pair (weight 0.5 >= 0.5).
+    assert result["tests_to_run"] == [{
+        "test": "tests/test_a.py",
+        "via": ["cochange", "pair"],
+        "reason": "cochange: changed together with src/a.py (weight 0.50); pair: test file name pairs with src/a.py",
+        "score": 0.6,
+    }]
+    assert result["tests_run_all"] is False and result["tests_run_all_reason"] == ""
     assert result["directives"] == sorted(result["directives"])
     assert result["missing_cochange"] == result["missing_cochanges"]
     assert result["missing_cochange"][0] == {"path": "src/b.py", "weight": 1.0, "for": "src/a.py"}
@@ -170,6 +188,7 @@ def test_every_directive_prefix_and_string_format() -> None:
         [{"qml": "Main.qml", "changed": "A.cpp"}],
         [{"site": "a.cpp", "relation": "connects", "signal": "done"}],
         [{"qml": "New.qml"}],
+        [{"test": "tests/test_a.py", "via": ["cochange", "structural"]}],
     )
 
     assert directives == [
@@ -179,6 +198,7 @@ def test_every_directive_prefix_and_string_format() -> None:
         "missing_qt_pair: a.hpp for a.cpp",
         "missing_qt_site: a.cpp (connects done)",
         "missing_tests: tests/test_a.py for a.py",
+        "tests_to_run: tests/test_a.py (cochange,structural)",
     ]
     assert sorted(d.split(" ", 1)[0] for d in directives) == DIRECTIVE_PREFIXES
     assert _directive_strings([], [], [], [], [], []) == []
