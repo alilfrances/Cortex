@@ -1073,13 +1073,547 @@ def measure_query_latency(
             os.environ["CORTEX_SEMANTIC"] = previous_semantic
 
 
+# --------------------------------------------------------------------------- #
+# OSS fixtures (Task 11): vendored, permissively licensed upstream snapshots.
+# --------------------------------------------------------------------------- #
+#
+# Everything here is offline.  Each snapshot under ``evals/fixtures/oss/<name>/``
+# (see its PROVENANCE.md; acquired by ``scripts/vendor_oss_fixtures.py``) is copied
+# into a temporary git repository, given a deterministic synthetic history (fixed
+# dates, fixed edits) so COCHANGE exists, ingested, and scored on three things that
+# are reported apart from the historical 17-task matrix:
+#   (i)   OSS retrieval tasks (``tags=("oss",)``; never part of the historical aggregate);
+#   (ii)  call-edge resolution: totals plus hand-checked (caller, callee) gold pairs
+#         that must exist as resolved ``calls`` edges;
+#   (iii) impacted tests: a change inside one named source symbol must select the named
+#         test file in ``cortex_risk``'s ``tests_to_run`` with ``structural`` in ``via``.
+
+OSS_ROOT = ROOT / "evals" / "fixtures" / "oss"
+FIXED_GIT_DATE = "2026-01-01T00:00:00+0000"
+_OSS_EPOCH = 1767225600  # 2026-01-01T00:00:00Z; synthetic commit i is dated EPOCH + i hours
+_LINE_COMMENT = {".rb": "#", ".pro": "#", ".pri": "#", ".txt": "#", ".toml": "#"}
+
+
+@dataclass(frozen=True)
+class OssImpactGold:
+    source: str  # file whose symbol body the final synthetic commit edits
+    anchor: str  # a comment line is inserted right after the first line containing this text
+    expected_test: str  # must appear in tests_to_run with "structural" in via
+
+
+@dataclass(frozen=True)
+class OssFixture:
+    name: str
+    family: str
+    tasks: tuple[GoldTask, ...]
+    call_pairs: tuple[tuple[str, str], ...]  # (caller symbol id, callee symbol id)
+    impact: OssImpactGold
+    # Synthetic history: each tuple is one commit touching those files (a trailing comment).
+    history: tuple[tuple[str, ...], ...]
+
+
+def _oss_task(repo: str, description: str, files: tuple[str, ...], symbols: tuple[str, ...] = ()) -> GoldTask:
+    return GoldTask(repo=repo, description=description, expected_files=files, expected_symbols=symbols, tags=("oss",))
+
+
+_SFPM = "cpp_qt_sortfilterproxymodel"
+_MUX = "go_mux"
+_PQ = "ts_p_queue"
+_SEMVER = "rust_semver"
+_SPLASH = "swift_splash"
+_JP = "java_javapoet"
+_JPP = "src/main/java/com/squareup/javapoet"
+_JPT = "src/test/java/com/squareup/javapoet"
+_RACK = "ruby_rack"
+_SPL = "Sources/Splash"
+
+OSS_FIXTURES: tuple[OssFixture, ...] = (
+    OssFixture(
+        name=_SFPM,
+        family="C/C++ with Qt",
+        tasks=(
+            _oss_task(
+                _SFPM,
+                "Where does the proxy model decide whether a source row passes its filters",
+                ("qqmlsortfilterproxymodel.cpp", "filters/filter.cpp"),
+                ("qqmlsortfilterproxymodel.cpp:filterAcceptsRow", "filters/filter.cpp:filterAcceptsRow"),
+            ),
+            _oss_task(
+                _SFPM,
+                "How does RangeFilter check a role value against its minimum and maximum bounds",
+                ("filters/rangefilter.cpp", "filters/rangefilter.h"),
+                ("filters/rangefilter.cpp:filterRow",),
+            ),
+        ),
+        call_pairs=(
+            # std::all_of(..., [=](Filter* filter) { return filter->filterAcceptsRow(...); })
+            ("symbol:qqmlsortfilterproxymodel.cpp:filterAcceptsRow", "symbol:filters/filter.cpp:filterAcceptsRow"),
+            # RangeFilter -> RoleFilter -> Filter; setMaximumValue() calls inherited invalidate()
+            ("symbol:filters/rangefilter.cpp:setMaximumValue", "symbol:filters/filter.cpp:invalidate"),
+            # parameter `const QQmlSortFilterProxyModel& proxyModel`; proxyModel.sourceData(...)
+            ("symbol:filters/expressionfilter.cpp:filterRow", "symbol:qqmlsortfilterproxymodel.cpp:sourceData"),
+            # `ProxyRole* proxyRole = ...; proxyRole->roleData(...)`
+            ("symbol:qqmlsortfilterproxymodel.cpp:sourceData", "symbol:proxyroles/proxyrole.cpp:roleData"),
+        ),
+        impact=OssImpactGold("sorters/sorter.h", "class Sorter : public QObject", "tests/indexsorter.cpp"),
+        history=(
+            ("filters/rangefilter.cpp", "filters/rangefilter.h"),
+            ("sorters/sorter.cpp", "tests/indexsorter.cpp"),
+            ("qqmlsortfilterproxymodel.cpp", "qqmlsortfilterproxymodel.h"),
+        ),
+    ),
+    OssFixture(
+        name=_PQ,
+        family="JavaScript/TypeScript",
+        tasks=(
+            _oss_task(
+                _PQ,
+                "How does the queue pause new tasks while the interval rate limit intervalCap is reached",
+                ("source/index.ts",),
+                ("source/index.ts:#onInterval",),
+            ),
+            _oss_task(
+                _PQ,
+                "How does the priority queue insert a job in priority order",
+                ("source/priority-queue.ts", "source/lower-bound.ts"),
+                ("source/priority-queue.ts:enqueue", "source/lower-bound.ts:lowerBound"),
+            ),
+        ),
+        call_pairs=(
+            # import lowerBound from './lower-bound.js'; lowerBound(this.#queue, element, ...)
+            ("symbol:source/priority-queue.ts:enqueue", "symbol:source/lower-bound.ts:lowerBound"),
+            # add() { const promise = this.#add(function_, options, waitingTask); }
+            ("symbol:source/index.ts:add", "symbol:source/index.ts:#add"),
+            # `this.#emit('add')` inside the private #add
+            ("symbol:source/index.ts:#add", "symbol:source/index.ts:#emit"),
+        ),
+        impact=OssImpactGold("source/priority-queue.ts", "enqueue(run: RunFunction", "test/priority-queue.ts"),
+        history=(
+            ("source/priority-queue.ts", "test/priority-queue.ts"),
+            ("source/index.ts", "test/basic.ts"),
+            ("source/index.ts", "source/options.ts"),
+        ),
+    ),
+    OssFixture(
+        name=_MUX,
+        family="Go",
+        tasks=(
+            _oss_task(
+                _MUX,
+                "How does the router match a request to a route and extract its path variables",
+                ("mux.go", "route.go", "regexp.go"),
+                ("mux.go:Match", "regexp.go:setMatch"),
+            ),
+            _oss_task(
+                _MUX,
+                "Where is the CORS method middleware that sets the Access-Control-Allow-Methods header",
+                ("middleware.go",),
+                ("middleware.go:CORSMethodMiddleware",),
+            ),
+        ),
+        call_pairs=(
+            # same package, other file: newRouteRegexp(tpl, typ, routeRegexpOptions{...})
+            ("symbol:route.go:addRegexpMatcher", "symbol:regexp.go:newRouteRegexp"),
+            # method receiver `r *Router`: r.Match(req, &match)
+            ("symbol:mux.go:ServeHTTP", "symbol:mux.go:Match"),
+            # r.NewRoute().Path(path).HandlerFunc(f)
+            ("symbol:mux.go:HandleFunc", "symbol:mux.go:NewRoute"),
+            # in-package test calling the middleware constructor
+            ("symbol:middleware_test.go:TestCORSMethodMiddleware", "symbol:middleware.go:CORSMethodMiddleware"),
+        ),
+        impact=OssImpactGold("middleware.go", "func CORSMethodMiddleware(", "middleware_test.go"),
+        history=(
+            ("mux.go", "mux_test.go"),
+            ("route.go", "regexp.go"),
+            ("middleware.go", "middleware_test.go"),
+        ),
+    ),
+    OssFixture(
+        name=_SEMVER,
+        family="Rust",
+        tasks=(
+            _oss_task(
+                _SEMVER,
+                "How is a version string parsed into major minor patch pre-release and build metadata",
+                ("src/parse.rs", "src/lib.rs"),
+                ("src/parse.rs:from_str", "src/lib.rs:parse"),
+            ),
+            _oss_task(
+                _SEMVER,
+                "How does a version requirement decide whether a version matches its comparators",
+                ("src/eval.rs", "src/lib.rs"),
+                ("src/eval.rs:matches_req", "src/eval.rs:matches_comparator"),
+            ),
+        ),
+        call_pairs=(
+            # Version::parse(text) -> Version::from_str(text)
+            ("symbol:src/lib.rs:parse", "symbol:src/parse.rs:from_str"),
+            # VersionReq::matches -> crate::eval::matches_req(self, version)
+            ("symbol:src/lib.rs:matches", "symbol:src/eval.rs:matches_req"),
+            # Comparator::matches -> crate::eval::matches_comparator(self, version)
+            ("symbol:src/lib.rs:matches", "symbol:src/eval.rs:matches_comparator"),
+            # Prerelease parsing builds identifiers through Identifier::new_unchecked
+            ("symbol:src/parse.rs:build_identifier", "symbol:src/identifier.rs:new_unchecked"),
+        ),
+        # Version::from_str is reached from tests/test_version.rs through the shared
+        # helper tests/util/mod.rs::version -> Version::parse -> from_str (depth 3).
+        # (tests/test_version_req.rs is *not* a sound structural gold: it imports two
+        # different `VersionReq` types under `#[cfg]`, so `req.matches` is ambiguous.)
+        impact=OssImpactGold("src/parse.rs", "fn from_str(", "tests/test_version.rs"),
+        history=(
+            ("src/parse.rs", "tests/test_version.rs"),
+            ("src/eval.rs", "src/lib.rs"),
+            ("src/identifier.rs", "tests/test_identifier.rs"),
+        ),
+    ),
+    OssFixture(
+        name=_SPLASH,
+        family="Swift",
+        tasks=(
+            _oss_task(
+                _SPLASH,
+                "How does the syntax highlighter tokenize code and build the highlighted output",
+                (f"{_SPL}/Syntax/SyntaxHighlighter.swift", f"{_SPL}/Tokenizing/Tokenizer.swift"),
+                (f"{_SPL}/Syntax/SyntaxHighlighter.swift:highlight",),
+            ),
+            _oss_task(
+                _SPLASH,
+                "How are Markdown code blocks decorated with highlighted HTML",
+                (f"{_SPL}/Output/MarkdownDecorator.swift", f"{_SPL}/Output/HTMLOutputFormat.swift"),
+                (f"{_SPL}/Output/MarkdownDecorator.swift:decorate",),
+            ),
+        ),
+        call_pairs=(
+            # private var tokenizer = Tokenizer(); tokenizer.segmentsByTokenizing(code, ...)
+            (f"symbol:{_SPL}/Syntax/SyntaxHighlighter.swift:highlight", f"symbol:{_SPL}/Tokenizing/Tokenizer.swift:segmentsByTokenizing"),
+            # private let highlighter: SyntaxHighlighter<HTMLOutputFormat>; highlighter.highlight(code)
+            (f"symbol:{_SPL}/Output/MarkdownDecorator.swift:decorate", f"symbol:{_SPL}/Syntax/SyntaxHighlighter.swift:highlight"),
+            # implicit self inside the struct
+            (f"symbol:{_SPL}/Syntax/SyntaxHighlighter.swift:highlight", f"symbol:{_SPL}/Syntax/SyntaxHighlighter.swift:typeOfToken"),
+        ),
+        impact=OssImpactGold(
+            f"{_SPL}/Output/MarkdownDecorator.swift", "func decorate(", "Tests/SplashTests/Tests/MarkdownTests.swift"
+        ),
+        history=(
+            (f"{_SPL}/Syntax/SyntaxHighlighter.swift", "Tests/SplashTests/Core/SyntaxHighlighterTestCase.swift"),
+            (f"{_SPL}/Output/HTMLOutputFormat.swift", "Tests/SplashTests/Tests/HTMLOutputFormatTests.swift"),
+            (f"{_SPL}/Tokenizing/Tokenizer.swift", f"{_SPL}/Grammar/SwiftGrammar.swift"),
+        ),
+    ),
+    OssFixture(
+        name=_JP,
+        family="Java",
+        tasks=(
+            _oss_task(
+                _JP,
+                "How does JavaFile write a compilation unit with its package and import statements",
+                (f"{_JPP}/JavaFile.java", f"{_JPP}/CodeWriter.java"),
+                (f"{_JPP}/JavaFile.java:writeTo",),
+            ),
+            _oss_task(
+                _JP,
+                "How does LineWrapper wrap long lines at the column limit",
+                (f"{_JPP}/LineWrapper.java",),
+                (f"{_JPP}/LineWrapper.java:LineWrapper",),
+            ),
+        ),
+        call_pairs=(
+            # CodeWriter importsCollector = new CodeWriter(...); importsCollector.suggestedImports()
+            (f"symbol:{_JPP}/JavaFile.java:writeTo", f"symbol:{_JPP}/CodeWriter.java:suggestedImports"),
+            # new CodeWriter(out).emit("$L", this) inside CodeBlock.toString()
+            (f"symbol:{_JPP}/CodeBlock.java:toString", f"symbol:{_JPP}/CodeWriter.java:emit"),
+            # MethodSpec.emit(CodeWriter codeWriter, ...) -> codeWriter.popTypeVariables(typeVariables)
+            (f"symbol:{_JPP}/MethodSpec.java:emit", f"symbol:{_JPP}/CodeWriter.java:popTypeVariables"),
+        ),
+        impact=OssImpactGold(f"{_JPP}/CodeWriter.java", "Map<String, ClassName> suggestedImports() {", f"{_JPT}/JavaFileTest.java"),
+        history=(
+            (f"{_JPP}/JavaFile.java", f"{_JPT}/JavaFileTest.java"),
+            (f"{_JPP}/LineWrapper.java", f"{_JPT}/LineWrapperTest.java"),
+            (f"{_JPP}/CodeWriter.java", f"{_JPP}/CodeBlock.java"),
+        ),
+    ),
+    OssFixture(
+        name=_RACK,
+        family="Ruby",
+        tasks=(
+            _oss_task(
+                _RACK,
+                "How does Rack ETag middleware compute the ETag header from a digest of the response body",
+                ("lib/rack/etag.rb",),
+                ("lib/rack/etag.rb:digest_body",),
+            ),
+            _oss_task(
+                _RACK,
+                "How does HTTP basic authentication parse credentials and reject unauthorized requests",
+                ("lib/rack/auth/basic.rb", "lib/rack/auth/abstract/handler.rb"),
+                ("lib/rack/auth/basic.rb:call", "lib/rack/auth/abstract/handler.rb:unauthorized"),
+            ),
+        ),
+        call_pairs=(
+            # class Basic < AbstractHandler; `return unauthorized unless auth.provided?`
+            ("symbol:lib/rack/auth/basic.rb:call", "symbol:lib/rack/auth/abstract/handler.rb:unauthorized"),
+            # Utils.select_best_encoding(ENCODINGS, request.accept_encoding)
+            ("symbol:lib/rack/deflater.rb:call", "symbol:lib/rack/utils.rb:select_best_encoding"),
+            # request = Rack::Request.new(env); request.get_header(...) (Request includes Env)
+            ("symbol:lib/rack/common_logger.rb:log", "symbol:lib/rack/request.rb:get_header"),
+        ),
+        impact=OssImpactGold("lib/rack/etag.rb", "def digest_body(", "test/spec_etag.rb"),
+        history=(
+            ("lib/rack/etag.rb", "test/spec_etag.rb"),
+            ("lib/rack/auth/basic.rb", "test/spec_auth_basic.rb"),
+            ("lib/rack/utils.rb", "lib/rack/request.rb"),
+        ),
+    ),
+)
+
+
+class _FixedGitDates:
+    """Pin git author/committer dates (restoring the caller's values on exit).
+
+    The historical fixture builders commit through plain ``git commit``; without
+    this the matrix depends on the wall clock (``bundle`` weights commit recency, so
+    two commits straddling a second boundary could flip a row).  The value matches
+    ``tests/baseline_helpers.py::FIXED_GIT_DATE`` that the pinned matrix was taken with.
+    """
+
+    _KEYS = ("GIT_AUTHOR_DATE", "GIT_COMMITTER_DATE", "GIT_CONFIG_NOSYSTEM")
+
+    def __enter__(self) -> "_FixedGitDates":
+        self._saved = {key: os.environ.get(key) for key in self._KEYS}
+        os.environ["GIT_AUTHOR_DATE"] = FIXED_GIT_DATE
+        os.environ["GIT_COMMITTER_DATE"] = FIXED_GIT_DATE
+        os.environ["GIT_CONFIG_NOSYSTEM"] = "1"
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        for key, value in self._saved.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
+def _oss_git(repo: Path, *args: str, when: int | None = None) -> None:
+    env = dict(os.environ)
+    env["GIT_CONFIG_NOSYSTEM"] = "1"
+    env["GIT_CONFIG_GLOBAL"] = os.devnull
+    if when is not None:
+        stamp = f"@{when} +0000"
+        env["GIT_AUTHOR_DATE"] = stamp
+        env["GIT_COMMITTER_DATE"] = stamp
+    subprocess.run(
+        ["git", "-c", "user.email=evals@example.test", "-c", "user.name=Cortex Evals", "-c", "commit.gpgsign=false", *args],
+        cwd=repo,
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        env=env,
+    )
+
+
+def _comment_prefix(path: str) -> str:
+    return _LINE_COMMENT.get(Path(path).suffix.lower(), "//")
+
+
+def _append_comment(repo: Path, rel: str, text: str) -> None:
+    target = repo / rel
+    content = target.read_bytes()
+    if content and not content.endswith(b"\n"):
+        content += b"\n"
+    target.write_bytes(content + f"{_comment_prefix(rel)} {text}\n".encode("utf-8"))
+
+
+def _insert_comment_after(repo: Path, rel: str, anchor: str, text: str) -> int:
+    target = repo / rel
+    lines = target.read_text(encoding="utf-8").splitlines(keepends=True)
+    for index, line in enumerate(lines):
+        if anchor in line:
+            indent = line[: len(line) - len(line.lstrip())]
+            lines.insert(index + 1, f"{indent}    {_comment_prefix(rel)} {text}\n")
+            target.write_text("".join(lines), encoding="utf-8")
+            return index + 2
+    raise ValueError(f"{rel}: anchor {anchor!r} not found")
+
+
+def build_oss_repo(fixture: OssFixture, base: Path) -> Path:
+    """Copy a vendored snapshot into ``base`` and give it a deterministic history.
+
+    Commit 0 imports the snapshot; commits 1..N touch ``fixture.history`` file groups
+    (a trailing comment each) so COCHANGE edges exist; the last commit inserts a comment
+    inside the body of the impacted-test gold's symbol.  Dates are fixed, so SHAs and
+    every derived metric are reproducible.
+    """
+    source = OSS_ROOT / fixture.name
+    if not (source / "PROVENANCE.md").is_file():
+        raise FileNotFoundError(f"vendored OSS snapshot missing: {source}")
+    repo = base / f"oss-{fixture.name}"
+    shutil.copytree(source, repo)
+    _oss_git(repo, "init", "-q", "-b", "main")
+    _oss_git(repo, "add", "-A")
+    _oss_git(repo, "commit", "-q", "-m", f"Import {fixture.name} snapshot", when=_OSS_EPOCH)
+    for index, group in enumerate(fixture.history, start=1):
+        for rel in group:
+            _append_comment(repo, rel, f"cortex-eval synthetic history {index}")
+        _oss_git(repo, "add", "-A")
+        _oss_git(repo, "commit", "-q", "-m", f"Synthetic history {index}", when=_OSS_EPOCH + 3600 * index)
+    _insert_comment_after(repo, fixture.impact.source, fixture.impact.anchor, "cortex-eval impacted-test probe")
+    _oss_git(repo, "add", "-A")
+    _oss_git(repo, "commit", "-q", "-m", "Synthetic change for impacted tests", when=_OSS_EPOCH + 3600 * (len(fixture.history) + 1))
+    return repo
+
+
+def oss_call_report(fixture: OssFixture, nodes: list[Any], edges: list[Any]) -> dict[str, Any]:
+    calls = [edge for edge in edges if edge.relation == "calls"]
+    # Resolved = the endpoint is a real repo symbol.  QML `external:`/`binding:`
+    # endpoints and unresolved `name:` targets are not counted.
+    resolved = [edge for edge in calls if edge.target.startswith("symbol:")]
+    ambiguous = [edge for edge in calls if edge.metadata.get("ambiguous")]
+    present = {(edge.source, edge.target) for edge in resolved}
+    tiers: dict[str, int] = {}
+    for edge in resolved:
+        tier = str(edge.metadata.get("resolution") or "qml")
+        tiers[tier] = tiers.get(tier, 0) + 1
+    missing = [list(pair) for pair in fixture.call_pairs if pair not in present]
+    return {
+        "fixture": fixture.name,
+        "family": fixture.family,
+        "calls_total": len(calls),
+        "calls_resolved": len(resolved),
+        "calls_ambiguous": len(ambiguous),
+        "resolved_ratio": len(resolved) / len(calls) if calls else 0.0,
+        "tiers": dict(sorted(tiers.items())),
+        "gold_pairs": len(fixture.call_pairs),
+        "gold_pairs_present": len(fixture.call_pairs) - len(missing),
+        "missing_pairs": missing,
+    }
+
+
+def oss_impact_report(fixture: OssFixture, repo: Path, db_path: Path) -> dict[str, Any]:
+    from cortex.risk import analyze_risk
+
+    result = analyze_risk(repo, "HEAD~1..HEAD", db_path=db_path)
+    selected = {item["test"]: item for item in result.get("tests_to_run", [])}
+    hit = selected.get(fixture.impact.expected_test)
+    via = list(hit["via"]) if hit else []
+    return {
+        "fixture": fixture.name,
+        "source": fixture.impact.source,
+        "expected_test": fixture.impact.expected_test,
+        "selected": hit is not None,
+        "via": via,
+        "structural": "structural" in via,
+        "tests_to_run": sorted(selected),
+        "tests_run_all": bool(result.get("tests_run_all")),
+        "tests_run_all_reason": result.get("tests_run_all_reason") or "",
+        "status": result.get("status"),
+    }
+
+
+def run_oss_evals(base: Path, *, modes: tuple[str, ...] = ("pagerank", "bfs", "skeleton_on", "skeleton_off")) -> dict[str, Any]:
+    """Build, ingest and score every vendored OSS fixture (offline)."""
+    from cortex.store import CortexStore
+
+    rows: list[dict[str, Any]] = []
+    calls: list[dict[str, Any]] = []
+    impacts: list[dict[str, Any]] = []
+    timings: dict[str, float] = {}
+    for fixture in OSS_FIXTURES:
+        started = time.perf_counter()
+        repo = build_oss_repo(fixture, base)
+        db_path = base / f"oss-{fixture.name}.db"
+        ingest_repository(repo, commit_limit=20, db_path=db_path)
+        store = CortexStore(db_path)
+        try:
+            nodes, edges = store.fetch_graph(repo)
+        finally:
+            store.connection.close()
+        calls.append(oss_call_report(fixture, nodes, edges))
+        impacts.append(oss_impact_report(fixture, repo, db_path))
+        for task in fixture.tasks:
+            for mode in modes:
+                rows.append(_score_task(task, mode, repo, db_path))
+        timings[fixture.name] = time.perf_counter() - started
+    return {"rows": rows, "calls": calls, "impacts": impacts, "timings": timings}
+
+
+def _format_oss_markdown(oss: dict[str, Any]) -> str:
+    rows = oss["rows"]
+    lines = [
+        "",
+        "## OSS Fixtures",
+        "",
+        "Vendored upstream snapshots under `evals/fixtures/oss/` (licenses and pinned commits in each",
+        "`PROVENANCE.md`), run offline with a deterministic synthetic history. These rows are not part of",
+        "the historical aggregate above.",
+        "",
+        "### OSS Retrieval Aggregate",
+        "",
+        "| Mode | Tasks | Precision | Precision@3 | Recall | Avg Tokens |",
+        "|---|---:|---:|---:|---:|---:|",
+    ]
+    for row in _aggregate(rows):
+        lines.append(
+            f"| {row['mode']} | {row['tasks']} | {row['precision']:.3f} | {row['precision_at_3']:.3f} | "
+            f"{row['recall']:.3f} | {row['tokens']} |"
+        )
+    lines.extend(
+        [
+            "",
+            "### OSS Retrieval Per Task",
+            "",
+            "| Fixture | Task | Mode | Precision | Precision@3 | Recall | File Recall | Symbol Recall | Tokens |",
+            "|---|---|---|---:|---:|---:|---:|---:|---:|",
+        ]
+    )
+    for row in rows:
+        task = row["task"]
+        lines.append(
+            f"| {task.repo} | {task.description} | {row['mode']} | {row['precision']:.3f} | {row['precision_at_3']:.3f} | "
+            f"{row['recall']:.3f} | {row['file_recall']:.3f} | {row['symbol_recall']:.3f} | {row['tokens']} |"
+        )
+    lines.extend(
+        [
+            "",
+            "### OSS Call Resolution",
+            "",
+            "| Fixture | Family | Calls | Resolved | Ambiguous | Resolved Ratio | Gold Pairs | Tiers |",
+            "|---|---|---:|---:|---:|---:|---:|---|",
+        ]
+    )
+    for row in oss["calls"]:
+        tiers = ", ".join(f"{name} {count}" for name, count in row["tiers"].items())
+        lines.append(
+            f"| {row['fixture']} | {row['family']} | {row['calls_total']} | {row['calls_resolved']} | "
+            f"{row['calls_ambiguous']} | {row['resolved_ratio']:.3f} | {row['gold_pairs_present']}/{row['gold_pairs']} | {tiers} |"
+        )
+    lines.extend(
+        [
+            "",
+            "### OSS Impacted Tests",
+            "",
+            "| Fixture | Changed File | Expected Test | Selected | Via | Selected Tests | Run All |",
+            "|---|---|---|---|---|---:|---|",
+        ]
+    )
+    for row in oss["impacts"]:
+        lines.append(
+            f"| {row['fixture']} | {row['source']} | {row['expected_test']} | {'yes' if row['selected'] else 'no'} | "
+            f"{','.join(row['via']) or '-'} | {len(row['tests_to_run'])} | {'yes' if row['tests_run_all'] else 'no'} |"
+        )
+    return "\n".join(lines) + "\n"
+
+
 def run_evals(
     results_path: Path = ROOT / "evals" / "RESULTS.md",
     *,
     semantic: bool = False,
     stdlib_tokens: bool = False,
+    oss: bool = True,
 ) -> tuple[str, list[dict[str, Any]]]:
+    """Run the historical matrix (returned as ``rows``) and, unless ``oss=False``, the
+    vendored OSS fixtures (appended to the Markdown; also kept on ``run_evals.last_oss``)."""
     rows: list[dict[str, Any]] = []
+    oss_result: dict[str, Any] | None = None
     previous_semantic = os.environ.get("CORTEX_SEMANTIC")
     previous_encoding = None
     previous_unavailable = False
@@ -1105,14 +1639,16 @@ def run_evals(
         modes = default_modes
         with tempfile.TemporaryDirectory(prefix="cortex-evals-") as tmp:
             base = Path(tmp)
-            repos = build_fixture_repos(base)
+            with _FixedGitDates():
+                repos = build_fixture_repos(base)
             if semantic and semantic_ready:
                 tasks.extend(task for task in GOLD_TASKS if task.tags)
                 # Optional tasks are deliberately run against the same
                 # real-model-built DB twice: explicit off proves the gold gap,
                 # explicit on proves semantic recovery. Historical rows stay
                 # on the unchanged four-mode matrix.
-                repos.update(build_semantic_fixture_repos(base))
+                with _FixedGitDates():
+                    repos.update(build_semantic_fixture_repos(base))
                 modes = (*default_modes, "semantic_off", "semantic_on")
             db_paths: dict[str, Path] = {}
             for name, repo in repos.items():
@@ -1129,6 +1665,10 @@ def run_evals(
                     elif mode not in default_modes and mode != "semantic_on":
                         continue
                     rows.append(_score_task(task, mode, repo, db_path))
+            if oss:
+                oss_base = base / "oss"
+                oss_base.mkdir()
+                oss_result = run_oss_evals(oss_base, modes=default_modes)
     finally:
         if previous_semantic is None:
             os.environ.pop("CORTEX_SEMANTIC", None)
@@ -1144,6 +1684,11 @@ def run_evals(
     if stdlib_tokens:
         command += " --stdlib-tokens"
     markdown = _format_markdown(rows, command=command)
+    if oss_result is not None:
+        markdown += _format_oss_markdown(oss_result)
+    else:
+        markdown += "\nOSS fixtures skipped (`--no-oss`).\n"
+    run_evals.last_oss = oss_result  # type: ignore[attr-defined]
     results_path.parent.mkdir(parents=True, exist_ok=True)
     results_path.write_text(markdown, encoding="utf-8")
     if semantic and not semantic_ready:
@@ -1164,11 +1709,18 @@ def main() -> None:
         action="store_true",
         help="Force the dependency-free calibrated tokenizer path even when optional token packages are installed",
     )
+    parser.add_argument(
+        "--oss",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Score the vendored OSS fixtures under evals/fixtures/oss (default on; --no-oss skips them)",
+    )
     args = parser.parse_args()
     markdown, rows = run_evals(
         args.results,
         semantic=args.semantic,
         stdlib_tokens=args.stdlib_tokens,
+        oss=args.oss,
     )
     if args.json:
         print(json.dumps(rows, indent=2, default=str))

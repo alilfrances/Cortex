@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import subprocess
+import sys
+
 import cortex.tokenizer as tokenizer_mod
 import evals.run_evals as eval_mod
 from evals.perf_ingest import run_perf
@@ -72,6 +75,7 @@ def test_stdlib_eval_override_restores_optional_tokenizer_state(tmp_path, monkey
     monkeypatch.setattr(tokenizer_mod, "_force_stdlib_segments", False)
     monkeypatch.setattr(eval_mod, "GOLD_TASKS", ())
     monkeypatch.setattr(eval_mod, "build_fixture_repos", lambda _base: {})
+    monkeypatch.setattr(eval_mod, "OSS_FIXTURES", ())
 
     markdown, rows = eval_mod.run_evals(
         tmp_path / "results.md",
@@ -90,3 +94,142 @@ def test_incremental_perf_harness_counts_only_changed_file_reads():
 
     assert result["passed"] is True
     assert result["content_reads"] == result["expected_content_reads"]
+
+
+# --------------------------------------------------------------------------- #
+# Task 11: vendored OSS fixtures -- provenance, resolution floors, gold pairs,
+# impacted tests.  One test file owns every eval regression check; the 17-task
+# historical matrix is pinned in tests/test_eval_baseline.py.
+# --------------------------------------------------------------------------- #
+
+import importlib.util  # noqa: E402
+import os  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+import pytest  # noqa: E402
+
+from tests.golden_utils import TREE_SITTER_ONLY  # noqa: E402
+
+ROOT = Path(__file__).resolve().parents[1]
+
+# resolved_ratio = calls whose target is a `symbol:` id / all `calls` edges, measured
+# under tree-sitter on 2026-10-17 (HEAD of the Task 11 commit); floor = measured - 0.05.
+# Most unresolved calls are calls into the standard library / framework (Qt, Foundation,
+# net/http, the JDK, Ruby core) or through untyped receivers, which are never guessed.
+RESOLVED_RATIO_FLOORS = {
+    "cpp_qt_sortfilterproxymodel": 0.247,  # measured 0.2975 (188 / 632)
+    "ts_p_queue": 0.275,  # measured 0.3255 (1456 / 4473)
+    "go_mux": 0.208,  # measured 0.2583 (516 / 1998)
+    "rust_semver": 0.523,  # measured 0.5735 (425 / 741)
+    "swift_splash": 0.178,  # measured 0.2282 (152 / 666)
+    "java_javapoet": 0.305,  # measured 0.3559 (2258 / 6345)
+    "ruby_rack": 0.194,  # measured 0.2447 (2909 / 11890)
+}
+LANGUAGE_FAMILIES = {"C/C++ with Qt", "JavaScript/TypeScript", "Go", "Rust", "Swift", "Java", "Ruby"}
+
+
+def _vendorer():
+    spec = importlib.util.spec_from_file_location("vendor_oss_fixtures", ROOT / "scripts" / "vendor_oss_fixtures.py")
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    sys.modules[spec.name] = module  # dataclasses resolve their module through sys.modules
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_oss_snapshots_have_verbatim_license_and_accurate_provenance(capsys) -> None:
+    vendor = _vendorer()
+    names = {snap.name for snap in vendor.SNAPSHOTS}
+
+    assert names == {fixture.name for fixture in eval_mod.OSS_FIXTURES}
+    assert {snap.family for snap in vendor.SNAPSHOTS} == LANGUAGE_FAMILIES
+    assert sorted(p.name for p in eval_mod.OSS_ROOT.iterdir() if p.is_dir()) == sorted(names)
+    total = 0
+    for snap in vendor.SNAPSHOTS:
+        fixture = eval_mod.OSS_ROOT / snap.name
+        assert (fixture / "LICENSE").is_file() and (fixture / "PROVENANCE.md").is_file()
+        assert len(snap.commit) == 40 and all(c in "0123456789abcdef" for c in snap.commit)
+        assert snap.license_id in {"MIT", "BSD-3-Clause", "Apache-2.0", "MIT OR Apache-2.0"}
+        files, size = vendor.fixture_stats(fixture)
+        assert files <= vendor.MAX_FILES
+        total += size
+    assert total <= 8 * 1024 * 1024
+    # Offline: recomputes counts, bytes and per-file sha256 against every PROVENANCE.md.
+    assert vendor.verify() == 0, capsys.readouterr().err
+
+
+def test_oss_gold_definitions_meet_the_task_minimums() -> None:
+    fixtures = eval_mod.OSS_FIXTURES
+    assert len(fixtures) == 7
+    assert {fixture.family for fixture in fixtures} == LANGUAGE_FAMILIES
+    for fixture in fixtures:
+        assert len(fixture.tasks) == 2
+        assert all(task.tags == ("oss",) and task.repo == fixture.name for task in fixture.tasks)
+        assert len(set(fixture.call_pairs)) >= 3
+        assert all(caller.startswith("symbol:") and callee.startswith("symbol:") for caller, callee in fixture.call_pairs)
+        root = eval_mod.OSS_ROOT / fixture.name
+        assert (root / fixture.impact.source).is_file() and (root / fixture.impact.expected_test).is_file()
+        for task in fixture.tasks:
+            assert all((root / rel).is_file() for rel in task.expected_files)
+    # OSS tasks never enter the historical matrix.
+    assert not {task.description for f in fixtures for task in f.tasks} & {t.description for t in eval_mod.GOLD_TASKS}
+
+
+@pytest.fixture(scope="module")
+def oss_report(tmp_path_factory):
+    if os.environ.get("CORTEX_FORCE_REGEX") == "1":
+        pytest.skip("resolution floors and gold pairs are tree-sitter measurements")
+    base = tmp_path_factory.mktemp("oss")
+    return eval_mod.run_oss_evals(base, modes=("pagerank",))
+
+
+@TREE_SITTER_ONLY
+def test_oss_retrieval_tasks_are_scored_separately(oss_report) -> None:
+    rows = oss_report["rows"]
+    assert len(rows) == 14
+    assert {row["task"].repo for row in rows} == set(RESOLVED_RATIO_FLOORS)
+    markdown = eval_mod._format_oss_markdown(oss_report)
+    for heading in ("### OSS Retrieval Aggregate", "### OSS Retrieval Per Task", "### OSS Call Resolution", "### OSS Impacted Tests"):
+        assert heading in markdown
+
+
+@TREE_SITTER_ONLY
+@pytest.mark.parametrize("name", sorted(RESOLVED_RATIO_FLOORS))
+def test_oss_call_resolution_floor_and_gold_pairs(oss_report, name: str) -> None:
+    report = next(row for row in oss_report["calls"] if row["fixture"] == name)
+    assert report["missing_pairs"] == []
+    assert report["gold_pairs_present"] == report["gold_pairs"] >= 3
+    assert report["resolved_ratio"] >= RESOLVED_RATIO_FLOORS[name], report
+
+
+@TREE_SITTER_ONLY
+@pytest.mark.parametrize("name", sorted(RESOLVED_RATIO_FLOORS))
+def test_oss_impacted_test_is_selected_structurally(oss_report, name: str) -> None:
+    report = next(row for row in oss_report["impacts"] if row["fixture"] == name)
+    assert report["status"] != "error", report
+    assert report["selected"] and report["structural"], report
+    assert report["tests_run_all"] is False, report
+
+
+def test_oss_flag_defaults_on_and_no_oss_skips(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(eval_mod, "GOLD_TASKS", ())
+    monkeypatch.setattr(eval_mod, "build_fixture_repos", lambda _base: {})
+    monkeypatch.setattr(eval_mod, "OSS_FIXTURES", ())
+
+    markdown_on, _ = eval_mod.run_evals(tmp_path / "on.md")
+    markdown_off, _ = eval_mod.run_evals(tmp_path / "off.md", oss=False)
+
+    assert "## OSS Fixtures" in markdown_on and "### OSS Call Resolution" in markdown_on
+    assert "## OSS Fixtures" not in markdown_off and "OSS fixtures skipped (`--no-oss`)." in markdown_off
+    assert markdown_on.startswith(markdown_off.split("\nOSS fixtures skipped")[0])
+
+
+def test_oss_synthetic_history_is_deterministic(tmp_path) -> None:
+    fixture = next(f for f in eval_mod.OSS_FIXTURES if f.name == "rust_semver")
+    heads = []
+    for run in ("a", "b"):
+        (tmp_path / run).mkdir()
+        repo = eval_mod.build_oss_repo(fixture, tmp_path / run)
+        heads.append(subprocess.run(["git", "-C", str(repo), "log", "--format=%H %at %s"], capture_output=True, text=True, check=True).stdout)
+    assert heads[0] == heads[1]
+    assert len(heads[0].splitlines()) == len(fixture.history) + 2
