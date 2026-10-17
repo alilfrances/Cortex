@@ -53,6 +53,9 @@ jobs:
           tests/test_qml_full_support.py
           tests/test_qml_modules.py
           tests/test_qml_resolution.py
+          tests/test_calls_cpp.py
+          tests/test_calls_js.py
+          tests/test_calls_multilang.py
           tests/test_golden_extraction.py
           tests/test_golden_mcp_shapes.py
 

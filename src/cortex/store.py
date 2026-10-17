@@ -24,6 +24,12 @@ LEGACY_DIR_NAME = ".cortex"
 # behind an ingest's write transaction.
 BUSY_TIMEOUT_SECONDS = 30.0
 INGEST_LOCK_NAME = "ingest.lock"
+# Version of the extracted graph format.  Bump it whenever extraction changes in a
+# way an incremental refresh cannot repair (it only re-extracts changed files):
+# an index stamped with an older version is re-ingested in full once, and the MCP
+# freshness check reports it stale.  1 = 0.10.0 (call-site contract on every
+# `calls` edge, C/C++/JS/TS/Go/Rust/Swift/Java/Ruby call edges, Ruby methods).
+GRAPH_FORMAT_VERSION = 1
 INGEST_LOCK_TIMEOUT_SECONDS = 120.0
 _LOCK_POLL_SECONDS = 0.05
 
@@ -575,6 +581,10 @@ class CortexStore:
             "ALTER TABLE graph_edges ADD COLUMN source_file TEXT NOT NULL DEFAULT ''",
             # 0.10.0 rename-aware history: [[old, new], ...] per commit.
             "ALTER TABLE commits ADD COLUMN renames_json TEXT NOT NULL DEFAULT '[]'",
+            # 0.10.0: version of the extracted graph format (see GRAPH_FORMAT_VERSION).
+            # Rows written before the column existed read 0, which forces one full
+            # re-ingest instead of an incremental refresh that would keep stale rows.
+            "ALTER TABLE repos ADD COLUMN graph_version INTEGER NOT NULL DEFAULT 0",
         ]
         for sql in migrations:
             try:
@@ -747,6 +757,23 @@ class CortexStore:
             (repo_key,),
         ).fetchone()
         return 0 if row is None else int(row["updated_at"])
+
+    def get_repo_graph_version(self, repo_path: Path) -> int:
+        """Graph format version of this repo's index (0 = written before 0.10.0 or never)."""
+        repo_key = str(repo_path.resolve())
+        row = self.connection.execute(
+            "SELECT graph_version FROM repos WHERE repo_path = ?",
+            (repo_key,),
+        ).fetchone()
+        return 0 if row is None else int(row["graph_version"] or 0)
+
+    def set_repo_graph_version(self, repo_path: Path, version: int) -> None:
+        repo_key = str(repo_path.resolve())
+        with self.connection:
+            self.connection.execute(
+                "UPDATE repos SET graph_version = ? WHERE repo_path = ?",
+                (int(version), repo_key),
+            )
 
     def get_repo_fingerprint(self, repo_path: Path) -> str:
         repo_key = str(repo_path.resolve())
@@ -1749,6 +1776,13 @@ class CortexStore:
                 """,
                 (repo_key, cache_key, int(_time.time()), payload_json),
             )
+
+    def clear_query_cache(self, repo_path: Path) -> None:
+        """Drop every cached response for one repo (an index rebuilt from an older
+        graph format keeps its fingerprint, so fingerprint-keyed rows would replay
+        answers computed from the old graph)."""
+        with self.connection:
+            self.connection.execute("DELETE FROM query_cache WHERE repo_path = ?", (str(repo_path.resolve()),))
 
     def prune_query_cache(self, repo_path: Path, max_age_days: int = 30, max_rows: int = 200) -> int:
         """Prune the P1-3 query_cache table for one repo (called from

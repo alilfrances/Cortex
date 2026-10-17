@@ -20,7 +20,7 @@ from .graph import (
 )
 from .hotspots import annotate_file_nodes, compute_churn, compute_hotspots
 from .models import CommitRecord, GraphNode, SourceRecord
-from .store import CortexStore, default_db_path, ingest_lock, write_repo_meta
+from .store import GRAPH_FORMAT_VERSION, CortexStore, default_db_path, ingest_lock, write_repo_meta
 
 _TEXT_SUFFIXES = {
     ".md",
@@ -392,6 +392,18 @@ def _ingest_locked(
     store = CortexStore(db_path or default_db_path(repo_root))
     write_repo_meta(store.db_path, repo_root)
 
+    upgraded_from: int | None = None
+    if incremental:
+        stored_version = store.get_repo_graph_version(repo_root)
+        if stored_version < GRAPH_FORMAT_VERSION:
+            # An index from an older graph format (or none at all): an incremental
+            # refresh only re-extracts changed files, so untouched files would keep
+            # rows without the current extraction (e.g. pre-0.10.0 call edges with
+            # no call-site metadata).  Rebuild once in full instead.
+            incremental = False
+            if store.get_repo_fingerprint(repo_root):
+                upgraded_from = stored_version
+
     if incremental:
         # Stat-first: only the changed/new files are opened and hashed. The
         # full stat() walk (cheap — no file content read) is unavoidable
@@ -568,10 +580,11 @@ def _ingest_locked(
     store.save_sources(repo_root, all_sources)
     store.save_commits(repo_root, commits)
     store.save_graph(repo_root, nodes, edges)
+    store.set_repo_graph_version(repo_root, GRAPH_FORMAT_VERSION)
     _sync_semantic_embeddings(store, repo_root, all_sources, nodes, replace_paths=[source.path for source in all_sources])
     parser_summary = _parser_summary(nodes)
 
-    return {
+    summary = {
         "repo_path": str(repo_root),
         "source_count": len(all_sources),
         "new_files": len(all_sources),
@@ -585,3 +598,9 @@ def _ingest_locked(
         "parser_backend_counts": parser_summary["backend_counts"],
         "language_runtime": parser_summary["language_runtime"],
     }
+    if upgraded_from is not None:
+        store.clear_query_cache(repo_root)
+        summary["full_reindex_reason"] = (
+            f"index graph format {upgraded_from} is older than {GRAPH_FORMAT_VERSION}; rebuilt in full"
+        )
+    return summary

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from cortex.ingest import compute_repo_fingerprint
 from cortex.models import SourceRecord
-from cortex.store import CortexStore, default_db_path
+from cortex.store import GRAPH_FORMAT_VERSION, CortexStore, default_db_path
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,10 +23,11 @@ def _write_repo(tmp_path: Path) -> Path:
     return repo
 
 
-def _seed_db(repo: Path, fingerprint: str | None = None) -> None:
+def _seed_db(repo: Path, fingerprint: str | None = None, graph_version: int = GRAPH_FORMAT_VERSION) -> None:
     store = CortexStore(default_db_path(repo))
     stored_fingerprint = fingerprint if fingerprint is not None else compute_repo_fingerprint(repo)
     store.reset_repo(repo, fingerprint=stored_fingerprint)
+    store.set_repo_graph_version(repo, graph_version)
     store.save_sources(
         repo,
         [
@@ -106,6 +107,39 @@ def test_session_start_hook_emits_stale_context(tmp_path: Path) -> None:
     assert "2 indexed files" in context
     assert "auto-refresh incrementally" in context
     assert "cortex_refresh" in context
+
+
+def test_session_start_hook_reports_an_index_from_an_older_graph_format(tmp_path: Path) -> None:
+    repo = _write_repo(tmp_path)
+    _seed_db(repo, graph_version=0)  # fingerprint matches; only the format is old
+
+    result = _run_hook(repo)
+
+    assert result.returncode == 0
+    assert result.stderr == ""
+    context = _additional_context(result.stdout)
+    assert "Cortex index is stale" in context
+    assert "older Cortex" in context and "rebuilds it in full" in context
+
+
+def test_session_start_hook_reads_a_pre_010_database_without_the_column(tmp_path: Path) -> None:
+    import sqlite3
+
+    repo = _write_repo(tmp_path)
+    db = default_db_path(repo)
+    db.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(db)
+    connection.executescript(
+        "CREATE TABLE repos (repo_path TEXT PRIMARY KEY, updated_at INTEGER NOT NULL, fingerprint TEXT NOT NULL DEFAULT '');"
+        "CREATE TABLE sources (repo_path TEXT NOT NULL, path TEXT NOT NULL);"
+    )
+    connection.execute("INSERT INTO repos VALUES (?, 0, ?)", (str(repo.resolve()), compute_repo_fingerprint(repo)))
+    connection.commit()
+    connection.close()
+
+    context = _additional_context(_run_hook(repo).stdout)
+
+    assert "Cortex index is stale" in context and "older Cortex" in context
 
 
 def test_session_start_hook_matcher_excludes_compaction() -> None:

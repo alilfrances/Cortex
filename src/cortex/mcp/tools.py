@@ -21,7 +21,7 @@ from ..references import find_references
 from ..report import build_report_data, render_report
 from ..hotspots import top_hotspots
 from ..risk import analyze_risk, truncate_risk_result
-from ..store import CortexStore, IngestLockTimeout, default_db_path, ingest_lock
+from ..store import GRAPH_FORMAT_VERSION, CortexStore, IngestLockTimeout, default_db_path, ingest_lock
 from ..tokenizer import count_text_tokens, truncate_text_to_budget
 from .status import REGISTRY
 
@@ -485,6 +485,13 @@ def _staleness(store: CortexStore, repo_root: Path, *, bypass_ttl: bool = False)
     current = _current_fingerprint(repo_root, bypass_ttl=bypass_ttl)
     stored = store.get_repo_fingerprint(repo_root)
     stale = bool(stored and current != stored)
+    if stored and not stale:
+        # An index written by an older graph format is stale even when no file
+        # changed: the refresh it triggers rebuilds it in full (ingest.py).
+        try:
+            stale = store.get_repo_graph_version(repo_root) < GRAPH_FORMAT_VERSION
+        except Exception:
+            stale = False
     # P1-5: a failure looking up the index timestamp must not take down
     # fingerprint-based staleness detection (which existed before this
     # feature and other logic like auto-refresh depends on) -- degrade
@@ -536,6 +543,8 @@ def _ensure_fresh(store: CortexStore, repo_root: Path) -> dict[str, Any]:
         key: summary[key]
         for key in ("new_files", "updated_files", "deleted_files", "unchanged_files")
     }
+    if summary.get("full_reindex_reason"):
+        status["auto_refreshed"]["full_reindex_reason"] = summary["full_reindex_reason"]
     return status
 
 

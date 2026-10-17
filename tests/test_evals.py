@@ -4,6 +4,7 @@ import subprocess
 import sys
 
 import cortex.tokenizer as tokenizer_mod
+from cortex.impacted_tests import is_runnable_test
 import evals.run_evals as eval_mod
 from evals.perf_ingest import run_perf
 from evals.run_evals import (
@@ -169,6 +170,10 @@ def test_oss_gold_definitions_meet_the_task_minimums() -> None:
         assert all(caller.startswith("symbol:") and callee.startswith("symbol:") for caller, callee in fixture.call_pairs)
         root = eval_mod.OSS_ROOT / fixture.name
         assert (root / fixture.impact.source).is_file() and (root / fixture.impact.expected_test).is_file()
+        gold = fixture.impact.expected_tests
+        assert fixture.impact.expected_test in gold and fixture.impact.gold_basis, fixture.name
+        assert list(gold) == sorted(set(gold)), fixture.name
+        assert all((root / rel).is_file() and is_runnable_test(rel) for rel in gold), fixture.name
         for task in fixture.tasks:
             assert all((root / rel).is_file() for rel in task.expected_files)
     # OSS tasks never enter the historical matrix.
@@ -200,6 +205,72 @@ def test_oss_call_resolution_floor_and_gold_pairs(oss_report, name: str) -> None
     assert report["missing_pairs"] == []
     assert report["gold_pairs_present"] == report["gold_pairs"] >= 3
     assert report["resolved_ratio"] >= RESOLVED_RATIO_FLOORS[name], report
+
+
+def test_impact_precision_recall_definitions() -> None:
+    pr = eval_mod.impact_precision_recall
+    assert pr({"a", "b", "x"}, {"a", "b", "c", "d"}) == {
+        "selected_count": 3,
+        "true_positives": 2,
+        "precision": 2 / 3,
+        "recall": 0.5,
+    }
+    assert pr(set(), {"a"})["precision"] is None and pr(set(), {"a"})["recall"] == 0.0
+    assert pr({"a"}, set())["recall"] is None
+    run_all = pr({"a"}, {"a"}, run_all=True)
+    assert run_all["precision"] is None and run_all["recall"] is None
+
+
+def test_impacted_markdown_reports_precision_recall_and_undefined_values() -> None:
+    row = {
+        "fixture": "f",
+        "source": "s.py",
+        "expected_test": "t.py",
+        "selected": True,
+        "via": ["structural"],
+        "tests_run_all": False,
+        "gold_tests": ["t.py", "u.py"],
+        **eval_mod.impact_precision_recall({"t.py", "v.py"}, {"t.py", "u.py"}),
+        **{f"structural_{k}": v for k, v in eval_mod.impact_precision_recall(set(), {"t.py", "u.py"}).items()},
+    }
+    markdown = eval_mod._format_oss_markdown({"rows": [], "calls": [], "impacts": [row]})
+    assert "| f | s.py | t.py | yes | structural | 2 | 2 | 1 | 0.500 | 0.500 | n/a | 0.000 | no |" in markdown
+    assert "Macro average over 1 fixtures: precision 0.500, recall 0.500." in markdown
+    assert "not from coverage" in markdown
+    assert "Regex fallback was used" not in markdown
+
+
+def test_oss_markdown_flags_regex_fallback_runs() -> None:
+    oss = {"rows": [], "calls": [], "impacts": []}
+    clean = eval_mod._format_oss_markdown({**oss, "backends": {"treesitter": 10}})
+    fallback = eval_mod._format_oss_markdown({**oss, "backends": {"regex": 7, "treesitter": 3}})
+    assert "Parser backends (code-file nodes): treesitter 10." in clean and "Regex fallback was used" not in clean
+    assert "Parser backends (code-file nodes): regex 7, treesitter 3." in fallback
+    assert "**Regex fallback was used**" in fallback
+
+
+# Impacted-test precision/recall against the hand-reviewed gold sets, measured under
+# tree-sitter (Task 12 audit); floor = measured - 0.05.  One probe per fixture, so these
+# are regression tripwires, not language-level accuracy claims.
+IMPACT_PR_FLOORS = {
+    # name: (precision floor, recall floor)  # measured precision, recall
+    "cpp_qt_sortfilterproxymodel": (0.95, 0.075),  # 1/1, 1/8
+    "ts_p_queue": (0.727, 0.95),  # 7/9, 7/7
+    "go_mux": (0.131, 0.95),  # 2/11, 2/2
+    "rust_semver": (0.45, 0.95),  # 2/4, 2/2
+    "swift_splash": (0.95, 0.95),  # 1/1, 1/1
+    "java_javapoet": (0.222, 0.95),  # 6/22, 6/6
+    "ruby_rack": (0.95, 0.95),  # 1/1, 1/1
+}
+
+
+@TREE_SITTER_ONLY
+@pytest.mark.parametrize("name", sorted(IMPACT_PR_FLOORS))
+def test_oss_impacted_tests_precision_recall_floors(oss_report, name: str) -> None:
+    report = next(row for row in oss_report["impacts"] if row["fixture"] == name)
+    precision_floor, recall_floor = IMPACT_PR_FLOORS[name]
+    assert report["precision"] is not None and report["precision"] >= precision_floor, report
+    assert report["recall"] is not None and report["recall"] >= recall_floor, report
 
 
 @TREE_SITTER_ONLY

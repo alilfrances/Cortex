@@ -1099,6 +1099,12 @@ class OssImpactGold:
     source: str  # file whose symbol body the final synthetic commit edits
     anchor: str  # a comment line is inserted right after the first line containing this text
     expected_test: str  # must appear in tests_to_run with "structural" in via
+    # Hand-reviewed gold set for precision/recall: runnable test files (Cortex's
+    # selection unit) whose execution reaches the changed symbol, judged by reading the
+    # snapshot's tests (static review, not coverage instrumentation).  Always contains
+    # ``expected_test``.  ``gold_basis`` records the rule used for this fixture.
+    expected_tests: tuple[str, ...] = ()
+    gold_basis: str = ""
 
 
 @dataclass(frozen=True)
@@ -1155,7 +1161,22 @@ OSS_FIXTURES: tuple[OssFixture, ...] = (
             # `ProxyRole* proxyRole = ...; proxyRole->roleData(...)`
             ("symbol:qqmlsortfilterproxymodel.cpp:sourceData", "symbol:proxyroles/proxyrole.cpp:roleData"),
         ),
-        impact=OssImpactGold("sorters/sorter.h", "class Sorter : public QObject", "tests/indexsorter.cpp"),
+        impact=OssImpactGold(
+            "sorters/sorter.h",
+            "class Sorter : public QObject",
+            "tests/indexsorter.cpp",
+            expected_tests=(
+                "tests/indexsorter.cpp",
+                "tests/tst_delayed.qml",
+                "tests/tst_filtersorter.qml",
+                "tests/tst_helpers.qml",
+                "tests/tst_rolesorter.qml",
+                "tests/tst_sortercontainerattached.qml",
+                "tests/tst_sorters.qml",
+                "tests/tst_stringsorter.qml",
+            ),
+            gold_basis="C++ Sorter subclasses in the test binary plus every Qt Quick test case that declares a sorter",
+        ),
         history=(
             ("filters/rangefilter.cpp", "filters/rangefilter.h"),
             ("sorters/sorter.cpp", "tests/indexsorter.cpp"),
@@ -1187,7 +1208,22 @@ OSS_FIXTURES: tuple[OssFixture, ...] = (
             # `this.#emit('add')` inside the private #add
             ("symbol:source/index.ts:#add", "symbol:source/index.ts:#emit"),
         ),
-        impact=OssImpactGold("source/priority-queue.ts", "enqueue(run: RunFunction", "test/priority-queue.ts"),
+        impact=OssImpactGold(
+            "source/priority-queue.ts",
+            "enqueue(run: RunFunction",
+            "test/priority-queue.ts",
+            expected_tests=(
+                "test/advanced.ts",
+                "test/basic.ts",
+                "test/debug.ts",
+                "test/priority-queue.ts",
+                "test/rate-limit.ts",
+                "test/strict.ts",
+                "test/validation.ts",
+            ),
+            gold_basis="PriorityQueue is PQueue's default queueClass, so every node:test file that adds to a PQueue runs enqueue; "
+            "test/types.ts only type-checks, test/helpers.ts is a helper",
+        ),
         history=(
             ("source/priority-queue.ts", "test/priority-queue.ts"),
             ("source/index.ts", "test/basic.ts"),
@@ -1221,7 +1257,13 @@ OSS_FIXTURES: tuple[OssFixture, ...] = (
             # in-package test calling the middleware constructor
             ("symbol:middleware_test.go:TestCORSMethodMiddleware", "symbol:middleware.go:CORSMethodMiddleware"),
         ),
-        impact=OssImpactGold("middleware.go", "func CORSMethodMiddleware(", "middleware_test.go"),
+        impact=OssImpactGold(
+            "middleware.go",
+            "func CORSMethodMiddleware(",
+            "middleware_test.go",
+            expected_tests=("example_cors_method_middleware_test.go", "middleware_test.go"),
+            gold_basis="the only _test.go files that call CORSMethodMiddleware",
+        ),
         history=(
             ("mux.go", "mux_test.go"),
             ("route.go", "regexp.go"),
@@ -1259,7 +1301,14 @@ OSS_FIXTURES: tuple[OssFixture, ...] = (
         # helper tests/util/mod.rs::version -> Version::parse -> from_str (depth 3).
         # (tests/test_version_req.rs is *not* a sound structural gold: it imports two
         # different `VersionReq` types under `#[cfg]`, so `req.matches` is ambiguous.)
-        impact=OssImpactGold("src/parse.rs", "fn from_str(", "tests/test_version.rs"),
+        impact=OssImpactGold(
+            "src/parse.rs",
+            "fn from_str(",
+            "tests/test_version.rs",
+            expected_tests=("tests/test_version.rs", "tests/test_version_req.rs"),
+            gold_basis="integration tests that parse a Version (util::version -> Version::parse -> Version::from_str); "
+            "test_identifier.rs and test_autotrait.rs never parse a Version",
+        ),
         history=(
             ("src/parse.rs", "tests/test_version.rs"),
             ("src/eval.rs", "src/lib.rs"),
@@ -1292,7 +1341,11 @@ OSS_FIXTURES: tuple[OssFixture, ...] = (
             (f"symbol:{_SPL}/Syntax/SyntaxHighlighter.swift:highlight", f"symbol:{_SPL}/Syntax/SyntaxHighlighter.swift:typeOfToken"),
         ),
         impact=OssImpactGold(
-            f"{_SPL}/Output/MarkdownDecorator.swift", "func decorate(", "Tests/SplashTests/Tests/MarkdownTests.swift"
+            f"{_SPL}/Output/MarkdownDecorator.swift",
+            "func decorate(",
+            "Tests/SplashTests/Tests/MarkdownTests.swift",
+            expected_tests=("Tests/SplashTests/Tests/MarkdownTests.swift",),
+            gold_basis="the only test file that references MarkdownDecorator",
         ),
         history=(
             (f"{_SPL}/Syntax/SyntaxHighlighter.swift", "Tests/SplashTests/Core/SyntaxHighlighterTestCase.swift"),
@@ -1325,7 +1378,24 @@ OSS_FIXTURES: tuple[OssFixture, ...] = (
             # MethodSpec.emit(CodeWriter codeWriter, ...) -> codeWriter.popTypeVariables(typeVariables)
             (f"symbol:{_JPP}/MethodSpec.java:emit", f"symbol:{_JPP}/CodeWriter.java:popTypeVariables"),
         ),
-        impact=OssImpactGold(f"{_JPP}/CodeWriter.java", "Map<String, ClassName> suggestedImports() {", f"{_JPT}/JavaFileTest.java"),
+        impact=OssImpactGold(
+            f"{_JPP}/CodeWriter.java",
+            "Map<String, ClassName> suggestedImports() {",
+            f"{_JPT}/JavaFileTest.java",
+            expected_tests=tuple(
+                f"{_JPT}/{name}.java"
+                for name in (
+                    "AnnotationSpecTest",
+                    "FileReadingTest",
+                    "FileWritingTest",
+                    "JavaFileTest",
+                    "MethodSpecTest",
+                    "TypeSpecTest",
+                )
+            ),
+            gold_basis="suggestedImports() is only called by JavaFile.writeTo, so the gold is every test class that "
+            "renders a JavaFile (toString/writeTo/toJavaFileObject)",
+        ),
         history=(
             (f"{_JPP}/JavaFile.java", f"{_JPT}/JavaFileTest.java"),
             (f"{_JPP}/LineWrapper.java", f"{_JPT}/LineWrapperTest.java"),
@@ -1357,7 +1427,13 @@ OSS_FIXTURES: tuple[OssFixture, ...] = (
             # request = Rack::Request.new(env); request.get_header(...) (Request includes Env)
             ("symbol:lib/rack/common_logger.rb:log", "symbol:lib/rack/request.rb:get_header"),
         ),
-        impact=OssImpactGold("lib/rack/etag.rb", "def digest_body(", "test/spec_etag.rb"),
+        impact=OssImpactGold(
+            "lib/rack/etag.rb",
+            "def digest_body(",
+            "test/spec_etag.rb",
+            expected_tests=("test/spec_etag.rb",),
+            gold_basis="the only spec that uses Rack::ETag",
+        ),
         history=(
             ("lib/rack/etag.rb", "test/spec_etag.rb"),
             ("lib/rack/auth/basic.rb", "test/spec_auth_basic.rb"),
@@ -1495,7 +1571,13 @@ def oss_impact_report(fixture: OssFixture, repo: Path, db_path: Path) -> dict[st
     selected = {item["test"]: item for item in result.get("tests_to_run", [])}
     hit = selected.get(fixture.impact.expected_test)
     via = list(hit["via"]) if hit else []
+    run_all = bool(result.get("tests_run_all"))
+    gold = set(fixture.impact.expected_tests)
+    structural = {test for test, item in selected.items() if "structural" in item.get("via", ())}
     return {
+        **impact_precision_recall(set(selected), gold, run_all=run_all),
+        **{f"structural_{key}": value for key, value in impact_precision_recall(structural, gold, run_all=run_all).items()},
+        "gold_tests": sorted(gold),
         "fixture": fixture.name,
         "source": fixture.impact.source,
         "expected_test": fixture.impact.expected_test,
@@ -1509,6 +1591,28 @@ def oss_impact_report(fixture: OssFixture, repo: Path, db_path: Path) -> dict[st
     }
 
 
+def impact_precision_recall(selected: set[str], gold: set[str], *, run_all: bool = False) -> dict[str, Any]:
+    """Precision/recall of a ``tests_to_run`` selection against a gold test set.
+
+    ``None`` means undefined: precision of an empty selection, recall of an empty gold
+    set, and both when Cortex asked to run everything (``tests_run_all``), because the
+    list is then not the selection.
+    """
+    true_positives = len(selected & gold)
+    if run_all:
+        return {"selected_count": len(selected), "true_positives": true_positives, "precision": None, "recall": None}
+    return {
+        "selected_count": len(selected),
+        "true_positives": true_positives,
+        "precision": true_positives / len(selected) if selected else None,
+        "recall": true_positives / len(gold) if gold else None,
+    }
+
+
+def _ratio(value: float | None) -> str:
+    return "n/a" if value is None else f"{value:.3f}"
+
+
 def run_oss_evals(base: Path, *, modes: tuple[str, ...] = ("pagerank", "bfs", "skeleton_on", "skeleton_off")) -> dict[str, Any]:
     """Build, ingest and score every vendored OSS fixture (offline)."""
     from cortex.store import CortexStore
@@ -1517,6 +1621,7 @@ def run_oss_evals(base: Path, *, modes: tuple[str, ...] = ("pagerank", "bfs", "s
     calls: list[dict[str, Any]] = []
     impacts: list[dict[str, Any]] = []
     timings: dict[str, float] = {}
+    backends: dict[str, int] = {}
     for fixture in OSS_FIXTURES:
         started = time.perf_counter()
         repo = build_oss_repo(fixture, base)
@@ -1527,13 +1632,40 @@ def run_oss_evals(base: Path, *, modes: tuple[str, ...] = ("pagerank", "bfs", "s
             nodes, edges = store.fetch_graph(repo)
         finally:
             store.connection.close()
+        for node in nodes:
+            backend = node.metadata.get("parser_backend")
+            # Only code files count: CMake/qmldir/.pro metadata always uses the regex backend.
+            if backend and Path(node.source_ref.split("#", 1)[0]).suffix.lower() in _CALL_GRAPH_SUFFIXES:
+                backends[str(backend)] = backends.get(str(backend), 0) + 1
         calls.append(oss_call_report(fixture, nodes, edges))
         impacts.append(oss_impact_report(fixture, repo, db_path))
         for task in fixture.tasks:
             for mode in modes:
                 rows.append(_score_task(task, mode, repo, db_path))
         timings[fixture.name] = time.perf_counter() - started
-    return {"rows": rows, "calls": calls, "impacts": impacts, "timings": timings}
+    return {"rows": rows, "calls": calls, "impacts": impacts, "timings": timings, "backends": dict(sorted(backends.items()))}
+
+
+_CALL_GRAPH_SUFFIXES = {
+    ".c", ".h", ".cc", ".cpp", ".cxx", ".hh", ".hpp", ".hxx", ".js", ".jsx", ".mjs", ".cjs",
+    ".ts", ".tsx", ".go", ".rs", ".swift", ".java", ".rb", ".qml",
+}
+
+
+def _oss_backend_note(backends: dict[str, int]) -> list[str]:
+    if not backends:
+        return []
+    counts = ", ".join(f"{name} {count}" for name, count in backends.items())
+    lines = [f"Parser backends (code-file nodes): {counts}.", ""]
+    if backends.get("regex"):
+        lines += [
+            "**Regex fallback was used** (`CORTEX_FORCE_REGEX=1` or the managed parser runtime is not",
+            "ready): fallback `calls` edges are name-only and never resolved, so resolved ratios and gold",
+            "pairs drop to zero and the structural impacted-test tier is weaker. These rows are not",
+            "comparable with the tree-sitter numbers and are not what the floors in `tests/test_evals.py` pin.",
+            "",
+        ]
+    return lines
 
 
 def _format_oss_markdown(oss: dict[str, Any]) -> str:
@@ -1546,6 +1678,7 @@ def _format_oss_markdown(oss: dict[str, Any]) -> str:
         "`PROVENANCE.md`), run offline with a deterministic synthetic history. These rows are not part of",
         "the historical aggregate above.",
         "",
+        *_oss_backend_note(oss.get("backends") or {}),
         "### OSS Retrieval Aggregate",
         "",
         "| Mode | Tasks | Precision | Precision@3 | Recall | Avg Tokens |",
@@ -1591,15 +1724,33 @@ def _format_oss_markdown(oss: dict[str, Any]) -> str:
             "",
             "### OSS Impacted Tests",
             "",
-            "| Fixture | Changed File | Expected Test | Selected | Via | Selected Tests | Run All |",
-            "|---|---|---|---|---|---:|---|",
+            "One synthetic edit per fixture (a comment inside one named symbol). Precision and recall compare",
+            "`tests_to_run` with a hand-reviewed gold set of runnable test files that reach the changed",
+            "symbol (rule per fixture in `OSS_FIXTURES[*].impact.gold_basis`). The gold sets come from",
+            "reading the tests, not from coverage, so they can miss transitive callers; precision is then a",
+            "lower bound. They were written during the 0.10.0 release audit with Cortex's selections already",
+            "visible (not blind). With one probe per language these are anecdotes, not language-level rates.",
+            "`Structural` counts only tests whose `via` includes `structural`; the full selection also has the",
+            "`cochange`, `pair` and `changed` tiers, and the synthetic history pairs many files, so its",
+            "cochange picks are optimistic about real histories.",
+            "",
+            "| Fixture | Changed File | Anchor Test | Anchor Selected | Via | Selected | Gold | Hits | Precision | Recall | "
+            "Structural Precision | Structural Recall | Run All |",
+            "|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|",
         ]
     )
     for row in oss["impacts"]:
         lines.append(
             f"| {row['fixture']} | {row['source']} | {row['expected_test']} | {'yes' if row['selected'] else 'no'} | "
-            f"{','.join(row['via']) or '-'} | {len(row['tests_to_run'])} | {'yes' if row['tests_run_all'] else 'no'} |"
+            f"{','.join(row['via']) or '-'} | {row['selected_count']} | {len(row['gold_tests'])} | {row['true_positives']} | "
+            f"{_ratio(row['precision'])} | {_ratio(row['recall'])} | {_ratio(row['structural_precision'])} | "
+            f"{_ratio(row['structural_recall'])} | {'yes' if row['tests_run_all'] else 'no'} |"
         )
+    defined = [row for row in oss["impacts"] if row["precision"] is not None and row["recall"] is not None]
+    if defined:
+        mean_p = sum(row["precision"] for row in defined) / len(defined)
+        mean_r = sum(row["recall"] for row in defined) / len(defined)
+        lines.extend(["", f"Macro average over {len(defined)} fixtures: precision {mean_p:.3f}, recall {mean_r:.3f}."])
     return "\n".join(lines) + "\n"
 
 

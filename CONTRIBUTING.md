@@ -67,6 +67,10 @@ then re-run without the variable to confirm no diff (`git diff --exit-code tests
 
 **List order.** `assert_golden` preserves list order on purpose: ranked outputs (impact items, search hits, risk files) are behavior, and an automatic sort would hide ranking regressions. Graph snapshots are sorted explicitly by `canonical_graph` (nodes by `node_id`, edges by `edge_id`). This deliberately deviates from the original plan text, which asked for a generic id-based list sort in the canonicalizer; `assert_golden(..., sort_lists=True)` remains available as an opt-in.
 
+## Graph format version
+
+`GRAPH_FORMAT_VERSION` in `src/cortex/store.py` stamps every full ingest. Bump it in the same change whenever extraction or resolution output changes in a way an incremental refresh cannot repair, because an incremental refresh only re-extracts changed files. Examples: new edge kinds or metadata on existing edges, new symbol kinds, or changed node ids. Indexes stamped with an older version are then rebuilt in full on their next refresh, reported stale by the MCP tools and the SessionStart hook until then, and their query cache is cleared (`tests/test_graph_format_upgrade.py`). Say so in `CHANGELOG.md`.
+
 ## Coverage floors
 
 Per-module line-coverage floors for the modules the 0.10.0 work rewrites live in `tests/coverage_floors.toml` (the file records the measured values). The rule is `floor = floor(measured) - 2`, raise-only: add tests instead of lowering a floor. Check them with:

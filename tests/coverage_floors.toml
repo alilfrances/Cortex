@@ -29,6 +29,14 @@
 # re-measures and raises any floor whose measured value rose by >= 5 points; a floor is
 # never lowered to make a change pass -- add the missing tests instead.
 #
+# Task 12 re-measure (0.10.0 release, 1732 passed / 44 skipped, same platform): no module
+# rose by >= 5 points, so no floor changed.  Measured: gitutils 98.46, cochange 100.00,
+# hotspots 92.54, impact 100.00, pathfind 97.96, references 97.12, deadcode 96.05,
+# risk 93.84, graph 94.09, ingest 90.20, store 91.13, ast_extract 97.51,
+# treesitter_backend 93.67, regex_backend 94.69, mcp.tools 91.67, mcp.server 86.74.
+# Modules new in 0.10.0 are not floored (the plan scopes floors to the modules above):
+# callresolve 97.57, structural.call_sites 93.55, impacted_tests 98.37.
+#
 # Enforced by scripts/check_coverage_floors.py against coverage.json (see CONTRIBUTING.md).
 # The floors apply only to these modules, not repo-wide.
 
