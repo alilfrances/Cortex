@@ -31,6 +31,8 @@ from pathlib import PurePosixPath
 import re
 from typing import Any, Iterable, Mapping, Sequence
 
+from .callresolve import _base_label
+from .models import GraphEdge
 from .report import _looks_like_src_test_pair
 from .testpatterns import is_test_path, test_base_name
 
@@ -49,8 +51,9 @@ STRUCTURAL_RELATIONS = frozenset({
 # The file of a changed symbol is still the unit that is compiled into a test
 # target or registered as a QML resource.
 _WIRING_RELATIONS = frozenset({"builds", "registers", "instantiates"})
-# A changed member affects whoever instantiates/constructs its owning type.
-_OWNER_RELATIONS = frozenset({"instantiates", "calls"})
+# A changed member affects whoever instantiates/constructs its owning type, and
+# (through `inherits`) the users of its subclasses.
+_OWNER_RELATIONS = frozenset({"instantiates", "calls", "inherits"})
 _HUB_FORWARD_RELATIONS = frozenset({"builds", "registers"})
 
 _RUNNABLE_SUFFIXES = {
@@ -59,6 +62,8 @@ _RUNNABLE_SUFFIXES = {
 }
 # Languages whose test files are recognised by directory alone (no naming rule).
 _DIRECTORY_TEST_SUFFIXES = {".rs", ".c", ".cpp", ".cc", ".cxx", ".qml"}
+_JS_SUFFIXES = {".js", ".jsx", ".ts", ".tsx"}
+_CPP_HEADER_SUFFIXES = {".h", ".hh", ".hpp", ".hxx"}
 _CPP_SUFFIXES = {".c", ".h", ".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx"}
 _CLASS_KINDS = {"class", "struct", "object", "component"}
 
@@ -155,8 +160,21 @@ def is_runnable_test(path: str) -> bool:
     suffix = pure.suffix.lower()
     if suffix not in _RUNNABLE_SUFFIXES or not is_test_path(path):
         return False
+    if suffix == ".rs" and "tests" in pure.parts[:-1]:
+        # Cargo integration-test targets are `tests/*.rs` and `tests/<name>/main.rs`;
+        # `tests/util/mod.rs` and other nested modules are shared helpers (traversed,
+        # not selected), as on dtolnay/semver.
+        parent = pure.parts[-2]
+        if parent == "tests":
+            return pure.name != "mod.rs"
+        return pure.name == "main.rs" and len(pure.parts) >= 3 and pure.parts[-3] == "tests"
     if suffix in _DIRECTORY_TEST_SUFFIXES or "__tests__" in pure.parts[:-1]:
         return True
+    if suffix in _JS_SUFFIXES and len(pure.parts) >= 2 and pure.parts[-2].lower() in {"test", "tests"}:
+        # `node --test test/*.ts`, mocha's `./test/*.js`, AVA's `test/` default: a script
+        # directly inside a top-level-style test directory is a test file; nested
+        # `test/fixtures/**` / `test/helpers/**` support files are not.
+        return not pure.name.startswith("_")
     # The file name itself must follow the language's test naming convention.
     return test_base_name(pure.name)[1]
 
@@ -243,6 +261,44 @@ class _GraphIndex:
                 self._classes_by_label[node.label].append(node)
         for bucket in self._classes_by_label.values():
             bucket.sort(key=lambda item: item.node_id)
+        # `inherits` edges keep the base as written (`name:qqsfpm::Sorter`,
+        # `module:Base`), so a reverse walk keyed by symbol id never crossed them.
+        # Attach each to every repo class carrying the base's label: over-selecting
+        # a same-named class's subclasses' tests is the safe side for test selection.
+        attached: set[str] = set()
+        for edge in edges:
+            if edge.layer != "STRUCTURAL" or edge.relation != "inherits" or edge.target in self.nodes:
+                continue
+            for base in self._classes_by_label.get(_base_label(edge.target), []):
+                if base.node_id != edge.source:
+                    self.reverse[base.node_id].append(edge)
+                    attached.add(base.node_id)
+        # JS/TS/Java/Swift/Ruby classes record their bases on the node (`metadata.bases`)
+        # instead of emitting `inherits` edges; give the walk the same hop.
+        for node in nodes:
+            metadata = node.metadata if isinstance(node.metadata, Mapping) else {}
+            declared = metadata.get("bases") if getattr(node, "granularity", "") == "symbol" else None
+            if not isinstance(declared, list):
+                continue
+            for raw in sorted({str(item) for item in declared}):
+                for base in self._classes_by_label.get(_base_label(f"name:{raw}"), []):
+                    if base.node_id == node.node_id:
+                        continue
+                    self.reverse[base.node_id].append(
+                        GraphEdge(
+                            edge_id=f"impacted:bases:{node.node_id}:{base.node_id}",
+                            source=node.node_id,
+                            target=base.node_id,
+                            relation="inherits",
+                            layer="STRUCTURAL",
+                            confidence="EXTRACTED",
+                            weight=1.0,
+                            metadata={"source_file": node.source_ref, "from_metadata": True},
+                        )
+                    )
+                    attached.add(base.node_id)
+        for node_id in attached:
+            self.reverse[node_id].sort(key=lambda item: (item.relation, item.source, item.target, item.edge_id))
 
     # -- C/C++ declaration <-> out-of-line definition --------------------------
     def _build_cpp_equivalents(self, nodes: Sequence[Any]) -> dict[str, list[str]]:
@@ -348,7 +404,12 @@ def _structural(
     changed member's type).  Declaration/definition equivalents of a C/C++
     member are visited at the same depth.
     """
-    allowed = {"full": STRUCTURAL_RELATIONS, "wiring": _WIRING_RELATIONS, "owner": _OWNER_RELATIONS}
+    allowed = {
+        "full": STRUCTURAL_RELATIONS,
+        "wiring": _WIRING_RELATIONS,
+        "owner": _OWNER_RELATIONS,
+        "include": frozenset({"imports"}),
+    }
     best: dict[tuple[str, str], int] = {}
     frontier: dict[tuple[str, str], tuple[int, str]] = {}
     for node_id, depth, mode in seeds:
@@ -472,6 +533,10 @@ def select_tests(
         changed_symbols = sorted({node_id for node_id, _depth, _mode in seeds if node_id != file_id})
         if changed_symbols:
             seeds.append((file_id, 0, "wiring"))
+            if PurePosixPath(path).suffix.lower() in _CPP_HEADER_SUFFIXES:
+                # `#include` is textual: an edit inside a header's class or
+                # function reaches every translation unit that includes it.
+                seeds.append((file_id, 0, "include"))
             for symbol_id in changed_symbols:
                 for owner in index.owners(index.nodes[symbol_id]):
                     seeds.append((owner.node_id, 1, "owner"))

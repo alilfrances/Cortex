@@ -187,3 +187,44 @@ def test_ts_private_methods_are_symbols_with_their_own_names() -> None:
     assert sites[(3, "#add")].target == "symbol:queue.ts:#add"
     assert sites[(7, "#setup")].target == "symbol:queue.ts:#setup"
     assert sites[(12, "addEventListener")].target == "name:addEventListener"
+
+
+RUST_MACROS = """\
+pub struct Version;
+impl Version {
+    pub fn parse(text: &str) -> Version { Version }
+    pub fn matches(&self, other: &Version) -> bool { true }
+}
+fn helper(v: &Version) -> bool { true }
+
+fn check(req: &Version, text: &str) {
+    assert!(req.matches(&Version::parse(text)), "no match {}", text);
+    assert_eq!(helper(req), true);
+    println!("{}", format!("{}", text));
+}
+
+macro_rules! noise {
+    ($x:expr) => { not_a_call($x) };
+}
+
+#[derive(Debug)]
+struct Marker;
+"""
+
+
+@TREE_SITTER_ONLY
+def test_rust_calls_inside_macro_arguments_are_call_sites() -> None:
+    """dtolnay/semver tests: `assert!(req.matches(&parsed))` -- tree-sitter-rust keeps macro
+    arguments as token trees, which hid the dominant test idiom's calls.  Attribute and
+    `macro_rules!` bodies are never read as calls; nested macros (`format!`) are skipped."""
+    _nodes, edges = build_graph([_source("lib.rs", RUST_MACROS)], [])
+    sites = {(e.metadata["lineno"], e.metadata["callee"]): e for e in calls(edges)}
+
+    matches = sites[(9, "matches")]
+    assert matches.source == "symbol:lib.rs:check" and matches.metadata["in_macro"] is True
+    assert matches.metadata["receiver_type"] == "Version"
+    assert matches.target == "symbol:lib.rs:matches"
+    assert sites[(9, "parse")].target == "symbol:lib.rs:parse"
+    assert sites[(10, "helper")].target == "symbol:lib.rs:helper"
+    callees = {callee for _line, callee in sites}
+    assert not {"format", "println", "not_a_call", "derive", "Debug"} & callees

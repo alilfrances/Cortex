@@ -1217,6 +1217,70 @@ class RustCalls(CallWalker):
                     else:
                         vars_.pop(self.text(pat), None)
 
+    def macro_calls(self, tree: Any, frame: Frame) -> None:
+        """Call sites inside a macro invocation's token tree (`assert!(req.matches(&v))`).
+
+        tree-sitter-rust leaves macro arguments as flat token trees, so the dominant
+        test idiom (`assert!`, `assert_eq!`, `println!`...) hid every call it wrapped
+        (dtolnay/semver's `assert!(req.matches(&parsed))`).  Only the unambiguous
+        token shapes are read: `ident(...)`, `recv.ident(...)`, `self.ident(...)`,
+        `Path::ident(...)`; `name!(...)` nested macros are skipped.  Attribute and
+        `macro_rules!` bodies are not code and are never scanned.
+        """
+        if not frame.in_function:
+            return
+        cursor = tree.parent
+        while cursor is not None and cursor.type == "token_tree":
+            cursor = cursor.parent
+        if cursor is None or cursor.type != "macro_invocation":
+            return
+        tokens = tree.children
+        for index, token in enumerate(tokens):
+            if token.type != "token_tree" or index == 0 or not self.text(token).startswith("("):
+                continue
+            name_tok = tokens[index - 1]
+            if name_tok.type != "identifier":
+                continue
+            callee = self.text(name_tok)
+            sep = tokens[index - 2] if index >= 2 else None
+            base = tokens[index - 3] if index >= 3 else None
+            sep_text = self.text(sep) if sep is not None else ""
+            if sep_text == "." and base is not None:
+                # Only a bare receiver token; `a.b.c(...)` (base preceded by `.`) is a chain.
+                chained = index >= 4 and self.text(tokens[index - 4]) in {".", "::"}
+                if base.type == "self" and not chained:
+                    self.emit(name_tok, frame, callee, receiver="self", kind="self", extra={"in_macro": True})
+                elif base.type == "identifier" and not chained:
+                    receiver = self.text(base)
+                    self.emit(name_tok, frame, callee, receiver=receiver, kind="var",
+                              receiver_type=frame.vars.get(receiver), extra={"in_macro": True})
+                else:
+                    self.emit(name_tok, frame, callee, receiver=self.text(base), kind="chain", extra={"in_macro": True})
+            elif sep_text == "::" and base is not None and base.type == "identifier":
+                scope = self.text(base)
+                if index >= 4 and self.text(tokens[index - 4]) == "::":
+                    continue  # `a::B::f(...)` -- leave multi-segment paths alone
+                if scope in {"crate", "self", "super"} or callee in _RUST_SKIP:
+                    self.emit(name_tok, frame, callee, extra={"implicit_receiver": False, "in_macro": True})
+                elif scope == "Self" and frame.class_name:
+                    self.emit(name_tok, frame, callee, receiver="Self", kind="this", extra={"in_macro": True})
+                elif _is_type_name(scope):
+                    self.emit(name_tok, frame, callee, receiver=scope, kind="scoped", scope=scope, extra={"in_macro": True})
+                else:
+                    file = self.module_file(scope)
+                    self.emit(
+                        name_tok, frame, callee, receiver=scope, kind="scoped", scope=scope,
+                        extra={"scope_file": file, "scope_namespace": True, "in_macro": True}
+                        if file else {"in_macro": True},
+                    )
+            elif sep_text not in {".", "::", "!"} and callee not in _RUST_SKIP:
+                extra: dict[str, Any] = {"implicit_receiver": False, "in_macro": True}
+                use = self.uses.get(callee)
+                if use is not None:
+                    extra.update({"import_spec": "::".join(use), "import_file": self.module_file(use[0])})
+                    callee = use[1]
+                self.emit(name_tok, frame, callee, extra=extra)
+
     def enter(self, node: Any, frame: Frame) -> Frame:
         if node.type == "impl_item":
             typ = node.child_by_field_name("type")
@@ -1239,6 +1303,9 @@ class RustCalls(CallWalker):
                     frame.vars[self.text(pat)] = typ
                 else:
                     frame.vars.pop(self.text(pat), None)
+            return
+        if kind == "token_tree":
+            self.macro_calls(node, frame)
             return
         if kind != "call_expression":
             return

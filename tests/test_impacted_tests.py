@@ -451,3 +451,69 @@ def test_truncation_drops_tests_last_and_switches_to_run_all() -> None:
     assert seen_partial
     tiny = truncate_risk_result(result, 0)
     assert tiny["tests_to_run"] == [] and tiny["tests_run_all"] is True
+
+
+# --------------------------------------------------------------------------- #
+# Task 11 findings on vendored upstream layouts (evals/fixtures/oss)
+# --------------------------------------------------------------------------- #
+
+
+def test_runnable_test_detection_follows_upstream_runner_globs() -> None:
+    # rack: Rake::TestTask `test/**/spec_*.rb`; minitest `test_*.rb`.
+    assert is_runnable_test("test/spec_etag.rb")
+    assert is_runnable_test("test/test_utils.rb")
+    assert not is_runnable_test("test/helper.rb")
+    # p-queue: `node --test test/*.ts`; nested support files are not test files.
+    assert is_runnable_test("test/basic.ts")
+    assert is_runnable_test("tests/app.js")
+    assert not is_runnable_test("test/fixtures/types.ts")
+    assert not is_runnable_test("test/_setup.ts")
+    assert not is_runnable_test("src/basic.ts")
+    # semver: Cargo targets are tests/*.rs and tests/<name>/main.rs; modules are helpers.
+    assert is_runnable_test("tests/test_version.rs")
+    assert is_runnable_test("tests/suite/main.rs")
+    assert not is_runnable_test("tests/util/mod.rs")
+    assert not is_runnable_test("tests/util/helpers.rs")
+
+
+def _cpp_header_repo(tmp_path: Path) -> Path:
+    """SortFilterProxyModel shape: `tests/indexsorter.h` includes `sorters/sorter.h`
+    and derives from a namespace-qualified base; `tests/indexsorter.cpp` includes it."""
+    repo = tmp_path / "cpp"
+    init_git(repo)
+    _write(repo, "sorters/sorter.h", "namespace ns {\nclass Sorter\n{\npublic:\n    int priority() const;\n};\n}\n")
+    _write(repo, "sorters/sorter.cpp", '#include "sorter.h"\nnamespace ns {\nint Sorter::priority() const { return 0; }\n}\n')
+    _write(repo, "tests/indexsorter.h", '#include "sorters/sorter.h"\nclass IndexSorter : public ns::Sorter\n{\n};\n')
+    _write(repo, "tests/indexsorter.cpp", '#include "indexsorter.h"\nint use() { return 1; }\n')
+    commit_all(repo, "initial")
+    return repo
+
+
+@pytest.mark.skipif(not treesitter_available(), reason="managed tree-sitter runtime is not ready")
+def test_cpp_header_symbol_change_reaches_includers(tmp_path: Path) -> None:
+    repo = _cpp_header_repo(tmp_path)
+    text = (repo / "sorters/sorter.h").read_text(encoding="utf-8").replace(
+        "public:\n", "public:\n    // changed\n"
+    )
+    result = _change(repo, "sorters/sorter.h", text)
+
+    hit = _by_test(result)["tests/indexsorter.cpp"]
+    assert "structural" in hit["via"]
+    assert result["tests_run_all"] is False
+
+
+@pytest.mark.skipif(not treesitter_available(), reason="managed tree-sitter runtime is not ready")
+def test_inherits_edges_with_unresolved_base_names_are_reverse_hops(tmp_path: Path) -> None:
+    """`class Child extends Base` keeps `name:Base`; a change to Base must reach the
+    test that uses only Child."""
+    repo = tmp_path / "java"
+    init_git(repo)
+    _write(repo, "src/Base.java", "public class Base {\n    public int run() {\n        return 1;\n    }\n}\n")
+    _write(repo, "src/Child.java", "public class Child extends Base {\n}\n")
+    _write(repo, "test/ChildTest.java", "public class ChildTest {\n    void testChild() {\n        Child child = new Child();\n    }\n}\n")
+    commit_all(repo, "initial")
+    text = "public class Base {\n    public int run() {\n        // changed\n        return 1;\n    }\n}\n"
+    result = _change(repo, "src/Base.java", text)
+
+    hit = _by_test(result)["test/ChildTest.java"]
+    assert "structural" in hit["via"]
