@@ -153,3 +153,37 @@ def test_cpp_lambda_parameters_are_declared_types() -> None:
     assert typed.target == "symbol:model.cpp:accepts"
     assert typed.metadata["resolution"] == "declared_type"
     assert sites[(16, "accepts")].metadata["receiver_type"] is None
+
+
+PRIVATE_TS = """\
+export default class Queue {
+	add<T>(task: T): T {
+		return this.#add(task);
+	}
+
+	async #add<T>(task: T): Promise<T> {
+		this.#setup();
+		return task;
+	}
+
+	#setup(): void {
+		this.addEventListener('add', () => undefined);
+	}
+}
+"""
+
+
+@TREE_SITTER_ONLY
+def test_ts_private_methods_are_symbols_with_their_own_names() -> None:
+    """sindresorhus/p-queue: `async #add<T>()` used to be labeled `T` and `#setup()` took
+    the name of the first identifier in its body (`addEventListener`), so inherited
+    `EventTarget.addEventListener` calls resolved to the wrong method."""
+    nodes, edges = build_graph([_source("queue.ts", PRIVATE_TS)], [])
+    labels = sorted(n.label for n in nodes if n.kind != "file")
+    sites = {(e.metadata["lineno"], e.metadata["callee"]): e for e in calls(edges)}
+
+    assert {"#add", "#setup", "add", "Queue"} <= set(labels)
+    assert "T" not in labels and "addEventListener" not in labels
+    assert sites[(3, "#add")].target == "symbol:queue.ts:#add"
+    assert sites[(7, "#setup")].target == "symbol:queue.ts:#setup"
+    assert sites[(12, "addEventListener")].target == "name:addEventListener"

@@ -131,6 +131,10 @@ def _identifier_text(node: Any, source: bytes) -> str:
     if node.type in {
         "identifier",
         "property_identifier",
+        # ES2022 `#private` class members (`#add() {}`); without it the walk fell
+        # through to the next identifier child and mislabeled the method after a
+        # generic parameter / return type (sindresorhus/p-queue `async #add<T>()`).
+        "private_property_identifier",
         "type_identifier",
         "constant",
         "simple_identifier",
