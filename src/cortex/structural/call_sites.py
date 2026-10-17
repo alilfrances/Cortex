@@ -52,6 +52,11 @@ class Frame:
     # bogus call expression, so nothing there is a call site.
     suppressed: bool = False
     locals: set[str] = field(default_factory=set)  # Ruby: names that are variables, not bare calls
+    # Go: the method receiver's name (`s` in `func (s *Svc) M()`).  Stored on the
+    # frame itself -- an `id(frame)`-keyed side table is unsound because CPython
+    # reuses ids of collected frames, which leaked a method's receiver name into
+    # later plain functions (seen on gorilla/mux: `r *http.Request` became `this`).
+    receiver_name: str | None = None
 
 
 def _text(node: Any, source: bytes) -> str:
@@ -330,6 +335,17 @@ class CppCalls(CallWalker):
             inner = self.definition_frame(node, frame, class_name=class_name, label="")
             self.add_parameters(node.child_by_field_name("declarator"), inner)
             return inner
+        if kind == "lambda_expression" and frame.in_function:
+            # `[=](Filter* f) { f->run(); }` -- lambda parameters are declared
+            # parameters; captured locals stay visible, the lambda's own
+            # declarations do not leak out (a copied var map).
+            inner = Frame(frame.symbol_id, frame.owner_label, frame.class_name, dict(frame.vars), True)
+            declarator = node.child_by_field_name("declarator")
+            params = declarator.child_by_field_name("parameters") if declarator is not None else None
+            for param in params.named_children if params is not None else ():
+                if param.type == "parameter_declaration":
+                    self.add_declaration(param, inner)
+            return inner
         return frame
 
     # -- sites --------------------------------------------------------------
@@ -353,7 +369,19 @@ class CppCalls(CallWalker):
         fn = node.child_by_field_name("function")
         if fn is None:
             return
+        if self.follows_emit_keyword(node):
+            return
         self.call_site(node, fn, frame)
+
+    def follows_emit_keyword(self, node: Any) -> bool:
+        """`if (x) Q_EMIT sig();` -- an unbraced control-flow body parses as
+        ``ERROR(emit) expression_statement(call_expression)``; that site is an
+        ``emits`` edge (regex Qt pass), never also a ``calls`` edge."""
+        parent = node.parent
+        if parent is None or parent.type != "expression_statement":
+            return False
+        previous = parent.prev_sibling
+        return previous is not None and previous.type == "ERROR" and self.text(previous).strip() in {"emit", "Q_EMIT"}
 
     def call_site(self, node: Any, fn: Any, frame: Frame) -> None:
         kind = fn.type
@@ -779,16 +807,21 @@ class JsCalls(CallWalker):
 
 import posixpath
 
-_CACHE: dict[str, tuple[int, int, Any]] = {}
+_CACHE: dict[str, tuple[set[str], int, Any]] = {}
 
 
 def _memo(name: str, known: set[str], build: Callable[[set[str]], Any]) -> Any:
-    """Per-batch index over `known_paths` (identity+size keyed) so per-file walkers stay O(1)."""
+    """Per-batch index over `known_paths` (identity+size keyed) so per-file walkers stay O(1).
+
+    The cache holds a strong reference to ``known``: keying on ``id(known)`` alone
+    is unsound because CPython reuses the id of a collected set, so a later batch
+    (another repo ingested in the same process, as the eval harness does) could be
+    served the previous batch's index."""
     hit = _CACHE.get(name)
-    if hit is not None and hit[0] == id(known) and hit[1] == len(known):
+    if hit is not None and hit[0] is known and hit[1] == len(known):
         return hit[2]
     value = build(known)
-    _CACHE[name] = (id(known), len(known), value)
+    _CACHE[name] = (known, len(known), value)
     return value
 
 
@@ -936,7 +969,6 @@ class GoCalls(CallWalker):
         super().__init__(ctx)
         self.imports: dict[str, str | None] = {}  # alias -> repo dir (None: external)
         self.fields_of: dict[str, dict[str, str]] = {}
-        self.recv: dict[int, str] = {}
 
     def go_type(self, node: Any | None) -> str | None:
         while node is not None and node.type in {"pointer_type", "parenthesized_type", "slice_type", "array_type"}:
@@ -1006,7 +1038,7 @@ class GoCalls(CallWalker):
             if param is not None and cls:
                 for name in param.children_by_field_name("name"):
                     inner.vars[self.text(name)] = cls
-                    self.recv[id(inner)] = self.text(name)
+                    inner.receiver_name = self.text(name)
             self.add_params(node.child_by_field_name("parameters"), inner.vars)
             return inner
         if node.type == "function_declaration":
@@ -1016,8 +1048,7 @@ class GoCalls(CallWalker):
             return inner
         if node.type == "func_literal":
             inner = Frame(frame.symbol_id, frame.owner_label, frame.class_name, dict(frame.vars), frame.in_function)
-            if id(frame) in self.recv:
-                self.recv[id(inner)] = self.recv[id(frame)]
+            inner.receiver_name = frame.receiver_name
             self.add_params(node.child_by_field_name("parameters"), inner.vars)
             return inner
         return frame
@@ -1067,7 +1098,7 @@ class GoCalls(CallWalker):
                     extra={"scope_dir": self.imports[receiver], "scope_namespace": True, "scope_file": None}
                     if self.imports[receiver] else {"scope_dir": None, "scope_namespace": True, "scope_file": None},
                 )
-            elif self.recv.get(id(frame)) == receiver:
+            elif frame.receiver_name == receiver:
                 self.emit(node, frame, callee, receiver=receiver, kind="this")
             else:
                 self.emit(node, frame, callee, receiver=receiver, kind="var", receiver_type=frame.vars.get(receiver))
