@@ -147,6 +147,20 @@ def _call(repo: Path, tool_name: str, arguments: dict[str, Any], response_format
     return tool(tool_name, repo_path=str(repo), response_format=response_format, **arguments)
 
 
+def _golden_payload(tool_name: str, response_format: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Drop references' optional concise ledger envelope from content goldens.
+
+    A resolved graph hit can make ``saved_tokens`` positive, which adds ``_meta``
+    to a concise references response.  That accounting result varies across
+    platforms even with the test tokenizer pinned; the envelope contract is
+    covered separately by ``test_meta_envelope.py``.  Keep the references data
+    itself fully golden while making its shape/payload snapshots portable.
+    """
+    if tool_name == "cortex_references" and response_format == "concise":
+        return {key: value for key, value in payload.items() if key != "_meta"}
+    return payload
+
+
 # --------------------------------------------------------------------------- #
 # tools/list and initialize
 # --------------------------------------------------------------------------- #
@@ -209,7 +223,8 @@ def test_tool_shape_goldens(name: str, backend: str, tmp_path: Path, monkeypatch
     for response_format in ("concise", "detailed"):
         payload, is_error = _call(repo, tool_name, _for_backend(arguments, backend), response_format)
         assert is_error is False, payload
-        assert_golden(f"mcp/shapes/{name}.{response_format}.json", shape_of(payload))
+        stable_payload = _golden_payload(tool_name, response_format, payload)
+        assert_golden(f"mcp/shapes/{name}.{response_format}.json", shape_of(stable_payload))
 
 
 # --------------------------------------------------------------------------- #
@@ -231,7 +246,11 @@ def test_tool_payload_goldens(name: str, backend: str, tmp_path: Path, monkeypat
     for response_format in ("concise", "detailed"):
         payload, is_error = _call(repo, tool_name, _for_backend(arguments, backend), response_format)
         assert is_error is False, payload
-        assert_golden(f"mcp/payloads/{backend}/{name}.{response_format}.json", scrub(payload, roots=(repo, tmp_path)))
+        stable_payload = _golden_payload(tool_name, response_format, payload)
+        assert_golden(
+            f"mcp/payloads/{backend}/{name}.{response_format}.json",
+            scrub(stable_payload, roots=(repo, tmp_path)),
+        )
 
 
 # --------------------------------------------------------------------------- #
