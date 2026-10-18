@@ -25,7 +25,8 @@ jobs:
           python-version: "3.11"
 
       - name: Install package
-        run: python -m pip install -e ".[llm,watch,dev]" build twine
+        # Run optional-feature tests that were present when coverage floors were measured.
+        run: python -m pip install -e ".[llm,watch,dev,semantic,tokens]" tree-sitter-cpp==0.23.4 build twine
 
       - name: Prepare locked parser runtime
         run: python -m cortex runtime setup
