@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import hashlib
 import math
 import re
@@ -368,14 +369,20 @@ def _skeleton_item(
     )
 
 
-def _split_identifier(token: str) -> list[str]:
-    normalized = re.sub(r'([a-z0-9])([A-Z])', r'\1 \2', token.replace('_', ' '))
-    return [part.lower() for part in re.findall(r'[A-Za-z0-9]+', normalized) if part]
+_CAMEL_SPLIT_RE = re.compile(r'([a-z0-9])([A-Z])')
+_ALNUM_RUN_RE = re.compile(r'[A-Za-z0-9]+')
+_IDENTIFIER_RUN_RE = re.compile(r'[A-Za-z0-9_]+')
+
+
+@functools.lru_cache(maxsize=65536)
+def _split_identifier(token: str) -> tuple[str, ...]:
+    normalized = _CAMEL_SPLIT_RE.sub(r'\1 \2', token.replace('_', ' '))
+    return tuple(part.lower() for part in _ALNUM_RUN_RE.findall(normalized) if part)
 
 
 def _tokenize_text(text: str, *, drop_stopwords: bool = False) -> set[str]:
     terms: set[str] = set()
-    for token in re.findall(r'[A-Za-z0-9_]+', text):
+    for token in _IDENTIFIER_RUN_RE.findall(text):
         for part in _split_identifier(token):
             if drop_stopwords and part in STOPWORDS:
                 continue
@@ -536,12 +543,21 @@ def generate_bundle(
     output_format: str = 'md',
     rank: str = 'pagerank',
     hotspot_boost: bool = False,
+    *,
+    sources: list | None = None,
+    graph: tuple[list[GraphNode], list[GraphEdge]] | None = None,
 ) -> str | dict:
+    """Build a retrieval bundle for `task`.
+
+    `sources` and `graph` let a caller that already loaded them (the MCP query
+    tool needs both again afterwards) avoid a second full read of the database.
+    """
     repo_root = discover_repo_root(repo_path)
     store = CortexStore(db_path or default_db_path(repo_root))
-    sources = store.fetch_sources(repo_root)
+    if sources is None:
+        sources = store.fetch_sources(repo_root)
     commits = store.fetch_commits(repo_root)
-    nodes, edges = store.fetch_graph(repo_root)
+    nodes, edges = graph if graph is not None else store.fetch_graph(repo_root)
 
     config = load_config(repo_root)
     task_terms = _tokenize_query(task, config.synonyms)

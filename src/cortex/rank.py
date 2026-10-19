@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from .deadline import check_deadline
 from .models import GraphEdge, GraphNode
 
 DAMPING = 0.85
@@ -71,22 +72,32 @@ def personalized_pagerank(
     personalization = _normalized_personalization(node_ids, seed_scores)
     ranks = dict(personalization)
 
+    # Neither the dangling set nor each node's normalised outgoing weights change
+    # between iterations, so compute them once. `weight / outgoing_weight` is
+    # evaluated exactly as before, so the results are bit-identical.
+    dangling_ids = [node_id for node_id in node_ids if not adjacency[node_id]]
+    outgoing: list[tuple[str, list[tuple[str, float]]]] = []
+    for source, neighbors in adjacency.items():
+        if not neighbors:
+            continue
+        outgoing_weight = sum(weight for _target, weight in neighbors)
+        if outgoing_weight <= 0:
+            continue
+        outgoing.append((source, [(target, weight / outgoing_weight) for target, weight in neighbors]))
+
     for _ in range(max_iterations):
-        dangling_mass = sum(ranks[node_id] for node_id in node_ids if not adjacency[node_id])
+        # Cooperative MCP deadline; a no-op outside a deadline scope.
+        check_deadline()
+        dangling_mass = sum(ranks[node_id] for node_id in dangling_ids)
         next_ranks = {
             node_id: (1.0 - damping) * personalization[node_id] + damping * dangling_mass * personalization[node_id]
             for node_id in node_ids
         }
 
-        for source, neighbors in adjacency.items():
-            if not neighbors:
-                continue
-            outgoing_weight = sum(weight for _target, weight in neighbors)
-            if outgoing_weight <= 0:
-                continue
+        for source, normalised in outgoing:
             source_rank = ranks[source]
-            for target, weight in neighbors:
-                next_ranks[target] += damping * source_rank * (weight / outgoing_weight)
+            for target, share in normalised:
+                next_ranks[target] += damping * source_rank * share
 
         delta = sum(abs(next_ranks[node_id] - ranks[node_id]) for node_id in node_ids)
         ranks = next_ranks

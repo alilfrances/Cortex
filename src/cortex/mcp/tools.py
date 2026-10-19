@@ -763,21 +763,27 @@ def _call_query(arguments: dict[str, Any]) -> dict[str, Any]:
             _cache_set(store, repo_root, cache_key, payload)
     else:
         task = str(arguments.get("task", ""))
+        # Load sources and the graph once: the bundle needs them, and so does the
+        # `why` annotation below.
+        all_sources = store.fetch_sources(repo_root)
+        graph = store.fetch_graph(repo_root)
         bundle = generate_bundle(
             repo_path=repo_root,
             task=task,
             budget=int(arguments.get("budget", 4000)),
             output_format="json",
             hotspot_boost=bool(arguments.get("hotspot_boost", False)),
+            sources=all_sources,
+            graph=graph,
         )
         assert isinstance(bundle, dict)
         terms = _tokenize_query(task)
         seed_paths = {
             source.path
-            for source in store.fetch_sources(repo_root)
+            for source in all_sources
             if any(term in f"{source.path}\n{source.content}".lower() for term in terms)
         }
-        _nodes, edges = store.fetch_graph(repo_root)
+        edges = graph[1]
         for item in bundle.get("items", []):
             item["why"] = _bundle_why(item, terms, seed_paths, edges)
         bundle["token_stats"] = _query_token_stats(bundle, arguments)

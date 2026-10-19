@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import contextlib
+import functools
 import re
 import sqlite3
 import threading
@@ -63,14 +64,20 @@ def _make_private(path: Path, mode: int) -> None:
         pass
 
 
-def _split_identifier(token: str) -> list[str]:
-    normalized = re.sub(r'([a-z0-9])([A-Z])', r'\1 \2', token.replace('_', ' '))
-    return [part.lower() for part in re.findall(r'[A-Za-z0-9]+', normalized) if part]
+_CAMEL_SPLIT_RE = re.compile(r'([a-z0-9])([A-Z])')
+_ALNUM_RUN_RE = re.compile(r'[A-Za-z0-9]+')
+_IDENTIFIER_RUN_RE = re.compile(r'[A-Za-z0-9_]+')
+
+
+@functools.lru_cache(maxsize=65536)
+def _split_identifier(token: str) -> tuple[str, ...]:
+    normalized = _CAMEL_SPLIT_RE.sub(r'\1 \2', token.replace('_', ' '))
+    return tuple(part.lower() for part in _ALNUM_RUN_RE.findall(normalized) if part)
 
 
 def _search_tokens(text: str) -> list[str]:
     tokens: list[str] = []
-    for raw in re.findall(r'[A-Za-z0-9_]+', text):
+    for raw in _IDENTIFIER_RUN_RE.findall(text):
         tokens.extend(_split_identifier(raw))
     return list(dict.fromkeys(tokens))
 
