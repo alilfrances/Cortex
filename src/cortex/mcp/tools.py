@@ -1729,7 +1729,7 @@ def _call_context(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def _call_risk(arguments: dict[str, Any]) -> dict[str, Any]:
-    """Run risk with one shared freshness check and no query cache."""
+    """Run risk with one shared freshness check; results are cached per diff."""
     repo_root = _repo_root(arguments)
     db_path = default_db_path(repo_root)
     store = CortexStore(db_path) if db_path.exists() else None
@@ -1749,6 +1749,13 @@ def _call_risk(arguments: dict[str, Any]) -> dict[str, Any]:
             "index_age_seconds": 0,
         }
         graph_args = {"nodes": None, "edges": None}
+    response_format = _response_format(arguments)
+    cache_key = None
+    if store is not None:
+        cache_key = _risk_cache_key(repo_root, status["current_fingerprint"], arguments)
+        cached = _cache_get(store, repo_root, cache_key) if cache_key else None
+        if cached is not None:
+            return _content(_format_payload(cached, status, response_format, cached=True))
     result = analyze_risk(
         repo_root,
         arguments.get("range"),
@@ -1757,8 +1764,30 @@ def _call_risk(arguments: dict[str, Any]) -> dict[str, Any]:
         **graph_args,
     )
     result = truncate_risk_result(result, int(arguments.get("budget", 2000)))
-    response_format = _response_format(arguments)
+    if store is not None and cache_key and result.get("status") != "error":
+        _cache_set(store, repo_root, cache_key, result)
     return _content(_format_payload(result, status, response_format), is_error=result.get("status") == "error")
+
+
+def _risk_cache_key(repo_root: Path, fingerprint: str, arguments: dict[str, Any]) -> str | None:
+    """Cache key for a risk call: index fingerprint, arguments and the diff itself.
+
+    The diff text is hashed because the range (default `HEAD~1..HEAD`) and the
+    staged changes can change without any indexed file changing, so the index
+    fingerprint alone would serve a stale answer. None (do not cache) when git
+    cannot produce the diff.
+    """
+    try:
+        from ..risk import _diff_args, _git
+
+        staged = bool(arguments.get("staged", False))
+        # The same defaulting analyze_risk applies, so the hashed diff is the analysed one.
+        range_spec = arguments.get("range") or (None if staged else "HEAD~1..HEAD")
+        diff = _git(repo_root, _diff_args(range_spec, staged, "diff", "--unified=0", "--no-color", "--no-ext-diff"))
+    except Exception:
+        return None
+    digest = hashlib.sha256(diff).hexdigest()
+    return _cache_key(fingerprint, "cortex_risk", {**arguments, "diff_sha256": digest})
 
 
 _DEAD_CODE_ANALYSIS_CACHE_VERSION = 1
