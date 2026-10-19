@@ -198,7 +198,7 @@ def test_initialize_golden() -> None:
     assert results["client_unsupported_2023-01-01"]["protocolVersion"] == "2025-06-18"
     assert results["client_sends_no_version"]["protocolVersion"] == "2025-06-18"
     assert all(r["capabilities"] == {"tools": {"listChanged": False}} for r in results.values())
-    assert all(r["serverInfo"] == {"name": "cortex", "version": "0.10.0"} for r in results.values())
+    assert all(r["serverInfo"] == {"name": "cortex", "version": "0.10.1"} for r in results.values())
     assert_golden("mcp/initialize.json", results)
 
 
