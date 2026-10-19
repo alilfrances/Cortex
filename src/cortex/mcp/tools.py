@@ -98,6 +98,10 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "type": "object",
             "properties": {
                 "repo_path": {"type": "string"},
+                "path": {
+                    "type": "string",
+                    "description": "Repo-relative file or directory; only symbols defined there are reported (references are still searched repo-wide).",
+                },
                 "budget": {"type": "integer", "default": 2000},
                 "response_format": {"type": "string", "enum": ["concise", "detailed"], "default": "concise"},
             },
@@ -1759,15 +1763,35 @@ def _call_risk(arguments: dict[str, Any]) -> dict[str, Any]:
 _DEAD_CODE_ANALYSIS_CACHE_VERSION = 1
 
 
-def _dead_code_analysis(store: CortexStore, repo_root: Path, fingerprint: str, budget: int) -> dict[str, Any]:
+def _normalise_scope(raw: Any) -> str:
+    """Repo-relative path with forward slashes and no leading `./` or trailing `/`; '' means the whole repo."""
+    value = str(raw or "").strip().replace("\\", "/")
+    while value.startswith("./"):
+        value = value[2:]
+    value = value.rstrip("/")
+    return "" if value == "." else value
+
+
+def _in_scope(path: str, scope: str) -> bool:
+    return not scope or path == scope or path.startswith(scope + "/")
+
+
+def _dead_code_analysis(
+    store: CortexStore, repo_root: Path, fingerprint: str, budget: int, scope: str = ""
+) -> dict[str, Any]:
     """Dead-code findings for the current index, reusing earlier work.
 
     The overview analysis already runs `analyze_dead_code` at the default
     reference budget and caches it under the same fingerprint, so a dead-code
-    call after an overview (or a repeat call) costs nothing. A partial result
-    is never cached.
+    call after an overview (or a repeat call) costs nothing; a scoped call
+    filters such a cached repo-wide result. A partial result is never cached.
     """
     reference_budget = max(2000, budget)
+
+    def scoped(findings: list[dict[str, Any]]) -> dict[str, Any]:
+        kept = [item for item in findings if _in_scope(str(item.get("file", "")), scope)]
+        return {"repo_path": str(repo_root), "findings": kept, "partial": False}
+
     if reference_budget == 2000:
         cached = _cache_get(store, repo_root, _overview_analysis_cache_key(fingerprint))
         if (
@@ -1776,13 +1800,23 @@ def _dead_code_analysis(store: CortexStore, repo_root: Path, fingerprint: str, b
             and _is_overview_analysis(cached.get("analysis"))
             and not cached["analysis"].get("dead_code_partial", False)
         ):
-            return {"repo_path": str(repo_root), "findings": list(cached["analysis"]["dead_code"]), "partial": False}
-    key = _cache_key(
+            return scoped(list(cached["analysis"]["dead_code"]))
+    full_key = _cache_key(
         fingerprint, "cortex_dead_code_analysis", {"budget": reference_budget, "v": _DEAD_CODE_ANALYSIS_CACHE_VERSION}
     )
-    cached = _cache_get(store, repo_root, key)
+    cached = _cache_get(store, repo_root, full_key)
     if isinstance(cached, dict) and isinstance(cached.get("findings"), list):
-        return {"repo_path": str(repo_root), "findings": cached["findings"], "partial": False}
+        return scoped(cached["findings"])
+    key = full_key
+    if scope:
+        key = _cache_key(
+            fingerprint,
+            "cortex_dead_code_analysis",
+            {"budget": reference_budget, "v": _DEAD_CODE_ANALYSIS_CACHE_VERSION, "scope": scope},
+        )
+        cached = _cache_get(store, repo_root, key)
+        if isinstance(cached, dict) and isinstance(cached.get("findings"), list):
+            return {"repo_path": str(repo_root), "findings": cached["findings"], "partial": False}
     nodes, edges = store.fetch_graph(repo_root)
     result = analyze_dead_code(
         repo_root,
@@ -1792,6 +1826,7 @@ def _dead_code_analysis(store: CortexStore, repo_root: Path, fingerprint: str, b
         edges=edges,
         budget=budget,
         should_stop=_analysis_should_stop(),
+        path_prefix=scope or None,
     )
     if not result.get("partial"):
         _cache_set(store, repo_root, key, {"findings": result["findings"]})
@@ -1805,14 +1840,28 @@ def _call_dead_code(arguments: dict[str, Any]) -> dict[str, Any]:
         return _content(error, is_error=True)
     assert store is not None
     status = _ensure_fresh(store, repo_root)
+    response_format = _response_format(arguments)
     budget = int(arguments.get("budget", 2000))
-    result = _dead_code_analysis(store, repo_root, status["current_fingerprint"], budget)
+    scope = _normalise_scope(arguments.get("path"))
+    if scope and not any(_in_scope(path, scope) for path in store.fetch_source_stats(repo_root)):
+        return _content(
+            _format_payload(
+                {
+                    "error": "unknown_path",
+                    "message": f"No indexed file or directory matches {scope!r}.",
+                    "hint": "Path must be a repo-relative file or directory as stored by cortex_refresh.",
+                },
+                status,
+                response_format,
+            ),
+            is_error=True,
+        )
+    result = _dead_code_analysis(store, repo_root, status["current_fingerprint"], budget, scope)
     result = truncate_dead_code_result(result, budget)
     if result.get("partial"):
         result["note"] = _PARTIAL_ANALYSIS_NOTE
     else:
         result.pop("partial", None)
-    response_format = _response_format(arguments)
     return _content(_format_payload(result, status, response_format))
 
 

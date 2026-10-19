@@ -225,6 +225,10 @@
           "default": 2000,
           "type": "integer"
         },
+        "path": {
+          "description": "Repo-relative file or directory; only symbols defined there are reported (references are still searched repo-wide).",
+          "type": "string"
+        },
         "repo_path": {
           "type": "string"
         },

@@ -396,7 +396,11 @@ def analyze_dead_code(
     nodes: Sequence[GraphNode] | None = None,
     edges: Sequence[GraphEdge] | None = None,
     should_stop: Callable[[], bool] | None = None,
+    path_prefix: str | None = None,
 ) -> dict[str, Any]:
+    """Dead-code candidates. `path_prefix` (a repo-relative file or directory)
+    restricts which symbols are *reported*; references are still searched
+    repo-wide, so a use outside the prefix still credits a symbol inside it."""
     repo_root = discover_repo_root(Path(repo_path))
     active_store = store or CortexStore(db_path or default_db_path(repo_root))
     graph_nodes, graph_edges = (
@@ -431,6 +435,8 @@ def analyze_dead_code(
         (item for item in graph_nodes if item.granularity == "symbol"),
         key=lambda item: (item.source_ref, item.label, item.node_id),
     ):
+        if path_prefix and not (node.source_ref == path_prefix or node.source_ref.startswith(path_prefix.rstrip("/") + "/")):
+            continue
         if should_stop is not None and should_stop():
             partial = True
             break
