@@ -815,6 +815,9 @@ _PARTIAL_ANALYSIS_NOTE = (
 # every helper. Both are reset when the outer call finishes.
 _current_cancel: threading.Event | None = None
 _current_request: RequestStatus | None = None
+# Optional (stage, done, total) callback the server installs when the client asked
+# for progress notifications on this request.
+_progress_sink: Callable[[str, int, int], None] | None = None
 _in_tool_call = False
 _analysis_memo: tuple[tuple[str, str], dict[str, Any]] | None = None
 
@@ -2279,10 +2282,20 @@ def _call_refresh(arguments: dict[str, Any]) -> dict[str, Any]:
     # Incremental needs an existing database to diff against.
     incremental = mode != "full" and default_db_path(repo_root).exists()
     _forget_fingerprint(repo_root)
+    request = _current_request
+    sink = _progress_sink
+
+    def report_progress(stage: str, done: int, total: int) -> None:
+        if request is not None:
+            request.set_progress(stage, done, total)
+        if sink is not None:
+            sink(stage, done, total)
+
     summary = ingest_repository(
         repo_root,
         commit_limit=int(arguments.get("commits", 1000)),
         incremental=incremental,
+        progress=report_progress,
     )
     try:
         _remember_fingerprint(repo_root, CortexStore(default_db_path(repo_root)).get_repo_fingerprint(repo_root))
@@ -2586,6 +2599,7 @@ def call_tool(
     *,
     cancel: threading.Event | None = None,
     request_id: Any = None,
+    progress: Callable[[str, int, int], None] | None = None,
 ) -> dict[str, Any]:
     """Dispatch one MCP tool call under a wall-clock budget.
 
@@ -2601,8 +2615,9 @@ def call_tool(
     `finally` cover `_record_tool_usage` too: the ledger's internal second
     `_call_overview` call must reuse the memoised analysis.
     """
-    global _current_cancel, _current_request, _in_tool_call, _analysis_memo
+    global _current_cancel, _current_request, _progress_sink, _in_tool_call, _analysis_memo
     _current_cancel = cancel
+    _progress_sink = progress
     _in_tool_call = True
     try:
         args = arguments or {}
@@ -2637,6 +2652,7 @@ def call_tool(
     finally:
         _current_cancel = None
         _current_request = None
+        _progress_sink = None
         _in_tool_call = False
         _analysis_memo = None
 
