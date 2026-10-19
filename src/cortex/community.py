@@ -6,6 +6,10 @@ from .deadline import check_deadline
 from .models import Community, GraphEdge, GraphNode
 
 COCHANGE_WEIGHT_FLOOR = 0.1
+# Symbol-level call edges are not a file-cluster signal and, since 0.10.0, make
+# up most of the graph (about two thirds of all edges on a large repository), which
+# made label propagation several times slower and changed the communities.
+EXCLUDED_RELATIONS = frozenset({"calls"})
 
 
 def detect_communities(
@@ -33,6 +37,8 @@ def detect_communities(
     neighbors: defaultdict[str, list[str]] = defaultdict(list)
     for edge in edges:
         if edge.source not in propagation_node_ids or edge.target not in propagation_node_ids:
+            continue
+        if edge.relation in EXCLUDED_RELATIONS:
             continue
         if edge.layer == 'HEADING' and edge.relation == 'contains':
             continue
