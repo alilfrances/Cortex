@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import functools
 import heapq
+import itertools
 import re
 import string
 from array import array
 from bisect import bisect_right
+from collections.abc import Iterator
 from itertools import accumulate, islice
 from pathlib import Path
 from typing import Any, Collection, Sequence
@@ -204,17 +207,35 @@ class GraphReferenceIndex:
         return _graph_hits_from_edges(self._matching_edges(symbol), self._nodes, symbol)
 
 
-def _line_access(symbol: str, line: str) -> str:
+@functools.lru_cache(maxsize=8192)
+def _access_patterns(symbol: str) -> tuple[re.Pattern[str], ...]:
+    """The write-detection regexes for one symbol, compiled once.
+
+    `_line_access` runs for every grep hit; building and compiling these seven
+    patterns per hit overflowed the `re` cache and dominated dead-code analysis.
+    """
     symbol_pattern = r"\b" + re.escape(symbol) + r"\b"
-    if re.search(symbol_pattern + r"\s*(?:<<=|>>=|\+=|-=|\*=|/=|\|=|&=|\^=)", line):
+    return (
+        re.compile(symbol_pattern + r"\s*(?:<<=|>>=|\+=|-=|\*=|/=|\|=|&=|\^=)"),
+        re.compile(r"(?:\+\+|--)\s*" + symbol_pattern),
+        re.compile(symbol_pattern + r"\s*(?:\+\+|--)"),
+        re.compile(symbol_pattern + r"\s*(?:\.\s*(?:" + "|".join(_MUTATING_METHODS) + r")\s*\(|\[[^\]]*\]\s*=(?!=|>))"),
+        re.compile(r"\bdel\s+" + symbol_pattern),
+        re.compile(symbol_pattern + r"\s*=(?!=|>)"),
+    )
+
+
+def _line_access(symbol: str, line: str) -> str:
+    compound, prefix_step, postfix_step, mutating, delete, assign = _access_patterns(symbol)
+    if compound.search(line):
         return "write"
-    if re.search(r"(?:\+\+|--)\s*" + symbol_pattern, line) or re.search(symbol_pattern + r"\s*(?:\+\+|--)", line):
+    if prefix_step.search(line) or postfix_step.search(line):
         return "write"
-    if re.search(symbol_pattern + r"\s*(?:\.\s*(?:" + "|".join(_MUTATING_METHODS) + r")\s*\(|\[[^\]]*\]\s*=(?!=|>))", line):
+    if mutating.search(line):
         return "write"
-    if re.search(r"\bdel\s+" + symbol_pattern, line):
+    if delete.search(line):
         return "write"
-    if re.search(symbol_pattern + r"\s*=(?!=|>)", line):
+    if assign.search(line):
         return "write"
     return "read"
 
@@ -333,34 +354,32 @@ class ReferenceCorpus:
 
 
 def _scan_lines(
-    hits: list[dict[str, Any]],
     pattern: re.Pattern[str],
     symbol: str,
     covered: set[tuple[str, int | None]],
     path: Path,
     rel_path: str,
     lines: list[str],
-) -> None:
+) -> Iterator[dict[str, Any]]:
     for lineno, line in enumerate(lines, start=1):
         if not pattern.search(line):
             continue
         if (rel_path, lineno) in covered:
             continue
-        hits.append({
+        yield {
             "bucket": _bucket(path),
             "text": f"{rel_path}:{lineno}",
             "origin": "grep",
             "access": _line_access(symbol, line),
-        })
+        }
 
 
 def _scan_text(
-    hits: list[dict[str, Any]],
     pattern: re.Pattern[str],
     symbol: str,
     covered: set[tuple[str, int | None]],
     item: _CorpusFile,
-) -> None:
+) -> Iterator[dict[str, Any]]:
     """One regex pass over the whole file; same hits as `_scan_lines` over its lines.
 
     Valid only for a non-empty symbol with no line-break character: a match then
@@ -376,30 +395,31 @@ def _scan_text(
         lineno = index + 1
         if (item.rel_path, lineno) in covered:
             continue
-        hits.append({
+        yield {
             "bucket": _bucket(item.path),
             "text": f"{item.rel_path}:{lineno}",
             "origin": "grep",
             "access": _line_access(symbol, item.lines[index]),
-        })
+        }
 
 
-def _grep_hits(
+def _grep_hit_iter(
     repo_root: Path,
     symbol: str,
     covered: set[tuple[str, int | None]],
     corpus: ReferenceCorpus | None = None,
-) -> list[dict[str, Any]]:
+) -> Iterator[dict[str, Any]]:
+    """Grep hits in listing order, produced lazily so a caller that only needs a
+    prefix does not scan the rest of the repository."""
     pattern = re.compile(r"\b" + re.escape(symbol) + r"\b")
-    hits: list[dict[str, Any]] = []
     if corpus is not None:
         whole_text = bool(symbol) and not _has_line_break(symbol)
         for item in corpus.files_for(symbol):
             if whole_text and item.retained:
-                _scan_text(hits, pattern, symbol, covered, item)
+                yield from _scan_text(pattern, symbol, covered, item)
             else:
-                _scan_lines(hits, pattern, symbol, covered, item.path, item.rel_path, item.lines)
-        return hits
+                yield from _scan_lines(pattern, symbol, covered, item.path, item.rel_path, item.lines)
+        return
     # Only a standalone call reaches this loop (dead-code analysis always passes a
     # corpus and stops softly instead), so a hard deadline check here is safe.
     for position, path in enumerate(_iter_candidate_files(repo_root)):
@@ -410,8 +430,16 @@ def _grep_hits(
         except (UnicodeDecodeError, OSError):
             continue
         rel_path = path.relative_to(repo_root).as_posix()
-        _scan_lines(hits, pattern, symbol, covered, path, rel_path, text.splitlines())
-    return hits
+        yield from _scan_lines(pattern, symbol, covered, path, rel_path, text.splitlines())
+
+
+def _grep_hits(
+    repo_root: Path,
+    symbol: str,
+    covered: set[tuple[str, int | None]],
+    corpus: ReferenceCorpus | None = None,
+) -> list[dict[str, Any]]:
+    return list(_grep_hit_iter(repo_root, symbol, covered, corpus))
 
 
 def _items_with_prefix(eligible: list[dict[str, Any]], count: int) -> dict[str, list[dict[str, str]]]:
@@ -434,15 +462,27 @@ def find_references(
         graph_hits, covered = graph_index.hits(symbol)
     else:
         graph_hits, covered = _graph_hits(store, repo_root, symbol)
-    grep_hits = _grep_hits(repo_root, symbol, covered, corpus)
-
-    eligible = [
-        hit for hit in (*graph_hits, *grep_hits)
+    all_hits = itertools.chain(graph_hits, _grep_hit_iter(repo_root, symbol, covered, corpus))
+    hit_stream = (
+        hit for hit in all_hits
         if not (mode == "writes" and hit["access"] not in {"definition", "write"})
-    ]
+    )
 
-    # Token count only grows with the prefix length, so the first hit that
-    # overflows under a one-at-a-time scan is the boundary a binary search finds.
+    # Only the longest prefix that fits the budget is returned, so hits are pulled
+    # lazily and the scan stops as soon as the prefix has overflowed: no need to read
+    # the rest of the repository for a symbol with thousands of hits. Token count only
+    # grows with the prefix length, so the largest fitting prefix is found by binary
+    # search over what was pulled, exactly as over the full list.
+    eligible: list[dict[str, Any]] = []
+    exhausted = False
+    chunk = 16
+    while not exhausted:
+        pulled = list(itertools.islice(hit_stream, chunk))
+        eligible.extend(pulled)
+        exhausted = len(pulled) < chunk
+        if not exhausted and count_text_tokens(str(_items_with_prefix(eligible, len(eligible)))) > budget:
+            break
+        chunk = min(chunk * 2, 256)
     lo, hi, best = 0, len(eligible), 0
     while lo <= hi:
         mid = (lo + hi) // 2
