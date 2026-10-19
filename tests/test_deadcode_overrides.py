@@ -93,3 +93,39 @@ def test_same_name_as_a_resolved_base_method_counts_as_an_override(tmp_path, mon
     # `Parent.shared` and `Child.shared` collapse to one graph label per file; whichever is
     # reported, the one in the subclass must not be high confidence.
     assert all(item["confidence"] != "high" for item in shared)
+
+
+CPP_FILES = {
+    "src/parent.hpp": "class Parent {\npublic:\n    int shared(int x) { return x; }\n    int outOfLine(int x);\n    int parentOnly(int x) { return x; }\n};\n",
+    "src/parent.cpp": '#include "parent.hpp"\nint Parent::outOfLine(int x) { return x; }\n',
+    "src/child.hpp": '#include "parent.hpp"\nclass Child : public Parent {\npublic:\n    int shared(int x);\n    int outOfLine(int x);\n    int childOnly(int x);\n};\n',
+    "src/child.cpp": (
+        '#include "child.hpp"\n'
+        "int Child::shared(int x) { return x + 1; }\n"
+        "int Child::outOfLine(int x) { return x + 2; }\n"
+        "int Child::childOnly(int x) { return x + 3; }\n"
+    ),
+    "src/free.cpp": "int freeFunction(int x) { return x; }\n",
+}
+
+
+def test_methods_sharing_a_name_with_a_resolved_cpp_base_method_are_low(tmp_path, monkeypatch):
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    repo = tmp_path / "repo"
+    for rel, content in CPP_FILES.items():
+        target = repo / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content)
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+    subprocess.run(["git", "-c", "user.email=a@b", "-c", "user.name=a", "commit", "-qm", "i"], cwd=repo, check=True)
+    ingest_repository(repo)
+    findings = {(item["file"], item["symbol"]): item for item in analyze_dead_code(repo)["findings"]}
+    reason = "overrides a base-class or framework method"
+
+    # `shared` is declared in-class in Parent; `outOfLine` is defined out of line in parent.cpp.
+    assert reason in findings[("src/child.cpp", "shared")]["reason"]
+    assert reason in findings[("src/child.cpp", "outOfLine")]["reason"]
+    # A method the base does not have, and a free function, are ordinary candidates.
+    assert reason not in findings[("src/child.cpp", "childOnly")]["reason"]
+    assert reason not in findings[("src/free.cpp", "freeFunction")]["reason"]

@@ -137,6 +137,10 @@ class _OverrideIndex:
         resolved: list[GraphNode] = []
         for target in self._bases.get(cls.node_id, ()):
             base = self._nodes_by_id.get(target)
+            if base is None and target.startswith("name:"):
+                # Cross-file bases are often left as `name:<Label>`; accept a unique class of that name.
+                named = self._classes_by_label.get(target.removeprefix("name:").rsplit("::", 1)[-1], [])
+                base = named[0] if len(named) == 1 else None
             if base is not None and base.kind == "class":
                 resolved.append(base)
         return resolved
