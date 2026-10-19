@@ -174,6 +174,24 @@ def _classify_path(path: Path) -> str:
     return "text"
 
 
+_LINGUIST_TS_PREFIXES = ("<?xml", "<!doctype ts", "<ts")
+
+
+def _classify_source(path: Path, content: str) -> str:
+    """`_classify_path`, corrected for files whose extension lies about them.
+
+    Qt Linguist translation catalogues use the `.ts` extension, but they are XML
+    data, not TypeScript. Treated as code they were parsed with the TypeScript
+    grammar and scored as source, so they crowded real code out of query bundles.
+    """
+    kind = _classify_path(path)
+    if kind == "code" and path.suffix.lower() == ".ts":
+        head = content.lstrip("\ufeff \t\r\n")[:16].lower()
+        if head.startswith(_LINGUIST_TS_PREFIXES):
+            return "text"
+    return kind
+
+
 def _content_hash(content: str) -> str:
     return hashlib.sha256(content.encode('utf-8', errors='replace')).hexdigest()
 
@@ -213,7 +231,7 @@ def _scan_sources(repo_root: Path, skip_dirs: set[str] | None = None) -> list[So
             SourceRecord(
                 path=rel_path,
                 content=content,
-                kind=_classify_path(path),
+                kind=_classify_source(path, content),
                 size_bytes=stat.st_size,
                 modified_at=stat.st_mtime,
                 content_hash=_content_hash(content),
@@ -285,7 +303,7 @@ def _scan_sources_incremental(
         record = SourceRecord(
             path=rel_path,
             content=content,
-            kind=_classify_path(path),
+            kind=_classify_source(path, content),
             size_bytes=stat.st_size,
             modified_at=stat.st_mtime,
             content_hash=content_hash,
