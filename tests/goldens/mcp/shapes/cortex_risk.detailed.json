@@ -31,6 +31,7 @@
     "missing_qt_sites": null,
     "missing_tests": null,
     "tests_to_run": null,
+    "uncovered_changed_files": null,
     "unindexed_files": null
   },
   "keys": [
@@ -59,10 +60,12 @@
     "staged",
     "stale",
     "status",
+    "tests_by_changed_file",
     "tests_run_all",
     "tests_run_all_reason",
     "tests_to_run",
     "truncated",
+    "uncovered_changed_files",
     "unindexed",
     "unindexed_files"
   ]

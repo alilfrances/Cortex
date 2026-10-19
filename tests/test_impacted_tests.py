@@ -517,3 +517,37 @@ def test_inherits_edges_with_unresolved_base_names_are_reverse_hops(tmp_path: Pa
 
     hit = _by_test(result)["test/ChildTest.java"]
     assert "structural" in hit["via"]
+
+
+def test_coverage_breakdown_names_tests_per_changed_file_and_the_uncovered_ones(tmp_path):
+    """The partial list stays visible next to a run-all verdict, per changed file."""
+    import subprocess
+
+    from cortex.ingest import ingest_repository
+    from cortex.risk import analyze_risk
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    def git(*args):
+        subprocess.run(["git", "-c", "user.email=a@b", "-c", "user.name=a", *args], cwd=repo, check=True, capture_output=True)
+
+    git("init", "-q")
+    (repo / "covered.py").write_text("def covered():\n    return 1\n")
+    (repo / "orphan.py").write_text("def orphan():\n    return 1\n")
+    (repo / "test_covered.py").write_text("from covered import covered\n\n\ndef test_it():\n    assert covered() == 1\n")
+    git("add", "-A")
+    git("commit", "-qm", "one")
+    (repo / "covered.py").write_text("def covered():\n    return 2\n")
+    (repo / "orphan.py").write_text("def orphan():\n    return 2\n")
+    git("commit", "-qam", "two")
+    import os
+    os.environ["CORTEX_DATA_DIR"] = str(tmp_path / "data")
+    ingest_repository(repo)
+
+    result = analyze_risk(repo, "HEAD~1..HEAD")
+
+    assert result["tests_run_all"] is True
+    assert result["tests_by_changed_file"] == {"covered.py": ["test_covered.py"]}
+    assert result["uncovered_changed_files"] == ["orphan.py"]
+    assert "orphan.py" in result["tests_run_all_reason"]

@@ -19,7 +19,7 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from .deadline import check_deadline
 from .gitutils import discover_repo_root
-from .impacted_tests import select_tests
+from .impacted_tests import select_tests_with_coverage
 from .report import _looks_like_src_test_pair
 from .store import CortexStore, default_db_path
 from .testpatterns import is_test_path
@@ -813,7 +813,7 @@ def analyze_risk(
 
     file_payloads.sort(key=lambda value: (-float(value["risk_score"]), str(value["path"]), str(value.get("previous_path", ""))))
     missing_cochange.sort(key=lambda value: (value["for"], -float(value["weight"]), value["path"]))
-    tests_to_run, tests_run_all, tests_run_all_reason = select_tests(
+    tests_to_run, tests_run_all, tests_run_all_reason, tests_by_changed_file, uncovered_changed_files = select_tests_with_coverage(
         diff.files,
         diff.raw_zero_context,
         graph_nodes,
@@ -862,6 +862,8 @@ def analyze_risk(
         "tests_to_run": tests_to_run,
         "tests_run_all": tests_run_all,
         "tests_run_all_reason": tests_run_all_reason,
+        "tests_by_changed_file": tests_by_changed_file,
+        "uncovered_changed_files": uncovered_changed_files,
     }
     return result
 
@@ -889,6 +891,7 @@ def truncate_risk_result(result: Mapping[str, Any], budget: int) -> dict[str, An
         # human-facing strings.  The unbudgeted result retains every bucket;
         # this order makes a small budget stable across Python versions.
         for key in (
+            "tests_by_changed_file",
             "missing_cochange",
             "missing_cochanges",
             "missing_tests",
