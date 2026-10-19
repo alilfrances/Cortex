@@ -803,6 +803,8 @@ _OVERVIEW_DEFAULT_BUDGET = 2000
 _CONFIDENCE_PRIORITY = {"high": 0, "medium": 1, "low": 2}
 
 
+_MIN_FINDING_TOKENS = 8
+
 _PARTIAL_ANALYSIS_NOTE = (
     "Analysis stopped at the time budget, so dead-code findings are incomplete. "
     "Set CORTEX_TOOL_TIMEOUT_SECONDS to raise it (0 disables the budget)."
@@ -952,7 +954,10 @@ def _fit_overview_report(
         )
         return count_text_tokens(json.dumps(rendered, sort_keys=True)) <= budget
 
-    lo, hi, best = 0, len(findings), 0
+    # Every included finding renders to a report line of well over eight tokens,
+    # so no more than budget // 8 can ever fit; bounding the search there keeps
+    # the probes small when there are tens of thousands of findings.
+    lo, hi, best = 0, min(len(findings), budget // _MIN_FINDING_TOKENS + 1), 0
     while lo <= hi:
         mid = (lo + hi) // 2
         if _fits(mid):
