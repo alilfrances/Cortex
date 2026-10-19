@@ -57,3 +57,15 @@ def test_read_tool_finishes_without_a_budget(repo, monkeypatch, tool, arguments)
     monkeypatch.setenv("CORTEX_TOOL_TIMEOUT_SECONDS", "0")
     result = tools.call_tool(tool, {"repo_path": str(repo), **arguments})
     assert result.get("isError") is not True, result["content"][0]["text"][:200]
+
+
+def test_dead_code_soft_stop_is_counted(repo, monkeypatch):
+    from cortex.mcp.status import REGISTRY
+
+    before = REGISTRY.snapshot()["total_soft_deadline"]
+    monkeypatch.setenv("CORTEX_TOOL_TIMEOUT_SECONDS", "0.000001")
+    result = tools.call_tool("cortex_dead_code", {"repo_path": str(repo)})
+    payload = json.loads(result["content"][0]["text"])
+    assert result.get("isError") is not True
+    assert payload.get("partial") is True
+    assert REGISTRY.snapshot()["total_soft_deadline"] == before + 1

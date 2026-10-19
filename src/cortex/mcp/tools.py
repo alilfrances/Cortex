@@ -23,7 +23,7 @@ from ..hotspots import top_hotspots
 from ..risk import analyze_risk, truncate_risk_result
 from ..store import GRAPH_FORMAT_VERSION, CortexStore, IngestLockTimeout, default_db_path, ingest_lock
 from ..tokenizer import count_text_tokens, truncate_text_to_budget
-from .status import REGISTRY
+from .status import REGISTRY, RequestStatus
 
 
 TOOL_DEFINITIONS: list[dict[str, Any]] = [
@@ -814,6 +814,7 @@ _PARTIAL_ANALYSIS_NOTE = (
 # single-slot overview-analysis memo here instead of threading them through
 # every helper. Both are reset when the outer call finishes.
 _current_cancel: threading.Event | None = None
+_current_request: RequestStatus | None = None
 _in_tool_call = False
 _analysis_memo: tuple[tuple[str, str], dict[str, Any]] | None = None
 
@@ -826,10 +827,16 @@ def _analysis_should_stop() -> Callable[[], bool]:
     cancel = _current_cancel
     deadline = current_deadline()
 
+    request = _current_request
+
     def should_stop() -> bool:
         if cancel is not None and cancel.is_set():
             return True
-        return deadline is not None and deadline.expired
+        if deadline is not None and deadline.expired:
+            if request is not None:
+                request.soft_deadline = True
+            return True
+        return False
 
     return should_stop
 
@@ -2594,7 +2601,7 @@ def call_tool(
     `finally` cover `_record_tool_usage` too: the ledger's internal second
     `_call_overview` call must reuse the memoised analysis.
     """
-    global _current_cancel, _in_tool_call, _analysis_memo
+    global _current_cancel, _current_request, _in_tool_call, _analysis_memo
     _current_cancel = cancel
     _in_tool_call = True
     try:
@@ -2602,7 +2609,8 @@ def call_tool(
         budget_seconds = resolve_budget_seconds()
         tracked_id = "" if request_id is None else str(request_id)
         try:
-            with REGISTRY.track(name, tracked_id), deadline_scope(budget_seconds, tool_name=name):
+            with REGISTRY.track(name, tracked_id) as request_status, deadline_scope(budget_seconds, tool_name=name):
+                _current_request = request_status
                 result = _dispatch_tool(name, args)
         except DeadlineExceeded as exc:
             return _content(
@@ -2628,6 +2636,7 @@ def call_tool(
         return result
     finally:
         _current_cancel = None
+        _current_request = None
         _in_tool_call = False
         _analysis_memo = None
 

@@ -149,6 +149,7 @@ def test_per_tool_aggregates_stay_bounded_regardless_of_call_volume() -> None:
         "call_count",
         "failure_count",
         "deadline_exceeded_count",
+        "soft_deadline_count",
         "slowest_seconds",
     }
 
@@ -180,6 +181,7 @@ def test_snapshot_has_expected_top_level_keys() -> None:
         "total_completed",
         "total_failed",
         "total_deadline_exceeded",
+        "total_soft_deadline",
         "per_tool",
     }
 
@@ -278,3 +280,24 @@ def test_concurrent_snapshot_reads_do_not_crash_while_writers_mutate() -> None:
     assert not read_errors
     snapshot = registry.snapshot()
     assert snapshot["total_completed"] == 300 * 4
+
+
+def test_soft_deadline_is_counted_separately_from_a_hard_one() -> None:
+    registry = StatusRegistry()
+    with registry.track("cortex_dead_code", "1") as status:
+        status.soft_deadline = True
+    with registry.track("cortex_dead_code", "2"):
+        pass
+    snapshot = registry.snapshot()
+    assert snapshot["total_soft_deadline"] == 1
+    assert snapshot["total_deadline_exceeded"] == 0
+    assert snapshot["per_tool"]["cortex_dead_code"]["soft_deadline_count"] == 1
+    assert snapshot["per_tool"]["cortex_dead_code"]["call_count"] == 2
+
+
+def test_in_flight_progress_is_reported_only_once_set() -> None:
+    registry = StatusRegistry()
+    with registry.track("cortex_refresh", "7") as status:
+        assert "progress" not in registry.snapshot()["in_flight"][0]
+        status.set_progress("parse", 50, 200)
+        assert registry.snapshot()["in_flight"][0]["progress"] == {"stage": "parse", "done": 50, "total": 200}
