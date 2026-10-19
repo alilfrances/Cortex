@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass, field
 import json
+import posixpath
 from pathlib import Path
 import re
 import subprocess
@@ -443,6 +444,29 @@ def _changed_paths(files: Sequence[DiffFile]) -> set[str]:
     return {item.path for item in files}
 
 
+_PAIR_INDEX_CACHE: list[Any] = []
+
+
+def _pair_index(paths: Iterable[str]) -> dict[str, list[tuple[str, str]]]:
+    """stem -> [(path, lowercase suffix)] over `paths`, built once per path set.
+
+    Pairing a header with its implementation used to scan every path for every
+    path, which made `cortex_risk` quadratic in file count. Sets are memoised by
+    identity and size (holding a strong reference, so a recycled `id()` can never
+    serve a stale index).
+    """
+    memoisable = isinstance(paths, (set, frozenset))
+    if memoisable and _PAIR_INDEX_CACHE and _PAIR_INDEX_CACHE[0] is paths and _PAIR_INDEX_CACHE[1] == len(paths):
+        return _PAIR_INDEX_CACHE[2]
+    index: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    for candidate in paths:
+        stem, suffix = posixpath.splitext(posixpath.basename(candidate))
+        index[stem].append((candidate, suffix.lower()))
+    if memoisable:
+        _PAIR_INDEX_CACHE[:] = [paths, len(paths), index]
+    return index
+
+
 def _pair_for(path: str, paths: Iterable[str]) -> list[str]:
     suffix = Path(path).suffix.lower()
     if suffix not in _CPP_HEADER_SUFFIXES | _CPP_IMPL_SUFFIXES:
@@ -450,8 +474,8 @@ def _pair_for(path: str, paths: Iterable[str]) -> list[str]:
     stem = Path(path).stem
     allowed = _CPP_IMPL_SUFFIXES if suffix in _CPP_HEADER_SUFFIXES else _CPP_HEADER_SUFFIXES
     return sorted(
-        candidate for candidate in paths
-        if candidate != path and Path(candidate).stem == stem and Path(candidate).suffix.lower() in allowed
+        candidate for candidate, candidate_suffix in _pair_index(paths).get(stem, ())
+        if candidate != path and candidate_suffix in allowed
     )
 
 
