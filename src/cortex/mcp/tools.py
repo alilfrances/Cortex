@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import difflib
 import hashlib
 import json
 import os
@@ -2684,7 +2685,9 @@ def call_tool(
     _progress_sink = progress
     _in_tool_call = True
     try:
-        args = arguments or {}
+        args, argument_error = _normalise_arguments(name, arguments or {})
+        if argument_error is not None:
+            return _content(argument_error, is_error=True)
         budget_seconds = resolve_budget_seconds()
         tracked_id = "" if request_id is None else str(request_id)
         try:
@@ -2719,6 +2722,56 @@ def call_tool(
         _progress_sink = None
         _in_tool_call = False
         _analysis_memo = None
+
+
+# Alternative names agents commonly use for a tool's identifier arguments. Each is
+# renamed to the canonical argument unless that one was also given.
+_ARGUMENT_ALIASES: dict[str, dict[str, str]] = {
+    "cortex_path": {"source": "symbol_a", "from": "symbol_a", "target": "symbol_b", "to": "symbol_b"},
+    "cortex_references": {"target": "symbol", "name": "symbol"},
+    "cortex_read_symbol": {"target": "symbol", "name": "symbol"},
+    "cortex_relations": {"name": "symbol"},
+    "cortex_query": {"query": "task", "prompt": "task"},
+    "cortex_search_symbols": {"pattern": "query", "text": "query"},
+    "cortex_search_text": {"pattern": "query", "text": "query"},
+}
+
+
+def _normalise_arguments(name: str, args: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """Apply argument aliases, then reject arguments the tool does not define.
+
+    Previously an unknown argument was silently ignored, so a misspelt `path`
+    turned a scoped request into a whole-repository run that used up its budget.
+    Keys starting with `_` (protocol metadata) are always allowed.
+    """
+    schema = next((tool["inputSchema"] for tool in TOOL_DEFINITIONS if tool["name"] == name), None)
+    if schema is None:
+        return args, None  # unknown tool: the dispatcher reports it
+    accepted = set(schema.get("properties", {}))
+    renamed = dict(args)
+    # Every tool takes a response format from agents that send it uniformly; tools
+    # with a single response shape simply ignore it.
+    if "format" in renamed and "response_format" not in renamed:
+        renamed["response_format"] = renamed.pop("format")
+    if "response_format" in renamed and "response_format" not in accepted:
+        renamed.pop("response_format")
+    for alias, canonical in _ARGUMENT_ALIASES.get(name, {}).items():
+        if alias in renamed and alias not in accepted and canonical not in renamed:
+            renamed[canonical] = renamed.pop(alias)
+    unknown = sorted(key for key in renamed if key not in accepted and not key.startswith("_"))
+    if not unknown:
+        return renamed, None
+    suggestions = {
+        key: difflib.get_close_matches(key, sorted(accepted), n=1) for key in unknown
+    }
+    hint = "; ".join(f"{key!r}: did you mean {match[0]!r}?" for key, match in suggestions.items() if match)
+    return renamed, {
+        "error": "unknown_argument",
+        "tool": name,
+        "unknown": unknown,
+        "accepted": sorted(accepted),
+        "hint": hint or f"Accepted arguments: {', '.join(sorted(accepted))}.",
+    }
 
 
 def _dispatch_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:

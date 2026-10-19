@@ -89,9 +89,9 @@ def test_request_id_reaches_the_in_flight_registry_without_entering_arguments(
         return mcp_tools._content({"ok": True})
 
     monkeypatch.setattr(mcp_tools, "_dispatch_tool", _dispatch)
-    mcp_tools.call_tool("cortex_refresh", {"a": 1}, request_id=41)
+    mcp_tools.call_tool("cortex_refresh", {"mode": "full"}, request_id=41)
 
-    assert seen["args"] == {"a": 1}
+    assert seen["args"] == {"mode": "full"}
     assert [(e["tool_name"], e["request_id"]) for e in seen["in_flight"]] == [("cortex_refresh", "41")]
 
 

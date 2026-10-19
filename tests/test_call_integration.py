@@ -57,7 +57,7 @@ def test_cross_module_callee_is_not_a_dead_code_candidate(repo: Path) -> None:
     assert "checkout" not in findings
     assert "never_called_anywhere" in findings
 
-    detailed = _payload(call_tool("cortex_dead_code", {"repo_path": str(repo), "format": "detailed", "budget": 9999}))
+    detailed = _payload(call_tool("cortex_dead_code", {"repo_path": str(repo), "response_format": "detailed", "budget": 9999}))
     assert "compute_invoice_total" not in {item["symbol"] for item in detailed["findings"]}
 
 
