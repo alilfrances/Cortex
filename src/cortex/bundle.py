@@ -44,6 +44,16 @@ ITEM_BUDGET_SHARE = 0.4
 SYMBOL_FILE_SCORE_SHARE = 0.25
 # Test/eval/fixture files are demoted unless the task itself is about them.
 AUX_PATH_DEMOTION = 0.5
+# Translation catalogues and other locale data match almost any task word (they
+# restate the UI text) but never implement behaviour, so they are demoted harder
+# unless the task is about translation or locales.
+LOCALE_PATH_DEMOTION = 0.25
+LOCALE_PATH_RE = re.compile(r'(^|/)(i18n|l10n|locales?|translations?)(/|$)')
+LOCALE_SUFFIXES = frozenset({'.ts', '.po', '.pot', '.xlf', '.xliff', '.qm'})
+LOCALE_INTENT_TERMS = {
+    'translation', 'translations', 'translate', 'translated', 'locale', 'locales', 'i18n', 'l10n',
+    'localization', 'localisation', 'language', 'languages',
+}
 AUX_PATH_RE = re.compile(r'(^|/)(tests?|testing|evals?|fixtures?|examples?|benchmarks?|samples?)(/|$)')
 AUX_INTENT_TERMS = {
     'test', 'tests', 'testing', 'eval', 'evals', 'evaluation', 'fixture', 'fixtures',
@@ -103,6 +113,16 @@ def _language_hint_suffixes(task: str, task_terms: set[str]) -> frozenset[str]:
     if 'c++' in task.lower():
         suffixes.update(LANGUAGE_HINT_SUFFIXES['cplusplus'])
     return frozenset(suffixes)
+
+
+def _is_locale_source(path: str, kind: str) -> bool:
+    """A locale/translation file: under an i18n-style directory, or a translation
+    catalogue by extension (`.ts` only when it was indexed as text, i.e. Qt Linguist
+    XML rather than TypeScript)."""
+    suffix = Path(path).suffix.lower()
+    if suffix == '.ts':
+        return kind != 'code'
+    return bool(LOCALE_PATH_RE.search(path)) or suffix in LOCALE_SUFFIXES
 
 
 def _is_aux_path(path: str) -> bool:
@@ -569,6 +589,7 @@ def generate_bundle(
     term_weights = _term_weights(task_terms, sources)
     check_deadline()
     demote_aux = not (task_terms & AUX_INTENT_TERMS)
+    demote_locale = not (task_terms & LOCALE_INTENT_TERMS)
     hotspot_by_path: dict[str, dict] = {}
     for node in nodes:
         if node.kind != 'file' or not isinstance(node.metadata.get('hotspot'), dict):
@@ -694,6 +715,8 @@ def generate_bundle(
         score = base_scores[source.path] + fusion_scores.get(source.path, 0.0) * FUSION_SCORE_MULTIPLIER
         if demote_aux and _is_aux_path(source.path):
             score *= AUX_PATH_DEMOTION
+        if demote_locale and _is_locale_source(source.path, source.kind):
+            score *= LOCALE_PATH_DEMOTION
         if lang_suffixes and score > 0:
             # Multiplicative so unrelated files (score 0) are never seeded by
             # language alone; only reorders files the task already matches.
@@ -833,6 +856,8 @@ def generate_bundle(
     for item in candidates:
         if item.score <= 0 or item.item_id in selected_ids:
             continue
+        if item.token_count <= 0:
+            continue  # an empty file or span adds nothing to a bundle
         allowed = min(budget - total_tokens, item_cap)
         if item.kind == 'symbol':
             if item.path in files_fully_selected:
