@@ -515,10 +515,25 @@ def _staleness(store: CortexStore, repo_root: Path, *, bypass_ttl: bool = False)
     }
 
 
+def _needs_full_rebuild(store: CortexStore, repo_root: Path) -> bool:
+    try:
+        return store.get_repo_graph_version(repo_root) < GRAPH_FORMAT_VERSION
+    except Exception:
+        return False
+
+
 def _ensure_fresh(store: CortexStore, repo_root: Path) -> dict[str, Any]:
     """Auto-refresh a stale index (incremental) before answering, unless disabled."""
     status = _staleness(store, repo_root)
     if not status["stale"] or os.environ.get("CORTEX_AUTO_REFRESH", "1") == "0":
+        return status
+    if resolve_budget_seconds() > 0 and _needs_full_rebuild(store, repo_root):
+        # A full rebuild takes minutes on a large repository, far past any call
+        # budget; answer from the current index and let the caller ask for it.
+        status["refresh_hint"] = (
+            "The index needs a full rebuild (older graph format); call cortex_refresh. "
+            "This answer comes from the existing index."
+        )
         return status
     try:
         with ingest_lock(repo_root):
