@@ -3,6 +3,7 @@ from __future__ import annotations
 import posixpath
 import re
 import shlex
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 
@@ -197,6 +198,39 @@ def _target_id(target: str) -> str:
     return f"module:{cleaned or 'unknown'}"
 
 
+# Per-batch lookup indexes over a `known_paths` set, keyed by identity and size.
+# Resolving an include or import by basename used to scan every known path, which
+# made a full ingest quadratic in the number of files. The cache holds a strong
+# reference to the set: keying on `id()` alone is unsound because CPython reuses
+# the id of a collected set (the same hazard `call_sites._memo` documents).
+_PATH_INDEX_CACHE: dict[str, tuple[set[str], int, object]] = {}
+
+
+def _path_index(name: str, known_paths: set[str], build: Callable[[set[str]], object]) -> object:
+    hit = _PATH_INDEX_CACHE.get(name)
+    if hit is not None and hit[0] is known_paths and hit[1] == len(known_paths):
+        return hit[2]
+    value = build(known_paths)
+    _PATH_INDEX_CACHE[name] = (known_paths, len(known_paths), value)
+    return value
+
+
+def _basename_index(known_paths: set[str]) -> dict[str, list[str]]:
+    index: dict[str, list[str]] = {}
+    for path in known_paths:
+        index.setdefault(PurePosixPath(path).name, []).append(path)
+    return index
+
+
+def _normalised_cpp_stem_index(known_paths: set[str]) -> dict[str, list[str]]:
+    index: dict[str, list[str]] = {}
+    for path in known_paths:
+        pure = PurePosixPath(path)
+        if pure.suffix.lower() in _CPP_SUFFIXES:
+            index.setdefault(re.sub(r"[^a-z0-9]", "", pure.stem.lower()), []).append(path)
+    return index
+
+
 def resolve_local_import(target: str, known_paths: set[str]) -> str | None:
     """Resolve an include/import target to a repo-relative path if it matches a known file.
 
@@ -210,7 +244,7 @@ def resolve_local_import(target: str, known_paths: set[str]) -> str | None:
     if candidate in known_paths:
         return candidate
     basename = PurePosixPath(candidate).name
-    matches = [p for p in known_paths if PurePosixPath(p).name == basename]
+    matches = _path_index("basename", known_paths, _basename_index).get(basename, ())  # type: ignore[attr-defined]
     if len(matches) == 1:
         return matches[0]
     return None
@@ -241,11 +275,7 @@ def resolve_qml_cpp_type(name: str, known_paths: set[str]) -> str | None:
     # a repo-wide class guess; the graph pass still requires a real class node
     # with the exact QML type name before it rewrites the endpoint.
     normalised_name = re.sub(r"[^a-z0-9]", "", name.lower())
-    candidates = [
-        path for path in known_paths
-        if PurePosixPath(path).suffix.lower() in _CPP_SUFFIXES
-        and re.sub(r"[^a-z0-9]", "", PurePosixPath(path).stem.lower()) == normalised_name
-    ]
+    candidates = _path_index("cpp_stem", known_paths, _normalised_cpp_stem_index).get(normalised_name, ())  # type: ignore[attr-defined]
     return sorted(candidates)[0] if len(candidates) == 1 else None
 
 
