@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections import defaultdict
 
+from .deadline import check_deadline
 from .models import GraphEdge, GraphNode
 from .tokenizer import count_text_tokens
 
@@ -128,7 +129,9 @@ def rank_file_impact(
     symbol_why: defaultdict[str, list[dict]] = defaultdict(list)
     seen_symbol_pairs: set[tuple[str, str, str]] = set()
 
-    for edge in edges:
+    for index, edge in enumerate(edges):
+        if index % 5000 == 0:
+            check_deadline()
         if edge.layer not in IMPACT_LAYERS:
             continue
         if edge.layer == "STRUCTURAL" and (edge.source not in file_paths or edge.target not in file_paths):

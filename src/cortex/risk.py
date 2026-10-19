@@ -17,6 +17,7 @@ import re
 import subprocess
 from typing import Any, Iterable, Mapping, Sequence
 
+from .deadline import check_deadline
 from .gitutils import discover_repo_root
 from .impacted_tests import select_tests
 from .report import _looks_like_src_test_pair
@@ -520,6 +521,7 @@ def _test_directives(changed: Sequence[DiffFile], all_paths: set[str]) -> list[d
     result: list[dict[str, str]] = []
     changed_paths = _changed_paths(changed)
     for item in changed:
+        check_deadline()
         if Path(item.path).suffix.lower() not in _SOURCE_SUFFIXES:
             continue
         if is_test_path(item.path):
@@ -545,7 +547,9 @@ def _qt_instantiation_directives(
             pair_map[path].add(partner)
     result: list[dict[str, str]] = []
     seen: set[tuple[str, str]] = set()
-    for edge in edges:
+    for index, edge in enumerate(edges):
+        if index % 5000 == 0:
+            check_deadline()
         if edge.layer != "STRUCTURAL" or edge.relation != "instantiates":
             continue
         source_node = nodes_by_id.get(edge.source)
@@ -763,11 +767,17 @@ def analyze_risk(
             }
         )
 
+    check_deadline()
     missing_tests = _test_directives(diff.files, all_paths)
+    check_deadline()
     qt_pairs = _pair_directives(diff.files, all_paths, graph_nodes, graph_edges)
+    check_deadline()
     qt_instantiations = _qt_instantiation_directives(diff.files, graph_nodes, graph_edges, all_paths)
+    check_deadline()
     qt_signal_sites = _qt_signal_site_directives(diff.files, graph_nodes, graph_edges)
+    check_deadline()
     build_system_misses = _build_reference_miss_directives(repo_root, diff.files, all_paths)
+    check_deadline()
 
     actionable_by_file: dict[str, int] = defaultdict(int)
     for record in missing_tests:

@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 
+from .deadline import check_deadline
 from .models import GraphEdge, GraphNode
 
 DEFAULT_EXCLUDE_LAYERS = frozenset({"COCHANGE"})
@@ -42,6 +43,7 @@ def shortest_paths(
     frontier = [source_id]
     depth = 0
     while frontier and depth < max_depth and target_id not in distance:
+        check_deadline()
         depth += 1
         next_frontier: list[str] = []
         for node_id in frontier:

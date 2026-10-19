@@ -9,6 +9,7 @@ from itertools import accumulate, islice
 from pathlib import Path
 from typing import Any, Collection, Sequence
 
+from .deadline import check_deadline
 from .ingest import MAX_SOURCE_BYTES, _iter_candidate_files
 from .models import GraphEdge, GraphNode
 from .store import CortexStore
@@ -399,7 +400,11 @@ def _grep_hits(
             else:
                 _scan_lines(hits, pattern, symbol, covered, item.path, item.rel_path, item.lines)
         return hits
-    for path in _iter_candidate_files(repo_root):
+    # Only a standalone call reaches this loop (dead-code analysis always passes a
+    # corpus and stops softly instead), so a hard deadline check here is safe.
+    for position, path in enumerate(_iter_candidate_files(repo_root)):
+        if position % 200 == 0:
+            check_deadline()
         try:
             text = path.read_text(encoding="utf-8")
         except (UnicodeDecodeError, OSError):

@@ -9,6 +9,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from .config import load_config
+from .deadline import check_deadline
 from .fusion import rrf_fuse
 from .gitutils import discover_repo_root
 from .models import BundleItem, GraphEdge, GraphNode, RetrievalBundle
@@ -564,7 +565,9 @@ def generate_bundle(
     noise_terms = frozenset(
         term for identifier in config.noise_identifiers for term in _tokenize_text(identifier)
     )
+    check_deadline()
     term_weights = _term_weights(task_terms, sources)
+    check_deadline()
     demote_aux = not (task_terms & AUX_INTENT_TERMS)
     hotspot_by_path: dict[str, dict] = {}
     for node in nodes:
@@ -592,7 +595,9 @@ def generate_bundle(
 
     newest_commit = max((c.authored_at for c in commits), default=0)
     base_scores: dict[str, float] = {}
-    for source in sources:
+    for position, source in enumerate(sources):
+        if position % 500 == 0:
+            check_deadline()
         recency_weight = 0.0
         if newest_commit:
             recency_weight = max(0.0, 5.0 - math.log2(max(1, newest_commit - int(source.modified_at) + 1)))
@@ -699,6 +704,7 @@ def generate_bundle(
                 score *= LANG_MISMATCH_DEMOTION
         source_scores[source.path] = score
 
+    check_deadline()
     seed_scores = {f'file:{path}': score for path, score in source_scores.items() if score > 0}
     if rank == 'bfs':
         proximity = _bfs_proximity(set(seed_scores), adj, max_depth=2)
@@ -709,9 +715,12 @@ def generate_bundle(
     else:
         raise ValueError(f'Unknown rank mode: {rank}')
 
+    check_deadline()
     candidates: list[BundleItem] = []
 
-    for source in sources:
+    for position, source in enumerate(sources):
+        if position % 500 == 0:
+            check_deadline()
         file_node_id = f'file:{source.path}'
         keyword_score = source_scores[source.path]
         graph_bonus = proximity.get(file_node_id, 0.0)
@@ -753,7 +762,9 @@ def generate_bundle(
 
     source_by_path = {source.path: source for source in sources}
     symbol_items_by_path: defaultdict[str, list[BundleItem]] = defaultdict(list)
-    for path, path_symbols in symbols_by_path.items():
+    for position, (path, path_symbols) in enumerate(symbols_by_path.items()):
+        if position % 500 == 0:
+            check_deadline()
         source = source_by_path.get(path)
         if source is None or source.kind != 'code':
             continue

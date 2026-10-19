@@ -32,6 +32,7 @@ import re
 from typing import Any, Iterable, Mapping, Sequence
 
 from .callresolve import _base_label
+from .deadline import check_deadline
 from .models import GraphEdge
 from .report import _looks_like_src_test_pair
 from .testpatterns import is_test_path, test_base_name
@@ -497,6 +498,7 @@ def select_tests(
     reviewable: list[str] = []  # changed files that must be covered by some tier
 
     for item in sorted(changed, key=lambda value: value.path):
+        check_deadline()
         path = item.path
         if item.status == "D":
             if is_runnable_test(path):
@@ -554,7 +556,9 @@ def select_tests(
 
         # (c) filename pairing
         if not is_test_path(path):
-            for candidate in sorted(known_paths):
+            for position, candidate in enumerate(sorted(known_paths)):
+                if position % 5000 == 0:
+                    check_deadline()
                 if is_runnable_test(candidate) and _looks_like_src_test_pair(path, candidate):
                     selection.add(candidate, "pair", PAIR_SCORE, f"test file name pairs with {path}", for_path=path)
 
