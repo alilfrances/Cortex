@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 from collections import Counter
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -350,13 +351,18 @@ def _parser_summary(nodes: list[GraphNode]) -> dict[str, Any]:
             backend = node.metadata.get("parser_backend")
             if backend:
                 counts[str(backend)] += 1
+    return _parser_summary_from_counts(counts)
+
+
+def _parser_summary_from_counts(counts: Mapping[str, int]) -> dict[str, Any]:
     try:
         from .runtime import public_capability
         runtime = public_capability()
     except Exception:
         runtime = {"ready": False, "degraded_reason": "runtime-status-unavailable"}
-    runtime = {**runtime, "backend_counts": dict(sorted(counts.items()))}
-    return {"backend_counts": dict(sorted(counts.items())), "language_runtime": runtime}
+    backend_counts = dict(sorted(counts.items()))
+    runtime = {**runtime, "backend_counts": backend_counts}
+    return {"backend_counts": dict(backend_counts), "language_runtime": runtime}
 
 
 def ingest_repository(
@@ -556,7 +562,7 @@ def _ingest_locked(
                     store.save_graph(repo_root, changed_nodes, changed_edges)
 
         store.set_repo_fingerprint(repo_root, scan.fingerprint)
-        parser_summary = _parser_summary(store.fetch_graph(repo_root)[0])
+        parser_summary = _parser_summary_from_counts(store.parser_backend_counts(repo_root))
 
         return {
             "repo_path": str(repo_root),

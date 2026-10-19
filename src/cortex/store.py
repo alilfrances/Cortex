@@ -1291,6 +1291,15 @@ class CortexStore:
             for row in rows
         ]
 
+    def parser_backend_counts(self, repo_path: Path) -> dict[str, int]:
+        """File nodes per recorded `parser_backend`, without loading the graph."""
+        rows = self.connection.execute(
+            "SELECT json_extract(metadata_json, '$.parser_backend') AS backend, COUNT(*) AS n "
+            "FROM graph_nodes WHERE repo_path = ? AND kind = 'file' GROUP BY backend",
+            (str(repo_path.resolve()),),
+        ).fetchall()
+        return {str(row["backend"]): int(row["n"]) for row in sorted(rows, key=lambda r: str(r["backend"])) if row["backend"]}
+
     def fetch_graph(self, repo_path: Path) -> tuple[list[GraphNode], list[GraphEdge]]:
         repo_key = str(repo_path.resolve())
         node_rows = self.connection.execute(

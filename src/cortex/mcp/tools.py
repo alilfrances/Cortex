@@ -975,12 +975,7 @@ def _overview_detailed_capabilities(store: CortexStore, repo_root: Path) -> dict
     try:
         from ..runtime import public_capability
         runtime_payload = public_capability()
-        backend_counts: dict[str, int] = {}
-        for file_node in store.fetch_graph(repo_root)[0]:
-            if file_node.kind == "file" and file_node.metadata.get("parser_backend"):
-                key = str(file_node.metadata["parser_backend"])
-                backend_counts[key] = backend_counts.get(key, 0) + 1
-        runtime_payload = {**runtime_payload, "backend_counts": dict(sorted(backend_counts.items()))}
+        runtime_payload = {**runtime_payload, "backend_counts": store.parser_backend_counts(repo_root)}
     except Exception:
         runtime_payload = {"ready": False, "degraded_reason": "runtime status unavailable"}
     return {"semantic": semantic_payload, "language_runtime": runtime_payload}
