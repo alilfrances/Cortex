@@ -12,7 +12,7 @@
     "cpp",
     "qml"
   ],
-  "language_pack_version": "1.12.5",
+  "language_pack_version": "1.22.1",
   "notes": "Only these wheels and parser grammars are supported; parser cache is populated before ready.json.",
   "packages": [
     {
@@ -414,83 +414,86 @@
     {
       "artifacts": [
         {
-          "filename": "tree_sitter_language_pack-1.12.5-cp310-abi3-macosx_10_12_x86_64.whl",
+          "filename": "tree_sitter_language_pack-1.22.1-cp310-abi3-macosx_10_12_x86_64.whl",
           "platform": "macos-x86_64",
-          "sha256": "c3613f26f1660d757626b50e2f7fd50ce269193ec9e8e0ad699ae47bf03fd664",
-          "size_bytes": 2140086,
+          "sha256": "d34a528bdd845d024c42da3fa43495c5d51c66151597ea6e46a1e9d79d863e89",
+          "size": 2313359,
+          "size_bytes": 2313359,
           "tags": [
-            "cp310-abi3-macosx_10_12_x86_64"
+            "cp310",
+            "abi3",
+            "macosx_10_12_x86_64"
           ],
-          "url": "https://files.pythonhosted.org/packages/be/b9/015240f1e091f0d7608582e2930b62580839f4b3e94b5813bc1894017cf3/tree_sitter_language_pack-1.12.5-cp310-abi3-macosx_10_12_x86_64.whl"
+          "url": "https://files.pythonhosted.org/packages/3f/04/97b69d8ce812bd17cb8180f837bcd17a8ae61362fd1e6f61cf526027f0e1/tree_sitter_language_pack-1.22.1-cp310-abi3-macosx_10_12_x86_64.whl"
         },
         {
-          "filename": "tree_sitter_language_pack-1.12.5-cp310-abi3-macosx_11_0_arm64.whl",
+          "filename": "tree_sitter_language_pack-1.22.1-cp310-abi3-macosx_11_0_arm64.whl",
           "platform": "macos-arm64",
-          "sha256": "30010156a06179e7c179ae51ba6f2da148bd0bc364f750bcc5ef81ab1c4e0c53",
-          "size": 2031270,
-          "size_bytes": 2031270,
+          "sha256": "b85116c8a8d7bbdca2e1be8068d6c3d4f0ac66e95b3310a6dbdd21fc87332323",
+          "size": 2199623,
+          "size_bytes": 2199623,
           "tags": [
             "cp310",
             "abi3",
             "macosx_11_0_arm64"
           ],
-          "url": "https://files.pythonhosted.org/packages/08/fd/8ca53b11ea1058c920944b52b41c4c4d96ccf67c62b15174f6d3d2a0126f/tree_sitter_language_pack-1.12.5-cp310-abi3-macosx_11_0_arm64.whl"
+          "url": "https://files.pythonhosted.org/packages/4d/5b/5157fef42981eac1e315ab9cfd2e1e7189d53677b68405d171a620b7a52a/tree_sitter_language_pack-1.22.1-cp310-abi3-macosx_11_0_arm64.whl"
         },
         {
-          "filename": "tree_sitter_language_pack-1.12.5-cp310-abi3-manylinux_2_34_aarch64.whl",
+          "filename": "tree_sitter_language_pack-1.22.1-cp310-abi3-manylinux_2_34_aarch64.whl",
           "platform": "linux-glibc-arm64",
-          "sha256": "1609b9cc2518e4657f6ef80a8ac533a8f5a04d4a74135d744fb171eca434e6eb",
-          "size": 2189197,
-          "size_bytes": 2189197,
+          "sha256": "852a0129463a94f898dda2aa9616fb19e598d9a0a9d3024ec9dc2bffb3fa7945",
+          "size": 2356785,
+          "size_bytes": 2356785,
           "tags": [
             "cp310",
             "abi3",
             "manylinux_2_34_aarch64"
           ],
-          "url": "https://files.pythonhosted.org/packages/03/e1/af79d0d302f1f47f190fd1f09146a6e5f88a32a7c0d0759820d7ca9aafc3/tree_sitter_language_pack-1.12.5-cp310-abi3-manylinux_2_34_aarch64.whl"
+          "url": "https://files.pythonhosted.org/packages/1a/3c/de8422cd16bbf8aad4da68b5182ad985c8f32c5573d9fa8aa7c527cdce34/tree_sitter_language_pack-1.22.1-cp310-abi3-manylinux_2_34_aarch64.whl"
         },
         {
-          "filename": "tree_sitter_language_pack-1.12.5-cp310-abi3-manylinux_2_34_x86_64.whl",
+          "filename": "tree_sitter_language_pack-1.22.1-cp310-abi3-manylinux_2_34_x86_64.whl",
           "platform": "linux-glibc-x86_64",
-          "sha256": "de5ec0c1b184176443fc6093f07fe5a1c403ee51ec8593bde372bd5960819941",
-          "size": 2299397,
-          "size_bytes": 2299397,
+          "sha256": "8a476b71c2f6c71f23b0b63f5ff6f72a8ba2c11901db63c360ebcaf1fc51af5c",
+          "size": 2473497,
+          "size_bytes": 2473497,
           "tags": [
             "cp310",
             "abi3",
             "manylinux_2_34_x86_64"
           ],
-          "url": "https://files.pythonhosted.org/packages/25/da/6e3db4ad85802747ead34f46f402508d796cd11be65b79d6ba6d76281a3f/tree_sitter_language_pack-1.12.5-cp310-abi3-manylinux_2_34_x86_64.whl"
+          "url": "https://files.pythonhosted.org/packages/6b/e1/30683d0d99c9cb7ae0fc23d6c6e8fb0bf9a1ac520fc8fd7cb9d12fe0cd46/tree_sitter_language_pack-1.22.1-cp310-abi3-manylinux_2_34_x86_64.whl"
         },
         {
-          "filename": "tree_sitter_language_pack-1.12.5-cp310-abi3-win_amd64.whl",
+          "filename": "tree_sitter_language_pack-1.22.1-cp310-abi3-win_amd64.whl",
           "platform": "windows-x86_64",
-          "sha256": "eb58ecee144247d8cde52a567bbe5c6f950ed1d2c416295e00f0e31389f1751e",
-          "size": 2073479,
-          "size_bytes": 2073479,
+          "sha256": "624d90afb8b210584bdcb871935385035872eeb12b26e41f487c0c8e1cab350b",
+          "size": 2257970,
+          "size_bytes": 2257970,
           "tags": [
             "cp310",
             "abi3",
             "win_amd64"
           ],
-          "url": "https://files.pythonhosted.org/packages/19/fb/ac271b8013ff4f386ddce86cab080b8c6352d3efa45e8b2285d246eed318/tree_sitter_language_pack-1.12.5-cp310-abi3-win_amd64.whl"
+          "url": "https://files.pythonhosted.org/packages/92/d0/9ebe21280bbe31fe0d7a2885837c616304eabf05fe5f74dfa973b54eccc6/tree_sitter_language_pack-1.22.1-cp310-abi3-win_amd64.whl"
         },
         {
-          "filename": "tree_sitter_language_pack-1.12.5-cp310-abi3-win_arm64.whl",
+          "filename": "tree_sitter_language_pack-1.22.1-cp310-abi3-win_arm64.whl",
           "platform": "windows-arm64",
-          "sha256": "41399bdd45eb4ced5840ddf1d44aa02fe69763c867bd7286aa20d182bfe397af",
-          "size": 1984602,
-          "size_bytes": 1984602,
+          "sha256": "34e4e7a77d02d102abf95c7b088962fcd56825bd48eabbe80f93e1d43665e7ad",
+          "size": 2164528,
+          "size_bytes": 2164528,
           "tags": [
             "cp310",
             "abi3",
             "win_arm64"
           ],
-          "url": "https://files.pythonhosted.org/packages/79/80/fbe56f84daec7fec163023f6e8865969e8873ec42b85241c750953320e1f/tree_sitter_language_pack-1.12.5-cp310-abi3-win_arm64.whl"
+          "url": "https://files.pythonhosted.org/packages/80/76/8bcee4c731ef0e6e610491b3614a45e63aa9550d99e951d9a14fa314da57/tree_sitter_language_pack-1.22.1-cp310-abi3-win_arm64.whl"
         }
       ],
       "name": "tree-sitter-language-pack",
-      "version": "1.12.5"
+      "version": "1.22.1"
     }
   ],
   "parser_manifest": {
@@ -512,40 +515,40 @@
     },
     "platforms": {
       "linux-glibc-arm64": {
-        "sha256": "b97e7b8f56c2193450504a845df925e3a6ebfd3804c83e9133e0e9b3fbe5e08e",
-        "size": 18248716,
-        "url": "https://github.com/xberg-io/tree-sitter-language-pack/releases/download/v1.12.5/parsers-linux-aarch64.tar.zst"
+        "sha256": "90bbdaae7d4ecca68d8c2c6396006c24b1151d5cdd2485b9933e60ec64494cbc",
+        "size": 22610185,
+        "url": "https://github.com/xberg-io/tree-sitter-language-pack/releases/download/v1.22.1/parsers-linux-aarch64.tar.zst"
       },
       "linux-glibc-x86_64": {
-        "sha256": "c93b39b2fca1202d0b92c70fd26383bf2fd9347791a86ae7c5cbd599a2cc5366",
-        "size": 18656179,
-        "url": "https://github.com/xberg-io/tree-sitter-language-pack/releases/download/v1.12.5/parsers-linux-x86_64.tar.zst"
+        "sha256": "4ad211e4a265be2106909ef9db4ccdc706e557436a446fbc10afbf23d668a2a5",
+        "size": 23031807,
+        "url": "https://github.com/xberg-io/tree-sitter-language-pack/releases/download/v1.22.1/parsers-linux-x86_64.tar.zst"
       },
       "macos-arm64": {
-        "sha256": "dcf73ccc9f42df530145fdfeb17acf17f97f7ee9fddd035e2ca1256ddd79e5c3",
-        "size": 20918403,
-        "url": "https://github.com/xberg-io/tree-sitter-language-pack/releases/download/v1.12.5/parsers-macos-arm64.tar.zst"
+        "sha256": "9931ad24c0714c6ebe73554f8ad981928902d3d4ea0b2bcd6365078591f47705",
+        "size": 26174298,
+        "url": "https://github.com/xberg-io/tree-sitter-language-pack/releases/download/v1.22.1/parsers-macos-arm64.tar.zst"
       },
       "macos-x86_64": {
-        "sha256": "f728273fb22871f455c9d615598dfdfa634895c0b4a5efa6e420a0d7565cf86b",
-        "size": 18270657,
-        "url": "https://github.com/xberg-io/tree-sitter-language-pack/releases/download/v1.12.5/parsers-macos-x86_64.tar.zst"
+        "sha256": "4ec855e1d1543d9db8e3d566a773ebd1951f40ea3eb1543a5818c1fbe26013d1",
+        "size": 22477604,
+        "url": "https://github.com/xberg-io/tree-sitter-language-pack/releases/download/v1.22.1/parsers-macos-x86_64.tar.zst"
       },
       "windows-arm64": {
-        "sha256": "4b1502f602e133181b347e791e83fc9a05dc6c9e1c7987038079e4df483e810e",
-        "size": 17656165,
-        "url": "https://github.com/xberg-io/tree-sitter-language-pack/releases/download/v1.12.5/parsers-windows-aarch64.tar.zst"
+        "sha256": "26039431dc69e93f3854c9d50a9f009883138d501377f2a13cad00b55a72171b",
+        "size": 21611485,
+        "url": "https://github.com/xberg-io/tree-sitter-language-pack/releases/download/v1.22.1/parsers-windows-aarch64.tar.zst"
       },
       "windows-x86_64": {
-        "sha256": "f29c8aafd69a4d6166120e1ee8104282f84f4c3115cc1b71b60e5c63aec099e9",
-        "size": 18039033,
-        "url": "https://github.com/xberg-io/tree-sitter-language-pack/releases/download/v1.12.5/parsers-windows-x86_64.tar.zst"
+        "sha256": "cf1678064b61052327dcd417640c79bce9ef142dbe182bc4c641e6ff6ecb732d",
+        "size": 22021182,
+        "url": "https://github.com/xberg-io/tree-sitter-language-pack/releases/download/v1.22.1/parsers-windows-x86_64.tar.zst"
       }
     },
     "provider": "tree-sitter-language-pack",
-    "source": "https://github.com/xberg-io/tree-sitter-language-pack/releases/tag/v1.12.5"
+    "source": "https://github.com/xberg-io/tree-sitter-language-pack/releases/tag/v1.22.1"
   },
-  "runtime_version": "0.8.0",
+  "runtime_version": "0.9.0",
   "schema_version": 1,
   "tree_sitter_version": "0.26.0"
 }

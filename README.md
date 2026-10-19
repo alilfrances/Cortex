@@ -21,7 +21,7 @@ Current package and plugin metadata is `0.10.0` (`pyproject.toml` and plugin man
 
 ## Install
 
-Requires Python 3.11+ on PATH as `python3`. Normal pip wheel/editable installs include the pinned `tree-sitter==0.26.0` and `tree-sitter-language-pack==1.12.5`. Marketplace/plugin launches bootstrap those parsers into a plugin-owned isolated runtime on first MCP launch, without modifying system Python or the repository. A failed setup is visible and fail-open: Cortex continues in regex/degraded mode.
+Requires Python 3.11+ on PATH as `python3`. Normal pip wheel/editable installs include the pinned `tree-sitter==0.26.0` and `tree-sitter-language-pack==1.22.1`. Marketplace/plugin launches bootstrap those parsers into a plugin-owned isolated runtime on first MCP launch, without modifying system Python or the repository. A failed setup is visible and fail-open: Cortex continues in regex/degraded mode.
 
 ### Claude Code
 

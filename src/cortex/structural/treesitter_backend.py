@@ -63,17 +63,8 @@ def _language_for_suffix(suffix: str) -> Any:
     # contains every grammar Cortex dispatches, including separate TSX/QMLJS
     # variants. Parser loading is cache-only; failures select the regex
     # fallback at the structural dispatcher.
-    import os
-    import tree_sitter_language_pack as pack
-    cache = os.environ.get("CORTEX_PARSER_CACHE")
-    if not cache:
-        from ..runtime import configure_parser_environment
-        verified = configure_parser_environment()
-        cache = str(verified / "parser-cache") if verified else None
-    if not cache:
-        raise RuntimeError("managed parser runtime is not ready")
-    pack.configure(pack.PackConfig(cache_dir=cache, languages=[]))
-    return pack.get_language(_PACK_NAMES[suffix])
+    from ..runtime import language_pack
+    return language_pack().get_language(_PACK_NAMES[suffix])
 
 
 def _parser_for_language(language: Any) -> Any:
