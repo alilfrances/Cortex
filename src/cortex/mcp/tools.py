@@ -1726,13 +1726,33 @@ def _call_risk(arguments: dict[str, Any]) -> dict[str, Any]:
     return _content(_format_payload(result, status, response_format), is_error=result.get("status") == "error")
 
 
-def _call_dead_code(arguments: dict[str, Any]) -> dict[str, Any]:
-    repo_root = _repo_root(arguments)
-    store, error = _store_or_error(repo_root)
-    if error is not None:
-        return _content(error, is_error=True)
-    assert store is not None
-    status = _ensure_fresh(store, repo_root)
+_DEAD_CODE_ANALYSIS_CACHE_VERSION = 1
+
+
+def _dead_code_analysis(store: CortexStore, repo_root: Path, fingerprint: str, budget: int) -> dict[str, Any]:
+    """Dead-code findings for the current index, reusing earlier work.
+
+    The overview analysis already runs `analyze_dead_code` at the default
+    reference budget and caches it under the same fingerprint, so a dead-code
+    call after an overview (or a repeat call) costs nothing. A partial result
+    is never cached.
+    """
+    reference_budget = max(2000, budget)
+    if reference_budget == 2000:
+        cached = _cache_get(store, repo_root, _overview_analysis_cache_key(fingerprint))
+        if (
+            isinstance(cached, dict)
+            and cached.get("version") == _OVERVIEW_ANALYSIS_CACHE_VERSION
+            and _is_overview_analysis(cached.get("analysis"))
+            and not cached["analysis"].get("dead_code_partial", False)
+        ):
+            return {"repo_path": str(repo_root), "findings": list(cached["analysis"]["dead_code"]), "partial": False}
+    key = _cache_key(
+        fingerprint, "cortex_dead_code_analysis", {"budget": reference_budget, "v": _DEAD_CODE_ANALYSIS_CACHE_VERSION}
+    )
+    cached = _cache_get(store, repo_root, key)
+    if isinstance(cached, dict) and isinstance(cached.get("findings"), list):
+        return {"repo_path": str(repo_root), "findings": cached["findings"], "partial": False}
     nodes, edges = store.fetch_graph(repo_root)
     result = analyze_dead_code(
         repo_root,
@@ -1740,10 +1760,24 @@ def _call_dead_code(arguments: dict[str, Any]) -> dict[str, Any]:
         store=store,
         nodes=nodes,
         edges=edges,
-        budget=int(arguments.get("budget", 2000)),
+        budget=budget,
         should_stop=_analysis_should_stop(),
     )
-    result = truncate_dead_code_result(result, int(arguments.get("budget", 2000)))
+    if not result.get("partial"):
+        _cache_set(store, repo_root, key, {"findings": result["findings"]})
+    return result
+
+
+def _call_dead_code(arguments: dict[str, Any]) -> dict[str, Any]:
+    repo_root = _repo_root(arguments)
+    store, error = _store_or_error(repo_root)
+    if error is not None:
+        return _content(error, is_error=True)
+    assert store is not None
+    status = _ensure_fresh(store, repo_root)
+    budget = int(arguments.get("budget", 2000))
+    result = _dead_code_analysis(store, repo_root, status["current_fingerprint"], budget)
+    result = truncate_dead_code_result(result, budget)
     if result.get("partial"):
         result["note"] = _PARTIAL_ANALYSIS_NOTE
     else:
