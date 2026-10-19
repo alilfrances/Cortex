@@ -48,6 +48,13 @@ AUX_PATH_DEMOTION = 0.5
 # restate the UI text) but never implement behaviour, so they are demoted harder
 # unless the task is about translation or locales.
 LOCALE_PATH_DEMOTION = 0.25
+# Files connected by a resolved call or inheritance edge to one of the best-matching
+# files are lifted to at least this score (scaled by how strong the match is), so a
+# base class, a callee or a caller whose own text shares no word with the task can
+# still enter the bundle. Kept below PATH_MATCH_BONUS so it never beats a real
+# name or path hit.
+CALL_EXPANSION_BONUS = 20.0
+CALL_EXPANSION_SEEDS = 8
 LOCALE_PATH_RE = re.compile(r'(^|/)(i18n|l10n|locales?|translations?)(/|$)')
 LOCALE_SUFFIXES = frozenset({'.ts', '.po', '.pot', '.xlf', '.xliff', '.qm'})
 LOCALE_INTENT_TERMS = {
@@ -123,6 +130,26 @@ def _is_locale_source(path: str, kind: str) -> bool:
     if suffix == '.ts':
         return kind != 'code'
     return bool(LOCALE_PATH_RE.search(path)) or suffix in LOCALE_SUFFIXES
+
+
+def _call_graph_file_neighbors(nodes: list[GraphNode], edges: list[GraphEdge]) -> dict[str, set[str]]:
+    """File -> files linked to it by a resolved `calls` or `inherits` edge.
+
+    Only edges whose endpoints are both known symbols count; `name:`/`module:`
+    targets are unresolved and same-file pairs add nothing.
+    """
+    file_of = {node.node_id: node.source_ref for node in nodes if node.granularity == 'symbol'}
+    neighbors: defaultdict[str, set[str]] = defaultdict(set)
+    for edge in edges:
+        if edge.relation not in ('calls', 'inherits'):
+            continue
+        source_file = file_of.get(edge.source)
+        target_file = file_of.get(edge.target)
+        if source_file is None or target_file is None or source_file == target_file:
+            continue
+        neighbors[source_file].add(target_file)
+        neighbors[target_file].add(source_file)
+    return neighbors
 
 
 def _is_aux_path(path: str) -> bool:
@@ -728,6 +755,24 @@ def generate_bundle(
         source_scores[source.path] = score
 
     check_deadline()
+    top_score = max(source_scores.values(), default=0.0)
+    if top_score > 0:
+        file_neighbors = _call_graph_file_neighbors(nodes, edges)
+        seeds = sorted(
+            ((path, score) for path, score in source_scores.items() if score > 0),
+            key=lambda item: (-item[1], item[0]),
+        )[:CALL_EXPANSION_SEEDS]
+        kind_by_path = {source.path: source.kind for source in sources}
+        for path, score in seeds:
+            bonus = CALL_EXPANSION_BONUS * (score / top_score)
+            for neighbor in sorted(file_neighbors.get(path, ())):
+                if neighbor not in source_scores or source_scores[neighbor] >= bonus:
+                    continue
+                if demote_aux and _is_aux_path(neighbor):
+                    continue
+                if demote_locale and _is_locale_source(neighbor, kind_by_path.get(neighbor, 'code')):
+                    continue
+                source_scores[neighbor] = bonus
     seed_scores = {f'file:{path}': score for path, score in source_scores.items() if score > 0}
     if rank == 'bfs':
         proximity = _bfs_proximity(set(seed_scores), adj, max_depth=2)
