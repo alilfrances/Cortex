@@ -19,6 +19,11 @@ _GRAPH_RELATIONS = {"calls", "imports", "inherits", "references", "reads", "writ
 _QT_RELATIONS = {"connects", "emits", "handles", "instantiates", "binds"}
 _QT_KINDS = {"signal", "slot", "handler", "property", "id", "binding", "enum", "enum_member", "module"}
 _COMMENT_PREFIXES = ("#", "//", "/*", "*", "*/", "<!--", "///")
+# QML symbol kinds that record a use or a local, never a definition someone could
+# delete: property bindings and attached-property settings (`ScrollBar.vertical:`),
+# references to external types, module imports, function parameters and `id:`
+# names. Reporting them as unreferenced is always a false positive.
+_NON_DEFINITION_QML_KINDS = frozenset({"binding", "external", "import", "parameter", "id"})
 
 
 def _is_test_path(path: str) -> bool:
@@ -297,6 +302,8 @@ def analyze_dead_code(
         if _is_test_path(node.source_ref) or _is_dunder_or_entry_point(node) or node.label in reexports:
             continue
         if node.metadata.get("qt") == "handler":
+            continue
+        if node.metadata.get("qml_kind") in _NON_DEFINITION_QML_KINDS:
             continue
         if context.is_decorated(node.source_ref, node.span_start):
             continue

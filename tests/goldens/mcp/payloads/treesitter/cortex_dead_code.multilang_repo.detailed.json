@@ -30,13 +30,6 @@
     {
       "confidence": "high",
       "file": "Main.qml",
-      "line": 1,
-      "reason": "no incoming edges; no grep refs",
-      "symbol": "QtQuick"
-    },
-    {
-      "confidence": "high",
-      "file": "Main.qml",
       "line": 6,
       "reason": "no incoming edges; no grep refs",
       "symbol": "launch"
@@ -156,7 +149,7 @@
   ],
   "refresh_hint": "",
   "repo_path": "<repo>",
-  "returned_count": 21,
+  "returned_count": 20,
   "stale": false,
   "truncated": false
 }
