@@ -9,7 +9,7 @@ user-invocable: false
 Establish the change boundary before editing.
 
 1. Call `cortex_context` once with all known files and symbols. Prefer one batched call over separate lookups; request optional impact, co-change, or symbol detail only when compact cards are insufficient.
-2. Call `cortex_impact` on the primary file to inspect structural and historical coupling, likely tests, and related modules.
+2. Call `cortex_impact` on the primary file to inspect structural and historical coupling, likely tests, and related modules. Impact includes cross-file call fan-in and fan-out: a `why` entry with `symbol: "caller -> callee"` names the resolved call (or signal/build edge) behind a neighbor. Unresolved `name:` calls (external, untyped, or ambiguous receivers) add nothing, so confirm fan-in with `cortex_references` before relying on an empty impact list.
 3. Use `cortex_references` for cross-language, config, documentation, script, and parser-missed references. Pass `mode: "writes"` when locating definitions and mutation sites.
 4. Use `cortex_relations` or `cortex_path` when direct or multi-hop graph wiring affects the change. For Qt/QML or build changes, inspect the relevant runtime and build relations rather than assuming grep coverage is complete.
 5. Read exact affected spans with `cortex_read_symbol` or indexed files with `cortex_read_file` before editing.

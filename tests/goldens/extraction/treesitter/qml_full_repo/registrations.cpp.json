@@ -1,0 +1,136 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:registrations.cpp:contains:Widget",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "registrations.cpp"
+      },
+      "relation": "contains",
+      "source": "file:registrations.cpp",
+      "target": "symbol:registrations.cpp:Widget",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "regex:registrations.cpp:runtime-register:3:qmlRegisterType:Widget",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "class_name": "Widget",
+        "lineno": 3,
+        "major": "1",
+        "minor": "0",
+        "qml_name": "Widget",
+        "registration": "qmlRegisterType",
+        "source_file": "registrations.cpp",
+        "uri": "Demo.Controls"
+      },
+      "relation": "registers",
+      "source": "file:registrations.cpp",
+      "target": "module:Widget",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:registrations.cpp:calls:registerTypes:qmlRegisterType:3",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "qmlRegisterType",
+        "enclosing_class": null,
+        "lineno": 3,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "registrations.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:registrations.cpp:registerTypes",
+      "target": "name:qmlRegisterType",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:registrations.cpp:contains:registerTypes",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "registrations.cpp"
+      },
+      "relation": "contains",
+      "source": "file:registrations.cpp",
+      "target": "symbol:registrations.cpp:registerTypes",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:registrations.cpp:import:1:Widget.hpp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "registrations.cpp"
+      },
+      "relation": "imports",
+      "source": "file:registrations.cpp",
+      "target": "file:Widget.hpp",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "registrations.cpp",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "cpp",
+        "size_bytes": 109
+      },
+      "node_id": "file:registrations.cpp",
+      "signature": "",
+      "source_ref": "registrations.cpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Widget",
+      "metadata": {
+        "lineno": 3,
+        "major": "1",
+        "minor": "0",
+        "parser_backend": "treesitter",
+        "qml_kind": "registered_type",
+        "qml_name": "Widget",
+        "qt": "qml_element",
+        "registration": "qmlRegisterType",
+        "uri": "Demo.Controls"
+      },
+      "node_id": "symbol:registrations.cpp:Widget",
+      "signature": "Widget",
+      "source_ref": "registrations.cpp",
+      "span_end": 3,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "registerTypes",
+      "metadata": {
+        "lineno": 2,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:registrations.cpp:registerTypes",
+      "signature": "void registerTypes() {",
+      "source_ref": "registrations.cpp",
+      "span_end": 4,
+      "span_start": 2
+    }
+  ]
+}

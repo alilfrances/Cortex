@@ -28,7 +28,7 @@ Use the Cortex MCP tools provided by the plugin's MCP server as the primary expl
 
 1. Locate the relevant code with `cortex_search_symbols` for named symbols and `cortex_search_text` for body text, comments, or prose. Use `cortex_query` when the question is broad.
 2. Read only the relevant context with `cortex_read_symbol` for exact numbered symbol spans or `cortex_context` for batched triage cards.
-3. Trace one-hop structure and blast radius with `cortex_impact`, `cortex_relations`, and `cortex_references`; use `cortex_path` when the question asks how one resolved symbol reaches another across multiple structural hops.
+3. Trace one-hop structure and blast radius with `cortex_impact`, `cortex_relations`, and `cortex_references`; use `cortex_path` when the question asks how one resolved symbol reaches another across multiple structural hops. For call-graph questions ("who calls X", "what does Y call"), use `cortex_relations` with `relation: "calls"`; a `name:<callee> (ambiguous: N candidates)` target is unresolved, so request `response_format: "detailed"` for the candidates and say which one the evidence supports instead of picking silently.
 
 For Qt signal/slot questions such as "which slot receives signal X?", use `cortex_relations`/`cortex_path`/`cortex_references` edges (`connects`, `emits`, and `handles`), not a grep for `connect(`. Pass `mode: "writes"` to `cortex_references` for mutation-only questions.
 

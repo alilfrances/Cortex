@@ -1,0 +1,51 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:engine.hpp:contains:EngineCore",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "engine.hpp"
+      },
+      "relation": "contains",
+      "source": "file:engine.hpp",
+      "target": "symbol:engine.hpp:EngineCore",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "engine.hpp",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "hpp",
+        "size_bytes": 92
+      },
+      "node_id": "file:engine.hpp",
+      "signature": "",
+      "source_ref": "engine.hpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "EngineCore",
+      "metadata": {
+        "lineno": 4,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:engine.hpp:EngineCore",
+      "signature": "class EngineCore {",
+      "source_ref": "engine.hpp",
+      "span_end": 7,
+      "span_start": 4
+    }
+  ]
+}

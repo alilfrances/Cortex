@@ -1,0 +1,86 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:main.go:calls:Run:fmt.Println:6",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Println",
+        "enclosing_class": null,
+        "lineno": 6,
+        "receiver": "fmt",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "fmt",
+        "scope_dir": null,
+        "scope_file": null,
+        "scope_namespace": true,
+        "source_file": "main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:main.go:Run",
+      "target": "name:Println",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:main.go:contains:Run",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "main.go"
+      },
+      "relation": "contains",
+      "source": "file:main.go",
+      "target": "symbol:main.go:Run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:main.go:import:3:fmt",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "main.go"
+      },
+      "relation": "imports",
+      "source": "file:main.go",
+      "target": "module:fmt",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "main.go",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "go",
+        "size_bytes": 63
+      },
+      "node_id": "file:main.go",
+      "signature": "",
+      "source_ref": "main.go",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "Run",
+      "metadata": {
+        "lineno": 5,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:main.go:Run",
+      "signature": "func Run() {",
+      "source_ref": "main.go",
+      "span_end": 7,
+      "span_start": 5
+    }
+  ]
+}

@@ -231,6 +231,14 @@ def build_parser() -> argparse.ArgumentParser:
     risk_parser.add_argument("--staged", action="store_true", help="Analyze the staged index instead of the default commit range")
     risk_parser.add_argument("--format", choices=("text", "json"), default="text")
     risk_parser.add_argument("--db", type=Path, default=None)
+    risk_parser.add_argument(
+        "--tests-only",
+        action="store_true",
+        help=(
+            "Print only the impacted test paths (tests_to_run), one per line, for piping into a runner; "
+            "prints nothing and exits 2 when the full suite should run (tests_run_all) or analysis failed"
+        ),
+    )
 
     graph_parser = subparsers.add_parser("graph", help="Export or view the Cortex graph")
     graph_subparsers = graph_parser.add_subparsers(dest="graph_action", required=True)
@@ -395,6 +403,19 @@ def main() -> None:
             staged=args.staged,
             db_path=args.db,
         )
+        if args.tests_only:
+            if result.get("status") == "error":
+                print(
+                    f"Risk analysis error ({result.get('error', 'analysis_error')}): {result.get('message', '')}",
+                    file=sys.stderr,
+                )
+                raise SystemExit(2)
+            if result.get("tests_run_all"):
+                print(f"tests_run_all: {result.get('tests_run_all_reason', '')}", file=sys.stderr)
+                raise SystemExit(2)
+            for item in result.get("tests_to_run", []):
+                print(item["test"])
+            return
         if args.format == "json":
             print(json.dumps(result, indent=2, sort_keys=True))
         else:
@@ -414,6 +435,8 @@ def main() -> None:
                     )
                 if result.get("unindexed_files"):
                     print(f"Unindexed files: {', '.join(result['unindexed_files'])}")
+                if result.get("tests_run_all"):
+                    print(f"Run all tests: {result.get('tests_run_all_reason', '')}")
         return
 
     if args.command == "graph":

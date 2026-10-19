@@ -1,0 +1,80 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Bar.java:contains:Bar",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "java/Bar.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Bar.java",
+      "target": "symbol:java/Bar.java:Bar",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Bar.java:contains:n",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "java/Bar.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Bar.java",
+      "target": "symbol:java/Bar.java:n",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "java/Bar.java",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "java",
+        "size_bytes": 49
+      },
+      "node_id": "file:java/Bar.java",
+      "signature": "",
+      "source_ref": "java/Bar.java",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Bar",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/Bar.java:Bar",
+      "signature": "public class Bar {",
+      "source_ref": "java/Bar.java",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "n",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 2,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/Bar.java:n",
+      "signature": "public void n() {",
+      "source_ref": "java/Bar.java",
+      "span_end": 3,
+      "span_start": 2
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "first_item_keys": {
+    "confidence_notes": null,
+    "items": [
+      "content",
+      "item_id",
+      "kind",
+      "metadata",
+      "path",
+      "score",
+      "title",
+      "token_count",
+      "why"
+    ],
+    "open_questions": null
+  },
+  "keys": [
+    "_meta",
+    "budget",
+    "confidence_notes",
+    "current_fingerprint",
+    "fingerprint",
+    "generated_at",
+    "items",
+    "open_questions",
+    "refresh_hint",
+    "repo_path",
+    "stale",
+    "task",
+    "token_stats",
+    "total_tokens"
+  ]
+}

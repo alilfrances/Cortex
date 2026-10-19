@@ -1,0 +1,107 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:go/store.go:contains:M",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 10,
+        "source_file": "go/store.go"
+      },
+      "relation": "contains",
+      "source": "file:go/store.go",
+      "target": "symbol:go/store.go:M",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:go/store.go:contains:Save",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 7,
+        "source_file": "go/store.go"
+      },
+      "relation": "contains",
+      "source": "file:go/store.go",
+      "target": "symbol:go/store.go:Save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:go/store.go:contains:shared",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 13,
+        "source_file": "go/store.go"
+      },
+      "relation": "contains",
+      "source": "file:go/store.go",
+      "target": "symbol:go/store.go:shared",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "go/store.go",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "go",
+        "size_bytes": 120
+      },
+      "node_id": "file:go/store.go",
+      "signature": "",
+      "source_ref": "go/store.go",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "M",
+      "metadata": {
+        "lineno": 10,
+        "parser_backend": "treesitter",
+        "qualifier": "Foo"
+      },
+      "node_id": "symbol:go/store.go:M",
+      "signature": "func (f Foo) M() {",
+      "source_ref": "go/store.go",
+      "span_end": 11,
+      "span_start": 10
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "Save",
+      "metadata": {
+        "lineno": 7,
+        "parser_backend": "treesitter",
+        "qualifier": "Repo"
+      },
+      "node_id": "symbol:go/store.go:Save",
+      "signature": "func (r *Repo) Save() {",
+      "source_ref": "go/store.go",
+      "span_end": 8,
+      "span_start": 7
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "shared",
+      "metadata": {
+        "lineno": 13,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:go/store.go:shared",
+      "signature": "func shared() {",
+      "source_ref": "go/store.go",
+      "span_end": 14,
+      "span_start": 13
+    }
+  ]
+}

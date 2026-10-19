@@ -1,0 +1,248 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/store.rs:contains:Bar",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "rust/src/store.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/store.rs",
+      "target": "symbol:rust/src/store.rs:Bar",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/store.rs:contains:Foo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "rust/src/store.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/store.rs",
+      "target": "symbol:rust/src/store.rs:Foo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/store.rs:contains:Repo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "rust/src/store.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/store.rs",
+      "target": "symbol:rust/src/store.rs:Repo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/store.rs:contains:default",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 20,
+        "source_file": "rust/src/store.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/store.rs",
+      "target": "symbol:rust/src/store.rs:default",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/store.rs:contains:m",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 15,
+        "source_file": "rust/src/store.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/store.rs",
+      "target": "symbol:rust/src/store.rs:m",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/store.rs:contains:n",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 24,
+        "source_file": "rust/src/store.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/store.rs",
+      "target": "symbol:rust/src/store.rs:n",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/store.rs:contains:new",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 11,
+        "source_file": "rust/src/store.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/store.rs",
+      "target": "symbol:rust/src/store.rs:new",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:rust/src/store.rs:contains:save",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "rust/src/store.rs"
+      },
+      "relation": "contains",
+      "source": "file:rust/src/store.rs",
+      "target": "symbol:rust/src/store.rs:save",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "rust/src/store.rs",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "rs",
+        "size_bytes": 273
+      },
+      "node_id": "file:rust/src/store.rs",
+      "signature": "",
+      "source_ref": "rust/src/store.rs",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Bar",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 3,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:rust/src/store.rs:Bar",
+      "signature": "pub struct Bar;",
+      "source_ref": "rust/src/store.rs",
+      "span_end": 3,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Foo",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 2,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:rust/src/store.rs:Foo",
+      "signature": "pub struct Foo;",
+      "source_ref": "rust/src/store.rs",
+      "span_end": 2,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Repo",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:rust/src/store.rs:Repo",
+      "signature": "pub struct Repo;",
+      "source_ref": "rust/src/store.rs",
+      "span_end": 1,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "default",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 20,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:rust/src/store.rs:default",
+      "signature": "pub fn default() -> Bar {",
+      "source_ref": "rust/src/store.rs",
+      "span_end": 22,
+      "span_start": 20
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "m",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 15,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:rust/src/store.rs:m",
+      "signature": "pub fn m(&self) {",
+      "source_ref": "rust/src/store.rs",
+      "span_end": 16,
+      "span_start": 15
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "n",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 24,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:rust/src/store.rs:n",
+      "signature": "pub fn n(&self) {",
+      "source_ref": "rust/src/store.rs",
+      "span_end": 25,
+      "span_start": 24
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "new",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 11,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:rust/src/store.rs:new",
+      "signature": "pub fn new() -> Foo {",
+      "source_ref": "rust/src/store.rs",
+      "span_end": 13,
+      "span_start": 11
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "save",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 6,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:rust/src/store.rs:save",
+      "signature": "pub fn save(&self) {",
+      "source_ref": "rust/src/store.rs",
+      "span_end": 7,
+      "span_start": 6
+    }
+  ]
+}

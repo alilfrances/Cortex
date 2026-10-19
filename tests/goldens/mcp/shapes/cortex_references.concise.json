@@ -1,0 +1,10 @@
+{
+  "first_item_keys": {},
+  "keys": [
+    "items",
+    "repo_path",
+    "returned_count",
+    "stale",
+    "truncated"
+  ]
+}

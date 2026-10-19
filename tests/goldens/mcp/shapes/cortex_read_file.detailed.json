@@ -1,0 +1,19 @@
+{
+  "first_item_keys": {},
+  "keys": [
+    "_meta",
+    "body",
+    "current_fingerprint",
+    "fingerprint",
+    "kind",
+    "mode",
+    "path",
+    "refresh_hint",
+    "repo_path",
+    "skeletonized",
+    "stale",
+    "symbol_count",
+    "token_count",
+    "truncated"
+  ]
+}

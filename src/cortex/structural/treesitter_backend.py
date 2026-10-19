@@ -4,7 +4,7 @@ from pathlib import PurePosixPath
 from typing import Any
 
 from ..models import GraphEdge, GraphNode
-from . import regex_backend
+from . import call_sites, regex_backend
 
 _PACK_NAMES = {
     ".js": "javascript", ".jsx": "javascript", ".ts": "typescript", ".tsx": "tsx",
@@ -131,6 +131,10 @@ def _identifier_text(node: Any, source: bytes) -> str:
     if node.type in {
         "identifier",
         "property_identifier",
+        # ES2022 `#private` class members (`#add() {}`); without it the walk fell
+        # through to the next identifier child and mislabeled the method after a
+        # generic parameter / return type (sindresorhus/p-queue `async #add<T>()`).
+        "private_property_identifier",
         "type_identifier",
         "constant",
         "simple_identifier",
@@ -296,6 +300,68 @@ def _qml_instantiates_edge(
     )
 
 
+def _extract_ruby_method_symbols(
+    path: str,
+    source: bytes,
+    root: Any,
+    file_node_id: str,
+    nodes: list[GraphNode],
+    edges: list[GraphEdge],
+    seen_symbols: set[str],
+    def_symbols: dict[tuple[int, int], str],
+) -> None:
+    """`def` / `def self.x` symbols (the generic table has no Ruby `method` node type).
+
+    Runs after the class/module pass so it can only *add* symbols: a method whose bare name is
+    already taken (by a class or by an earlier method) is not a new node, and ids keep the
+    `symbol:<path>:<name>` scheme (same-named methods of different classes in one file share a
+    node, like every other language).  Ownership is lexical: the class/module span contains it.
+    """
+    method_ids: set[str] = set()
+    for node in _iter_nodes(root):
+        if node.type not in {"method", "singleton_method"}:
+            continue
+        name_node = node.child_by_field_name("name")
+        if name_node is None:
+            continue
+        name = _node_text(name_node, source)
+        symbol_id = f"symbol:{path}:{name}"
+        key = (node.start_byte, node.end_byte)
+        if name in seen_symbols:
+            if symbol_id in method_ids:
+                def_symbols.setdefault(key, symbol_id)  # same-named method: calls attributed to the shared node
+            continue
+        seen_symbols.add(name)
+        method_ids.add(symbol_id)
+        def_symbols[key] = symbol_id
+        line = node.start_point[0] + 1
+        nodes.append(
+            GraphNode(
+                node_id=symbol_id,
+                kind="func",
+                label=name,
+                source_ref=path,
+                granularity="symbol",
+                signature=_signature(node, source),
+                span_start=line,
+                span_end=node.end_point[0] + 1,
+                metadata={"lineno": line},
+            )
+        )
+        edges.append(
+            GraphEdge(
+                edge_id=f"treesitter:{path}:contains:{name}",
+                source=file_node_id,
+                target=symbol_id,
+                relation="contains",
+                layer="STRUCTURAL",
+                confidence="EXTRACTED",
+                weight=1.0,
+                metadata={"lineno": line, "source_file": path},
+            )
+        )
+
+
 def extract_treesitter_edges(
     path: str,
     content: str,
@@ -318,6 +384,8 @@ def extract_treesitter_edges(
     nodes: list[GraphNode] = []
     edges: list[GraphEdge] = []
     seen_symbols: set[str] = set()
+    def_symbols: dict[tuple[int, int], str] = {}
+    def_qualifiers: dict[tuple[int, int], str] = {}
     qml_object_index = 0
 
     if suffix == ".qml":
@@ -356,15 +424,37 @@ def extract_treesitter_edges(
         member_name = ""
         if suffix in _CPP_SUFFIXES and node.type == "function_definition":
             qualifier, member_name = _cpp_member_for_definition(node, source)
+        if qualifier is None and suffix in {".go", ".rs", ".swift"}:
+            qualifier = call_sites.method_qualifier(suffix, node, source)
         name = member_name or _name_for_node(node, source)
+        if name and name in seen_symbols:
+            # Same-named definitions share one node (documented non-goal); calls
+            # inside the duplicate are attributed to that node.
+            def_symbols.setdefault((node.start_byte, node.end_byte), f"symbol:{path}:{name}")
+            if qualifier:
+                def_qualifiers[(node.start_byte, node.end_byte)] = qualifier
         if not name or name in seen_symbols:
             continue
         seen_symbols.add(name)
         line = node.start_point[0] + 1
         symbol_id = f"symbol:{path}:{name}"
+        def_symbols[(node.start_byte, node.end_byte)] = symbol_id
+        if qualifier:
+            def_qualifiers[(node.start_byte, node.end_byte)] = qualifier
         metadata: dict[str, Any] = {"lineno": line}
         if qualifier:
             metadata["qualifier"] = qualifier
+        if suffix in _CPP_SUFFIXES | {".c"} and node.type in {"class_specifier", "struct_specifier"}:
+            member_types = call_sites.cpp_member_types(node, source)
+            if member_types:
+                # Declared member types let the call resolver type `m_x->f()` in an
+                # out-of-line `Foo::bar()` whose class body lives in this file.
+                metadata["member_types"] = member_types
+        if suffix in {".js", ".jsx", ".ts", ".tsx", ".java", ".swift", ".rb"} and _DEF_TYPES[node.type] == "class":
+            bases = call_sites.class_bases(suffix, node, source)
+            if bases:
+                # These extractors emit no `inherits` edges; the resolver reads bases here.
+                metadata["bases"] = bases
         nodes.append(
             GraphNode(
                 node_id=symbol_id,
@@ -392,6 +482,29 @@ def extract_treesitter_edges(
         )
         if suffix in _CPP_SUFFIXES and node.type in {"class_specifier", "struct_specifier"}:
             _extract_cpp_inheritance_edges(path, node, source, symbol_id, name, edges)
+
+    if suffix == ".rb":
+        _extract_ruby_method_symbols(path, source, root, file_node_id, nodes, edges, seen_symbols, def_symbols)
+
+    if call_sites.supports_calls(suffix):
+        # Additive pass: describes call sites only; resolution is callresolve's job.
+        # Runs before the Qt regex pass so `emit`/`connect` keep their own edges.
+        edges.extend(
+            call_sites.extract_calls(
+                suffix,
+                root,
+                call_sites.CallContext(
+                    path=path,
+                    source=source,
+                    file_node_id=file_node_id,
+                    def_symbols=def_symbols,
+                    def_qualifiers=def_qualifiers,
+                    name_of=_name_for_node,
+                    member_of=_cpp_member_for_definition,
+                    known_paths=known_paths,
+                ),
+            )
+        )
 
     if suffix in _CPP_SUFFIXES:
         regex_backend._extract_qt_cpp_edges(path, content, file_node_id, nodes, edges, seen_symbols, connect_names)

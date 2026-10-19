@@ -1,0 +1,92 @@
+{
+  "_meta": {
+    "cached": false,
+    "fingerprint_fresh": true
+  },
+  "budget": 2000,
+  "budget_feasible": true,
+  "findings": [
+    {
+      "confidence": "low",
+      "file": "CMakeLists.txt",
+      "line": 6,
+      "reason": "no incoming edges; regex/dynamic-language caveat",
+      "symbol": "qt_app"
+    },
+    {
+      "confidence": "low",
+      "file": "qml/DeviceDelegate.qml",
+      "line": 1,
+      "reason": "no incoming edges; grep refs in code/config",
+      "symbol": "QtQuick"
+    },
+    {
+      "confidence": "low",
+      "file": "qml/DeviceDelegate.qml",
+      "line": 8,
+      "reason": "no incoming edges; Qt meta-object or dynamic-language caveat",
+      "symbol": "anchors.fill"
+    },
+    {
+      "confidence": "high",
+      "file": "qml/DeviceDelegate.qml",
+      "line": 8,
+      "reason": "no incoming edges; no grep refs",
+      "symbol": "anchors.fill"
+    },
+    {
+      "confidence": "low",
+      "file": "qml/DeviceDelegate.qml",
+      "line": 4,
+      "reason": "no incoming edges; grep refs in code/config",
+      "symbol": "deviceId"
+    },
+    {
+      "confidence": "low",
+      "file": "qml/Main.qml",
+      "line": 4,
+      "reason": "no incoming edges; grep refs in code/config",
+      "symbol": "Main"
+    },
+    {
+      "confidence": "low",
+      "file": "qml/Main.qml",
+      "line": 1,
+      "reason": "no incoming edges; grep refs in code/config",
+      "symbol": "QtQuick"
+    },
+    {
+      "confidence": "high",
+      "file": "qml/Main.qml",
+      "line": 2,
+      "reason": "no incoming edges; no grep refs",
+      "symbol": "QtQuick.Controls"
+    },
+    {
+      "confidence": "low",
+      "file": "qml/Main.qml",
+      "line": 10,
+      "reason": "no incoming edges; Qt meta-object or dynamic-language caveat",
+      "symbol": "delegate"
+    },
+    {
+      "confidence": "low",
+      "file": "qml/Main.qml",
+      "line": 5,
+      "reason": "no incoming edges; Qt meta-object or dynamic-language caveat",
+      "symbol": "sceneReady"
+    },
+    {
+      "confidence": "low",
+      "file": "src/DeviceModel.cpp",
+      "line": 3,
+      "reason": "no incoming edges; grep refs in code/config",
+      "symbol": "DeviceModel"
+    }
+  ],
+  "refresh_hint": "",
+  "repo_path": "<repo>",
+  "returned_count": 11,
+  "stale": false,
+  "truncated": false
+}

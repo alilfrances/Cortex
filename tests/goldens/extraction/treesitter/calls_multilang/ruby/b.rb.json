@@ -1,0 +1,51 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/b.rb:contains:Widget",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "ruby/b.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/b.rb",
+      "target": "symbol:ruby/b.rb:Widget",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "ruby/b.rb",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "rb",
+        "size_bytes": 17
+      },
+      "node_id": "file:ruby/b.rb",
+      "signature": "",
+      "source_ref": "ruby/b.rb",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Widget",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:ruby/b.rb:Widget",
+      "signature": "class Widget",
+      "source_ref": "ruby/b.rb",
+      "span_end": 2,
+      "span_start": 1
+    }
+  ]
+}

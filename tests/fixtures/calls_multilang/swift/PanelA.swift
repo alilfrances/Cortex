@@ -1,0 +1,4 @@
+class Panel {
+    func draw() {
+    }
+}

@@ -1,0 +1,80 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Repo.java:contains:Repo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "java/Repo.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Repo.java",
+      "target": "symbol:java/Repo.java:Repo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Repo.java:contains:save",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "java/Repo.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Repo.java",
+      "target": "symbol:java/Repo.java:save",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "java/Repo.java",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "java",
+        "size_bytes": 53
+      },
+      "node_id": "file:java/Repo.java",
+      "signature": "",
+      "source_ref": "java/Repo.java",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Repo",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/Repo.java:Repo",
+      "signature": "public class Repo {",
+      "source_ref": "java/Repo.java",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "save",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 2,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/Repo.java:save",
+      "signature": "public void save() {",
+      "source_ref": "java/Repo.java",
+      "span_end": 3,
+      "span_start": 2
+    }
+  ]
+}

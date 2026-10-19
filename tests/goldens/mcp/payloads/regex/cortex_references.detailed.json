@@ -1,0 +1,69 @@
+{
+  "_meta": {
+    "cached": false,
+    "fingerprint_fresh": true
+  },
+  "items": {
+    "code": [
+      {
+        "access": "definition",
+        "origin": "graph",
+        "text": "include/DeviceManager.hpp:11"
+      },
+      {
+        "access": "definition",
+        "origin": "graph",
+        "text": "include/DeviceManager.hpp:14"
+      },
+      {
+        "access": "definition",
+        "origin": "graph",
+        "text": "include/DeviceModel.hpp:10"
+      },
+      {
+        "access": "definition",
+        "origin": "graph",
+        "text": "qml/DeviceDelegate.qml:4"
+      },
+      {
+        "access": "definition",
+        "origin": "graph",
+        "text": "qml/Main.qml:12"
+      },
+      {
+        "access": "definition",
+        "origin": "graph",
+        "text": "src/DeviceManager.cpp:23"
+      },
+      {
+        "access": "definition",
+        "origin": "graph",
+        "text": "src/DeviceModel.cpp:5"
+      },
+      {
+        "access": "read",
+        "origin": "grep",
+        "text": "src/DeviceManager.cpp:6"
+      },
+      {
+        "access": "read",
+        "origin": "grep",
+        "text": "src/DeviceManager.cpp:13"
+      },
+      {
+        "access": "read",
+        "origin": "grep",
+        "text": "src/DeviceManager.cpp:16"
+      }
+    ],
+    "config": [],
+    "doc": [],
+    "other": [],
+    "script": []
+  },
+  "refresh_hint": "",
+  "repo_path": "<repo>",
+  "returned_count": 10,
+  "stale": false,
+  "truncated": false
+}

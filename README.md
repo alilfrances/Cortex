@@ -4,12 +4,14 @@ Cortex is a graph-aware, local-first context engine for code agents. It ingests 
 
 The result is a repo-native context service: MCP tools for live agent queries, CLI commands for reports and exports, and local parser/runtime state. Parser setup downloads only locked artifacts; repository source is never sent during setup. Normal ingest/query is offline after setup.
 
-Current package and plugin metadata is `0.9.2` (`pyproject.toml` and plugin manifests).
+Current package and plugin metadata is `0.10.0` (`pyproject.toml` and plugin manifests).
 
 ## What Cortex Builds
 
 - STRUCTURAL layer: files, imports, definitions, symbol nodes, and contains edges.
-- COCHANGE layer: git history coupling between files changed together.
+- Call graph: `calls` edges for Python, C, C++, JavaScript, TypeScript/TSX, Go, Rust, Swift, Java, and Ruby (plus QML JavaScript). One deterministic, indexed repo-wide pass resolves each call site to a real `symbol:` id, first match wins: `scoped` (`Cls::m`, `pkg.f`, module/namespace aliases), `this` (`this`/`self`/implicit this), `declared_type` (typed locals, parameters and members, including pointers, references, smart pointers and `auto x = T(...)`/`new T`), `inherited` (bounded walk over base classes), `same_file`, `same_package` (Go), `import_scoped` (imports/includes, one hop), then `repo_unique`. Resolution never crosses language families. When more than one candidate matches at the deciding tier, the edge keeps its `name:<callee>` target with `confidence: LOW`, `ambiguous: true`, and up to 8 sorted `candidates`. External, built-in, and untyped-receiver calls stay `name:<callee>` and are never guessed. Without the parser runtime, the regex fallback still records name-only `calls` edges (`confidence: LOW`, never resolved). Static and declaration-driven: there is no type checker, compiler, or LSP, so overloads, generics, trait/protocol dispatch, metaprogramming, and re-export barrels are not followed. On the vendored OSS eval fixtures, 23-57% of call edges resolve; the rest are mostly framework/standard-library or untyped calls (see Eval Numbers).
+- Upgrades: the index records its graph format version. An index written by an earlier Cortex (before 0.10.0) is rebuilt in full once, by the next `cortex ingest --update`, `cortex_refresh`, or MCP auto-refresh, and the MCP tools and SessionStart hook report it stale until then. Without that rebuild, files untouched since the upgrade would keep their old, call-less rows.
+- COCHANGE layer: git history coupling between files changed together. History is rename-aware: after a `git mv`, co-change pairs, churn, and commit provenance recorded under the old name are credited to the file's current path, and a name later reused by an unrelated file does not inherit that history. A database built by an earlier version is rebuilt this way on its next refresh.
 - HEADING layer: Markdown sections for docs and planning context.
 - Ranking: personalized PageRank by default, with BFS available for comparison; optional churn×complexity hotspot boosting is opt-in.
 - Hotspots: deterministic per-language complexity and git touch-count analytics persisted with file nodes.
@@ -144,29 +146,31 @@ cortex report .
 
 This creates `cortex.db` and `cortex_report.md` under `~/.cortex/data/<repo-path-hash>/` — the target repo itself is never touched. Repos indexed before v0.4.0 keep using their existing in-repo `.cortex/` directory. Set `CORTEX_DATA_DIR` to relocate the central store. Run `cortex gc --prune` to delete data for repos that no longer exist.
 
+The data dir also holds `meta.json` (which repo it belongs to), `ingest.lock`, and, while any Cortex process has the database open, SQLite's `cortex.db-wal`/`cortex.db-shm` files. Several Cortex processes (for example a Claude Code and a Codex MCP server on the same repo) can share one database safely: it runs in WAL mode so readers never wait for an ingest, connections wait up to 30 seconds for a competing writer instead of failing with "database is locked", and every ingest holds an exclusive `ingest.lock`. When an MCP call finds the index stale it takes the lock, re-checks freshness, and skips the refresh if another process already did it; if the lock stays busy (default 120 seconds, or the call's time budget) the call answers from the current index and reports it as stale.
+
 ## MCP Tools
 
 | Tool | What it does | Example prompt |
 |---|---|---|
 | `cortex_query` | Builds a task-focused retrieval bundle under a token budget; pass `hotspot_boost: true` only when churn×complexity should influence ranking. | "Use Cortex to find the files and symbols for adding password reset." |
 | `cortex_overview` | Returns a compact repo overview, including `top_hotspots`, from stored report analysis. Its `budget` defaults to 2000 tokens; use `response_format: "detailed"` when current semantic/parser capability status is also needed. | "Ask Cortex for an overview before we refactor the API layer." |
-| `cortex_impact` | Ranks structural and co-change neighbors for a file or symbol. | "Use Cortex impact on `src/cortex/bundle.py` before changing packing." |
-| `cortex_context` | Batches paths and symbols into one compact triage card per target; default budget 2000, with optional `include: ["impact", "cochange", "symbols"]` expansions. Cards include structural/co-change neighbors, hotspots, spans, and Qt/QML signals, slots, handlers, wiring, and instantiations. If an intentionally tiny budget cannot fit irreducible card metadata, `budget_feasible: false` explains the condition while preserving every original target. | "Before editing several files, call Cortex context once with all their paths and symbols." |
-| `cortex_risk` | Runs a local git diff and returns deterministic 0–10 per-file risk plus missing co-change/test/Qt/build-reference directives; supports `range`, `staged`, and a response budget. | "Check `cortex_risk` before committing this change." |
+| `cortex_impact` | Ranks structural and co-change neighbors for a file or symbol. Cross-file symbol-level edges (resolved calls, `emits`/`connects`, CMake `builds`, ...) are aggregated onto their files, one contribution per distinct caller/callee pair, with up to 5 `symbol: "caller -> callee"` why-entries per neighbor; unresolved `name:` calls count nothing. | "Use Cortex impact on `src/cortex/bundle.py` before changing packing." |
+| `cortex_context` | Batches paths and symbols into one compact triage card per target; default budget 2000, with optional `include: ["impact", "cochange", "symbols"]` expansions. Cards include structural/co-change neighbors (resolved callers/callees included), hotspots, spans, and Qt/QML signals, slots, handlers, wiring, and instantiations. If an intentionally tiny budget cannot fit irreducible card metadata, `budget_feasible: false` explains the condition while preserving every original target. | "Before editing several files, call Cortex context once with all their paths and symbols." |
+| `cortex_risk` | Runs a local git diff and returns deterministic 0–10 per-file risk plus missing co-change/test/Qt/build-reference directives, and `tests_to_run`: the impacted test files with their `via` tiers (`structural`, `cochange`, `pair`, `changed`), reason and score, plus `tests_run_all`/`tests_run_all_reason` when the selection cannot be vouched for; supports `range`, `staged`, and a response budget. | "Check `cortex_risk` before committing this change." |
 | `cortex_dead_code` | Finds conservative high/medium/low dead-code candidates from the persisted symbol graph and local grep references, excluding Python entry points and Qt meta-object runtime surfaces; supports an optional response budget. | "Find dead-code candidates and keep Qt slots, signals, handlers, and QML types out of the report." |
 | `cortex_search_symbols` | Searches indexed file and symbol nodes by name. | "Search Cortex symbols for `SessionStore` and related methods." |
 | `cortex_read_symbol` | Returns source for one indexed symbol span; `mode` picks `full` (numbered lines, default), `skeleton` (signature + nested member signatures, bodies elided), or `signature` (signature line + span only). | "Read the `generate_bundle` symbol with Cortex instead of opening the whole file." |
 | `cortex_read_file` | Direct replacement for the built-in `Read` tool on an indexed file; `mode: "skeleton"` (default) returns imports/includes + every top-level signature with bodies elided, `mode: "full"` returns the exact indexed content. | "Read `src/cortex/bundle.py` with Cortex instead of the raw file." |
-| `cortex_relations` | Returns parsed graph edges such as imports, calls, inherits, emits, connects, handles, QML `instantiates`/`binds`/`reads`/`writes`/`aliases`, and CMake/QRC `builds`/`registers`/`exports` wiring. | "Show Cortex relations for `generate_bundle` outgoing calls." |
-| `cortex_path` | Returns up to three shortest structural graph paths between two symbols, excluding commit/co-change shortcuts. | "Show how `generate_bundle` reaches `count_text_tokens`." |
+| `cortex_relations` | Returns parsed graph edges such as imports, calls (resolved calls point at the defining symbol in every call-graph language above; ambiguous ones keep `name:<callee>` at LOW confidence with sorted `candidates`, shown as `name:<callee> (ambiguous: N candidates)` with the list in `detailed`), inherits, emits, connects, handles, QML `instantiates`/`binds`/`reads`/`writes`/`aliases`, and CMake/QRC `builds`/`registers`/`exports` wiring. | "Show Cortex relations for `generate_bundle` outgoing calls." |
+| `cortex_path` | Returns up to three shortest structural graph paths between two symbols, excluding commit/co-change shortcuts; paths run through resolved `calls` as well as imports and Qt/QML `handles`/`connects`/`emits` wiring. | "Show how `generate_bundle` reaches `count_text_tokens`." |
 | `cortex_references` | Returns cross-file references from parsed graph edges plus repo grep, bucketed by file type; `mode: "writes"` keeps definitions and mutation sites only. | "Find where `_ensure_fresh` is mutated with Cortex." |
 | `cortex_search_text` | Full-text body search (FTS5 BM25) across indexed file contents, with line-anchored snippets — a grep replacement over string literals, error messages, comments, and prose that symbol search can't see. | "Search Cortex text for the 'device offline' error message." |
-| `cortex_refresh` | Re-ingests the repo and updates freshness metadata. | "Refresh Cortex, then query the checkout flow again." |
-| `cortex_status` | Reports the server's in-flight requests, how long each has been running, and lifetime per-tool counters. Also reports `queue_depth` and the active `deadline_budget_seconds`. Answered immediately even while another call is mid-scan, so a slow call can be told apart from a wedged server without attaching a debugger. | "Ask Cortex for its server status." |
+| `cortex_refresh` | Re-ingests the repo and updates freshness metadata (in full once when the index predates the current graph format). | "Refresh Cortex, then query the checkout flow again." |
+| `cortex_status` | Reports the server's in-flight requests, how long each has been running, and lifetime per-tool counters. Also reports `queue_depth`, the active `deadline_budget_seconds`, and `fingerprint_ttl_seconds`. Answered immediately even while another call is mid-scan, so a slow call can be told apart from a wedged server without attaching a debugger. | "Ask Cortex for its server status." |
 
-Tool results include provenance where available. Read/query/analysis tools keep the index fresh automatically: when the repository fingerprint has changed since ingestion, they run an incremental re-ingest (changed, new, and deleted files only) before answering and report the delta under `auto_refreshed`. Set `CORTEX_AUTO_REFRESH=0` to disable and fall back to stale-state hints plus manual `cortex_refresh`. If no index exists yet, indexed read/query tools still require an explicit `cortex_refresh` first; `cortex_risk` can run a clearly marked partial git-only analysis.
+Tool results include provenance where available. Read/query/analysis tools keep the index fresh automatically: when the repository fingerprint has changed since ingestion, they run an incremental re-ingest (changed, new, and deleted files only) before answering and report the delta under `auto_refreshed`. Set `CORTEX_AUTO_REFRESH=0` to disable and fall back to stale-state hints plus manual `cortex_refresh`. Computing the fingerprint means listing and stat-ing every indexed file, so each MCP server process remembers it per repository for `CORTEX_FINGERPRINT_TTL_SECONDS` (default `2`, `0` disables): a burst of calls pays for one scan. The tradeoff is that an edit made within that window is seen by the first call after it expires. The stored index fingerprint is still read on every call, and a refresh by this process (or a re-check after waiting for another process's ingest) never relies on the remembered value. If no index exists yet, indexed read/query tools still require an explicit `cortex_refresh` first; `cortex_risk` can run a clearly marked partial git-only analysis.
 
-`cortex_query` and `cortex_impact` cache their result under a key derived from the (post-refresh) repo fingerprint, tool name, and call arguments, so a repeated identical call skips PageRank/packing entirely — any file change invalidates the cache automatically, since it changes the fingerprint. `cortex_overview` instead caches a versioned, fingerprint-keyed **analysis** record (graph/report facts and dead-code findings), then reconstructs the response on every call. This deliberately bypasses old overview response-cache entries and invalidates an incompatible analysis shape when its cache version changes. Dynamic detailed-only capability data is never cached. Set `CORTEX_QUERY_CACHE=0` to disable both reading and writing this cache. `cortex gc` prunes cached rows older than 30 days or beyond 200 rows per repo.
+`cortex_query` and `cortex_impact` cache their result under a key derived from the (post-refresh) repo fingerprint, tool name, and call arguments (plus a payload version for `cortex_impact`, so rows written by an older release are bypassed), so a repeated identical call skips PageRank/packing entirely — any file change invalidates the cache automatically, since it changes the fingerprint. `cortex_overview` instead caches a versioned, fingerprint-keyed **analysis** record (graph/report facts and dead-code findings), then reconstructs the response on every call. This deliberately bypasses old overview response-cache entries and invalidates an incompatible analysis shape when its cache version changes. Dynamic detailed-only capability data is never cached. Set `CORTEX_QUERY_CACHE=0` to disable both reading and writing this cache. `cortex gc` prunes cached rows older than 30 days or beyond 200 rows per repo.
 
 The MCP server runs tool calls one at a time but keeps reading input while one runs, so a slow call cannot wedge the connection. `notifications/cancelled` stops a running dead-code analysis or drops a queued request without a response, and `ping` and `cortex_status` are answered immediately. Every call has a wall-clock budget, `CORTEX_TOOL_TIMEOUT_SECONDS` (default `30`, `0` disables). Dead-code analysis in `cortex_overview` and `cortex_dead_code` stops softly at the budget: the result is flagged `dead_code_partial` / `partial` with a `note`, and a partial overview analysis is not cached. Any other call that overruns returns a `deadline_exceeded` error naming the tool, elapsed time, and budget. Each server process also writes `<data dir>/mcp-activity/<pid>.json` with its current tool, request id, queue depth, and completed/cancelled counts (never arguments or repo content), so a slow server can be inspected without a debugger; set `CORTEX_MCP_ACTIVITY=0` to disable it.
 
@@ -180,6 +184,8 @@ In `response_format: "detailed"`, overview additionally reconstructs current `se
 
 The MCP surface has 15 tools: 13 read/query/analysis tools (everything above except `cortex_refresh` and `cortex_status`) can carry a `_meta` object: `{index_age_seconds, indexed_at, fingerprint_fresh, auto_refreshed?, cached?, saved_tokens?}`. `detailed` responses always include it; `concise` responses include it only when something is worth surfacing — the index is stale, an auto-refresh just ran, the response came from cache (`cached: true`), or the call saved a meaningful number of tokens over a raw file read (`saved_tokens`, exactly the number recorded in the `tool_usage` ledger — see `cortex saved` below) — otherwise it's omitted so a routine concise call costs no extra tokens. A cache hit always reports the *current* index age, never a value frozen from when the cache entry was written.
 
+Every tool definition carries a human-readable `title` and MCP `annotations` (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`). All tools except `cortex_refresh` are marked read-only: they never modify your files (an automatic refresh only updates Cortex's own index), so clients that honour `readOnlyHint` may run them without asking for approval. None are destructive or reach the network. The server negotiates MCP protocol versions `2025-06-18`, `2025-03-26`, and `2024-11-05`: it answers `initialize` with the client's version when supported and with `2025-06-18` otherwise. Responses still use a single text content block (no `structuredContent`).
+
 ## CLI Reference
 
 | Command | Purpose |
@@ -187,7 +193,7 @@ The MCP surface has 15 tools: 13 read/query/analysis tools (everything above exc
 | `cortex ingest <repo> [--commits 50] [--update]` | Scan source files, git history, graph layers, symbols, and fingerprints into SQLite. |
 | `cortex bundle <repo> --task "..." [--budget 4000] [--rank pagerank\|bfs] [--hotspot-boost] [--format md\|json]` | Emit a token-budgeted context bundle. |
 | `cortex report <repo> [--out] [--include-test-pairs]` | Write an exhaustive, unbudgeted architecture report with central nodes, hotspots, communities, connections, and every confidence-tiered dead-code finding. |
-| `cortex risk [range] [--staged] [--format text|json] [--db PATH]` | Analyze a committed range (default `HEAD~1..HEAD`) or staged diff with deterministic per-file risk and missing-context directives. It runs local git only; no index is required, but an unindexed/partial result says so explicitly. |
+| `cortex risk [range] [--staged] [--format text|json] [--tests-only] [--db PATH]` | Analyze a committed range (default `HEAD~1..HEAD`) or staged diff with deterministic per-file risk, missing-context directives and impacted tests. It runs local git only; no index is required, but an unindexed/partial result says so explicitly. `--tests-only` prints one impacted test path per line (pipe it into a runner) and prints nothing and exits 2 when the full suite should run. |
 | `cortex gc [--prune]` | List central data dirs (`--prune` deletes ones whose repo is gone) and prune each repo's query result cache. |
 | `cortex enrich <repo> --provider claude\|codex --allow-code-upload [--force]` | Remote LLM enrichment. Sends up to 8,000 characters from each uncached indexed source file to the provider; requires explicit consent and `[llm]`. |
 | `cortex semantic setup [--force]` | Explicitly download/cache `minishlab/potion-code-16M` below `CORTEX_DATA_DIR`; parser artifacts are managed separately by `cortex runtime setup`. |
@@ -208,6 +214,10 @@ The MCP surface has 15 tools: 13 read/query/analysis tools (everything above exc
 ### Risk score policy
 
 `cortex risk` uses fixed normalized components: `min(1, churn/100)`, stored hotspot score `/1000`, structural fan-in `/10`, strongest missing COCHANGE weight, and actionable-directive count `/3`. Their weights are respectively `0.30`, `0.20`, `0.15`, `0.15`, and `0.20`; the deterministic score is `round(10 * sum(weight * component), 2)`. Missing COCHANGE advice uses a documented threshold of `0.50`. Ties sort by descending score, then repository-relative path. Risk never runs network commands.
+
+### Impacted tests
+
+`tests_to_run` maps the diff to test files. Changed lines (new side of the `--unified=0` diff, blank lines ignored) are mapped to the innermost indexed symbol whose span contains them; a change outside every symbol, or in a file without symbols, seeds the whole file. From there a bounded reverse walk (depth ≤ 3, edge target → source) over STRUCTURAL `calls`, `imports`, `references`, `inherits`, `instantiates`, `connects`, `handles`, `emits`, `binds`/`reads`/`writes`/`aliases`, `builds` and `registers` edges stops at test files (`structural`, score `1/depth`). The file of a changed symbol is also followed through its build/registration/instantiation edges, the type that owns a changed member through its instantiations (depth +1), and a C/C++ member declared in a header is treated as the same node as its out-of-line definition. A `connect()` written in a test selects that test, and a CMake target or `.qrc` that builds/registers the changed file selects the tests it also builds. Further tiers: a COCHANGE partner test with weight ≥ `0.50` (`cochange`, score = weight), a file-name pair such as `a.py`/`test_a.py` (`pair`, 0.6), and a changed test file (`changed`, 1.0); an entry merges its tiers and keeps the best score. `tests_run_all` is set when the index is unavailable, a build/config file changed (`CMakeLists.txt`, `*.cmake`, `*.qrc`, `*.toml`, `*.yaml`/`*.yml`, `package.json`, `conftest.py`, `setup.cfg`, ...), a changed file is deleted or unindexed, no test is indexed, a changed non-documentation file was reached by no tier (including fixtures and goldens that tests read by path), or a tight budget had to cut the list (it is truncated last, after every other optional field).
 
 ## Extras
 
@@ -257,7 +267,7 @@ The checked-in factors were measured against this repository with `o200k_base` o
 
 ## Eval Numbers
 
-Regenerated on 2026-07-17 with the dependency-free calibrated tokenizer path:
+Regenerated on 2026-10-17 for 0.10.0 with the dependency-free calibrated tokenizer path:
 
 ```bash
 python3 evals/run_evals.py --stdlib-tokens
@@ -269,16 +279,34 @@ The harness creates small git fixture repos (including a C++/Qt + QML fixture) a
 
 | Mode | Tasks | Precision | Precision@3 | Recall | Avg Tokens | Avg Latency ms |
 |---|---:|---:|---:|---:|---:|---:|
-| bfs | 17 | 0.291 | 0.608 | 0.985 | 512 | 16-18 |
-| pagerank | 17 | 0.291 | 0.608 | 0.985 | 512 | 17-19 |
-| skeleton_off | 17 | 0.613 | 0.608 | 0.865 | 171 | 17-18 |
-| skeleton_on | 17 | 0.599 | 0.588 | 0.865 | 173 | 17-18 |
+| bfs | 17 | 0.291 | 0.608 | 0.985 | 512 | 16-19 |
+| pagerank | 17 | 0.291 | 0.608 | 0.985 | 512 | 17-20 |
+| skeleton_off | 17 | 0.613 | 0.608 | 0.865 | 171 | 17-20 |
+| skeleton_on | 17 | 0.599 | 0.588 | 0.865 | 173 | 17-20 |
+
+These 17-task precision/recall rows are identical to 0.9.2 (the call graph, impacted tests and rename-aware history did not change them); `tests/test_eval_baseline.py` pins them.
 
 Interpretation: normal-budget PageRank and BFS recover almost all gold files/symbols across these fixtures but include extra files. The tight-budget modes trade some recall for a roughly threefold token reduction. Latency figures are wall-clock on a shared dev machine and fluctuate run to run; treat the ranges as illustrative, not a benchmark result.
 
 These checked-in rows use the default stdlib segmenter with the measured P1-4 calibration factors. When the optional `[tokens]` extra is installed, Cortex uses exact `tiktoken` `o200k_base` counts instead; file selection can differ near a tight budget boundary.
 
-On the same checkout, `cortex benchmark . --budget 4000` measured 272,879 calibrated corpus tokens across 138 sources versus 3,998 tokens per query on average, a 68.3× reduction. Regenerate after substantial corpus changes rather than treating this as a fixed product claim.
+#### OSS fixtures
+
+Since 0.10.0 the harness also scores seven vendored, permissively licensed upstream snapshots under `evals/fixtures/oss/`, one per language family (pinned commits, licenses and prune rules in each `PROVENANCE.md`; 2.35 MB total). Each is copied into a temporary git repository with a fixed synthetic history, entirely offline (`--no-oss` skips them). The rows are reported apart from the historical matrix:
+
+| Fixture | Family | Calls | Resolved ratio | Gold call pairs | Impacted tests: precision / recall | Structural tier only |
+|---|---|---:|---:|---:|---:|---:|
+| `cpp_qt_sortfilterproxymodel` | C/C++ with Qt | 632 | 0.297 | 4/4 | 1.000 / 0.125 | 1.000 / 0.125 |
+| `ts_p_queue` | JS/TS | 4473 | 0.326 | 3/3 | 0.778 / 1.000 | 1.000 / 0.143 |
+| `go_mux` | Go | 1998 | 0.258 | 4/4 | 0.182 / 1.000 | 1.000 / 0.500 |
+| `rust_semver` | Rust | 741 | 0.574 | 4/4 | 0.500 / 1.000 | 1.000 / 1.000 |
+| `swift_splash` | Swift | 666 | 0.228 | 3/3 | 1.000 / 1.000 | 1.000 / 1.000 |
+| `java_javapoet` | Java | 6345 | 0.356 | 3/3 | 0.273 / 1.000 | 0.429 / 1.000 |
+| `ruby_rack` | Ruby | 11890 | 0.245 | 3/3 | 1.000 / 1.000 | 1.000 / 1.000 |
+
+How to read this: the resolved ratio is the share of all `calls` edges that resolve to a repository symbol. Most unresolved calls go into the standard library or framework (Qt, Foundation, `net/http`, the JDK, Ruby core) or through untyped receivers, which Cortex deliberately leaves as `name:<callee>` instead of guessing. `tests/test_evals.py` pins each ratio at its measured value minus 0.05. The impacted-test columns come from **one** synthetic edit per fixture, compared with a hand-reviewed gold set of the test files that reach the changed symbol. The gold sets were written by reading the tests, not from coverage, after Cortex's selections were visible, so treat the numbers as anecdotes, not per-language accuracy. Full-selection recall leans on the `cochange` tier, and the synthetic history couples many files, which flatters co-change. The structural tier alone is precise on these probes but misses tests reached only at runtime: QML test cases that instantiate a C++ type, and a TS queue class used through a default constructor argument. The OSS retrieval aggregate (14 tasks) is precision 0.39-0.41 and recall 0.80 at the normal budget (0.50-0.55 at the tight skeleton budget); `evals/RESULTS.md` has every row.
+
+On this checkout (978 tracked files, of which 699 are vendored OSS eval fixtures and test goldens), `cortex benchmark . --budget 4000` with exact `tiktoken` counts measured 1,737,094 corpus tokens across 957 indexed sources versus 3,998 tokens per query on average, a 434.5× reduction. That ratio grew mostly because the corpus grew (the 0.9.x figure was 68.3× over 138 sources), not because bundles got smaller. Regenerate it after substantial corpus changes rather than treating it as a fixed product claim.
 
 ## Token Savings
 
@@ -301,7 +329,8 @@ The baseline policy lives in one auditable function, `_estimate_baseline` in `sr
 - Serena: Cortex is not an LSP replacement; it focuses on durable repo graph memory, COCHANGE history, and token-budgeted retrieval over MCP.
 - claude-context: Cortex does not require embeddings, a vector DB, or network services. The core is deterministic and SQLite local-first.
 - repomix: Cortex is selective and graph-aware rather than whole-repo packing. It ranks files/symbols and can skeletonize code when the budget is tight.
-- Cortex-specific edge: the COCHANGE temporal layer makes git history a first-class retrieval signal alongside structure and docs.
+- CodeGraph, GitNexus, Repowise: these lead with cross-file call graphs and "affected"/impacted-test commands. Since 0.10.0 Cortex has both, for Python, C/C++, JS/TS, Go, Rust, Swift, Java, and Ruby. Its call graph is resolved by a deterministic, declaration-driven resolver, and its impacted tests (`cortex_risk` `tests_to_run`) combine structural reachability with co-change history and file-name pairing, saying explicitly (`tests_run_all`) when it cannot vouch for a selection. Cortex still deliberately lacks a type checker or compiler integration (so resolution rates are modest on framework-heavy code), a language server, a file watcher inside the MCP server, and multi-repo workspaces.
+- Cortex-specific edge: the COCHANGE temporal layer makes git history a first-class retrieval signal alongside structure and docs. History is rename-aware, and Qt/QML wiring (signals, slots, `emit`, `connect`, QML handlers, CMake/QRC registration) is part of the same graph as calls. Several Cortex processes can safely share one index.
 
 ## Stacking With tokenslim
 

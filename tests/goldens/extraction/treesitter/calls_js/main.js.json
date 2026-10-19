@@ -1,0 +1,125 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:main.js:calls:boot:Worker:4",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Worker",
+        "enclosing_class": null,
+        "import_file": "lib/worker.js",
+        "import_spec": "./lib/worker.js",
+        "lineno": 4,
+        "receiver": null,
+        "receiver_kind": "new",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "main.js"
+      },
+      "relation": "calls",
+      "source": "symbol:main.js:boot",
+      "target": "name:Worker",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:main.js:calls:boot:w.missing:6",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "missing",
+        "enclosing_class": null,
+        "lineno": 6,
+        "receiver": "w",
+        "receiver_kind": "var",
+        "receiver_type": "Worker",
+        "receiver_type_file": "lib/worker.js",
+        "scope": null,
+        "source_file": "main.js"
+      },
+      "relation": "calls",
+      "source": "symbol:main.js:boot",
+      "target": "name:missing",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:main.js:calls:boot:w.run:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "run",
+        "enclosing_class": null,
+        "lineno": 5,
+        "receiver": "w",
+        "receiver_kind": "var",
+        "receiver_type": "Worker",
+        "receiver_type_file": "lib/worker.js",
+        "scope": null,
+        "source_file": "main.js"
+      },
+      "relation": "calls",
+      "source": "symbol:main.js:boot",
+      "target": "name:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:main.js:contains:boot",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "main.js"
+      },
+      "relation": "contains",
+      "source": "file:main.js",
+      "target": "symbol:main.js:boot",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:main.js:import:1:./lib/worker.js",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "main.js"
+      },
+      "relation": "imports",
+      "source": "file:main.js",
+      "target": "file:lib/worker.js",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "main.js",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "js",
+        "size_bytes": 124
+      },
+      "node_id": "file:main.js",
+      "signature": "",
+      "source_ref": "main.js",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "boot",
+      "metadata": {
+        "lineno": 3,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:main.js:boot",
+      "signature": "function boot() {",
+      "source_ref": "main.js",
+      "span_end": 7,
+      "span_start": 3
+    }
+  ]
+}

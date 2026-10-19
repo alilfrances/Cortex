@@ -1,0 +1,52 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:lib/legacy.js:contains:go",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/legacy.js"
+      },
+      "relation": "contains",
+      "source": "file:lib/legacy.js",
+      "target": "symbol:lib/legacy.js:go",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/legacy.js",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "js",
+        "size_bytes": 56
+      },
+      "node_id": "file:lib/legacy.js",
+      "signature": "",
+      "source_ref": "lib/legacy.js",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "go",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:lib/legacy.js:go",
+      "signature": "function go() {",
+      "source_ref": "lib/legacy.js",
+      "span_end": 3,
+      "span_start": 1
+    }
+  ]
+}

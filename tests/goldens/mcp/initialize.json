@@ -1,0 +1,54 @@
+{
+  "client_2024-11-05": {
+    "capabilities": {
+      "tools": {
+        "listChanged": false
+      }
+    },
+    "instructions": "Use Cortex before Grep or raw file reads. Start with cortex_query for a coding task and cortex_context before multi-file edits. Search with cortex_search_symbols for named identifiers or cortex_search_text for body text and literals. Read indexed source with cortex_read_symbol or cortex_read_file. Check blast radius with cortex_impact and cortex_references; trace callers and callees with cortex_relations relation=calls or cortex_path. Run cortex_risk before finishing, then run its tests_to_run (everything when tests_run_all is true). Fall back to raw Grep or Read only when the index is missing or Cortex coverage is insufficient; call cortex_refresh for a missing or stale index.",
+    "protocolVersion": "2024-11-05",
+    "serverInfo": {
+      "name": "cortex",
+      "version": "0.10.0"
+    }
+  },
+  "client_2025-06-18": {
+    "capabilities": {
+      "tools": {
+        "listChanged": false
+      }
+    },
+    "instructions": "Use Cortex before Grep or raw file reads. Start with cortex_query for a coding task and cortex_context before multi-file edits. Search with cortex_search_symbols for named identifiers or cortex_search_text for body text and literals. Read indexed source with cortex_read_symbol or cortex_read_file. Check blast radius with cortex_impact and cortex_references; trace callers and callees with cortex_relations relation=calls or cortex_path. Run cortex_risk before finishing, then run its tests_to_run (everything when tests_run_all is true). Fall back to raw Grep or Read only when the index is missing or Cortex coverage is insufficient; call cortex_refresh for a missing or stale index.",
+    "protocolVersion": "2025-06-18",
+    "serverInfo": {
+      "name": "cortex",
+      "version": "0.10.0"
+    }
+  },
+  "client_sends_no_version": {
+    "capabilities": {
+      "tools": {
+        "listChanged": false
+      }
+    },
+    "instructions": "Use Cortex before Grep or raw file reads. Start with cortex_query for a coding task and cortex_context before multi-file edits. Search with cortex_search_symbols for named identifiers or cortex_search_text for body text and literals. Read indexed source with cortex_read_symbol or cortex_read_file. Check blast radius with cortex_impact and cortex_references; trace callers and callees with cortex_relations relation=calls or cortex_path. Run cortex_risk before finishing, then run its tests_to_run (everything when tests_run_all is true). Fall back to raw Grep or Read only when the index is missing or Cortex coverage is insufficient; call cortex_refresh for a missing or stale index.",
+    "protocolVersion": "2025-06-18",
+    "serverInfo": {
+      "name": "cortex",
+      "version": "0.10.0"
+    }
+  },
+  "client_unsupported_2023-01-01": {
+    "capabilities": {
+      "tools": {
+        "listChanged": false
+      }
+    },
+    "instructions": "Use Cortex before Grep or raw file reads. Start with cortex_query for a coding task and cortex_context before multi-file edits. Search with cortex_search_symbols for named identifiers or cortex_search_text for body text and literals. Read indexed source with cortex_read_symbol or cortex_read_file. Check blast radius with cortex_impact and cortex_references; trace callers and callees with cortex_relations relation=calls or cortex_path. Run cortex_risk before finishing, then run its tests_to_run (everything when tests_run_all is true). Fall back to raw Grep or Read only when the index is missing or Cortex coverage is insufficient; call cortex_refresh for a missing or stale index.",
+    "protocolVersion": "2025-06-18",
+    "serverInfo": {
+      "name": "cortex",
+      "version": "0.10.0"
+    }
+  }
+}

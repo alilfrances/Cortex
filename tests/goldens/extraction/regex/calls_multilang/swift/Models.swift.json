@@ -1,0 +1,276 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Models.swift:contains:Bar",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 16,
+        "source_file": "swift/Models.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Models.swift",
+      "target": "symbol:swift/Models.swift:Bar",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Models.swift:contains:Base",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "swift/Models.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Models.swift",
+      "target": "symbol:swift/Models.swift:Base",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Models.swift:contains:Foo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 11,
+        "source_file": "swift/Models.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Models.swift",
+      "target": "symbol:swift/Models.swift:Foo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Models.swift:contains:Repo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "swift/Models.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Models.swift",
+      "target": "symbol:swift/Models.swift:Repo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Models.swift:contains:free",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 21,
+        "source_file": "swift/Models.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Models.swift",
+      "target": "symbol:swift/Models.swift:free",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Models.swift:contains:inheritedOp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "swift/Models.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Models.swift",
+      "target": "symbol:swift/Models.swift:inheritedOp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Models.swift:contains:m",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 12,
+        "source_file": "swift/Models.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Models.swift",
+      "target": "symbol:swift/Models.swift:m",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Models.swift:contains:n",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 17,
+        "source_file": "swift/Models.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Models.swift",
+      "target": "symbol:swift/Models.swift:n",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:swift/Models.swift:contains:save",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 7,
+        "source_file": "swift/Models.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/Models.swift",
+      "target": "symbol:swift/Models.swift:save",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "swift/Models.swift",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "swift",
+        "size_bytes": 175
+      },
+      "node_id": "file:swift/Models.swift",
+      "signature": "",
+      "source_ref": "swift/Models.swift",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Bar",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 16,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:swift/Models.swift:Bar",
+      "signature": "class Bar {",
+      "source_ref": "swift/Models.swift",
+      "span_end": 19,
+      "span_start": 16
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Base",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:swift/Models.swift:Base",
+      "signature": "class Base {",
+      "source_ref": "swift/Models.swift",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Foo",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 11,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:swift/Models.swift:Foo",
+      "signature": "class Foo {",
+      "source_ref": "swift/Models.swift",
+      "span_end": 14,
+      "span_start": 11
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Repo",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 6,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:swift/Models.swift:Repo",
+      "signature": "class Repo {",
+      "source_ref": "swift/Models.swift",
+      "span_end": 9,
+      "span_start": 6
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "free",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 21,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:swift/Models.swift:free",
+      "signature": "func free() {",
+      "source_ref": "swift/Models.swift",
+      "span_end": 22,
+      "span_start": 21
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "inheritedOp",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 2,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:swift/Models.swift:inheritedOp",
+      "signature": "func inheritedOp() {",
+      "source_ref": "swift/Models.swift",
+      "span_end": 3,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "m",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 12,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:swift/Models.swift:m",
+      "signature": "func m() {",
+      "source_ref": "swift/Models.swift",
+      "span_end": 13,
+      "span_start": 12
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "n",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 17,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:swift/Models.swift:n",
+      "signature": "func n() {",
+      "source_ref": "swift/Models.swift",
+      "span_end": 18,
+      "span_start": 17
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "save",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 7,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:swift/Models.swift:save",
+      "signature": "func save() {",
+      "source_ref": "swift/Models.swift",
+      "span_end": 8,
+      "span_start": 7
+    }
+  ]
+}

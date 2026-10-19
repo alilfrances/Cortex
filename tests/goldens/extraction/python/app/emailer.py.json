@@ -1,0 +1,52 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/emailer.py:contains:ReceiptEmailer",
+      "layer": "STRUCTURAL",
+      "metadata": {},
+      "relation": "contains",
+      "source": "file:app/emailer.py",
+      "target": "symbol:app/emailer.py:ReceiptEmailer",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/emailer.py:contains:ReceiptEmailer.send_receipt",
+      "layer": "STRUCTURAL",
+      "metadata": {},
+      "relation": "contains",
+      "source": "symbol:app/emailer.py:ReceiptEmailer",
+      "target": "symbol:app/emailer.py:ReceiptEmailer.send_receipt",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "ReceiptEmailer",
+      "metadata": {
+        "lineno": 1
+      },
+      "node_id": "symbol:app/emailer.py:ReceiptEmailer",
+      "signature": "class ReceiptEmailer:",
+      "source_ref": "app/emailer.py",
+      "span_end": 3,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "send_receipt",
+      "metadata": {
+        "lineno": 2
+      },
+      "node_id": "symbol:app/emailer.py:ReceiptEmailer.send_receipt",
+      "signature": "def send_receipt(self, order):",
+      "source_ref": "app/emailer.py",
+      "span_end": 3,
+      "span_start": 2
+    }
+  ]
+}

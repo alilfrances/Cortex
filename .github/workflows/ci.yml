@@ -25,13 +25,21 @@ jobs:
           python-version: "3.11"
 
       - name: Install package
-        run: python -m pip install -e ".[llm,watch]" pytest build twine
+        # Run optional-feature tests that were present when coverage floors were measured.
+        run: python -m pip install -e ".[llm,watch,dev,semantic,tokens]" tree-sitter-cpp==0.23.4 build twine
 
       - name: Prepare locked parser runtime
         run: python -m cortex runtime setup
 
       - name: Run tests
         run: python -m pytest tests/ -q
+
+      - name: Enforce per-module coverage floors
+        # Floors live in tests/coverage_floors.toml (measured at 7b0e6e0 - 2 points,
+        # raise-only). The suite runs a second time here with coverage collection.
+        run: >-
+          python -m pytest tests/ -q --cov=cortex --cov-report=json:coverage.json
+          && python scripts/check_coverage_floors.py
 
       - name: Run explicit regex fallback suite
         env:
@@ -46,6 +54,11 @@ jobs:
           tests/test_qml_full_support.py
           tests/test_qml_modules.py
           tests/test_qml_resolution.py
+          tests/test_calls_cpp.py
+          tests/test_calls_js.py
+          tests/test_calls_multilang.py
+          tests/test_golden_extraction.py
+          tests/test_golden_mcp_shapes.py
 
       - name: Run evals
         run: python evals/run_evals.py

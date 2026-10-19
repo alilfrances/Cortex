@@ -3,16 +3,44 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import contextlib
 import re
 import sqlite3
+import threading
 import time
+from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 from .graph import QtSymbolIndex
 from .hotspots import estimate_complexity, hotspot_stats
 from .models import BundleItem, CommitRecord, Community, GraphEdge, GraphNode, RetrievalBundle, SourceRecord
 
 LEGACY_DIR_NAME = ".cortex"
+
+# Multi-process safety (0.10.0): every connection waits up to this long for a
+# competing writer instead of failing with "database is locked" after
+# SQLite's 5 s default, and on-disk databases use WAL so readers never block
+# behind an ingest's write transaction.
+BUSY_TIMEOUT_SECONDS = 30.0
+INGEST_LOCK_NAME = "ingest.lock"
+# Version of the extracted graph format.  Bump it whenever extraction changes in a
+# way an incremental refresh cannot repair (it only re-extracts changed files):
+# an index stamped with an older version is re-ingested in full once, and the MCP
+# freshness check reports it stale.  1 = 0.10.0 (call-site contract on every
+# `calls` edge, C/C++/JS/TS/Go/Rust/Swift/Java/Ruby call edges, Ruby methods).
+GRAPH_FORMAT_VERSION = 1
+INGEST_LOCK_TIMEOUT_SECONDS = 120.0
+_LOCK_POLL_SECONDS = 0.05
+
+
+class IngestLockTimeout(TimeoutError):
+    """Another process held the repo's ingest lock for longer than allowed."""
+
+    def __init__(self, lock_path: Path, timeout: float) -> None:
+        self.lock_path = lock_path
+        self.timeout = timeout
+        super().__init__(f"timed out after {timeout:g}s waiting for ingest lock {lock_path}")
 
 
 def _is_managed_database(db_path: Path) -> bool:
@@ -127,14 +155,183 @@ def write_repo_meta(db_path: Path, repo_root: Path) -> None:
     _make_private(meta_path, 0o600)
 
 
+def ingest_lock_path(repo_root: Path, db_path: Path | None = None) -> Path:
+    """The advisory lock file guarding ingest for one database.
+
+    It lives next to the database it protects (the central per-repo data dir,
+    or a legacy in-repo ``.cortex/``), never in the work tree proper, so
+    taking it can neither change the repo fingerprint nor `git status`.
+    """
+    return (db_path or default_db_path(repo_root)).parent / INGEST_LOCK_NAME
+
+
+class _HeldLock:
+    """Per-lock-file state: one OS-level lock per process, re-entrant per thread.
+
+    POSIX ``flock`` locks belong to an open file description, so a second
+    ``open()`` + ``flock`` of the same file in the *same* process blocks
+    forever. Ingest re-enters itself (``_ensure_fresh`` holds the lock and
+    then calls ``ingest_repository``, which takes it too), so the OS lock is
+    taken once per process and nested acquisitions by the owning thread only
+    bump a depth counter. Other threads of the process serialize on the
+    ``RLock`` before ever touching the file.
+    """
+
+    def __init__(self) -> None:
+        self.thread_lock = threading.RLock()
+        self.depth = 0
+        self.handle: Any = None
+
+
+_LOCKS: dict[str, _HeldLock] = {}
+_LOCKS_GUARD = threading.Lock()
+
+
+def _os_try_lock(handle: Any) -> bool:
+    if os.name == "nt":  # pragma: no cover - exercised on Windows CI only
+        import msvcrt
+
+        try:
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        except OSError:
+            return False
+        return True
+    import fcntl
+
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return False
+    except OSError as exc:  # EWOULDBLOCK/EAGAIN spelled differently on some libcs
+        import errno
+
+        if exc.errno in (errno.EAGAIN, errno.EACCES, errno.EWOULDBLOCK):
+            return False
+        raise
+    return True
+
+
+def _os_unlock(handle: Any) -> None:
+    if os.name == "nt":  # pragma: no cover
+        import msvcrt
+
+        handle.seek(0)
+        with contextlib.suppress(OSError):
+            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        return
+    import fcntl
+
+    with contextlib.suppress(OSError):
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def _open_lock_file(lock_path: Path) -> Any:
+    lock_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    fd = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
+    _make_private(lock_path, 0o600)
+    return os.fdopen(fd, "r+b", buffering=0)
+
+
+def _check_deadline() -> None:
+    # Imported lazily: deadline is an MCP-layer concern and the store must stay
+    # importable on its own. Outside a deadline scope this is a no-op.
+    from .deadline import check_deadline
+
+    check_deadline()
+
+
+@contextlib.contextmanager
+def ingest_lock(
+    repo_root: Path,
+    *,
+    timeout: float | None = None,
+    db_path: Path | None = None,
+) -> Iterator[Path]:
+    """Hold the exclusive cross-process ingest lock for ``repo_root``'s database.
+
+    Blocking with polling until ``timeout`` seconds (default
+    ``INGEST_LOCK_TIMEOUT_SECONDS``, read at call time), then raises
+    :class:`IngestLockTimeout`. Re-entrant within one thread (see
+    :class:`_HeldLock`). Inside an MCP call the poll loop also honours the
+    call's cooperative deadline, so a waiting tool call fails with
+    ``deadline_exceeded`` rather than hanging past its budget.
+    """
+    if timeout is None:
+        timeout = INGEST_LOCK_TIMEOUT_SECONDS
+    lock_path = ingest_lock_path(repo_root, db_path)
+    key = str(lock_path.absolute())
+    with _LOCKS_GUARD:
+        held = _LOCKS.setdefault(key, _HeldLock())
+    deadline = time.monotonic() + max(0.0, timeout)
+
+    while not held.thread_lock.acquire(timeout=_LOCK_POLL_SECONDS):
+        _check_deadline()
+        if time.monotonic() >= deadline:
+            raise IngestLockTimeout(lock_path, timeout)
+    try:
+        if held.depth == 0:
+            handle = _open_lock_file(lock_path)
+            try:
+                while not _os_try_lock(handle):
+                    _check_deadline()
+                    if time.monotonic() >= deadline:
+                        raise IngestLockTimeout(lock_path, timeout)
+                    time.sleep(_LOCK_POLL_SECONDS)
+            except BaseException:
+                handle.close()
+                raise
+            held.handle = handle
+        held.depth += 1
+        try:
+            yield lock_path
+        finally:
+            held.depth -= 1
+            if held.depth == 0 and held.handle is not None:
+                handle, held.handle = held.handle, None
+                _os_unlock(handle)
+                handle.close()
+    finally:
+        held.thread_lock.release()
+
+
+def _decode_renames(raw: str | None) -> list[tuple[str, str]]:
+    try:
+        value = json.loads(raw or "[]")
+    except (TypeError, ValueError):
+        return []
+    if not isinstance(value, list):
+        return []
+    return [
+        (str(pair[0]), str(pair[1]))
+        for pair in value
+        if isinstance(pair, (list, tuple)) and len(pair) == 2
+    ]
+
+
+def _configure_connection(connection: sqlite3.Connection, db_path: Path) -> None:
+    """Busy timeout + WAL. WAL is skipped for in-memory databases and silently
+    left at the current mode when the filesystem cannot support it (read-only
+    media, some network filesystems)."""
+    with contextlib.suppress(sqlite3.OperationalError):
+        connection.execute(f"PRAGMA busy_timeout = {int(BUSY_TIMEOUT_SECONDS * 1000)}")
+    if str(db_path) == ":memory:" or str(db_path).startswith("file::memory:"):
+        return
+    with contextlib.suppress(sqlite3.OperationalError):
+        connection.execute("PRAGMA journal_mode = WAL")
+
+
 class CortexStore:
     def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         if _is_managed_database(self.db_path):
             _make_private(self.db_path.parent, 0o700)
-        self.connection = sqlite3.connect(self.db_path)
+        self.connection = sqlite3.connect(self.db_path, timeout=BUSY_TIMEOUT_SECONDS)
+        # chmod before switching to WAL: SQLite creates the -wal/-shm files
+        # with the main database file's permission bits.
         _make_private(self.db_path, 0o600)
+        _configure_connection(self.connection, self.db_path)
         self.connection.row_factory = sqlite3.Row
         self.initialize_schema()
 
@@ -382,11 +579,24 @@ class CortexStore:
             # don't need a json_extract() scan.
             "ALTER TABLE sources ADD COLUMN mtime_ns INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE graph_edges ADD COLUMN source_file TEXT NOT NULL DEFAULT ''",
+            # 0.10.0 rename-aware history: [[old, new], ...] per commit.
+            "ALTER TABLE commits ADD COLUMN renames_json TEXT NOT NULL DEFAULT '[]'",
+            # 0.10.0: version of the extracted graph format (see GRAPH_FORMAT_VERSION).
+            # Rows written before the column existed read 0, which forces one full
+            # re-ingest instead of an incremental refresh that would keep stale rows.
+            "ALTER TABLE repos ADD COLUMN graph_version INTEGER NOT NULL DEFAULT 0",
         ]
         for sql in migrations:
             try:
                 self.connection.execute(sql)
                 self.connection.commit()
+            except sqlite3.OperationalError as exc:
+                # "duplicate column name" is the normal already-migrated case.
+                # A busy/locked database must not be mistaken for it: that
+                # would silently leave the column missing for this process.
+                message = str(exc).lower()
+                if "locked" in message or "busy" in message:
+                    raise
             except Exception:
                 pass  # column already exists
 
@@ -547,6 +757,23 @@ class CortexStore:
             (repo_key,),
         ).fetchone()
         return 0 if row is None else int(row["updated_at"])
+
+    def get_repo_graph_version(self, repo_path: Path) -> int:
+        """Graph format version of this repo's index (0 = written before 0.10.0 or never)."""
+        repo_key = str(repo_path.resolve())
+        row = self.connection.execute(
+            "SELECT graph_version FROM repos WHERE repo_path = ?",
+            (repo_key,),
+        ).fetchone()
+        return 0 if row is None else int(row["graph_version"] or 0)
+
+    def set_repo_graph_version(self, repo_path: Path, version: int) -> None:
+        repo_key = str(repo_path.resolve())
+        with self.connection:
+            self.connection.execute(
+                "UPDATE repos SET graph_version = ? WHERE repo_path = ?",
+                (int(version), repo_key),
+            )
 
     def get_repo_fingerprint(self, repo_path: Path) -> str:
         repo_key = str(repo_path.resolve())
@@ -733,6 +960,28 @@ class CortexStore:
                 [(repo_key, path) for path in paths],
             )
 
+    def fetch_symbol_summary_for_sources(self, repo_path: Path, paths: list[str]) -> tuple[set[str], bool]:
+        """(symbol labels, has class/inheritance rows) currently owned by
+        `paths`. Read before `delete_graph_for_sources` so the incremental
+        call-resolution pass knows which callee labels and member/base
+        relations the delta is about to remove."""
+        repo_key = str(repo_path.resolve())
+        labels: set[str] = set()
+        hierarchy = False
+        for path in paths:
+            for row in self.connection.execute(
+                "SELECT label, kind FROM graph_nodes WHERE repo_path = ? AND source_ref = ? AND granularity = 'symbol'",
+                (repo_key, path),
+            ):
+                labels.add(str(row["label"]))
+                hierarchy = hierarchy or row["kind"] == "class"
+            if not hierarchy:
+                hierarchy = self.connection.execute(
+                    "SELECT 1 FROM graph_edges WHERE repo_path = ? AND source_file = ? AND relation = 'inherits' LIMIT 1",
+                    (repo_key, path),
+                ).fetchone() is not None
+        return labels, hierarchy
+
     def delete_cochange_layer(self, repo_path: Path) -> None:
         """Drop the COCHANGE layer (cochange pair edges, commit nodes, and
         commit->file touches edges) so it can be rebuilt fresh. Used by the
@@ -813,11 +1062,19 @@ class CortexStore:
         with self.connection:
             self.connection.executemany(
                 """
-                INSERT OR REPLACE INTO commits(repo_path, sha, summary, author, authored_at, files_json)
-                VALUES(?, ?, ?, ?, ?, ?)
+                INSERT OR REPLACE INTO commits(repo_path, sha, summary, author, authored_at, files_json, renames_json)
+                VALUES(?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
-                    (repo_key, commit.sha, commit.summary, commit.author, commit.authored_at, json.dumps(commit.files))
+                    (
+                        repo_key,
+                        commit.sha,
+                        commit.summary,
+                        commit.author,
+                        commit.authored_at,
+                        json.dumps(commit.files),
+                        json.dumps([list(pair) for pair in commit.renames]),
+                    )
                     for commit in commits
                 ],
             )
@@ -1017,7 +1274,7 @@ class CortexStore:
     def fetch_commits(self, repo_path: Path) -> list[CommitRecord]:
         repo_key = str(repo_path.resolve())
         rows = self.connection.execute(
-            "SELECT sha, summary, author, authored_at, files_json FROM commits WHERE repo_path = ? ORDER BY authored_at DESC",
+            "SELECT sha, summary, author, authored_at, files_json, renames_json FROM commits WHERE repo_path = ? ORDER BY authored_at DESC",
             (repo_key,),
         ).fetchall()
         return [
@@ -1027,6 +1284,7 @@ class CortexStore:
                 author=row["author"],
                 authored_at=row["authored_at"],
                 files=json.loads(row["files_json"]),
+                renames=_decode_renames(row["renames_json"]),
             )
             for row in rows
         ]
@@ -1518,6 +1776,13 @@ class CortexStore:
                 """,
                 (repo_key, cache_key, int(_time.time()), payload_json),
             )
+
+    def clear_query_cache(self, repo_path: Path) -> None:
+        """Drop every cached response for one repo (an index rebuilt from an older
+        graph format keeps its fingerprint, so fingerprint-keyed rows would replay
+        answers computed from the old graph)."""
+        with self.connection:
+            self.connection.execute("DELETE FROM query_cache WHERE repo_path = ?", (str(repo_path.resolve()),))
 
     def prune_query_cache(self, repo_path: Path, max_age_days: int = 30, max_rows: int = 200) -> int:
         """Prune the P1-3 query_cache table for one repo (called from

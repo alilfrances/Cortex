@@ -1,0 +1,457 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:calls:run:Bar:14",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Bar",
+        "enclosing_class": null,
+        "lineno": 14,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:Bar",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:calls:run:Baz:17",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Baz",
+        "enclosing_class": null,
+        "lineno": 17,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:Baz",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:calls:run:Foo:12",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Foo",
+        "enclosing_class": null,
+        "lineno": 12,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:Foo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:calls:run:help:10",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "help",
+        "enclosing_class": null,
+        "lineno": 10,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:help",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:calls:run:inheritedOp:18",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "inheritedOp",
+        "enclosing_class": null,
+        "lineno": 18,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:inheritedOp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:calls:run:inheritedOp:19",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "inheritedOp",
+        "enclosing_class": null,
+        "lineno": 19,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:inheritedOp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:calls:run:m:13",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "m",
+        "enclosing_class": null,
+        "lineno": 13,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:m",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:calls:run:make:11",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "make",
+        "enclosing_class": null,
+        "lineno": 11,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:make",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:calls:run:n:15",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "n",
+        "enclosing_class": null,
+        "lineno": 15,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:n",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:calls:run:q:17",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "q",
+        "enclosing_class": null,
+        "lineno": 17,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:q",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:calls:run:save:16",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "save",
+        "enclosing_class": null,
+        "lineno": 16,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:calls:run:save:9",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "save",
+        "enclosing_class": null,
+        "lineno": 9,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:calls:run:step:7",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "step",
+        "enclosing_class": null,
+        "lineno": 7,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:calls:run:step:8",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "step",
+        "enclosing_class": null,
+        "lineno": 8,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Svc.java:run",
+      "target": "name:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:contains:Svc",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Svc.java",
+      "target": "symbol:java/Svc.java:Svc",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:contains:inheritedOp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 18,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Svc.java",
+      "target": "symbol:java/Svc.java:inheritedOp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:contains:make",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 25,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Svc.java",
+      "target": "symbol:java/Svc.java:make",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:contains:run",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Svc.java",
+      "target": "symbol:java/Svc.java:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:contains:step",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 7,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Svc.java",
+      "target": "symbol:java/Svc.java:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:java/Svc.java:import:1:1:com.x.Util",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "java/Svc.java"
+      },
+      "relation": "imports",
+      "source": "file:java/Svc.java",
+      "target": "module:com.x.Util",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "java/Svc.java",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "java",
+        "size_bytes": 461
+      },
+      "node_id": "file:java/Svc.java",
+      "signature": "",
+      "source_ref": "java/Svc.java",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Svc",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 3,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/Svc.java:Svc",
+      "signature": "public class Svc extends Base {",
+      "source_ref": "java/Svc.java",
+      "span_end": 27,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "inheritedOp",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 18,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/Svc.java:inheritedOp",
+      "signature": "inheritedOp();",
+      "source_ref": "java/Svc.java",
+      "span_end": 18,
+      "span_start": 18
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "make",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 25,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/Svc.java:make",
+      "signature": "public static void make() {",
+      "source_ref": "java/Svc.java",
+      "span_end": 26,
+      "span_start": 25
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "run",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 6,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/Svc.java:run",
+      "signature": "public void run(Repo r) {",
+      "source_ref": "java/Svc.java",
+      "span_end": 20,
+      "span_start": 6
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "step",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 7,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:java/Svc.java:step",
+      "signature": "step();",
+      "source_ref": "java/Svc.java",
+      "span_end": 7,
+      "span_start": 7
+    }
+  ]
+}

@@ -29,6 +29,11 @@ class CommitRecord:
     author: str
     authored_at: int
     files: list[str]
+    # Renames detected in this commit, as (old_path, new_path). `files` holds
+    # the post-commit path of every entry, so a rename contributes `new_path`
+    # there. Copies are not renames (the source path lives on) and are not
+    # listed here.
+    renames: list[tuple[str, str]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

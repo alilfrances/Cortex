@@ -21,6 +21,23 @@ Relations include `binds`, `reads`, `writes`, `references`, `aliases`, and
 framework types remain explicitly `unverified`; Cortex never guesses a target
 from an ambiguous basename.
 
+## Qt C++ call edges (0.10.0)
+
+C++ `calls` edges sit next to the Qt wiring and never replace it:
+
+- `emit sig()` / `Q_EMIT sig()` stays an `emits` edge and is never also a
+  `calls` edge (including an unbraced `if (x) Q_EMIT sig();`).
+- `connect(...)`, `SIGNAL(...)`, `SLOT(...)` and `Q_*` macros are never calls;
+  `connect` stays a `connects` edge.
+- A slot invoked directly (`onDone()`, `this->onDone()`) is an ordinary call
+  and resolves like any other member call.
+- Calls inside regions the parser swallows into an `ERROR` node after
+  `Q_OBJECT` are ignored rather than guessed.
+
+So a QML handler can be traced to C++ helpers as
+`handles` -> `connects` -> `calls` with `cortex_path`. With the regex fallback,
+C++ calls are name-only (`confidence: LOW`, never resolved to a symbol).
+
 ## Modules and registration
 
 Checked-in `qmldir` and `.qmltypes` files, QML JavaScript imports, qrc aliases,

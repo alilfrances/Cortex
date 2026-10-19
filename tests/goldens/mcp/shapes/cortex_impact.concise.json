@@ -1,0 +1,18 @@
+{
+  "first_item_keys": {
+    "items": [
+      "hotspot",
+      "node_id",
+      "path",
+      "score",
+      "why"
+    ]
+  },
+  "keys": [
+    "items",
+    "repo_path",
+    "returned_count",
+    "stale",
+    "truncated"
+  ]
+}

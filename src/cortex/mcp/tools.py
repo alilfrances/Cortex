@@ -14,14 +14,14 @@ from ..bundle import _render_skeleton, _render_symbol_skeleton, _tokenize_query,
 from ..deadcode import analyze_dead_code, truncate_dead_code_result
 from ..deadline import DeadlineExceeded, current_deadline, deadline_scope, resolve_budget_seconds
 from ..gitutils import discover_repo_root
-from ..impact import UnknownPathError, rank_file_impact
+from ..impact import IMPACT_CACHE_VERSION, UnknownPathError, rank_file_impact
 from ..ingest import compute_repo_fingerprint, ingest_repository
 from ..pathfind import shortest_paths
 from ..references import find_references
 from ..report import build_report_data, render_report
 from ..hotspots import top_hotspots
 from ..risk import analyze_risk, truncate_risk_result
-from ..store import CortexStore, default_db_path
+from ..store import GRAPH_FORMAT_VERSION, CortexStore, IngestLockTimeout, default_db_path, ingest_lock
 from ..tokenizer import count_text_tokens, truncate_text_to_budget
 from .status import REGISTRY
 
@@ -240,6 +240,49 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
 ]
 
+# MCP 2025-03-26+ `Tool.title` and `Tool.annotations`. Clients treat
+# annotations as untrusted hints; several use `readOnlyHint` to auto-approve
+# calls. Every tool except cortex_refresh only reads the repository. Read
+# tools may update Cortex's own index (auto-refresh) and token ledger, but
+# never the user's files or anything outside the local data dir, so they are
+# read-only from the environment's point of view. Nothing reaches the
+# network, so `openWorldHint` is false everywhere.
+TOOL_TITLES: dict[str, str] = {
+    "cortex_query": "Cortex: task context bundle",
+    "cortex_overview": "Cortex: repository overview",
+    "cortex_context": "Cortex: pre-edit context cards",
+    "cortex_impact": "Cortex: file impact ranking",
+    "cortex_risk": "Cortex: change risk review",
+    "cortex_dead_code": "Cortex: dead code candidates",
+    "cortex_search_symbols": "Cortex: search symbols",
+    "cortex_read_symbol": "Cortex: read symbol source",
+    "cortex_read_file": "Cortex: read indexed file",
+    "cortex_relations": "Cortex: graph relations",
+    "cortex_references": "Cortex: find references",
+    "cortex_search_text": "Cortex: search indexed text",
+    "cortex_path": "Cortex: path between symbols",
+    "cortex_refresh": "Cortex: refresh index",
+    "cortex_status": "Cortex: server status",
+}
+_NON_READ_ONLY_TOOLS = frozenset({"cortex_refresh"})
+
+
+def _annotate_tool_definition(definition: dict[str, Any]) -> dict[str, Any]:
+    name = definition["name"]
+    title = TOOL_TITLES[name]
+    annotations = {
+        "title": title,
+        "readOnlyHint": name not in _NON_READ_ONLY_TOOLS,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": False,
+    }
+    rest = {key: value for key, value in definition.items() if key != "name"}
+    return {"name": name, "title": title, **rest, "annotations": annotations}
+
+
+TOOL_DEFINITIONS = [_annotate_tool_definition(definition) for definition in TOOL_DEFINITIONS]
+
 
 def _content(payload: dict[str, Any], is_error: bool = False) -> dict[str, Any]:
     return {
@@ -363,10 +406,92 @@ def _store_or_error(repo_root: Path) -> tuple[CortexStore | None, dict[str, Any]
     return CortexStore(db_path), None
 
 
-def _staleness(store: CortexStore, repo_root: Path) -> dict[str, Any]:
+# Fingerprint TTL memo (0.10.0). `compute_repo_fingerprint` runs `git
+# ls-files` plus a stat() of every candidate file; an agent typically fires
+# several Cortex calls within a second or two, so the *working-tree*
+# fingerprint is memoized per repo for a short TTL. Only the disk-side value is
+# cached: the stored (indexed) fingerprint is always read from the database,
+# so another process's ingest is noticed immediately. Edits made inside the
+# TTL window are seen by the first call after it expires.
+_DEFAULT_FINGERPRINT_TTL_SECONDS = 2.0
+_FINGERPRINT_MEMO: dict[str, tuple[str, float]] = {}
+_FINGERPRINT_MEMO_LOCK = threading.Lock()
+
+
+def fingerprint_ttl_seconds(env: dict[str, str] | None = None) -> float:
+    """`CORTEX_FINGERPRINT_TTL_SECONDS` (float, default 2.0; `0` disables).
+    Unparseable or non-finite values fall back to the default; negative
+    values disable the memo."""
+    raw = (os.environ if env is None else env).get("CORTEX_FINGERPRINT_TTL_SECONDS")
+    if raw is None or not raw.strip():
+        return _DEFAULT_FINGERPRINT_TTL_SECONDS
+    try:
+        value = float(raw)
+    except ValueError:
+        return _DEFAULT_FINGERPRINT_TTL_SECONDS
+    if value != value or value in (float("inf"), float("-inf")):
+        return _DEFAULT_FINGERPRINT_TTL_SECONDS
+    return max(0.0, value)
+
+
+def _memo_key(repo_root: Path) -> str:
+    return str(repo_root.resolve())
+
+
+def _current_fingerprint(repo_root: Path, *, bypass_ttl: bool = False) -> str:
+    """Working-tree fingerprint, served from the TTL memo when fresh.
+
+    `bypass_ttl=True` always recomputes (and refreshes the memo); it is used
+    for the post-lock re-check in `_ensure_fresh`, where a value memoized
+    before waiting on another process's ingest must not decide whether to
+    ingest again."""
+    ttl = fingerprint_ttl_seconds()
+    key = _memo_key(repo_root)
+    if ttl > 0 and not bypass_ttl:
+        with _FINGERPRINT_MEMO_LOCK:
+            entry = _FINGERPRINT_MEMO.get(key)
+        if entry is not None and 0 <= time.monotonic() - entry[1] < ttl:
+            return entry[0]
     current = compute_repo_fingerprint(repo_root)
+    if ttl > 0:
+        _remember_fingerprint(repo_root, current)
+    return current
+
+
+def _remember_fingerprint(repo_root: Path, fingerprint: str) -> None:
+    if not fingerprint or fingerprint_ttl_seconds() <= 0:
+        _forget_fingerprint(repo_root)
+        return
+    with _FINGERPRINT_MEMO_LOCK:
+        _FINGERPRINT_MEMO[_memo_key(repo_root)] = (fingerprint, time.monotonic())
+
+
+def _forget_fingerprint(repo_root: Path) -> None:
+    with _FINGERPRINT_MEMO_LOCK:
+        _FINGERPRINT_MEMO.pop(_memo_key(repo_root), None)
+
+
+def _remember_ingested_fingerprint(store: CortexStore, repo_root: Path) -> None:
+    """After this process ingested, the fingerprint the ingest just stored *is*
+    the working-tree fingerprint it scanned: seed the memo with it instead of
+    paying for another full scan. Any failure just drops the entry."""
+    try:
+        _remember_fingerprint(repo_root, store.get_repo_fingerprint(repo_root))
+    except Exception:
+        _forget_fingerprint(repo_root)
+
+
+def _staleness(store: CortexStore, repo_root: Path, *, bypass_ttl: bool = False) -> dict[str, Any]:
+    current = _current_fingerprint(repo_root, bypass_ttl=bypass_ttl)
     stored = store.get_repo_fingerprint(repo_root)
     stale = bool(stored and current != stored)
+    if stored and not stale:
+        # An index written by an older graph format is stale even when no file
+        # changed: the refresh it triggers rebuilds it in full (ingest.py).
+        try:
+            stale = store.get_repo_graph_version(repo_root) < GRAPH_FORMAT_VERSION
+        except Exception:
+            stale = False
     # P1-5: a failure looking up the index timestamp must not take down
     # fingerprint-based staleness detection (which existed before this
     # feature and other logic like auto-refresh depends on) -- degrade
@@ -395,12 +520,31 @@ def _ensure_fresh(store: CortexStore, repo_root: Path) -> dict[str, Any]:
     status = _staleness(store, repo_root)
     if not status["stale"] or os.environ.get("CORTEX_AUTO_REFRESH", "1") == "0":
         return status
-    summary = ingest_repository(repo_root, incremental=True)
+    try:
+        with ingest_lock(repo_root):
+            # Another Cortex process (or thread) may have refreshed this repo
+            # while we waited for the lock: re-check before doing the work
+            # again, and only report `auto_refreshed` when *this* call ingested.
+            # The re-check bypasses the fingerprint TTL memo: the value
+            # memoized before the wait must not decide whether to ingest.
+            status = _staleness(store, repo_root, bypass_ttl=True)
+            if not status["stale"]:
+                return status
+            # Re-entrant: ingest_repository takes the same lock again.
+            _forget_fingerprint(repo_root)
+            summary = ingest_repository(repo_root, incremental=True)
+            _remember_ingested_fingerprint(store, repo_root)
+    except IngestLockTimeout:
+        # Another process is still ingesting; answer from the current index
+        # and keep reporting it as stale rather than failing the call.
+        return status
     status = _staleness(store, repo_root)
     status["auto_refreshed"] = {
         key: summary[key]
         for key in ("new_files", "updated_files", "deleted_files", "unchanged_files")
     }
+    if summary.get("full_reindex_reason"):
+        status["auto_refreshed"]["full_reindex_reason"] = summary["full_reindex_reason"]
     return status
 
 
@@ -892,7 +1036,11 @@ def _call_impact(arguments: dict[str, Any]) -> dict[str, Any]:
     assert store is not None
     status = _ensure_fresh(store, repo_root)
     response_format = _response_format(arguments)
-    cache_key = _cache_key(status["current_fingerprint"], "cortex_impact", arguments)
+    # The version is hashed with the arguments so rows written before symbol
+    # edges were aggregated (unversioned) can never be served again.
+    cache_key = _cache_key(
+        status["current_fingerprint"], "cortex_impact", {**arguments, "impact_v": IMPACT_CACHE_VERSION}
+    )
     cached_payload = _cache_get(store, repo_root, cache_key)
     if cached_payload is not None:
         payload = cached_payload
@@ -1038,6 +1186,20 @@ def _context_structural_neighbors(node: Any, nodes_by_id: dict[str, Any], edges:
         ref.update({"relation": edge.relation, "weight": round(float(edge.weight), 3)})
         result.append(ref)
     return result
+
+
+def _context_call_counts(node: Any, edges: list[Any]) -> dict[str, int]:
+    """Distinct resolved callers/callees of a symbol (unresolved ``name:`` excluded)."""
+    callers: set[str] = set()
+    callees: set[str] = set()
+    for edge in edges:
+        if edge.relation != "calls" or edge.layer != "STRUCTURAL":
+            continue
+        if edge.target == node.node_id and edge.source != node.node_id:
+            callers.add(edge.source)
+        elif edge.source == node.node_id and edge.target != node.node_id and not edge.target.startswith("name:"):
+            callees.add(edge.target)
+    return {"callers": len(callers), "callees": len(callees)}
 
 
 def _context_cochange_partners(
@@ -1214,6 +1376,7 @@ def _context_card(
     files_by_path: dict[str, Any],
     edges: list[Any],
     includes: list[str],
+    response_format: str = "concise",
 ) -> dict[str, Any]:
     file_node = _context_file_for_node(node, files_by_path)
     file_path = node.source_ref
@@ -1258,6 +1421,13 @@ def _context_card(
         card["signatures"] = [item.signature or item.label for item in file_symbols[:signature_limit]]
 
     card.update(_context_qt_details(node, file_path, nodes, nodes_by_id, edges))
+    if response_format == "detailed" and node.granularity == "symbol":
+        # Detailed only: in concise form the counts would cost ~12 tokens per
+        # card, over the 10-token allowance; ``neighbors`` already shows the
+        # strongest caller/callee there.
+        call_counts = _context_call_counts(node, edges)
+        if call_counts["callers"] or call_counts["callees"]:
+            card["calls"] = call_counts
 
     if "impact" in includes:
         try:
@@ -1496,7 +1666,7 @@ def _call_context(arguments: dict[str, Any]) -> dict[str, Any]:
         # source bodies are needed only for file cards (notably Markdown
         # headings and file line spans).
         source = fetch_target_source(node.source_ref) if node.granularity != "symbol" else None
-        cards.append(_context_card(target, node, source, nodes, nodes_by_id, files_by_path, edges, includes))
+        cards.append(_context_card(target, node, source, nodes, nodes_by_id, files_by_path, edges, includes, response_format))
 
     if cards:
         base_share, remainder = divmod(budget, len(cards))
@@ -1862,6 +2032,36 @@ def _edge_origin(edge: Any) -> str:
     return "unknown"
 
 
+def _ambiguous_candidates(edge: Any) -> list[str]:
+    """Sorted resolver candidates of an unresolved ambiguous ``calls`` edge."""
+    metadata = edge.metadata if isinstance(getattr(edge, "metadata", None), dict) else {}
+    if edge.relation != "calls" or not edge.target.startswith("name:") or not metadata.get("ambiguous"):
+        return []
+    raw = metadata.get("candidates")
+    if not isinstance(raw, list):
+        return []
+    return sorted(str(item) for item in raw)
+
+
+def _relation_item(edge: Any, nodes: dict[str, Any], response_format: str) -> dict[str, Any]:
+    item: dict[str, Any] = {
+        "relation": edge.relation,
+        "source": _endpoint(edge.source, nodes),
+        "target": _endpoint(edge.target, nodes),
+        "layer": edge.layer,
+        "confidence": edge.confidence,
+        "origin": _edge_origin(edge),
+    }
+    candidates = _ambiguous_candidates(edge)
+    if candidates:
+        # Only ambiguous call targets change: name it as unresolved and say
+        # how many symbols the resolver could not choose between.
+        item["target"] = f"{edge.target} (ambiguous: {len(candidates)} candidates)"
+        if response_format == "detailed":
+            item["candidates"] = candidates
+    return item
+
+
 def _call_relations(arguments: dict[str, Any]) -> dict[str, Any]:
     repo_root = _repo_root(arguments)
     store, error = _store_or_error(repo_root)
@@ -1879,20 +2079,10 @@ def _call_relations(arguments: dict[str, Any]) -> dict[str, Any]:
     node_ids = sorted({edge.source for edge in edges} | {edge.target for edge in edges})
     nodes = store.get_nodes(repo_root, node_ids)
 
-    all_items: list[dict[str, Any]] = [
-        {
-            "relation": edge.relation,
-            "source": _endpoint(edge.source, nodes),
-            "target": _endpoint(edge.target, nodes),
-            "layer": edge.layer,
-            "confidence": edge.confidence,
-            "origin": _edge_origin(edge),
-        }
-        for edge in edges
-    ]
+    response_format = _response_format(arguments)
+    all_items: list[dict[str, Any]] = [_relation_item(edge, nodes, response_format) for edge in edges]
     budget = int(arguments.get("budget", 2000))
     items, truncated = _prefix_fit_items(all_items, budget)
-    response_format = _response_format(arguments)
     return _content(_format_payload(
         {"repo_path": str(repo_root), "items": items, "truncated": truncated, "returned_count": len(items)},
         status,
@@ -2041,11 +2231,16 @@ def _call_refresh(arguments: dict[str, Any]) -> dict[str, Any]:
     mode = str(arguments.get("mode", "incremental"))
     # Incremental needs an existing database to diff against.
     incremental = mode != "full" and default_db_path(repo_root).exists()
+    _forget_fingerprint(repo_root)
     summary = ingest_repository(
         repo_root,
         commit_limit=int(arguments.get("commits", 1000)),
         incremental=incremental,
     )
+    try:
+        _remember_fingerprint(repo_root, CortexStore(default_db_path(repo_root)).get_repo_fingerprint(repo_root))
+    except Exception:
+        _forget_fingerprint(repo_root)
     return _content({"summary": summary, "mode": "incremental" if incremental else "full", "stale": False})
 
 
@@ -2088,6 +2283,7 @@ def build_status_result(**extra_fields: Any) -> dict[str, Any]:
     tool is executing."""
     snapshot = REGISTRY.snapshot()
     snapshot["deadline_budget_seconds"] = resolve_budget_seconds()
+    snapshot["fingerprint_ttl_seconds"] = fingerprint_ttl_seconds()
     snapshot.update(extra_fields)
     return _content(snapshot)
 

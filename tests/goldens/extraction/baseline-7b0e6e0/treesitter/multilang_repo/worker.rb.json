@@ -1,0 +1,64 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:worker.rb:contains:Worker",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "worker.rb"
+      },
+      "relation": "contains",
+      "source": "file:worker.rb",
+      "target": "symbol:worker.rb:Worker",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:worker.rb:import:1:require",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "worker.rb"
+      },
+      "relation": "imports",
+      "source": "file:worker.rb",
+      "target": "module:require",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "worker.rb",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "rb",
+        "size_bytes": 71
+      },
+      "node_id": "file:worker.rb",
+      "signature": "",
+      "source_ref": "worker.rb",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Worker",
+      "metadata": {
+        "lineno": 3,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:worker.rb:Worker",
+      "signature": "class Worker",
+      "source_ref": "worker.rb",
+      "span_end": 7,
+      "span_start": 3
+    }
+  ]
+}

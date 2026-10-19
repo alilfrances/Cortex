@@ -1,0 +1,78 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/PanelB.swift:contains:Panel",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "swift/PanelB.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/PanelB.swift",
+      "target": "symbol:swift/PanelB.swift:Panel",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:swift/PanelB.swift:contains:draw",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "swift/PanelB.swift"
+      },
+      "relation": "contains",
+      "source": "file:swift/PanelB.swift",
+      "target": "symbol:swift/PanelB.swift:draw",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "swift/PanelB.swift",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "swift",
+        "size_bytes": 40
+      },
+      "node_id": "file:swift/PanelB.swift",
+      "signature": "",
+      "source_ref": "swift/PanelB.swift",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Panel",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:swift/PanelB.swift:Panel",
+      "signature": "class Panel {",
+      "source_ref": "swift/PanelB.swift",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "draw",
+      "metadata": {
+        "lineno": 2,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:swift/PanelB.swift:draw",
+      "signature": "func draw() {",
+      "source_ref": "swift/PanelB.swift",
+      "span_end": 3,
+      "span_start": 2
+    }
+  ]
+}

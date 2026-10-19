@@ -219,14 +219,16 @@ def test_incremental_prunes_stale_edges_for_changed_file(tmp_path):
     ingest_repository(repo)
     store = CortexStore(default_db_path(repo))
     _, edges = store.fetch_graph(repo)
-    assert any(e.edge_id == "ast:auth.py:calls:login:extra" for e in edges)
+    # Task 5 call-site contract: ids carry the line number, and the repo-wide
+    # resolver rewrites the `name:extra` target to the defining symbol.
+    assert any(e.edge_id == "ast:auth.py:calls:login:extra:3" and e.target == "symbol:auth.py:extra" for e in edges)
 
     (repo / "auth.py").write_text("def login():\n    check()\n\ndef check():\n    pass\n")
     _commit_all(repo, "remove extra() call")
     ingest_repository(repo, incremental=True)
 
     _, edges_after = store.fetch_graph(repo)
-    stale = [e for e in edges_after if e.edge_id == "ast:auth.py:calls:login:extra"]
+    stale = [e for e in edges_after if e.metadata.get("callee") == "extra" or e.target == "symbol:auth.py:extra"]
     assert stale == [], "stale call edge for a removed call site must be pruned on incremental ingest"
 
 

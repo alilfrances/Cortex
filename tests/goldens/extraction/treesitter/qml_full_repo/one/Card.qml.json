@@ -1,0 +1,290 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:one/Card.qml:binds:binding:one/Card.qml:Card.value:symbol:one/Card.qml:Card.value:2",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "bound_name": "value",
+        "lineno": 2,
+        "source_file": "one/Card.qml"
+      },
+      "relation": "binds",
+      "source": "binding:one/Card.qml:Card.value",
+      "target": "symbol:one/Card.qml:Card.value",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:one/Card.qml:contains:file:one/Card.qml:binding:one/Card.qml:Card.value:2",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "one/Card.qml"
+      },
+      "relation": "contains",
+      "source": "file:one/Card.qml",
+      "target": "binding:one/Card.qml:Card.value",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:one/Card.qml:contains:file:one/Card.qml:import:one/Card.qml:QtQuick:::1",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "one/Card.qml"
+      },
+      "relation": "contains",
+      "source": "file:one/Card.qml",
+      "target": "import:one/Card.qml:QtQuick::",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:one/Card.qml:contains:file:one/Card.qml:symbol:one/Card.qml:Card.value:2",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "one/Card.qml"
+      },
+      "relation": "contains",
+      "source": "file:one/Card.qml",
+      "target": "symbol:one/Card.qml:Card.value",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:one/Card.qml:contains:file:one/Card.qml:symbol:one/Card.qml:Card.valueChanged:2",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "one/Card.qml"
+      },
+      "relation": "contains",
+      "source": "file:one/Card.qml",
+      "target": "symbol:one/Card.qml:Card.valueChanged",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:one/Card.qml:contains:file:one/Card.qml:symbol:one/Card.qml:Card:2",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "one/Card.qml"
+      },
+      "relation": "contains",
+      "source": "file:one/Card.qml",
+      "target": "symbol:one/Card.qml:Card",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:one/Card.qml:contains:symbol:one/Card.qml:Card:binding:one/Card.qml:Card.value:2",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "one/Card.qml"
+      },
+      "relation": "contains",
+      "source": "symbol:one/Card.qml:Card",
+      "target": "binding:one/Card.qml:Card.value",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:one/Card.qml:contains:symbol:one/Card.qml:Card:symbol:one/Card.qml:Card.value:2",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "one/Card.qml"
+      },
+      "relation": "contains",
+      "source": "symbol:one/Card.qml:Card",
+      "target": "symbol:one/Card.qml:Card.value",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:one/Card.qml:contains:symbol:one/Card.qml:Card:symbol:one/Card.qml:Card.valueChanged:2",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "one/Card.qml"
+      },
+      "relation": "contains",
+      "source": "symbol:one/Card.qml:Card",
+      "target": "symbol:one/Card.qml:Card.valueChanged",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:one/Card.qml:imports:file:one/Card.qml:module:QtQuick:1",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "alias": "",
+        "lineno": 1,
+        "source_file": "one/Card.qml",
+        "unverified": true,
+        "uri": "QtQuick",
+        "version": ""
+      },
+      "relation": "imports",
+      "source": "file:one/Card.qml",
+      "target": "module:QtQuick",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:one/Card.qml:inherits:symbol:one/Card.qml:Card:module:Item:2",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "one/Card.qml",
+        "type_name": "Item",
+        "unverified": true
+      },
+      "relation": "inherits",
+      "source": "symbol:one/Card.qml:Card",
+      "target": "module:Item",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:one/Card.qml:references:symbol:one/Card.qml:Card.value:symbol:one/Card.qml:Card.valueChanged:2",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "implicit": true,
+        "lineno": 2,
+        "notify": true,
+        "source_file": "one/Card.qml"
+      },
+      "relation": "references",
+      "source": "symbol:one/Card.qml:Card.value",
+      "target": "symbol:one/Card.qml:Card.valueChanged",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "symbol",
+      "kind": "binding",
+      "label": "value",
+      "metadata": {
+        "alias": false,
+        "bound_name": "value",
+        "byte_end": 43,
+        "byte_start": 22,
+        "lineno": 2,
+        "parser_backend": "treesitter",
+        "qml_kind": "binding",
+        "qml_owner": "Card"
+      },
+      "node_id": "binding:one/Card.qml:Card.value",
+      "signature": "property int value: 1",
+      "source_ref": "one/Card.qml",
+      "span_end": 2,
+      "span_start": 2
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "one/Card.qml",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "qml",
+        "size_bytes": 46
+      },
+      "node_id": "file:one/Card.qml",
+      "signature": "",
+      "source_ref": "one/Card.qml",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "module",
+      "label": "QtQuick",
+      "metadata": {
+        "alias": "",
+        "byte_end": 14,
+        "byte_start": 0,
+        "lineno": 1,
+        "parser_backend": "treesitter",
+        "qml_kind": "import",
+        "uri": "QtQuick",
+        "version": ""
+      },
+      "node_id": "import:one/Card.qml:QtQuick::",
+      "signature": "import QtQuick",
+      "source_ref": "one/Card.qml",
+      "span_end": 1,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Card",
+      "metadata": {
+        "byte_end": 45,
+        "byte_start": 15,
+        "lineno": 2,
+        "parser_backend": "treesitter",
+        "qml_base_type": "Item",
+        "qml_kind": "component",
+        "qml_owner": "Card"
+      },
+      "node_id": "symbol:one/Card.qml:Card",
+      "signature": "Item { property int value: 1 }",
+      "source_ref": "one/Card.qml",
+      "span_end": 2,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "property",
+      "label": "value",
+      "metadata": {
+        "byte_end": 43,
+        "byte_start": 22,
+        "has_binding": true,
+        "lineno": 2,
+        "modifiers": [],
+        "parser_backend": "treesitter",
+        "qml_kind": "property",
+        "qml_owner": "Card",
+        "type": "int"
+      },
+      "node_id": "symbol:one/Card.qml:Card.value",
+      "signature": "property int value: 1",
+      "source_ref": "one/Card.qml",
+      "span_end": 2,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "valueChanged",
+      "metadata": {
+        "byte_end": 43,
+        "byte_start": 22,
+        "implicit": true,
+        "lineno": 2,
+        "parser_backend": "treesitter",
+        "property_id": "symbol:one/Card.qml:Card.value",
+        "qml_kind": "signal",
+        "qml_owner": "Card",
+        "qt": "signal"
+      },
+      "node_id": "symbol:one/Card.qml:Card.valueChanged",
+      "signature": "signal valueChanged()",
+      "source_ref": "one/Card.qml",
+      "span_end": 2,
+      "span_start": 2
+    }
+  ]
+}

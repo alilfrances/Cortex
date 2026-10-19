@@ -1,0 +1,78 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/base.rb:contains:Base",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "ruby/base.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/base.rb",
+      "target": "symbol:ruby/base.rb:Base",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/base.rb:contains:inherited_op",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "ruby/base.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/base.rb",
+      "target": "symbol:ruby/base.rb:inherited_op",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "ruby/base.rb",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "rb",
+        "size_bytes": 40
+      },
+      "node_id": "file:ruby/base.rb",
+      "signature": "",
+      "source_ref": "ruby/base.rb",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Base",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:ruby/base.rb:Base",
+      "signature": "class Base",
+      "source_ref": "ruby/base.rb",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "inherited_op",
+      "metadata": {
+        "lineno": 2,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:ruby/base.rb:inherited_op",
+      "signature": "def inherited_op",
+      "source_ref": "ruby/base.rb",
+      "span_end": 3,
+      "span_start": 2
+    }
+  ]
+}

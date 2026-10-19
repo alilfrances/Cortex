@@ -1,0 +1,76 @@
+{
+  "_meta": {
+    "cached": false,
+    "fingerprint_fresh": true
+  },
+  "items": [
+    {
+      "confidence": "LOW",
+      "layer": "STRUCTURAL",
+      "origin": "regex-parser",
+      "relation": "imports",
+      "source": "include/DeviceManager.hpp @ include/DeviceManager.hpp",
+      "target": "QObject"
+    },
+    {
+      "confidence": "LOW",
+      "layer": "STRUCTURAL",
+      "origin": "regex-parser",
+      "relation": "imports",
+      "source": "include/DeviceModel.hpp @ include/DeviceModel.hpp",
+      "target": "QObject"
+    },
+    {
+      "confidence": "LOW",
+      "layer": "STRUCTURAL",
+      "origin": "regex-parser",
+      "relation": "imports",
+      "source": "qml/DeviceDelegate.qml @ qml/DeviceDelegate.qml",
+      "target": "QtQuick"
+    },
+    {
+      "confidence": "LOW",
+      "layer": "STRUCTURAL",
+      "origin": "regex-parser",
+      "relation": "imports",
+      "source": "qml/Main.qml @ qml/Main.qml",
+      "target": "QtQuick"
+    },
+    {
+      "confidence": "LOW",
+      "layer": "STRUCTURAL",
+      "origin": "regex-parser",
+      "relation": "imports",
+      "source": "qml/Main.qml @ qml/Main.qml",
+      "target": "QtQuick.Controls"
+    },
+    {
+      "confidence": "LOW",
+      "layer": "STRUCTURAL",
+      "origin": "regex-parser",
+      "relation": "imports",
+      "source": "src/DeviceManager.cpp @ src/DeviceManager.cpp",
+      "target": "include/DeviceManager.hpp @ include/DeviceManager.hpp"
+    },
+    {
+      "confidence": "LOW",
+      "layer": "STRUCTURAL",
+      "origin": "regex-parser",
+      "relation": "imports",
+      "source": "src/DeviceManager.cpp @ src/DeviceManager.cpp",
+      "target": "include/DeviceModel.hpp @ include/DeviceModel.hpp"
+    },
+    {
+      "confidence": "LOW",
+      "layer": "STRUCTURAL",
+      "origin": "regex-parser",
+      "relation": "imports",
+      "source": "src/DeviceModel.cpp @ src/DeviceModel.cpp",
+      "target": "include/DeviceModel.hpp @ include/DeviceModel.hpp"
+    }
+  ],
+  "repo_path": "<repo>",
+  "returned_count": 8,
+  "stale": false,
+  "truncated": false
+}

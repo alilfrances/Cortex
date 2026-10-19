@@ -205,3 +205,139 @@ def test_incremental_reingest_of_cpp_alone_still_resolves_emit_to_header_signal(
     assert scan_edges, edges
     assert any(e.target == "symbol:include/DeviceManager.hpp:deviceConnected" for e in scan_edges), scan_edges
     assert not any(e.target == "module:deviceConnected" for e in scan_edges), scan_edges
+
+
+# ---------------------------------------------------------------------------
+# Task 6: C++ call edges on the Qt fixture.  `tests/fixtures/qt_calls_app` is a
+# call-specific addition (the `_build_qt_app` eval fixture and its frozen goldens
+# stay as they were); it has a QObject with a signal, a connected slot, an
+# `emit`, a `connect`, a QPointer member declared in the header and used from
+# the .cpp, an implicit-this call and a free helper in another file.
+# ---------------------------------------------------------------------------
+
+
+def _ingest_qt_calls_app(tmp_path: Path) -> Path:
+    from tests.baseline_helpers import FIXTURES, copy_fixture_repo
+
+    repo = copy_fixture_repo(FIXTURES / "qt_calls_app", tmp_path / "qt_calls_app")
+    ingest_repository(repo, commit_limit=5)
+    return repo
+
+
+def _tool_payload(repo: Path, name: str, **kwargs) -> dict:
+    result = call_tool(name, {"repo_path": str(repo), **kwargs})
+    payload = json.loads(result["content"][0]["text"])
+    assert not result["isError"], payload
+    return payload
+
+
+def _treesitter_ready() -> bool:
+    from tests.golden_utils import treesitter_available
+
+    return treesitter_available()
+
+
+@pytest.mark.skipif(not _treesitter_ready(), reason="managed tree-sitter runtime not usable here")
+def test_relations_calls_returns_resolved_targets_for_a_qobject(tmp_path):
+    repo = _ingest_qt_calls_app(tmp_path)
+    items = _tool_payload(repo, "cortex_relations", relation="calls", symbol="Scanner", limit=50)["items"]
+    pairs = {(i["source"], i["target"]) for i in items}
+    assert ("scan @ src/Scanner.cpp:9", "refresh @ src/Scanner.cpp:16") in pairs  # implicit this
+    assert ("scan @ src/Scanner.cpp:9", "normalize_id @ src/helpers.cpp:3") in pairs  # include-scoped helper
+    assert ("scan @ src/Scanner.cpp:9", "store @ include/Cache.hpp:8") in pairs  # QPointer<Cache> header member
+    assert ("onFound @ src/Scanner.cpp:20", "log_event @ src/helpers.cpp:7") in pairs
+    # emit/connect keep their own relations and never double as calls
+    assert all(i["target"] != "found" for i in items)
+    emits = _tool_payload(repo, "cortex_relations", relation="emits", symbol="Scanner")["items"]
+    assert any("found" in i["target"] for i in emits)
+    connects = _tool_payload(repo, "cortex_relations", relation="connects", symbol="found")["items"]
+    assert connects
+
+
+@pytest.mark.skipif(not _treesitter_ready(), reason="managed tree-sitter runtime not usable here")
+def test_cortex_path_walks_emits_then_calls_from_the_signal_to_the_helper(tmp_path):
+    repo = _ingest_qt_calls_app(tmp_path)
+    payload = _tool_payload(
+        repo, "cortex_path",
+        symbol_a="symbol:include/Scanner.hpp:found", symbol_b="symbol:src/helpers.cpp:normalize_id", format="detailed",
+    )
+    shortest = min(payload["paths"], key=len)
+    assert [(h["relation"], h["node_id"]) for h in shortest] == [
+        ("emits", "symbol:src/Scanner.cpp:scan"),
+        ("calls", "symbol:src/helpers.cpp:normalize_id"),
+    ]
+    # slot body -> helper chain through two resolved call edges
+    chain = _tool_payload(
+        repo, "cortex_path",
+        symbol_a="symbol:src/Scanner.cpp:onFound", symbol_b="symbol:src/helpers.cpp:normalize_id", format="detailed",
+    )["paths"]
+    assert [h["relation"] for h in min(chain, key=len)] == ["calls", "calls"]
+
+
+@pytest.mark.skipif(not _treesitter_ready(), reason="managed tree-sitter runtime not usable here")
+def test_qml_handler_to_slot_to_helper_path_uses_handles_connects_and_calls(tmp_path):
+    """`ScannerView { onFound: ... }` (QML) -handles-> `ScannerView.found` (QML signal) -connects->
+    `Relay::onFound` (C++ slot, `connect(view_, &ScannerView::found, relay_, &Relay::onFound)`)
+    -calls-> `log_event`.  Every hop is produced by the existing QML/Qt
+    resolution plus the C++ call resolver; nothing is special-cased for the test."""
+    repo = _ingest_qt_calls_app(tmp_path)
+    handler = "symbol:qml/Main.qml:Main.ScannerView.onFound"
+    path = _tool_payload(
+        repo, "cortex_path", symbol_a=handler, symbol_b="symbol:src/helpers.cpp:log_event", format="detailed",
+    )["paths"]
+    shortest = min(path, key=len)
+    assert [(h["relation"], h["node_id"]) for h in shortest] == [
+        ("handles", "symbol:qml/ScannerView.qml:ScannerView.found"),
+        ("connects", "symbol:src/Relay.cpp:onFound"),
+        ("calls", "symbol:src/helpers.cpp:log_event"),
+    ]
+
+
+@pytest.mark.skipif(not _treesitter_ready(), reason="managed tree-sitter runtime not usable here")
+def test_qt_dead_code_stays_clean_with_call_edges(tmp_path):
+    repo = _ingest_qt_calls_app(tmp_path)
+    detailed = _tool_payload(repo, "cortex_dead_code", format="detailed", budget=9999)
+    flagged = {item["symbol"]: item["confidence"] for item in detailed["findings"]}
+    # connected slots, emitted/QML-handled signals, QML-instantiated types and called helpers are never `high`
+    for name in ("onFound", "found", "Scanner", "ScannerView", "Relay", "normalize_id", "log_event", "refresh", "store"):
+        assert flagged.get(name) != "high", (name, flagged)
+
+
+def test_regex_backend_calls_on_qt_fixture_are_name_only_low(tmp_path, monkeypatch):
+    monkeypatch.setenv("CORTEX_FORCE_REGEX", "1")
+    repo = _ingest_qt_calls_app(tmp_path)
+    items = _tool_payload(repo, "cortex_relations", relation="calls", symbol="Scanner", limit=50)["items"]
+    assert items and all(i["confidence"] == "LOW" for i in items)
+    assert all("@" not in i["target"] for i in items)  # name-based: never a symbol endpoint
+    assert {i["target"] for i in items} >= {"refresh", "normalize_id", "store", "log_event"}
+
+
+# ---------------------------------------------------------------------------
+# Task 9: resolved call edges surface in impact and context.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(not _treesitter_ready(), reason="managed tree-sitter runtime not usable here")
+def test_impact_and_context_surface_cpp_call_edges(tmp_path):
+    repo = _ingest_qt_calls_app(tmp_path)
+    items = _tool_payload(repo, "cortex_impact", path="src/Scanner.cpp", limit=20, budget=9999)["items"]
+    by_path = {item["path"]: item for item in items}
+    helpers_why = [w for w in by_path["src/helpers.cpp"]["why"] if "symbol" in w]
+    assert {w["symbol"] for w in helpers_why} == {"scan -> normalize_id", "onFound -> log_event"}
+    assert all(w["relation"] == "calls" and w["layer"] == "STRUCTURAL" for w in helpers_why)
+    # A header member reached only through a typed QPointer is a neighbour too.
+    assert any(w.get("symbol") == "scan -> store" for w in by_path["include/Cache.hpp"]["why"])
+
+    concise = _tool_payload(repo, "cortex_context", targets=["symbol:src/Scanner.cpp:scan"])["cards"][0]
+    assert {(n["relation"], n["node_id"]) for n in concise["neighbors"]} == {
+        ("calls", "symbol:include/Cache.hpp:store"),
+        ("calls", "symbol:src/Scanner.cpp:refresh"),
+        ("calls", "symbol:src/helpers.cpp:normalize_id"),
+    }
+    assert "calls" not in concise  # counts are detailed-only (token budget)
+    detailed = _tool_payload(
+        repo, "cortex_context", targets=["symbol:src/Scanner.cpp:scan", "symbol:src/helpers.cpp:log_event"],
+        response_format="detailed",
+    )["cards"]
+    assert detailed[0]["calls"] == {"callers": 0, "callees": 3}
+    assert detailed[1]["calls"]["callers"] >= 1  # onFound (and Relay::onFound) call log_event

@@ -1,0 +1,113 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:App.java:calls:run:of:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "of",
+        "enclosing_class": null,
+        "lineno": 5,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "App.java"
+      },
+      "relation": "calls",
+      "source": "symbol:App.java:run",
+      "target": "name:of",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:App.java:contains:App",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "App.java"
+      },
+      "relation": "contains",
+      "source": "file:App.java",
+      "target": "symbol:App.java:App",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:App.java:contains:run",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "App.java"
+      },
+      "relation": "contains",
+      "source": "file:App.java",
+      "target": "symbol:App.java:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:App.java:import:1:1:java.util.List",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "App.java"
+      },
+      "relation": "imports",
+      "source": "file:App.java",
+      "target": "module:java.util.List",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "App.java",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "java",
+        "size_bytes": 99
+      },
+      "node_id": "file:App.java",
+      "signature": "",
+      "source_ref": "App.java",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "App",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 3,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:App.java:App",
+      "signature": "public class App {",
+      "source_ref": "App.java",
+      "span_end": 7,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "run",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 4,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:App.java:run",
+      "signature": "public void run() {",
+      "source_ref": "App.java",
+      "span_end": 6,
+      "span_start": 4
+    }
+  ]
+}

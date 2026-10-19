@@ -1,0 +1,1708 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:calls:make:Engine:16",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Engine",
+        "enclosing_class": "Engine",
+        "lineno": 16,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:app.cpp:make",
+      "target": "name:Engine",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:calls:run:Engine.make:35",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "make",
+        "enclosing_class": "Controller",
+        "lineno": 35,
+        "receiver": "Engine",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "Engine",
+        "source_file": "app.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:app.cpp:run",
+      "target": "name:make",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:calls:run:Engine:43",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Engine",
+        "enclosing_class": "Controller",
+        "lineno": 43,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:app.cpp:run",
+      "target": "name:Engine",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:calls:run:Net.connect_count:36",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "connect_count",
+        "enclosing_class": "Controller",
+        "lineno": 36,
+        "receiver": "Net",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "Net",
+        "source_file": "app.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:app.cpp:run",
+      "target": "name:connect_count",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:calls:run:Worker:45",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Worker",
+        "enclosing_class": "Controller",
+        "lineno": 45,
+        "receiver": null,
+        "receiver_kind": "new",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:app.cpp:run",
+      "target": "name:Worker",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:calls:run:clamp:49",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "clamp",
+        "enclosing_class": "Controller",
+        "lineno": 49,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:app.cpp:run",
+      "target": "name:clamp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:calls:run:compute_total:50",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "compute_total",
+        "enclosing_class": "Controller",
+        "lineno": 50,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:app.cpp:run",
+      "target": "name:compute_total",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:calls:run:e.warm:40",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "warm",
+        "enclosing_class": "Controller",
+        "lineno": 40,
+        "receiver": "e",
+        "receiver_kind": "var",
+        "receiver_type": "Engine",
+        "scope": null,
+        "source_file": "app.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:app.cpp:run",
+      "target": "name:warm",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:calls:run:engine_.warm:41",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "warm",
+        "enclosing_class": "Controller",
+        "lineno": 41,
+        "receiver": "engine_",
+        "receiver_kind": "var",
+        "receiver_type": "Engine",
+        "scope": null,
+        "source_file": "app.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:app.cpp:run",
+      "target": "name:warm",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:calls:run:free_helper:32",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "free_helper",
+        "enclosing_class": "Controller",
+        "lineno": 32,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:app.cpp:run",
+      "target": "name:free_helper",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:calls:run:local.work:38",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "work",
+        "enclosing_class": "Controller",
+        "lineno": 38,
+        "receiver": "local",
+        "receiver_kind": "var",
+        "receiver_type": "Worker",
+        "scope": null,
+        "source_file": "app.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:app.cpp:run",
+      "target": "name:work",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:calls:run:ping:47",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "ping",
+        "enclosing_class": "Controller",
+        "lineno": 47,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:app.cpp:run",
+      "target": "name:ping",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:calls:run:printf:54",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "printf",
+        "enclosing_class": "Controller",
+        "lineno": 54,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:app.cpp:run",
+      "target": "name:printf",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:calls:run:render:51",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "render",
+        "enclosing_class": "Controller",
+        "lineno": 51,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:app.cpp:run",
+      "target": "name:render",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:calls:run:this.tick:48",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "tick",
+        "enclosing_class": "Controller",
+        "lineno": 48,
+        "receiver": "this",
+        "receiver_kind": "this",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:app.cpp:run",
+      "target": "name:tick",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:calls:run:this.warm_up:33",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "warm_up",
+        "enclosing_class": "Controller",
+        "lineno": 33,
+        "receiver": "this",
+        "receiver_kind": "this",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:app.cpp:run",
+      "target": "name:warm_up",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:calls:run:values.push_back:53",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "push_back",
+        "enclosing_class": "Controller",
+        "lineno": 53,
+        "receiver": "values",
+        "receiver_kind": "var",
+        "receiver_type": "vector",
+        "scope": null,
+        "source_file": "app.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:app.cpp:run",
+      "target": "name:push_back",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:calls:run:w.work:39",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "work",
+        "enclosing_class": "Controller",
+        "lineno": 39,
+        "receiver": "w",
+        "receiver_kind": "var",
+        "receiver_type": "Worker",
+        "scope": null,
+        "source_file": "app.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:app.cpp:run",
+      "target": "name:work",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:calls:run:warm_up:34",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "warm_up",
+        "enclosing_class": "Controller",
+        "lineno": 34,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:app.cpp:run",
+      "target": "name:warm_up",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:calls:run:worker_.work:42",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "work",
+        "enclosing_class": "Controller",
+        "lineno": 42,
+        "receiver": "worker_",
+        "receiver_kind": "var",
+        "receiver_type": "Worker",
+        "scope": null,
+        "source_file": "app.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:app.cpp:run",
+      "target": "name:work",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:calls:run:x.warm:44",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "warm",
+        "enclosing_class": "Controller",
+        "lineno": 44,
+        "receiver": "x",
+        "receiver_kind": "var",
+        "receiver_type": "Engine",
+        "scope": null,
+        "source_file": "app.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:app.cpp:run",
+      "target": "name:warm",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:calls:run:y.work:46",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "work",
+        "enclosing_class": "Controller",
+        "lineno": 46,
+        "receiver": "y",
+        "receiver_kind": "var",
+        "receiver_type": "Worker",
+        "scope": null,
+        "source_file": "app.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:app.cpp:run",
+      "target": "name:work",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:contains:Controller",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 23,
+        "source_file": "app.cpp"
+      },
+      "relation": "contains",
+      "source": "file:app.cpp",
+      "target": "symbol:app.cpp:Controller",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:contains:Engine",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 11,
+        "source_file": "app.cpp"
+      },
+      "relation": "contains",
+      "source": "file:app.cpp",
+      "target": "symbol:app.cpp:Engine",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:contains:Net",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "app.cpp"
+      },
+      "relation": "contains",
+      "source": "file:app.cpp",
+      "target": "symbol:app.cpp:Net",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:contains:connect_count",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "app.cpp"
+      },
+      "relation": "contains",
+      "source": "file:app.cpp",
+      "target": "symbol:app.cpp:connect_count",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:contains:free_helper",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 20,
+        "source_file": "app.cpp"
+      },
+      "relation": "contains",
+      "source": "file:app.cpp",
+      "target": "symbol:app.cpp:free_helper",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:contains:make",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 15,
+        "source_file": "app.cpp"
+      },
+      "relation": "contains",
+      "source": "file:app.cpp",
+      "target": "symbol:app.cpp:make",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:contains:run",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 31,
+        "source_file": "app.cpp"
+      },
+      "relation": "contains",
+      "source": "file:app.cpp",
+      "target": "symbol:app.cpp:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:contains:warm",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 13,
+        "source_file": "app.cpp"
+      },
+      "relation": "contains",
+      "source": "file:app.cpp",
+      "target": "symbol:app.cpp:warm",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:contains:warm_up",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 28,
+        "source_file": "app.cpp"
+      },
+      "relation": "contains",
+      "source": "file:app.cpp",
+      "target": "symbol:app.cpp:warm_up",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:import:1:memory",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "app.cpp"
+      },
+      "relation": "imports",
+      "source": "file:app.cpp",
+      "target": "module:memory",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:import:2:util.hpp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "app.cpp"
+      },
+      "relation": "imports",
+      "source": "file:app.cpp",
+      "target": "file:util.hpp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:import:3:worker.hpp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "app.cpp"
+      },
+      "relation": "imports",
+      "source": "file:app.cpp",
+      "target": "file:worker.hpp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.cpp:inherits:Controller:Base",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 23,
+        "source_file": "app.cpp"
+      },
+      "relation": "inherits",
+      "source": "symbol:app.cpp:Controller",
+      "target": "name:Base",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:base.hpp:contains:Base",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "base.hpp"
+      },
+      "relation": "contains",
+      "source": "file:base.hpp",
+      "target": "symbol:base.hpp:Base",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:base.hpp:contains:ping",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "base.hpp"
+      },
+      "relation": "contains",
+      "source": "file:base.hpp",
+      "target": "symbol:base.hpp:ping",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:base.hpp:contains:tick",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 8,
+        "source_file": "base.hpp"
+      },
+      "relation": "contains",
+      "source": "file:base.hpp",
+      "target": "symbol:base.hpp:tick",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:diamond.cpp:calls:go:name:7",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "name",
+        "enclosing_class": "Duo",
+        "lineno": 7,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "diamond.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:diamond.cpp:go",
+      "target": "name:name",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:diamond.cpp:contains:Duo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "diamond.cpp"
+      },
+      "relation": "contains",
+      "source": "file:diamond.cpp",
+      "target": "symbol:diamond.cpp:Duo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:diamond.cpp:contains:go",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "diamond.cpp"
+      },
+      "relation": "contains",
+      "source": "file:diamond.cpp",
+      "target": "symbol:diamond.cpp:go",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:diamond.cpp:import:1:left.hpp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "diamond.cpp"
+      },
+      "relation": "imports",
+      "source": "file:diamond.cpp",
+      "target": "file:left.hpp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:diamond.cpp:import:2:right.hpp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "diamond.cpp"
+      },
+      "relation": "imports",
+      "source": "file:diamond.cpp",
+      "target": "file:right.hpp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:diamond.cpp:inherits:Duo:Left",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "diamond.cpp"
+      },
+      "relation": "inherits",
+      "source": "symbol:diamond.cpp:Duo",
+      "target": "name:Left",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:diamond.cpp:inherits:Duo:Right",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "diamond.cpp"
+      },
+      "relation": "inherits",
+      "source": "symbol:diamond.cpp:Duo",
+      "target": "name:Right",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:draw_a.cpp:contains:render",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "draw_a.cpp"
+      },
+      "relation": "contains",
+      "source": "file:draw_a.cpp",
+      "target": "symbol:draw_a.cpp:render",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:draw_b.cpp:contains:render",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "draw_b.cpp"
+      },
+      "relation": "contains",
+      "source": "file:draw_b.cpp",
+      "target": "symbol:draw_b.cpp:render",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:gateway.cpp:calls:send:engine_.warm:4",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "warm",
+        "enclosing_class": "Gateway",
+        "lineno": 4,
+        "receiver": "engine_",
+        "receiver_kind": "var",
+        "receiver_member": "engine_",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "gateway.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:gateway.cpp:send",
+      "target": "name:warm",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:gateway.cpp:calls:send:this->engine_.warm:6",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "warm",
+        "enclosing_class": "Gateway",
+        "lineno": 6,
+        "receiver": "this->engine_",
+        "receiver_kind": "var",
+        "receiver_member": "engine_",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "gateway.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:gateway.cpp:send",
+      "target": "name:warm",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:gateway.cpp:calls:send:worker_.work:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "work",
+        "enclosing_class": "Gateway",
+        "lineno": 5,
+        "receiver": "worker_",
+        "receiver_kind": "var",
+        "receiver_member": "worker_",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "gateway.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:gateway.cpp:send",
+      "target": "name:work",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:gateway.cpp:contains:send",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "gateway.cpp"
+      },
+      "relation": "contains",
+      "source": "file:gateway.cpp",
+      "target": "symbol:gateway.cpp:send",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:gateway.cpp:import:1:gateway.hpp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "gateway.cpp"
+      },
+      "relation": "imports",
+      "source": "file:gateway.cpp",
+      "target": "file:gateway.hpp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:gateway.hpp:contains:Gateway",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 7,
+        "source_file": "gateway.hpp"
+      },
+      "relation": "contains",
+      "source": "file:gateway.hpp",
+      "target": "symbol:gateway.hpp:Gateway",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:gateway.hpp:import:2:memory",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "gateway.hpp"
+      },
+      "relation": "imports",
+      "source": "file:gateway.hpp",
+      "target": "module:memory",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:gateway.hpp:import:3:worker.hpp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "gateway.hpp"
+      },
+      "relation": "imports",
+      "source": "file:gateway.hpp",
+      "target": "file:worker.hpp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:gateway.hpp:inherits:Gateway:Worker",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 7,
+        "source_file": "gateway.hpp"
+      },
+      "relation": "inherits",
+      "source": "symbol:gateway.hpp:Gateway",
+      "target": "name:Worker",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:left.hpp:contains:Left",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "left.hpp"
+      },
+      "relation": "contains",
+      "source": "file:left.hpp",
+      "target": "symbol:left.hpp:Left",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:left.hpp:contains:name",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "left.hpp"
+      },
+      "relation": "contains",
+      "source": "file:left.hpp",
+      "target": "symbol:left.hpp:name",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:misc.cpp:contains:name",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "misc.cpp"
+      },
+      "relation": "contains",
+      "source": "file:misc.cpp",
+      "target": "symbol:misc.cpp:name",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:right.hpp:contains:Right",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "right.hpp"
+      },
+      "relation": "contains",
+      "source": "file:right.hpp",
+      "target": "symbol:right.hpp:Right",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:right.hpp:contains:name",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "right.hpp"
+      },
+      "relation": "contains",
+      "source": "file:right.hpp",
+      "target": "symbol:right.hpp:name",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:util.cpp:calls:compute_total:clamp:4",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "clamp",
+        "enclosing_class": null,
+        "lineno": 4,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "util.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:util.cpp:compute_total",
+      "target": "name:clamp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:util.cpp:contains:compute_total",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "util.cpp"
+      },
+      "relation": "contains",
+      "source": "file:util.cpp",
+      "target": "symbol:util.cpp:compute_total",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:util.cpp:import:1:util.hpp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "util.cpp"
+      },
+      "relation": "imports",
+      "source": "file:util.cpp",
+      "target": "file:util.hpp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:util.hpp:contains:clamp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "util.hpp"
+      },
+      "relation": "contains",
+      "source": "file:util.hpp",
+      "target": "symbol:util.hpp:clamp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:worker.hpp:calls:work:ping:7",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "ping",
+        "enclosing_class": "Worker",
+        "lineno": 7,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "worker.hpp"
+      },
+      "relation": "calls",
+      "source": "symbol:worker.hpp:work",
+      "target": "name:ping",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:worker.hpp:contains:Worker",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "worker.hpp"
+      },
+      "relation": "contains",
+      "source": "file:worker.hpp",
+      "target": "symbol:worker.hpp:Worker",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:worker.hpp:contains:work",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "worker.hpp"
+      },
+      "relation": "contains",
+      "source": "file:worker.hpp",
+      "target": "symbol:worker.hpp:work",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:worker.hpp:import:2:base.hpp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "worker.hpp"
+      },
+      "relation": "imports",
+      "source": "file:worker.hpp",
+      "target": "file:base.hpp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:worker.hpp:inherits:Worker:Base",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "worker.hpp"
+      },
+      "relation": "inherits",
+      "source": "symbol:worker.hpp:Worker",
+      "target": "name:Base",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "app.cpp",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "cpp",
+        "size_bytes": 976
+      },
+      "node_id": "file:app.cpp",
+      "signature": "",
+      "source_ref": "app.cpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "base.hpp",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "hpp",
+        "size_bytes": 158
+      },
+      "node_id": "file:base.hpp",
+      "signature": "",
+      "source_ref": "base.hpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "diamond.cpp",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "cpp",
+        "size_bytes": 137
+      },
+      "node_id": "file:diamond.cpp",
+      "signature": "",
+      "source_ref": "diamond.cpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "draw_a.cpp",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "cpp",
+        "size_bytes": 31
+      },
+      "node_id": "file:draw_a.cpp",
+      "signature": "",
+      "source_ref": "draw_a.cpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "draw_b.cpp",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "cpp",
+        "size_bytes": 31
+      },
+      "node_id": "file:draw_b.cpp",
+      "signature": "",
+      "source_ref": "draw_b.cpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "gateway.cpp",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "cpp",
+        "size_bytes": 118
+      },
+      "node_id": "file:gateway.cpp",
+      "signature": "",
+      "source_ref": "gateway.cpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "gateway.hpp",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "hpp",
+        "size_bytes": 197
+      },
+      "node_id": "file:gateway.hpp",
+      "signature": "",
+      "source_ref": "gateway.hpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "left.hpp",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "hpp",
+        "size_bytes": 79
+      },
+      "node_id": "file:left.hpp",
+      "signature": "",
+      "source_ref": "left.hpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "misc.cpp",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "cpp",
+        "size_bytes": 29
+      },
+      "node_id": "file:misc.cpp",
+      "signature": "",
+      "source_ref": "misc.cpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "right.hpp",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "hpp",
+        "size_bytes": 80
+      },
+      "node_id": "file:right.hpp",
+      "signature": "",
+      "source_ref": "right.hpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "util.cpp",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "cpp",
+        "size_bytes": 85
+      },
+      "node_id": "file:util.cpp",
+      "signature": "",
+      "source_ref": "util.cpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "util.hpp",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "hpp",
+        "size_bytes": 96
+      },
+      "node_id": "file:util.hpp",
+      "signature": "",
+      "source_ref": "util.hpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "worker.hpp",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "hpp",
+        "size_bytes": 114
+      },
+      "node_id": "file:worker.hpp",
+      "signature": "",
+      "source_ref": "worker.hpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Controller",
+      "metadata": {
+        "lineno": 23,
+        "member_types": {
+          "engine_": "Engine",
+          "worker_": "Worker"
+        },
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:app.cpp:Controller",
+      "signature": "class Controller : public Base {",
+      "source_ref": "app.cpp",
+      "span_end": 56,
+      "span_start": 23
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Engine",
+      "metadata": {
+        "lineno": 11,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:app.cpp:Engine",
+      "signature": "class Engine {",
+      "source_ref": "app.cpp",
+      "span_end": 18,
+      "span_start": 11
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Net",
+      "metadata": {
+        "lineno": 5,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:app.cpp:Net",
+      "signature": "namespace Net {",
+      "source_ref": "app.cpp",
+      "span_end": 9,
+      "span_start": 5
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "connect_count",
+      "metadata": {
+        "lineno": 6,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:app.cpp:connect_count",
+      "signature": "int connect_count() {",
+      "source_ref": "app.cpp",
+      "span_end": 8,
+      "span_start": 6
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "free_helper",
+      "metadata": {
+        "lineno": 20,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:app.cpp:free_helper",
+      "signature": "static void free_helper(int level) {",
+      "source_ref": "app.cpp",
+      "span_end": 21,
+      "span_start": 20
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "make",
+      "metadata": {
+        "lineno": 15,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:app.cpp:make",
+      "signature": "static Engine make() {",
+      "source_ref": "app.cpp",
+      "span_end": 17,
+      "span_start": 15
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "run",
+      "metadata": {
+        "lineno": 31,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:app.cpp:run",
+      "signature": "void run(Worker *w, Engine &e) {",
+      "source_ref": "app.cpp",
+      "span_end": 55,
+      "span_start": 31
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "warm",
+      "metadata": {
+        "lineno": 13,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:app.cpp:warm",
+      "signature": "void warm() {",
+      "source_ref": "app.cpp",
+      "span_end": 14,
+      "span_start": 13
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "warm_up",
+      "metadata": {
+        "lineno": 28,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:app.cpp:warm_up",
+      "signature": "void warm_up() {",
+      "source_ref": "app.cpp",
+      "span_end": 29,
+      "span_start": 28
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Base",
+      "metadata": {
+        "lineno": 3,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:base.hpp:Base",
+      "signature": "class Base {",
+      "source_ref": "base.hpp",
+      "span_end": 10,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "ping",
+      "metadata": {
+        "lineno": 5,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:base.hpp:ping",
+      "signature": "void ping() {",
+      "source_ref": "base.hpp",
+      "span_end": 7,
+      "span_start": 5
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "tick",
+      "metadata": {
+        "lineno": 8,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:base.hpp:tick",
+      "signature": "virtual void tick() {",
+      "source_ref": "base.hpp",
+      "span_end": 9,
+      "span_start": 8
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Duo",
+      "metadata": {
+        "lineno": 4,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:diamond.cpp:Duo",
+      "signature": "class Duo : public Left, public Right {",
+      "source_ref": "diamond.cpp",
+      "span_end": 9,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "go",
+      "metadata": {
+        "lineno": 6,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:diamond.cpp:go",
+      "signature": "int go() {",
+      "source_ref": "diamond.cpp",
+      "span_end": 8,
+      "span_start": 6
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "render",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:draw_a.cpp:render",
+      "signature": "int render() {",
+      "source_ref": "draw_a.cpp",
+      "span_end": 3,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "render",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:draw_b.cpp:render",
+      "signature": "int render() {",
+      "source_ref": "draw_b.cpp",
+      "span_end": 3,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "send",
+      "metadata": {
+        "lineno": 3,
+        "parser_backend": "treesitter",
+        "qualifier": "Gateway"
+      },
+      "node_id": "symbol:gateway.cpp:send",
+      "signature": "void Gateway::send() {",
+      "source_ref": "gateway.cpp",
+      "span_end": 7,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Gateway",
+      "metadata": {
+        "lineno": 7,
+        "member_types": {
+          "engine_": "Engine",
+          "worker_": "Worker"
+        },
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:gateway.hpp:Gateway",
+      "signature": "class Gateway : public Worker {",
+      "source_ref": "gateway.hpp",
+      "span_end": 14,
+      "span_start": 7
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Left",
+      "metadata": {
+        "lineno": 3,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:left.hpp:Left",
+      "signature": "class Left {",
+      "source_ref": "left.hpp",
+      "span_end": 8,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "name",
+      "metadata": {
+        "lineno": 5,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:left.hpp:name",
+      "signature": "int name() {",
+      "source_ref": "left.hpp",
+      "span_end": 7,
+      "span_start": 5
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "name",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:misc.cpp:name",
+      "signature": "int name() {",
+      "source_ref": "misc.cpp",
+      "span_end": 3,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Right",
+      "metadata": {
+        "lineno": 3,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:right.hpp:Right",
+      "signature": "class Right {",
+      "source_ref": "right.hpp",
+      "span_end": 8,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "name",
+      "metadata": {
+        "lineno": 5,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:right.hpp:name",
+      "signature": "int name() {",
+      "source_ref": "right.hpp",
+      "span_end": 7,
+      "span_start": 5
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "compute_total",
+      "metadata": {
+        "lineno": 3,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:util.cpp:compute_total",
+      "signature": "int compute_total(int amount) {",
+      "source_ref": "util.cpp",
+      "span_end": 5,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "clamp",
+      "metadata": {
+        "lineno": 5,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:util.hpp:clamp",
+      "signature": "inline int clamp(int value) {",
+      "source_ref": "util.hpp",
+      "span_end": 7,
+      "span_start": 5
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Worker",
+      "metadata": {
+        "lineno": 4,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:worker.hpp:Worker",
+      "signature": "class Worker : public Base {",
+      "source_ref": "worker.hpp",
+      "span_end": 9,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "work",
+      "metadata": {
+        "lineno": 6,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:worker.hpp:work",
+      "signature": "void work() {",
+      "source_ref": "worker.hpp",
+      "span_end": 8,
+      "span_start": 6
+    }
+  ]
+}

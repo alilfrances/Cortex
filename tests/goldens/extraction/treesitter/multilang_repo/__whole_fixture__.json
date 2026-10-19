@@ -1,0 +1,1152 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:Main.qml:calls:symbol:Main.qml:Main.launch:symbol:Main.qml:Main.started:7",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 7,
+        "member": "",
+        "source_file": "Main.qml",
+        "unverified": false
+      },
+      "relation": "calls",
+      "source": "symbol:Main.qml:Main.launch",
+      "target": "symbol:Main.qml:Main.started",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:Main.qml:contains:file:Main.qml:import:Main.qml:QtQuick:2.15::1",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "Main.qml"
+      },
+      "relation": "contains",
+      "source": "file:Main.qml",
+      "target": "import:Main.qml:QtQuick:2.15:",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:Main.qml:contains:file:Main.qml:symbol:Main.qml:Main.launch:6",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "Main.qml"
+      },
+      "relation": "contains",
+      "source": "file:Main.qml",
+      "target": "symbol:Main.qml:Main.launch",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:Main.qml:contains:file:Main.qml:symbol:Main.qml:Main.started:4",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "Main.qml"
+      },
+      "relation": "contains",
+      "source": "file:Main.qml",
+      "target": "symbol:Main.qml:Main.started",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:Main.qml:contains:file:Main.qml:symbol:Main.qml:Main:3",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "Main.qml"
+      },
+      "relation": "contains",
+      "source": "file:Main.qml",
+      "target": "symbol:Main.qml:Main",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:Main.qml:contains:symbol:Main.qml:Main:symbol:Main.qml:Main.launch:6",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "Main.qml"
+      },
+      "relation": "contains",
+      "source": "symbol:Main.qml:Main",
+      "target": "symbol:Main.qml:Main.launch",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:Main.qml:contains:symbol:Main.qml:Main:symbol:Main.qml:Main.started:4",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "Main.qml"
+      },
+      "relation": "contains",
+      "source": "symbol:Main.qml:Main",
+      "target": "symbol:Main.qml:Main.started",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:Main.qml:imports:file:Main.qml:module:QtQuick:1",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "alias": "",
+        "lineno": 1,
+        "source_file": "Main.qml",
+        "unverified": true,
+        "uri": "QtQuick",
+        "version": "2.15"
+      },
+      "relation": "imports",
+      "source": "file:Main.qml",
+      "target": "module:QtQuick",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:Main.qml:inherits:symbol:Main.qml:Main:module:Item:3",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "Main.qml",
+        "type_name": "Item",
+        "unverified": true
+      },
+      "relation": "inherits",
+      "source": "symbol:Main.qml:Main",
+      "target": "module:Item",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:App.java:calls:run:List.of:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "of",
+        "enclosing_class": "App",
+        "lineno": 5,
+        "receiver": "List",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "List",
+        "source_file": "App.java"
+      },
+      "relation": "calls",
+      "source": "symbol:App.java:run",
+      "target": "name:of",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:App.java:contains:App",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "App.java"
+      },
+      "relation": "contains",
+      "source": "file:App.java",
+      "target": "symbol:App.java:App",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:App.java:contains:run",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "App.java"
+      },
+      "relation": "contains",
+      "source": "file:App.java",
+      "target": "symbol:App.java:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:App.java:import:1:java.util.List",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "App.java"
+      },
+      "relation": "imports",
+      "source": "file:App.java",
+      "target": "module:java.util.List",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.js:calls:run:start:9",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "start",
+        "enclosing_class": "AppController",
+        "implicit_receiver": false,
+        "lineno": 9,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.js"
+      },
+      "relation": "calls",
+      "source": "symbol:app.js:run",
+      "target": "name:start",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.js:calls:start:helper:4",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "helper",
+        "enclosing_class": null,
+        "implicit_receiver": false,
+        "import_file": null,
+        "import_spec": "./helper.js",
+        "lineno": 4,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.js"
+      },
+      "relation": "calls",
+      "source": "symbol:app.js:start",
+      "target": "name:helper",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.js:contains:AppController",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 7,
+        "source_file": "app.js"
+      },
+      "relation": "contains",
+      "source": "file:app.js",
+      "target": "symbol:app.js:AppController",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.js:contains:run",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 8,
+        "source_file": "app.js"
+      },
+      "relation": "contains",
+      "source": "file:app.js",
+      "target": "symbol:app.js:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.js:contains:start",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "app.js"
+      },
+      "relation": "contains",
+      "source": "file:app.js",
+      "target": "symbol:app.js:start",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:app.js:import:1:./helper.js",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "app.js"
+      },
+      "relation": "imports",
+      "source": "file:app.js",
+      "target": "module:./helper.js",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:client.ts:calls:connect:start:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "start",
+        "enclosing_class": "Client",
+        "implicit_receiver": false,
+        "import_file": "app.js",
+        "import_spec": "./app",
+        "lineno": 5,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "client.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:client.ts:connect",
+      "target": "name:start",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:client.ts:contains:Client",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "client.ts"
+      },
+      "relation": "contains",
+      "source": "file:client.ts",
+      "target": "symbol:client.ts:Client",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:client.ts:contains:connect",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "client.ts"
+      },
+      "relation": "contains",
+      "source": "file:client.ts",
+      "target": "symbol:client.ts:connect",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:client.ts:import:1:./app",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "client.ts"
+      },
+      "relation": "imports",
+      "source": "file:client.ts",
+      "target": "module:./app",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:engine.cpp:contains:Engine",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "engine.cpp"
+      },
+      "relation": "contains",
+      "source": "file:engine.cpp",
+      "target": "symbol:engine.cpp:Engine",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:engine.cpp:contains:Runner",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "engine.cpp"
+      },
+      "relation": "contains",
+      "source": "file:engine.cpp",
+      "target": "symbol:engine.cpp:Runner",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:engine.cpp:contains:compute",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 9,
+        "source_file": "engine.cpp"
+      },
+      "relation": "contains",
+      "source": "file:engine.cpp",
+      "target": "symbol:engine.cpp:compute",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:engine.cpp:contains:start",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "engine.cpp"
+      },
+      "relation": "contains",
+      "source": "file:engine.cpp",
+      "target": "symbol:engine.cpp:start",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:engine.cpp:import:1:engine.hpp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "engine.cpp"
+      },
+      "relation": "imports",
+      "source": "file:engine.cpp",
+      "target": "file:engine.hpp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:engine.hpp:contains:EngineCore",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "engine.hpp"
+      },
+      "relation": "contains",
+      "source": "file:engine.hpp",
+      "target": "symbol:engine.hpp:EngineCore",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib.rs:calls:run:fmt.format:6",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "format",
+        "enclosing_class": null,
+        "lineno": 6,
+        "receiver": "fmt",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "fmt",
+        "source_file": "lib.rs"
+      },
+      "relation": "calls",
+      "source": "symbol:lib.rs:run",
+      "target": "name:format",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib.rs:contains:Worker",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "lib.rs"
+      },
+      "relation": "contains",
+      "source": "file:lib.rs",
+      "target": "symbol:lib.rs:Worker",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib.rs:contains:run",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "lib.rs"
+      },
+      "relation": "contains",
+      "source": "file:lib.rs",
+      "target": "symbol:lib.rs:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:lib.rs:import:1:std::fmt",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib.rs"
+      },
+      "relation": "imports",
+      "source": "file:lib.rs",
+      "target": "module:std::fmt",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:main.c:contains:Counter",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "main.c"
+      },
+      "relation": "contains",
+      "source": "file:main.c",
+      "target": "symbol:main.c:Counter",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:main.c:contains:add",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 7,
+        "source_file": "main.c"
+      },
+      "relation": "contains",
+      "source": "file:main.c",
+      "target": "symbol:main.c:add",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:main.c:import:1:stdio.h",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "main.c"
+      },
+      "relation": "imports",
+      "source": "file:main.c",
+      "target": "module:stdio.h",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:main.go:calls:Run:fmt.Println:6",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Println",
+        "enclosing_class": null,
+        "lineno": 6,
+        "receiver": "fmt",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "fmt",
+        "scope_dir": null,
+        "scope_file": null,
+        "scope_namespace": true,
+        "source_file": "main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:main.go:Run",
+      "target": "name:Println",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:main.go:contains:Run",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "main.go"
+      },
+      "relation": "contains",
+      "source": "file:main.go",
+      "target": "symbol:main.go:Run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:main.go:import:3:fmt",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "main.go"
+      },
+      "relation": "imports",
+      "source": "file:main.go",
+      "target": "module:fmt",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:worker.rb:calls:run:JSON.generate:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "generate",
+        "enclosing_class": "Worker",
+        "lineno": 5,
+        "receiver": "JSON",
+        "receiver_kind": "scoped",
+        "receiver_type": null,
+        "scope": "JSON",
+        "source_file": "worker.rb"
+      },
+      "relation": "calls",
+      "source": "symbol:worker.rb:run",
+      "target": "name:generate",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:worker.rb:contains:Worker",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "worker.rb"
+      },
+      "relation": "contains",
+      "source": "file:worker.rb",
+      "target": "symbol:worker.rb:Worker",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:worker.rb:contains:run",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "worker.rb"
+      },
+      "relation": "contains",
+      "source": "file:worker.rb",
+      "target": "symbol:worker.rb:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:worker.rb:import:1:require",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "worker.rb"
+      },
+      "relation": "imports",
+      "source": "file:worker.rb",
+      "target": "module:require",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "App.java",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "java",
+        "size_bytes": 99
+      },
+      "node_id": "file:App.java",
+      "signature": "",
+      "source_ref": "App.java",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "Main.qml",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "qml",
+        "size_bytes": 100
+      },
+      "node_id": "file:Main.qml",
+      "signature": "",
+      "source_ref": "Main.qml",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "app.js",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "js",
+        "size_bytes": 145
+      },
+      "node_id": "file:app.js",
+      "signature": "",
+      "source_ref": "app.js",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "client.ts",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "ts",
+        "size_bytes": 102
+      },
+      "node_id": "file:client.ts",
+      "signature": "",
+      "source_ref": "client.ts",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "engine.cpp",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "cpp",
+        "size_bytes": 140
+      },
+      "node_id": "file:engine.cpp",
+      "signature": "",
+      "source_ref": "engine.cpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "engine.hpp",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "hpp",
+        "size_bytes": 92
+      },
+      "node_id": "file:engine.hpp",
+      "signature": "",
+      "source_ref": "engine.hpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib.rs",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "rs",
+        "size_bytes": 98
+      },
+      "node_id": "file:lib.rs",
+      "signature": "",
+      "source_ref": "lib.rs",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "main.c",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "c",
+        "size_bytes": 114
+      },
+      "node_id": "file:main.c",
+      "signature": "",
+      "source_ref": "main.c",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "main.go",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "go",
+        "size_bytes": 63
+      },
+      "node_id": "file:main.go",
+      "signature": "",
+      "source_ref": "main.go",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "worker.rb",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "rb",
+        "size_bytes": 71
+      },
+      "node_id": "file:worker.rb",
+      "signature": "",
+      "source_ref": "worker.rb",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "module",
+      "label": "QtQuick",
+      "metadata": {
+        "alias": "",
+        "byte_end": 19,
+        "byte_start": 0,
+        "lineno": 1,
+        "parser_backend": "treesitter",
+        "qml_kind": "import",
+        "uri": "QtQuick",
+        "version": "2.15"
+      },
+      "node_id": "import:Main.qml:QtQuick:2.15:",
+      "signature": "import QtQuick 2.15",
+      "source_ref": "Main.qml",
+      "span_end": 1,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "App",
+      "metadata": {
+        "lineno": 3,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:App.java:App",
+      "signature": "public class App {",
+      "source_ref": "App.java",
+      "span_end": 7,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "run",
+      "metadata": {
+        "lineno": 4,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:App.java:run",
+      "signature": "public void run() {",
+      "source_ref": "App.java",
+      "span_end": 6,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Main",
+      "metadata": {
+        "byte_end": 99,
+        "byte_start": 21,
+        "lineno": 3,
+        "parser_backend": "treesitter",
+        "qml_base_type": "Item",
+        "qml_kind": "component",
+        "qml_owner": "Main"
+      },
+      "node_id": "symbol:Main.qml:Main",
+      "signature": "Item {",
+      "source_ref": "Main.qml",
+      "span_end": 9,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "launch",
+      "metadata": {
+        "byte_end": 97,
+        "byte_start": 54,
+        "generator": false,
+        "handler_name": "",
+        "lineno": 6,
+        "parser_backend": "treesitter",
+        "qml_kind": "method",
+        "qml_owner": "Main",
+        "qt": "method",
+        "signal_name": ""
+      },
+      "node_id": "symbol:Main.qml:Main.launch",
+      "signature": "function launch() {",
+      "source_ref": "Main.qml",
+      "span_end": 8,
+      "span_start": 6
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "started",
+      "metadata": {
+        "byte_end": 48,
+        "byte_start": 32,
+        "lineno": 4,
+        "parameters": [],
+        "parser_backend": "treesitter",
+        "qml_kind": "signal",
+        "qml_owner": "Main",
+        "qt": "signal"
+      },
+      "node_id": "symbol:Main.qml:Main.started",
+      "signature": "signal started()",
+      "source_ref": "Main.qml",
+      "span_end": 4,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "AppController",
+      "metadata": {
+        "lineno": 7,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:app.js:AppController",
+      "signature": "class AppController {",
+      "source_ref": "app.js",
+      "span_end": 11,
+      "span_start": 7
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "run",
+      "metadata": {
+        "lineno": 8,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:app.js:run",
+      "signature": "run() {",
+      "source_ref": "app.js",
+      "span_end": 10,
+      "span_start": 8
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "start",
+      "metadata": {
+        "lineno": 3,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:app.js:start",
+      "signature": "function start() {",
+      "source_ref": "app.js",
+      "span_end": 5,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Client",
+      "metadata": {
+        "lineno": 3,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:client.ts:Client",
+      "signature": "class Client {",
+      "source_ref": "client.ts",
+      "span_end": 7,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "connect",
+      "metadata": {
+        "lineno": 4,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:client.ts:connect",
+      "signature": "connect(): string {",
+      "source_ref": "client.ts",
+      "span_end": 6,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Engine",
+      "metadata": {
+        "lineno": 3,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:engine.cpp:Engine",
+      "signature": "namespace Engine {",
+      "source_ref": "engine.cpp",
+      "span_end": 12,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Runner",
+      "metadata": {
+        "lineno": 4,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:engine.cpp:Runner",
+      "signature": "class Runner {",
+      "source_ref": "engine.cpp",
+      "span_end": 7,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "compute",
+      "metadata": {
+        "lineno": 9,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:engine.cpp:compute",
+      "signature": "int compute(int value) {",
+      "source_ref": "engine.cpp",
+      "span_end": 11,
+      "span_start": 9
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "start",
+      "metadata": {
+        "lineno": 6,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:engine.cpp:start",
+      "signature": "void start() {}",
+      "source_ref": "engine.cpp",
+      "span_end": 6,
+      "span_start": 6
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "EngineCore",
+      "metadata": {
+        "lineno": 4,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:engine.hpp:EngineCore",
+      "signature": "class EngineCore {",
+      "source_ref": "engine.hpp",
+      "span_end": 7,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Worker",
+      "metadata": {
+        "lineno": 3,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:lib.rs:Worker",
+      "signature": "pub struct Worker;",
+      "source_ref": "lib.rs",
+      "span_end": 3,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "run",
+      "metadata": {
+        "lineno": 5,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:lib.rs:run",
+      "signature": "pub fn run() {",
+      "source_ref": "lib.rs",
+      "span_end": 7,
+      "span_start": 5
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Counter",
+      "metadata": {
+        "lineno": 3,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:main.c:Counter",
+      "signature": "struct Counter {",
+      "source_ref": "main.c",
+      "span_end": 5,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "add",
+      "metadata": {
+        "lineno": 7,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:main.c:add",
+      "signature": "int add(int left, int right) {",
+      "source_ref": "main.c",
+      "span_end": 9,
+      "span_start": 7
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "Run",
+      "metadata": {
+        "lineno": 5,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:main.go:Run",
+      "signature": "func Run() {",
+      "source_ref": "main.go",
+      "span_end": 7,
+      "span_start": 5
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Worker",
+      "metadata": {
+        "lineno": 3,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:worker.rb:Worker",
+      "signature": "class Worker",
+      "source_ref": "worker.rb",
+      "span_end": 7,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "run",
+      "metadata": {
+        "lineno": 4,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:worker.rb:run",
+      "signature": "def run",
+      "source_ref": "worker.rb",
+      "span_end": 6,
+      "span_start": 4
+    }
+  ]
+}

@@ -1,0 +1,234 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/orders.py:calls:OrderService.__init__:AuditLog:8",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "AuditLog",
+        "enclosing_class": "OrderService",
+        "import_module": "app.audit",
+        "lineno": 8,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/orders.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/orders.py:OrderService.__init__",
+      "target": "name:AuditLog",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/orders.py:calls:OrderService.__init__:PaymentGateway:9",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "PaymentGateway",
+        "enclosing_class": "OrderService",
+        "import_module": "app.payments",
+        "lineno": 9,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/orders.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/orders.py:OrderService.__init__",
+      "target": "name:PaymentGateway",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/orders.py:calls:OrderService.__init__:ReceiptEmailer:10",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "ReceiptEmailer",
+        "enclosing_class": "OrderService",
+        "import_module": "app.emailer",
+        "lineno": 10,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/orders.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/orders.py:OrderService.__init__",
+      "target": "name:ReceiptEmailer",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/orders.py:calls:OrderService.checkout:self.audit.record:14",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "record",
+        "enclosing_class": "OrderService",
+        "lineno": 14,
+        "receiver": "self.audit",
+        "receiver_kind": "chain",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/orders.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/orders.py:OrderService.checkout",
+      "target": "name:record",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/orders.py:calls:OrderService.checkout:self.emailer.send_receipt:15",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "send_receipt",
+        "enclosing_class": "OrderService",
+        "lineno": 15,
+        "receiver": "self.emailer",
+        "receiver_kind": "chain",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/orders.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/orders.py:OrderService.checkout",
+      "target": "name:send_receipt",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/orders.py:calls:OrderService.checkout:self.gateway.capture:13",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "capture",
+        "enclosing_class": "OrderService",
+        "lineno": 13,
+        "receiver": "self.gateway",
+        "receiver_kind": "chain",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/orders.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/orders.py:OrderService.checkout",
+      "target": "name:capture",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/orders.py:contains:OrderService",
+      "layer": "STRUCTURAL",
+      "metadata": {},
+      "relation": "contains",
+      "source": "file:app/orders.py",
+      "target": "symbol:app/orders.py:OrderService",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/orders.py:contains:OrderService.__init__",
+      "layer": "STRUCTURAL",
+      "metadata": {},
+      "relation": "contains",
+      "source": "symbol:app/orders.py:OrderService",
+      "target": "symbol:app/orders.py:OrderService.__init__",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/orders.py:contains:OrderService.checkout",
+      "layer": "STRUCTURAL",
+      "metadata": {},
+      "relation": "contains",
+      "source": "symbol:app/orders.py:OrderService",
+      "target": "symbol:app/orders.py:OrderService.checkout",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/orders.py:from:app.audit",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "level": 0,
+        "lineno": 1,
+        "module": "app.audit"
+      },
+      "relation": "imports",
+      "source": "file:app/orders.py",
+      "target": "file:app/audit.py",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/orders.py:from:app.emailer",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "level": 0,
+        "lineno": 2,
+        "module": "app.emailer"
+      },
+      "relation": "imports",
+      "source": "file:app/orders.py",
+      "target": "file:app/emailer.py",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/orders.py:from:app.payments",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "level": 0,
+        "lineno": 3,
+        "module": "app.payments"
+      },
+      "relation": "imports",
+      "source": "file:app/orders.py",
+      "target": "file:app/payments.py",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "OrderService",
+      "metadata": {
+        "lineno": 6
+      },
+      "node_id": "symbol:app/orders.py:OrderService",
+      "signature": "class OrderService:",
+      "source_ref": "app/orders.py",
+      "span_end": 16,
+      "span_start": 6
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "__init__",
+      "metadata": {
+        "lineno": 7
+      },
+      "node_id": "symbol:app/orders.py:OrderService.__init__",
+      "signature": "def __init__(self, payment_client, audit=None, emailer=None):",
+      "source_ref": "app/orders.py",
+      "span_end": 10,
+      "span_start": 7
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "checkout",
+      "metadata": {
+        "lineno": 12
+      },
+      "node_id": "symbol:app/orders.py:OrderService.checkout",
+      "signature": "def checkout(self, order):",
+      "source_ref": "app/orders.py",
+      "span_end": 16,
+      "span_start": 12
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "edges": [],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/service.ts",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "ts",
+        "size_bytes": 53
+      },
+      "node_id": "file:lib/service.ts",
+      "signature": "",
+      "source_ref": "lib/service.ts",
+      "span_end": null,
+      "span_start": null
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "first_item_keys": {},
+  "keys": [
+    "body",
+    "kind",
+    "mode",
+    "path",
+    "repo_path",
+    "skeletonized",
+    "stale",
+    "symbol_count",
+    "token_count",
+    "truncated"
+  ]
+}

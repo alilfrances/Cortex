@@ -1,0 +1,78 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Base.java:contains:Base",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "java/Base.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Base.java",
+      "target": "symbol:java/Base.java:Base",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Base.java:contains:inheritedOp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "java/Base.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Base.java",
+      "target": "symbol:java/Base.java:inheritedOp",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "java/Base.java",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "java",
+        "size_bytes": 60
+      },
+      "node_id": "file:java/Base.java",
+      "signature": "",
+      "source_ref": "java/Base.java",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Base",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/Base.java:Base",
+      "signature": "public class Base {",
+      "source_ref": "java/Base.java",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "inheritedOp",
+      "metadata": {
+        "lineno": 2,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/Base.java:inheritedOp",
+      "signature": "public void inheritedOp() {",
+      "source_ref": "java/Base.java",
+      "span_end": 3,
+      "span_start": 2
+    }
+  ]
+}

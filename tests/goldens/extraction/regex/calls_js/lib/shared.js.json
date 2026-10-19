@@ -1,0 +1,52 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:lib/shared.js:contains:render",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/shared.js"
+      },
+      "relation": "contains",
+      "source": "file:lib/shared.js",
+      "target": "symbol:lib/shared.js:render",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/shared.js",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "js",
+        "size_bytes": 48
+      },
+      "node_id": "file:lib/shared.js",
+      "signature": "",
+      "source_ref": "lib/shared.js",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "render",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:lib/shared.js:render",
+      "signature": "export function render() {",
+      "source_ref": "lib/shared.js",
+      "span_end": 3,
+      "span_start": 1
+    }
+  ]
+}

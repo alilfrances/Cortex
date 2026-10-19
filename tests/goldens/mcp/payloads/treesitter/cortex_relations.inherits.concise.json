@@ -1,0 +1,44 @@
+{
+  "_meta": {
+    "cached": false,
+    "fingerprint_fresh": true
+  },
+  "items": [
+    {
+      "confidence": "EXTRACTED",
+      "layer": "STRUCTURAL",
+      "origin": "unknown",
+      "relation": "inherits",
+      "source": "DeviceDelegate @ qml/DeviceDelegate.qml:3",
+      "target": "Item"
+    },
+    {
+      "confidence": "EXTRACTED",
+      "layer": "STRUCTURAL",
+      "origin": "unknown",
+      "relation": "inherits",
+      "source": "Main @ qml/Main.qml:4",
+      "target": "ApplicationWindow"
+    },
+    {
+      "confidence": "EXTRACTED",
+      "layer": "STRUCTURAL",
+      "origin": "treesitter-parser",
+      "relation": "inherits",
+      "source": "DeviceManager @ include/DeviceManager.hpp:4",
+      "target": "QObject"
+    },
+    {
+      "confidence": "EXTRACTED",
+      "layer": "STRUCTURAL",
+      "origin": "treesitter-parser",
+      "relation": "inherits",
+      "source": "DeviceModel @ include/DeviceModel.hpp:4",
+      "target": "QObject"
+    }
+  ],
+  "repo_path": "<repo>",
+  "returned_count": 4,
+  "stale": false,
+  "truncated": false
+}

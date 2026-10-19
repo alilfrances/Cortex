@@ -1,0 +1,2460 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:CMakeLists.txt:include/DeviceManager.hpp",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 2
+      },
+      "relation": "cochange",
+      "source": "file:CMakeLists.txt",
+      "target": "file:include/DeviceManager.hpp",
+      "weight": 0.5
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:CMakeLists.txt:include/DeviceModel.hpp",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 2
+      },
+      "relation": "cochange",
+      "source": "file:CMakeLists.txt",
+      "target": "file:include/DeviceModel.hpp",
+      "weight": 0.5
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:CMakeLists.txt:qml/DeviceDelegate.qml",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 2
+      },
+      "relation": "cochange",
+      "source": "file:CMakeLists.txt",
+      "target": "file:qml/DeviceDelegate.qml",
+      "weight": 0.5
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:CMakeLists.txt:qml/Main.qml",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 2
+      },
+      "relation": "cochange",
+      "source": "file:CMakeLists.txt",
+      "target": "file:qml/Main.qml",
+      "weight": 0.5
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:CMakeLists.txt:resources.qrc",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 2
+      },
+      "relation": "cochange",
+      "source": "file:CMakeLists.txt",
+      "target": "file:resources.qrc",
+      "weight": 0.5
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:CMakeLists.txt:src/DeviceManager.cpp",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 2
+      },
+      "relation": "cochange",
+      "source": "file:CMakeLists.txt",
+      "target": "file:src/DeviceManager.cpp",
+      "weight": 0.5
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:CMakeLists.txt:src/DeviceModel.cpp",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 2
+      },
+      "relation": "cochange",
+      "source": "file:CMakeLists.txt",
+      "target": "file:src/DeviceModel.cpp",
+      "weight": 0.5
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:include/DeviceManager.hpp:include/DeviceModel.hpp",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 2
+      },
+      "relation": "cochange",
+      "source": "file:include/DeviceManager.hpp",
+      "target": "file:include/DeviceModel.hpp",
+      "weight": 0.5
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:include/DeviceManager.hpp:qml/DeviceDelegate.qml",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 2
+      },
+      "relation": "cochange",
+      "source": "file:include/DeviceManager.hpp",
+      "target": "file:qml/DeviceDelegate.qml",
+      "weight": 0.5
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:include/DeviceManager.hpp:qml/Main.qml",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 2
+      },
+      "relation": "cochange",
+      "source": "file:include/DeviceManager.hpp",
+      "target": "file:qml/Main.qml",
+      "weight": 0.5
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:include/DeviceManager.hpp:resources.qrc",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 2
+      },
+      "relation": "cochange",
+      "source": "file:include/DeviceManager.hpp",
+      "target": "file:resources.qrc",
+      "weight": 0.5
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:include/DeviceManager.hpp:src/DeviceManager.cpp",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 2
+      },
+      "relation": "cochange",
+      "source": "file:include/DeviceManager.hpp",
+      "target": "file:src/DeviceManager.cpp",
+      "weight": 0.5
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:include/DeviceManager.hpp:src/DeviceModel.cpp",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 2
+      },
+      "relation": "cochange",
+      "source": "file:include/DeviceManager.hpp",
+      "target": "file:src/DeviceModel.cpp",
+      "weight": 0.5
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:include/DeviceModel.hpp:qml/DeviceDelegate.qml",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 2
+      },
+      "relation": "cochange",
+      "source": "file:include/DeviceModel.hpp",
+      "target": "file:qml/DeviceDelegate.qml",
+      "weight": 0.5
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:include/DeviceModel.hpp:qml/Main.qml",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 2
+      },
+      "relation": "cochange",
+      "source": "file:include/DeviceModel.hpp",
+      "target": "file:qml/Main.qml",
+      "weight": 0.5
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:include/DeviceModel.hpp:resources.qrc",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 2
+      },
+      "relation": "cochange",
+      "source": "file:include/DeviceModel.hpp",
+      "target": "file:resources.qrc",
+      "weight": 0.5
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:include/DeviceModel.hpp:src/DeviceManager.cpp",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 2
+      },
+      "relation": "cochange",
+      "source": "file:include/DeviceModel.hpp",
+      "target": "file:src/DeviceManager.cpp",
+      "weight": 0.5
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:include/DeviceModel.hpp:src/DeviceModel.cpp",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 2
+      },
+      "relation": "cochange",
+      "source": "file:include/DeviceModel.hpp",
+      "target": "file:src/DeviceModel.cpp",
+      "weight": 0.5
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:qml/DeviceDelegate.qml:qml/Main.qml",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 2
+      },
+      "relation": "cochange",
+      "source": "file:qml/DeviceDelegate.qml",
+      "target": "file:qml/Main.qml",
+      "weight": 0.5
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:qml/DeviceDelegate.qml:resources.qrc",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 2
+      },
+      "relation": "cochange",
+      "source": "file:qml/DeviceDelegate.qml",
+      "target": "file:resources.qrc",
+      "weight": 0.5
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:qml/DeviceDelegate.qml:src/DeviceManager.cpp",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 2
+      },
+      "relation": "cochange",
+      "source": "file:qml/DeviceDelegate.qml",
+      "target": "file:src/DeviceManager.cpp",
+      "weight": 0.5
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:qml/DeviceDelegate.qml:src/DeviceModel.cpp",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 2
+      },
+      "relation": "cochange",
+      "source": "file:qml/DeviceDelegate.qml",
+      "target": "file:src/DeviceModel.cpp",
+      "weight": 0.5
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:qml/Main.qml:resources.qrc",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 2
+      },
+      "relation": "cochange",
+      "source": "file:qml/Main.qml",
+      "target": "file:resources.qrc",
+      "weight": 0.5
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:qml/Main.qml:src/DeviceManager.cpp",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 2,
+        "max_count": 2
+      },
+      "relation": "cochange",
+      "source": "file:qml/Main.qml",
+      "target": "file:src/DeviceManager.cpp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:qml/Main.qml:src/DeviceModel.cpp",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 2
+      },
+      "relation": "cochange",
+      "source": "file:qml/Main.qml",
+      "target": "file:src/DeviceModel.cpp",
+      "weight": 0.5
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:resources.qrc:src/DeviceManager.cpp",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 2
+      },
+      "relation": "cochange",
+      "source": "file:resources.qrc",
+      "target": "file:src/DeviceManager.cpp",
+      "weight": 0.5
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:resources.qrc:src/DeviceModel.cpp",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 2
+      },
+      "relation": "cochange",
+      "source": "file:resources.qrc",
+      "target": "file:src/DeviceModel.cpp",
+      "weight": 0.5
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "cochange:src/DeviceManager.cpp:src/DeviceModel.cpp",
+      "layer": "COCHANGE",
+      "metadata": {
+        "count": 1,
+        "max_count": 2
+      },
+      "relation": "cochange",
+      "source": "file:src/DeviceManager.cpp",
+      "target": "file:src/DeviceModel.cpp",
+      "weight": 0.5
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "edge:0000000000000000000000000000000000000001:CMakeLists.txt",
+      "layer": "COCHANGE",
+      "metadata": {},
+      "relation": "touches",
+      "source": "commit:0000000000000000000000000000000000000001",
+      "target": "file:CMakeLists.txt",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "edge:0000000000000000000000000000000000000001:include/DeviceManager.hpp",
+      "layer": "COCHANGE",
+      "metadata": {},
+      "relation": "touches",
+      "source": "commit:0000000000000000000000000000000000000001",
+      "target": "file:include/DeviceManager.hpp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "edge:0000000000000000000000000000000000000001:include/DeviceModel.hpp",
+      "layer": "COCHANGE",
+      "metadata": {},
+      "relation": "touches",
+      "source": "commit:0000000000000000000000000000000000000001",
+      "target": "file:include/DeviceModel.hpp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "edge:0000000000000000000000000000000000000001:qml/DeviceDelegate.qml",
+      "layer": "COCHANGE",
+      "metadata": {},
+      "relation": "touches",
+      "source": "commit:0000000000000000000000000000000000000001",
+      "target": "file:qml/DeviceDelegate.qml",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "edge:0000000000000000000000000000000000000001:qml/Main.qml",
+      "layer": "COCHANGE",
+      "metadata": {},
+      "relation": "touches",
+      "source": "commit:0000000000000000000000000000000000000001",
+      "target": "file:qml/Main.qml",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "edge:0000000000000000000000000000000000000001:resources.qrc",
+      "layer": "COCHANGE",
+      "metadata": {},
+      "relation": "touches",
+      "source": "commit:0000000000000000000000000000000000000001",
+      "target": "file:resources.qrc",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "edge:0000000000000000000000000000000000000001:src/DeviceManager.cpp",
+      "layer": "COCHANGE",
+      "metadata": {},
+      "relation": "touches",
+      "source": "commit:0000000000000000000000000000000000000001",
+      "target": "file:src/DeviceManager.cpp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "edge:0000000000000000000000000000000000000001:src/DeviceModel.cpp",
+      "layer": "COCHANGE",
+      "metadata": {},
+      "relation": "touches",
+      "source": "commit:0000000000000000000000000000000000000001",
+      "target": "file:src/DeviceModel.cpp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "edge:0000000000000000000000000000000000000002:qml/Main.qml",
+      "layer": "COCHANGE",
+      "metadata": {},
+      "relation": "touches",
+      "source": "commit:0000000000000000000000000000000000000002",
+      "target": "file:qml/Main.qml",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "edge:0000000000000000000000000000000000000002:src/DeviceManager.cpp",
+      "layer": "COCHANGE",
+      "metadata": {},
+      "relation": "touches",
+      "source": "commit:0000000000000000000000000000000000000002",
+      "target": "file:src/DeviceManager.cpp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/DeviceDelegate.qml:binds:binding:qml/DeviceDelegate.qml:DeviceDelegate.MouseArea.anchors.fill:external:qml:MouseArea.anchors.fill:8",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "bound_name": "anchors.fill",
+        "lineno": 8,
+        "source_file": "qml/DeviceDelegate.qml"
+      },
+      "relation": "binds",
+      "source": "binding:qml/DeviceDelegate.qml:DeviceDelegate.MouseArea.anchors.fill",
+      "target": "external:qml:MouseArea.anchors.fill",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/DeviceDelegate.qml:calls:symbol:qml/DeviceDelegate.qml:DeviceDelegate.MouseArea.onClicked:symbol:qml/DeviceDelegate.qml:DeviceDelegate.clicked:9",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 9,
+        "member": "",
+        "source_file": "qml/DeviceDelegate.qml",
+        "unverified": false
+      },
+      "relation": "calls",
+      "source": "symbol:qml/DeviceDelegate.qml:DeviceDelegate.MouseArea.onClicked",
+      "target": "symbol:qml/DeviceDelegate.qml:DeviceDelegate.clicked",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/DeviceDelegate.qml:contains:file:qml/DeviceDelegate.qml:binding:qml/DeviceDelegate.qml:DeviceDelegate.MouseArea.anchors.fill:8",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 8,
+        "source_file": "qml/DeviceDelegate.qml"
+      },
+      "relation": "contains",
+      "source": "file:qml/DeviceDelegate.qml",
+      "target": "binding:qml/DeviceDelegate.qml:DeviceDelegate.MouseArea.anchors.fill",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/DeviceDelegate.qml:contains:file:qml/DeviceDelegate.qml:external:qml:qml/DeviceDelegate.qml:MouseArea.anchors.fill:8",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 8,
+        "source_file": "qml/DeviceDelegate.qml"
+      },
+      "relation": "contains",
+      "source": "file:qml/DeviceDelegate.qml",
+      "target": "external:qml:qml/DeviceDelegate.qml:MouseArea.anchors.fill",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/DeviceDelegate.qml:contains:file:qml/DeviceDelegate.qml:external:qml:qml/DeviceDelegate.qml:parent:8",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 8,
+        "source_file": "qml/DeviceDelegate.qml"
+      },
+      "relation": "contains",
+      "source": "file:qml/DeviceDelegate.qml",
+      "target": "external:qml:qml/DeviceDelegate.qml:parent",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/DeviceDelegate.qml:contains:file:qml/DeviceDelegate.qml:import:qml/DeviceDelegate.qml:QtQuick:2.15::1",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "qml/DeviceDelegate.qml"
+      },
+      "relation": "contains",
+      "source": "file:qml/DeviceDelegate.qml",
+      "target": "import:qml/DeviceDelegate.qml:QtQuick:2.15:",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/DeviceDelegate.qml:contains:file:qml/DeviceDelegate.qml:symbol:qml/DeviceDelegate.qml:DeviceDelegate.MouseArea.onClicked:9",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 9,
+        "source_file": "qml/DeviceDelegate.qml"
+      },
+      "relation": "contains",
+      "source": "file:qml/DeviceDelegate.qml",
+      "target": "symbol:qml/DeviceDelegate.qml:DeviceDelegate.MouseArea.onClicked",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/DeviceDelegate.qml:contains:file:qml/DeviceDelegate.qml:symbol:qml/DeviceDelegate.qml:DeviceDelegate.MouseArea:7",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 7,
+        "source_file": "qml/DeviceDelegate.qml"
+      },
+      "relation": "contains",
+      "source": "file:qml/DeviceDelegate.qml",
+      "target": "symbol:qml/DeviceDelegate.qml:DeviceDelegate.MouseArea",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/DeviceDelegate.qml:contains:file:qml/DeviceDelegate.qml:symbol:qml/DeviceDelegate.qml:DeviceDelegate.clicked:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "qml/DeviceDelegate.qml"
+      },
+      "relation": "contains",
+      "source": "file:qml/DeviceDelegate.qml",
+      "target": "symbol:qml/DeviceDelegate.qml:DeviceDelegate.clicked",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/DeviceDelegate.qml:contains:file:qml/DeviceDelegate.qml:symbol:qml/DeviceDelegate.qml:DeviceDelegate.deviceConnected.deviceId:4",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "qml/DeviceDelegate.qml"
+      },
+      "relation": "contains",
+      "source": "file:qml/DeviceDelegate.qml",
+      "target": "symbol:qml/DeviceDelegate.qml:DeviceDelegate.deviceConnected.deviceId",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/DeviceDelegate.qml:contains:file:qml/DeviceDelegate.qml:symbol:qml/DeviceDelegate.qml:DeviceDelegate.deviceConnected:4",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "qml/DeviceDelegate.qml"
+      },
+      "relation": "contains",
+      "source": "file:qml/DeviceDelegate.qml",
+      "target": "symbol:qml/DeviceDelegate.qml:DeviceDelegate.deviceConnected",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/DeviceDelegate.qml:contains:file:qml/DeviceDelegate.qml:symbol:qml/DeviceDelegate.qml:DeviceDelegate:3",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "qml/DeviceDelegate.qml"
+      },
+      "relation": "contains",
+      "source": "file:qml/DeviceDelegate.qml",
+      "target": "symbol:qml/DeviceDelegate.qml:DeviceDelegate",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/DeviceDelegate.qml:contains:symbol:qml/DeviceDelegate.qml:DeviceDelegate.MouseArea:binding:qml/DeviceDelegate.qml:DeviceDelegate.MouseArea.anchors.fill:8",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 8,
+        "source_file": "qml/DeviceDelegate.qml"
+      },
+      "relation": "contains",
+      "source": "symbol:qml/DeviceDelegate.qml:DeviceDelegate.MouseArea",
+      "target": "binding:qml/DeviceDelegate.qml:DeviceDelegate.MouseArea.anchors.fill",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/DeviceDelegate.qml:contains:symbol:qml/DeviceDelegate.qml:DeviceDelegate.MouseArea:symbol:qml/DeviceDelegate.qml:DeviceDelegate.MouseArea.onClicked:9",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 9,
+        "source_file": "qml/DeviceDelegate.qml"
+      },
+      "relation": "contains",
+      "source": "symbol:qml/DeviceDelegate.qml:DeviceDelegate.MouseArea",
+      "target": "symbol:qml/DeviceDelegate.qml:DeviceDelegate.MouseArea.onClicked",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/DeviceDelegate.qml:contains:symbol:qml/DeviceDelegate.qml:DeviceDelegate.deviceConnected:symbol:qml/DeviceDelegate.qml:DeviceDelegate.deviceConnected.deviceId:4",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "qml/DeviceDelegate.qml"
+      },
+      "relation": "contains",
+      "source": "symbol:qml/DeviceDelegate.qml:DeviceDelegate.deviceConnected",
+      "target": "symbol:qml/DeviceDelegate.qml:DeviceDelegate.deviceConnected.deviceId",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/DeviceDelegate.qml:contains:symbol:qml/DeviceDelegate.qml:DeviceDelegate:symbol:qml/DeviceDelegate.qml:DeviceDelegate.MouseArea:7",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 7,
+        "source_file": "qml/DeviceDelegate.qml"
+      },
+      "relation": "contains",
+      "source": "symbol:qml/DeviceDelegate.qml:DeviceDelegate",
+      "target": "symbol:qml/DeviceDelegate.qml:DeviceDelegate.MouseArea",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/DeviceDelegate.qml:contains:symbol:qml/DeviceDelegate.qml:DeviceDelegate:symbol:qml/DeviceDelegate.qml:DeviceDelegate.clicked:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "qml/DeviceDelegate.qml"
+      },
+      "relation": "contains",
+      "source": "symbol:qml/DeviceDelegate.qml:DeviceDelegate",
+      "target": "symbol:qml/DeviceDelegate.qml:DeviceDelegate.clicked",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/DeviceDelegate.qml:contains:symbol:qml/DeviceDelegate.qml:DeviceDelegate:symbol:qml/DeviceDelegate.qml:DeviceDelegate.deviceConnected:4",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "qml/DeviceDelegate.qml"
+      },
+      "relation": "contains",
+      "source": "symbol:qml/DeviceDelegate.qml:DeviceDelegate",
+      "target": "symbol:qml/DeviceDelegate.qml:DeviceDelegate.deviceConnected",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/DeviceDelegate.qml:handles:symbol:qml/DeviceDelegate.qml:DeviceDelegate.MouseArea.onClicked:module:clicked:9",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "component_path": "",
+        "handler_name": "onClicked",
+        "lineno": 9,
+        "signal_name": "clicked",
+        "source_file": "qml/DeviceDelegate.qml",
+        "unverified": true
+      },
+      "relation": "handles",
+      "source": "symbol:qml/DeviceDelegate.qml:DeviceDelegate.MouseArea.onClicked",
+      "target": "module:clicked",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/DeviceDelegate.qml:imports:file:qml/DeviceDelegate.qml:module:QtQuick:1",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "alias": "",
+        "lineno": 1,
+        "source_file": "qml/DeviceDelegate.qml",
+        "unverified": true,
+        "uri": "QtQuick",
+        "version": "2.15"
+      },
+      "relation": "imports",
+      "source": "file:qml/DeviceDelegate.qml",
+      "target": "module:QtQuick",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/DeviceDelegate.qml:inherits:symbol:qml/DeviceDelegate.qml:DeviceDelegate:module:Item:3",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "qml/DeviceDelegate.qml",
+        "type_name": "Item",
+        "unverified": true
+      },
+      "relation": "inherits",
+      "source": "symbol:qml/DeviceDelegate.qml:DeviceDelegate",
+      "target": "module:Item",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/DeviceDelegate.qml:instantiates:file:qml/DeviceDelegate.qml:module:MouseArea:7",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "component_kind": "external",
+        "lineno": 7,
+        "source_file": "qml/DeviceDelegate.qml",
+        "type_name": "MouseArea",
+        "unverified": true
+      },
+      "relation": "instantiates",
+      "source": "file:qml/DeviceDelegate.qml",
+      "target": "module:MouseArea",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/DeviceDelegate.qml:reads:binding:qml/DeviceDelegate.qml:DeviceDelegate.MouseArea.anchors.fill:external:qml:qml/DeviceDelegate.qml:parent:8",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 8,
+        "member": "",
+        "source_file": "qml/DeviceDelegate.qml",
+        "unverified": true
+      },
+      "relation": "reads",
+      "source": "binding:qml/DeviceDelegate.qml:DeviceDelegate.MouseArea.anchors.fill",
+      "target": "external:qml:qml/DeviceDelegate.qml:parent",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/DeviceDelegate.qml:references:binding:qml/DeviceDelegate.qml:DeviceDelegate.MouseArea.anchors.fill:external:qml:qml/DeviceDelegate.qml:parent:8",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 8,
+        "member": "",
+        "source_file": "qml/DeviceDelegate.qml",
+        "unverified": true
+      },
+      "relation": "references",
+      "source": "binding:qml/DeviceDelegate.qml:DeviceDelegate.MouseArea.anchors.fill",
+      "target": "external:qml:qml/DeviceDelegate.qml:parent",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/Main.qml:contains:file:qml/Main.qml:external:qml:qml/Main.qml:deviceId:12",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 12,
+        "source_file": "qml/Main.qml"
+      },
+      "relation": "contains",
+      "source": "file:qml/Main.qml",
+      "target": "external:qml:qml/Main.qml:deviceId",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/Main.qml:contains:file:qml/Main.qml:import:qml/Main.qml:QtQuick.Controls:2.15::2",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "qml/Main.qml"
+      },
+      "relation": "contains",
+      "source": "file:qml/Main.qml",
+      "target": "import:qml/Main.qml:QtQuick.Controls:2.15:",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/Main.qml:contains:file:qml/Main.qml:import:qml/Main.qml:QtQuick:2.15::1",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "qml/Main.qml"
+      },
+      "relation": "contains",
+      "source": "file:qml/Main.qml",
+      "target": "import:qml/Main.qml:QtQuick:2.15:",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/Main.qml:contains:file:qml/Main.qml:symbol:qml/Main.qml:Main.DeviceDelegate.delegate:10",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 10,
+        "source_file": "qml/Main.qml"
+      },
+      "relation": "contains",
+      "source": "file:qml/Main.qml",
+      "target": "symbol:qml/Main.qml:Main.DeviceDelegate.delegate",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/Main.qml:contains:file:qml/Main.qml:symbol:qml/Main.qml:Main.DeviceDelegate.onClicked:11",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 11,
+        "source_file": "qml/Main.qml"
+      },
+      "relation": "contains",
+      "source": "file:qml/Main.qml",
+      "target": "symbol:qml/Main.qml:Main.DeviceDelegate.onClicked",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/Main.qml:contains:file:qml/Main.qml:symbol:qml/Main.qml:Main.DeviceDelegate.onDeviceConnected:12",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 12,
+        "source_file": "qml/Main.qml"
+      },
+      "relation": "contains",
+      "source": "file:qml/Main.qml",
+      "target": "symbol:qml/Main.qml:Main.DeviceDelegate.onDeviceConnected",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/Main.qml:contains:file:qml/Main.qml:symbol:qml/Main.qml:Main.DeviceDelegate:9",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 9,
+        "source_file": "qml/Main.qml"
+      },
+      "relation": "contains",
+      "source": "file:qml/Main.qml",
+      "target": "symbol:qml/Main.qml:Main.DeviceDelegate",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/Main.qml:contains:file:qml/Main.qml:symbol:qml/Main.qml:Main.DeviceManager:7",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 7,
+        "source_file": "qml/Main.qml"
+      },
+      "relation": "contains",
+      "source": "file:qml/Main.qml",
+      "target": "symbol:qml/Main.qml:Main.DeviceManager",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/Main.qml:contains:file:qml/Main.qml:symbol:qml/Main.qml:Main.sceneReady:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "qml/Main.qml"
+      },
+      "relation": "contains",
+      "source": "file:qml/Main.qml",
+      "target": "symbol:qml/Main.qml:Main.sceneReady",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/Main.qml:contains:file:qml/Main.qml:symbol:qml/Main.qml:Main:4",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "qml/Main.qml"
+      },
+      "relation": "contains",
+      "source": "file:qml/Main.qml",
+      "target": "symbol:qml/Main.qml:Main",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/Main.qml:contains:symbol:qml/Main.qml:Main.DeviceDelegate:symbol:qml/Main.qml:Main.DeviceDelegate.delegate:10",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 10,
+        "source_file": "qml/Main.qml"
+      },
+      "relation": "contains",
+      "source": "symbol:qml/Main.qml:Main.DeviceDelegate",
+      "target": "symbol:qml/Main.qml:Main.DeviceDelegate.delegate",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/Main.qml:contains:symbol:qml/Main.qml:Main.DeviceDelegate:symbol:qml/Main.qml:Main.DeviceDelegate.onClicked:11",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 11,
+        "source_file": "qml/Main.qml"
+      },
+      "relation": "contains",
+      "source": "symbol:qml/Main.qml:Main.DeviceDelegate",
+      "target": "symbol:qml/Main.qml:Main.DeviceDelegate.onClicked",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/Main.qml:contains:symbol:qml/Main.qml:Main.DeviceDelegate:symbol:qml/Main.qml:Main.DeviceDelegate.onDeviceConnected:12",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 12,
+        "source_file": "qml/Main.qml"
+      },
+      "relation": "contains",
+      "source": "symbol:qml/Main.qml:Main.DeviceDelegate",
+      "target": "symbol:qml/Main.qml:Main.DeviceDelegate.onDeviceConnected",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/Main.qml:contains:symbol:qml/Main.qml:Main:symbol:qml/Main.qml:Main.DeviceDelegate:9",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 9,
+        "source_file": "qml/Main.qml"
+      },
+      "relation": "contains",
+      "source": "symbol:qml/Main.qml:Main",
+      "target": "symbol:qml/Main.qml:Main.DeviceDelegate",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/Main.qml:contains:symbol:qml/Main.qml:Main:symbol:qml/Main.qml:Main.DeviceManager:7",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 7,
+        "source_file": "qml/Main.qml"
+      },
+      "relation": "contains",
+      "source": "symbol:qml/Main.qml:Main",
+      "target": "symbol:qml/Main.qml:Main.DeviceManager",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/Main.qml:contains:symbol:qml/Main.qml:Main:symbol:qml/Main.qml:Main.sceneReady:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "qml/Main.qml"
+      },
+      "relation": "contains",
+      "source": "symbol:qml/Main.qml:Main",
+      "target": "symbol:qml/Main.qml:Main.sceneReady",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/Main.qml:handles:symbol:qml/Main.qml:Main.DeviceDelegate.onClicked:module:clicked:11",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "component_path": "qml/DeviceDelegate.qml",
+        "handler_name": "onClicked",
+        "lineno": 11,
+        "signal_name": "clicked",
+        "source_file": "qml/Main.qml"
+      },
+      "relation": "handles",
+      "source": "symbol:qml/Main.qml:Main.DeviceDelegate.onClicked",
+      "target": "symbol:qml/DeviceDelegate.qml:DeviceDelegate.clicked",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/Main.qml:handles:symbol:qml/Main.qml:Main.DeviceDelegate.onDeviceConnected:module:deviceConnected:12",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "component_path": "qml/DeviceDelegate.qml",
+        "handler_name": "onDeviceConnected",
+        "lineno": 12,
+        "signal_name": "deviceConnected",
+        "source_file": "qml/Main.qml"
+      },
+      "relation": "handles",
+      "source": "symbol:qml/Main.qml:Main.DeviceDelegate.onDeviceConnected",
+      "target": "symbol:qml/DeviceDelegate.qml:DeviceDelegate.deviceConnected",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/Main.qml:imports:file:qml/Main.qml:module:QtQuick.Controls:2",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "alias": "",
+        "lineno": 2,
+        "source_file": "qml/Main.qml",
+        "unverified": true,
+        "uri": "QtQuick.Controls",
+        "version": "2.15"
+      },
+      "relation": "imports",
+      "source": "file:qml/Main.qml",
+      "target": "module:QtQuick.Controls",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/Main.qml:imports:file:qml/Main.qml:module:QtQuick:1",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "alias": "",
+        "lineno": 1,
+        "source_file": "qml/Main.qml",
+        "unverified": true,
+        "uri": "QtQuick",
+        "version": "2.15"
+      },
+      "relation": "imports",
+      "source": "file:qml/Main.qml",
+      "target": "module:QtQuick",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/Main.qml:inherits:symbol:qml/Main.qml:Main:module:ApplicationWindow:4",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "qml/Main.qml",
+        "type_name": "ApplicationWindow",
+        "unverified": true
+      },
+      "relation": "inherits",
+      "source": "symbol:qml/Main.qml:Main",
+      "target": "module:ApplicationWindow",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/Main.qml:instantiates:file:qml/Main.qml:file:qml/DeviceDelegate.qml:9",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "component_kind": "qml",
+        "lineno": 9,
+        "source_file": "qml/Main.qml",
+        "type_name": "DeviceDelegate"
+      },
+      "relation": "instantiates",
+      "source": "file:qml/Main.qml",
+      "target": "file:qml/DeviceDelegate.qml",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/Main.qml:instantiates:file:qml/Main.qml:module:DeviceManager:7",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "component_kind": "external",
+        "lineno": 7,
+        "source_file": "qml/Main.qml",
+        "type_name": "DeviceManager",
+        "unverified": true
+      },
+      "relation": "instantiates",
+      "source": "file:qml/Main.qml",
+      "target": "symbol:include/DeviceManager.hpp:DeviceManager",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/Main.qml:reads:symbol:qml/Main.qml:Main.DeviceDelegate.onDeviceConnected:external:qml:qml/Main.qml:deviceId:12",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 12,
+        "member": "",
+        "source_file": "qml/Main.qml",
+        "unverified": true
+      },
+      "relation": "reads",
+      "source": "symbol:qml/Main.qml:Main.DeviceDelegate.onDeviceConnected",
+      "target": "external:qml:qml/Main.qml:deviceId",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:qml/Main.qml:references:symbol:qml/Main.qml:Main.DeviceDelegate.onDeviceConnected:external:qml:qml/Main.qml:deviceId:12",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 12,
+        "member": "",
+        "source_file": "qml/Main.qml",
+        "unverified": true
+      },
+      "relation": "references",
+      "source": "symbol:qml/Main.qml:Main.DeviceDelegate.onDeviceConnected",
+      "target": "external:qml:qml/Main.qml:deviceId",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qmlmeta:CMakeLists.txt:exports:target:qt_app:module:QtApp:6",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "cmake_command": "qt_add_qml_module",
+        "lineno": 6,
+        "source_file": "CMakeLists.txt",
+        "uri": "QtApp",
+        "version": ""
+      },
+      "relation": "exports",
+      "source": "target:qt_app",
+      "target": "module:QtApp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qmlmeta:CMakeLists.txt:registers:target:qt_app:file:qml/DeviceDelegate.qml:6",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "category": "qml_files",
+        "lineno": 6,
+        "source_file": "CMakeLists.txt",
+        "uri": "QtApp",
+        "version": ""
+      },
+      "relation": "registers",
+      "source": "target:qt_app",
+      "target": "file:qml/DeviceDelegate.qml",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qmlmeta:CMakeLists.txt:registers:target:qt_app:file:qml/Main.qml:6",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "category": "qml_files",
+        "lineno": 6,
+        "source_file": "CMakeLists.txt",
+        "uri": "QtApp",
+        "version": ""
+      },
+      "relation": "registers",
+      "source": "target:qt_app",
+      "target": "file:qml/Main.qml",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qmlmeta:resources.qrc:registers:file:resources.qrc:file:qml/DeviceDelegate.qml:4",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "alias": "DeviceDelegate.qml",
+        "lineno": 4,
+        "prefix": "/",
+        "resource_path": "/DeviceDelegate.qml",
+        "source_file": "resources.qrc"
+      },
+      "relation": "registers",
+      "source": "file:resources.qrc",
+      "target": "file:qml/DeviceDelegate.qml",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qmlmeta:resources.qrc:registers:file:resources.qrc:file:qml/Main.qml:3",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "alias": "Main.qml",
+        "lineno": 3,
+        "prefix": "/",
+        "resource_path": "/Main.qml",
+        "source_file": "resources.qrc"
+      },
+      "relation": "registers",
+      "source": "file:resources.qrc",
+      "target": "file:qml/Main.qml",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "regex:CMakeLists.txt:builds:target:qt_app:file:src/DeviceManager.cpp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "CMakeLists.txt"
+      },
+      "relation": "builds",
+      "source": "target:qt_app",
+      "target": "file:src/DeviceManager.cpp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "regex:CMakeLists.txt:builds:target:qt_app:file:src/DeviceModel.cpp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "CMakeLists.txt"
+      },
+      "relation": "builds",
+      "source": "target:qt_app",
+      "target": "file:src/DeviceModel.cpp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "regex:CMakeLists.txt:registers:target:qt_app:file:qml/DeviceDelegate.qml",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "CMakeLists.txt"
+      },
+      "relation": "registers",
+      "source": "target:qt_app",
+      "target": "file:qml/DeviceDelegate.qml",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "regex:CMakeLists.txt:registers:target:qt_app:file:qml/Main.qml",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "CMakeLists.txt"
+      },
+      "relation": "registers",
+      "source": "target:qt_app",
+      "target": "file:qml/Main.qml",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:include/DeviceManager.hpp:contains:deviceConnected",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 11,
+        "source_file": "include/DeviceManager.hpp"
+      },
+      "relation": "contains",
+      "source": "file:include/DeviceManager.hpp",
+      "target": "symbol:include/DeviceManager.hpp:deviceConnected",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:include/DeviceManager.hpp:contains:onDeviceConnected",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 14,
+        "source_file": "include/DeviceManager.hpp"
+      },
+      "relation": "contains",
+      "source": "file:include/DeviceManager.hpp",
+      "target": "symbol:include/DeviceManager.hpp:onDeviceConnected",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:include/DeviceModel.hpp:contains:modelUpdated",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 13,
+        "source_file": "include/DeviceModel.hpp"
+      },
+      "relation": "contains",
+      "source": "file:include/DeviceModel.hpp",
+      "target": "symbol:include/DeviceModel.hpp:modelUpdated",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:include/DeviceModel.hpp:contains:onDeviceConnected",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 10,
+        "source_file": "include/DeviceModel.hpp"
+      },
+      "relation": "contains",
+      "source": "file:include/DeviceModel.hpp",
+      "target": "symbol:include/DeviceModel.hpp:onDeviceConnected",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:src/DeviceManager.cpp:connects:6:1:deviceConnected:onDeviceConnected",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "receiver": "model",
+        "receiver_class": "DeviceModel",
+        "sender": "this",
+        "sender_class": "DeviceManager",
+        "signal_name": "deviceConnected",
+        "slot_name": "onDeviceConnected",
+        "source_file": "src/DeviceManager.cpp"
+      },
+      "relation": "connects",
+      "source": "symbol:include/DeviceManager.hpp:deviceConnected",
+      "target": "symbol:include/DeviceModel.hpp:onDeviceConnected",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:src/DeviceManager.cpp:emits:13:deviceConnected",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 13,
+        "signal_name": "deviceConnected",
+        "source_file": "src/DeviceManager.cpp"
+      },
+      "relation": "emits",
+      "source": "symbol:src/DeviceManager.cpp:scan",
+      "target": "symbol:include/DeviceManager.hpp:deviceConnected",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:src/DeviceManager.cpp:emits:16:deviceConnected",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 16,
+        "signal_name": "deviceConnected",
+        "source_file": "src/DeviceManager.cpp"
+      },
+      "relation": "emits",
+      "source": "symbol:src/DeviceManager.cpp:scan",
+      "target": "symbol:include/DeviceManager.hpp:deviceConnected",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:src/DeviceModel.cpp:emits:6:modelUpdated",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "signal_name": "modelUpdated",
+        "source_file": "src/DeviceModel.cpp"
+      },
+      "relation": "emits",
+      "source": "symbol:src/DeviceModel.cpp:onDeviceConnected",
+      "target": "symbol:include/DeviceModel.hpp:modelUpdated",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:include/DeviceManager.hpp:contains:DeviceManager",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "include/DeviceManager.hpp"
+      },
+      "relation": "contains",
+      "source": "file:include/DeviceManager.hpp",
+      "target": "symbol:include/DeviceManager.hpp:DeviceManager",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:include/DeviceManager.hpp:import:2:QObject",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "include/DeviceManager.hpp"
+      },
+      "relation": "imports",
+      "source": "file:include/DeviceManager.hpp",
+      "target": "module:QObject",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:include/DeviceManager.hpp:inherits:DeviceManager:QObject",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "include/DeviceManager.hpp"
+      },
+      "relation": "inherits",
+      "source": "symbol:include/DeviceManager.hpp:DeviceManager",
+      "target": "name:QObject",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:include/DeviceModel.hpp:contains:DeviceModel",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "include/DeviceModel.hpp"
+      },
+      "relation": "contains",
+      "source": "file:include/DeviceModel.hpp",
+      "target": "symbol:include/DeviceModel.hpp:DeviceModel",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:include/DeviceModel.hpp:import:2:QObject",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "include/DeviceModel.hpp"
+      },
+      "relation": "imports",
+      "source": "file:include/DeviceModel.hpp",
+      "target": "module:QObject",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:include/DeviceModel.hpp:inherits:DeviceModel:QObject",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "include/DeviceModel.hpp"
+      },
+      "relation": "inherits",
+      "source": "symbol:include/DeviceModel.hpp:DeviceModel",
+      "target": "name:QObject",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:src/DeviceManager.cpp:calls:DeviceManager:DeviceModel:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "DeviceModel",
+        "enclosing_class": "DeviceManager",
+        "lineno": 5,
+        "receiver": null,
+        "receiver_kind": "new",
+        "receiver_type": null,
+        "resolution": "import_scoped",
+        "scope": null,
+        "source_file": "src/DeviceManager.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:src/DeviceManager.cpp:DeviceManager",
+      "target": "symbol:include/DeviceModel.hpp:DeviceModel",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:src/DeviceManager.cpp:calls:onDeviceConnected:scan:24",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "scan",
+        "enclosing_class": "DeviceManager",
+        "lineno": 24,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "resolution": "this",
+        "scope": null,
+        "source_file": "src/DeviceManager.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:src/DeviceManager.cpp:onDeviceConnected",
+      "target": "symbol:src/DeviceManager.cpp:scan",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:src/DeviceManager.cpp:contains:DeviceManager",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "src/DeviceManager.cpp"
+      },
+      "relation": "contains",
+      "source": "file:src/DeviceManager.cpp",
+      "target": "symbol:src/DeviceManager.cpp:DeviceManager",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:src/DeviceManager.cpp:contains:onDeviceConnected",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 23,
+        "source_file": "src/DeviceManager.cpp"
+      },
+      "relation": "contains",
+      "source": "file:src/DeviceManager.cpp",
+      "target": "symbol:src/DeviceManager.cpp:onDeviceConnected",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:src/DeviceManager.cpp:contains:scan",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 9,
+        "source_file": "src/DeviceManager.cpp"
+      },
+      "relation": "contains",
+      "source": "file:src/DeviceManager.cpp",
+      "target": "symbol:src/DeviceManager.cpp:scan",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:src/DeviceManager.cpp:import:1:DeviceManager.hpp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "src/DeviceManager.cpp"
+      },
+      "relation": "imports",
+      "source": "file:src/DeviceManager.cpp",
+      "target": "file:include/DeviceManager.hpp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:src/DeviceManager.cpp:import:2:DeviceModel.hpp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "src/DeviceManager.cpp"
+      },
+      "relation": "imports",
+      "source": "file:src/DeviceManager.cpp",
+      "target": "file:include/DeviceModel.hpp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:src/DeviceModel.cpp:contains:DeviceModel",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "src/DeviceModel.cpp"
+      },
+      "relation": "contains",
+      "source": "file:src/DeviceModel.cpp",
+      "target": "symbol:src/DeviceModel.cpp:DeviceModel",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:src/DeviceModel.cpp:contains:onDeviceConnected",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "src/DeviceModel.cpp"
+      },
+      "relation": "contains",
+      "source": "file:src/DeviceModel.cpp",
+      "target": "symbol:src/DeviceModel.cpp:onDeviceConnected",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:src/DeviceModel.cpp:import:1:DeviceModel.hpp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "src/DeviceModel.cpp"
+      },
+      "relation": "imports",
+      "source": "file:src/DeviceModel.cpp",
+      "target": "file:include/DeviceModel.hpp",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "symbol",
+      "kind": "binding",
+      "label": "anchors.fill",
+      "metadata": {
+        "alias": false,
+        "bound_name": "anchors.fill",
+        "byte_end": 135,
+        "byte_start": 115,
+        "degree": 5,
+        "lineno": 8,
+        "parser_backend": "treesitter",
+        "qml_kind": "binding",
+        "qml_owner": "DeviceDelegate.MouseArea"
+      },
+      "node_id": "binding:qml/DeviceDelegate.qml:DeviceDelegate.MouseArea.anchors.fill",
+      "signature": "anchors.fill: parent",
+      "source_ref": "qml/DeviceDelegate.qml",
+      "span_end": 8,
+      "span_start": 8
+    },
+    {
+      "granularity": "file",
+      "kind": "commit",
+      "label": "add device manager/model and qml scene",
+      "metadata": {
+        "author": "Cortex Evals",
+        "authored_at": 1700000060,
+        "degree": 8
+      },
+      "node_id": "commit:0000000000000000000000000000000000000001",
+      "signature": "",
+      "source_ref": "0000000000000000000000000000000000000001",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "commit",
+      "label": "wire deviceConnected scan and update qml handler",
+      "metadata": {
+        "author": "Cortex Evals",
+        "authored_at": 1700000120,
+        "degree": 2
+      },
+      "node_id": "commit:0000000000000000000000000000000000000002",
+      "signature": "",
+      "source_ref": "0000000000000000000000000000000000000002",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "external",
+      "label": "anchors.fill",
+      "metadata": {
+        "byte_end": 135,
+        "byte_start": 115,
+        "degree": 1,
+        "lineno": 8,
+        "member_name": "anchors.fill",
+        "parser_backend": "treesitter",
+        "qml_kind": "external",
+        "type_name": "MouseArea",
+        "unverified": true,
+        "uri": ""
+      },
+      "node_id": "external:qml:qml/DeviceDelegate.qml:MouseArea.anchors.fill",
+      "signature": "anchors.fill: parent",
+      "source_ref": "qml/DeviceDelegate.qml",
+      "span_end": 8,
+      "span_start": 8
+    },
+    {
+      "granularity": "symbol",
+      "kind": "external",
+      "label": "parent",
+      "metadata": {
+        "byte_end": 135,
+        "byte_start": 129,
+        "degree": 3,
+        "lineno": 8,
+        "member_name": "",
+        "parser_backend": "treesitter",
+        "qml_kind": "external",
+        "type_name": "parent",
+        "unverified": true,
+        "uri": ""
+      },
+      "node_id": "external:qml:qml/DeviceDelegate.qml:parent",
+      "signature": "parent",
+      "source_ref": "qml/DeviceDelegate.qml",
+      "span_end": 8,
+      "span_start": 8
+    },
+    {
+      "granularity": "symbol",
+      "kind": "external",
+      "label": "deviceId",
+      "metadata": {
+        "byte_end": 277,
+        "byte_start": 269,
+        "degree": 3,
+        "lineno": 12,
+        "member_name": "",
+        "parser_backend": "treesitter",
+        "qml_kind": "external",
+        "type_name": "deviceId",
+        "unverified": true,
+        "uri": ""
+      },
+      "node_id": "external:qml:qml/Main.qml:deviceId",
+      "signature": "deviceId",
+      "source_ref": "qml/Main.qml",
+      "span_end": 12,
+      "span_start": 12
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "CMakeLists.txt",
+      "metadata": {
+        "degraded_reason": "",
+        "degree": 8,
+        "hotspot": {
+          "churn": 1,
+          "complexity": 0,
+          "score": 0
+        },
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "txt",
+        "size_bytes": 215
+      },
+      "node_id": "file:CMakeLists.txt",
+      "signature": "",
+      "source_ref": "CMakeLists.txt",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "include/DeviceManager.hpp",
+      "metadata": {
+        "degraded_reason": "",
+        "degree": 13,
+        "hotspot": {
+          "churn": 1,
+          "complexity": 0,
+          "score": 0
+        },
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "hpp",
+        "size_bytes": 275
+      },
+      "node_id": "file:include/DeviceManager.hpp",
+      "signature": "",
+      "source_ref": "include/DeviceManager.hpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "include/DeviceModel.hpp",
+      "metadata": {
+        "degraded_reason": "",
+        "degree": 14,
+        "hotspot": {
+          "churn": 1,
+          "complexity": 0,
+          "score": 0
+        },
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "hpp",
+        "size_bytes": 239
+      },
+      "node_id": "file:include/DeviceModel.hpp",
+      "signature": "",
+      "source_ref": "include/DeviceModel.hpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "qml/DeviceDelegate.qml",
+      "metadata": {
+        "degraded_reason": "",
+        "degree": 24,
+        "hotspot": {
+          "churn": 1,
+          "complexity": 182,
+          "score": 182
+        },
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "qml",
+        "size_bytes": 173
+      },
+      "node_id": "file:qml/DeviceDelegate.qml",
+      "signature": "",
+      "source_ref": "qml/DeviceDelegate.qml",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "qml/Main.qml",
+      "metadata": {
+        "degraded_reason": "",
+        "degree": 26,
+        "hotspot": {
+          "churn": 2,
+          "complexity": 214,
+          "score": 428
+        },
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "qml",
+        "size_bytes": 287
+      },
+      "node_id": "file:qml/Main.qml",
+      "signature": "",
+      "source_ref": "qml/Main.qml",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "resources.qrc",
+      "metadata": {
+        "degraded_reason": "",
+        "degree": 10,
+        "hotspot": {
+          "churn": 1,
+          "complexity": 0,
+          "score": 0
+        },
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "qrc",
+        "size_bytes": 123
+      },
+      "node_id": "file:resources.qrc",
+      "signature": "",
+      "source_ref": "resources.qrc",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "src/DeviceManager.cpp",
+      "metadata": {
+        "degraded_reason": "",
+        "degree": 15,
+        "hotspot": {
+          "churn": 2,
+          "complexity": 120,
+          "score": 240
+        },
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "cpp",
+        "size_bytes": 582
+      },
+      "node_id": "file:src/DeviceManager.cpp",
+      "signature": "",
+      "source_ref": "src/DeviceManager.cpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "src/DeviceModel.cpp",
+      "metadata": {
+        "degraded_reason": "",
+        "degree": 12,
+        "hotspot": {
+          "churn": 1,
+          "complexity": 0,
+          "score": 0
+        },
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "cpp",
+        "size_bytes": 171
+      },
+      "node_id": "file:src/DeviceModel.cpp",
+      "signature": "",
+      "source_ref": "src/DeviceModel.cpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "module",
+      "label": "QtQuick",
+      "metadata": {
+        "alias": "",
+        "byte_end": 19,
+        "byte_start": 0,
+        "degree": 1,
+        "lineno": 1,
+        "parser_backend": "treesitter",
+        "qml_kind": "import",
+        "uri": "QtQuick",
+        "version": "2.15"
+      },
+      "node_id": "import:qml/DeviceDelegate.qml:QtQuick:2.15:",
+      "signature": "import QtQuick 2.15",
+      "source_ref": "qml/DeviceDelegate.qml",
+      "span_end": 1,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "module",
+      "label": "QtQuick.Controls",
+      "metadata": {
+        "alias": "",
+        "byte_end": 48,
+        "byte_start": 20,
+        "degree": 1,
+        "lineno": 2,
+        "parser_backend": "treesitter",
+        "qml_kind": "import",
+        "uri": "QtQuick.Controls",
+        "version": "2.15"
+      },
+      "node_id": "import:qml/Main.qml:QtQuick.Controls:2.15:",
+      "signature": "import QtQuick.Controls 2.15",
+      "source_ref": "qml/Main.qml",
+      "span_end": 2,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "module",
+      "label": "QtQuick",
+      "metadata": {
+        "alias": "",
+        "byte_end": 19,
+        "byte_start": 0,
+        "degree": 1,
+        "lineno": 1,
+        "parser_backend": "treesitter",
+        "qml_kind": "import",
+        "uri": "QtQuick",
+        "version": "2.15"
+      },
+      "node_id": "import:qml/Main.qml:QtQuick:2.15:",
+      "signature": "import QtQuick 2.15",
+      "source_ref": "qml/Main.qml",
+      "span_end": 1,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "DeviceManager",
+      "metadata": {
+        "degree": 3,
+        "lineno": 4,
+        "parser_backend": "treesitter",
+        "qt": "qobject"
+      },
+      "node_id": "symbol:include/DeviceManager.hpp:DeviceManager",
+      "signature": "class DeviceManager : public QObject {",
+      "source_ref": "include/DeviceManager.hpp",
+      "span_end": 15,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "deviceConnected",
+      "metadata": {
+        "degree": 4,
+        "lineno": 11,
+        "parser_backend": "treesitter",
+        "qt": "signal"
+      },
+      "node_id": "symbol:include/DeviceManager.hpp:deviceConnected",
+      "signature": "void deviceConnected(int deviceId);",
+      "source_ref": "include/DeviceManager.hpp",
+      "span_end": 11,
+      "span_start": 11
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "onDeviceConnected",
+      "metadata": {
+        "degree": 1,
+        "lineno": 14,
+        "parser_backend": "treesitter",
+        "qt": "slot"
+      },
+      "node_id": "symbol:include/DeviceManager.hpp:onDeviceConnected",
+      "signature": "void onDeviceConnected(int deviceId);",
+      "source_ref": "include/DeviceManager.hpp",
+      "span_end": 14,
+      "span_start": 14
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "DeviceModel",
+      "metadata": {
+        "degree": 3,
+        "lineno": 4,
+        "parser_backend": "treesitter",
+        "qt": "qobject"
+      },
+      "node_id": "symbol:include/DeviceModel.hpp:DeviceModel",
+      "signature": "class DeviceModel : public QObject {",
+      "source_ref": "include/DeviceModel.hpp",
+      "span_end": 14,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "modelUpdated",
+      "metadata": {
+        "degree": 2,
+        "lineno": 13,
+        "parser_backend": "treesitter",
+        "qt": "signal"
+      },
+      "node_id": "symbol:include/DeviceModel.hpp:modelUpdated",
+      "signature": "void modelUpdated();",
+      "source_ref": "include/DeviceModel.hpp",
+      "span_end": 13,
+      "span_start": 13
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "onDeviceConnected",
+      "metadata": {
+        "degree": 2,
+        "lineno": 10,
+        "parser_backend": "treesitter",
+        "qt": "slot"
+      },
+      "node_id": "symbol:include/DeviceModel.hpp:onDeviceConnected",
+      "signature": "void onDeviceConnected(int deviceId);",
+      "source_ref": "include/DeviceModel.hpp",
+      "span_end": 10,
+      "span_start": 10
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "DeviceDelegate",
+      "metadata": {
+        "byte_end": 172,
+        "byte_start": 21,
+        "degree": 5,
+        "lineno": 3,
+        "parser_backend": "treesitter",
+        "qml_base_type": "Item",
+        "qml_kind": "component",
+        "qml_owner": "DeviceDelegate"
+      },
+      "node_id": "symbol:qml/DeviceDelegate.qml:DeviceDelegate",
+      "signature": "Item {",
+      "source_ref": "qml/DeviceDelegate.qml",
+      "span_end": 11,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "object",
+      "label": "MouseArea",
+      "metadata": {
+        "byte_end": 170,
+        "byte_start": 95,
+        "degree": 4,
+        "lineno": 7,
+        "parent_owner": "symbol:qml/DeviceDelegate.qml:DeviceDelegate",
+        "parser_backend": "treesitter",
+        "qml_kind": "object",
+        "qml_owner": "DeviceDelegate.MouseArea",
+        "type_name": "MouseArea"
+      },
+      "node_id": "symbol:qml/DeviceDelegate.qml:DeviceDelegate.MouseArea",
+      "signature": "MouseArea {",
+      "source_ref": "qml/DeviceDelegate.qml",
+      "span_end": 10,
+      "span_start": 7
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "onClicked",
+      "metadata": {
+        "byte_end": 164,
+        "byte_start": 144,
+        "component_path": "",
+        "degree": 4,
+        "handler_name": "onClicked",
+        "lineno": 9,
+        "parser_backend": "treesitter",
+        "qml_kind": "handler",
+        "qml_owner": "DeviceDelegate.MouseArea",
+        "qt": "handler",
+        "signal_name": "clicked"
+      },
+      "node_id": "symbol:qml/DeviceDelegate.qml:DeviceDelegate.MouseArea.onClicked",
+      "signature": "onClicked: clicked()",
+      "source_ref": "qml/DeviceDelegate.qml",
+      "span_end": 9,
+      "span_start": 9
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "clicked",
+      "metadata": {
+        "byte_end": 89,
+        "byte_start": 73,
+        "degree": 4,
+        "lineno": 5,
+        "parameters": [],
+        "parser_backend": "treesitter",
+        "qml_kind": "signal",
+        "qml_owner": "DeviceDelegate",
+        "qt": "signal"
+      },
+      "node_id": "symbol:qml/DeviceDelegate.qml:DeviceDelegate.clicked",
+      "signature": "signal clicked()",
+      "source_ref": "qml/DeviceDelegate.qml",
+      "span_end": 5,
+      "span_start": 5
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "deviceConnected",
+      "metadata": {
+        "byte_end": 68,
+        "byte_start": 32,
+        "degree": 4,
+        "lineno": 4,
+        "parameters": [
+          "int deviceId"
+        ],
+        "parser_backend": "treesitter",
+        "qml_kind": "signal",
+        "qml_owner": "DeviceDelegate",
+        "qt": "signal"
+      },
+      "node_id": "symbol:qml/DeviceDelegate.qml:DeviceDelegate.deviceConnected",
+      "signature": "signal deviceConnected(int deviceId)",
+      "source_ref": "qml/DeviceDelegate.qml",
+      "span_end": 4,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "parameter",
+      "label": "deviceId",
+      "metadata": {
+        "byte_end": 67,
+        "byte_start": 55,
+        "degree": 2,
+        "lineno": 4,
+        "parser_backend": "treesitter",
+        "qml_kind": "parameter",
+        "qml_owner": "DeviceDelegate.deviceConnected",
+        "type": "int"
+      },
+      "node_id": "symbol:qml/DeviceDelegate.qml:DeviceDelegate.deviceConnected.deviceId",
+      "signature": "int deviceId",
+      "source_ref": "qml/DeviceDelegate.qml",
+      "span_end": 4,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Main",
+      "metadata": {
+        "byte_end": 286,
+        "byte_start": 50,
+        "degree": 5,
+        "lineno": 4,
+        "parser_backend": "treesitter",
+        "qml_base_type": "ApplicationWindow",
+        "qml_kind": "component",
+        "qml_owner": "Main"
+      },
+      "node_id": "symbol:qml/Main.qml:Main",
+      "signature": "ApplicationWindow {",
+      "source_ref": "qml/Main.qml",
+      "span_end": 14,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "object",
+      "label": "DeviceDelegate",
+      "metadata": {
+        "byte_end": 284,
+        "byte_start": 121,
+        "degree": 5,
+        "lineno": 9,
+        "parent_owner": "symbol:qml/Main.qml:Main",
+        "parser_backend": "treesitter",
+        "qml_kind": "object",
+        "qml_owner": "Main.DeviceDelegate",
+        "type_name": "DeviceDelegate"
+      },
+      "node_id": "symbol:qml/Main.qml:Main.DeviceDelegate",
+      "signature": "DeviceDelegate {",
+      "source_ref": "qml/Main.qml",
+      "span_end": 13,
+      "span_start": 9
+    },
+    {
+      "granularity": "symbol",
+      "kind": "id",
+      "label": "delegate",
+      "metadata": {
+        "byte_end": 158,
+        "byte_start": 146,
+        "degree": 2,
+        "id_name": "delegate",
+        "lineno": 10,
+        "parser_backend": "treesitter",
+        "qml_kind": "id",
+        "qml_owner": "Main.DeviceDelegate"
+      },
+      "node_id": "symbol:qml/Main.qml:Main.DeviceDelegate.delegate",
+      "signature": "id: delegate",
+      "source_ref": "qml/Main.qml",
+      "span_end": 10,
+      "span_start": 10
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "onClicked",
+      "metadata": {
+        "byte_end": 209,
+        "byte_start": 167,
+        "component_path": "qml/DeviceDelegate.qml",
+        "degree": 3,
+        "handler_name": "onClicked",
+        "lineno": 11,
+        "parser_backend": "treesitter",
+        "qml_kind": "handler",
+        "qml_owner": "Main.DeviceDelegate",
+        "qt": "handler",
+        "signal_name": "clicked"
+      },
+      "node_id": "symbol:qml/Main.qml:Main.DeviceDelegate.onClicked",
+      "signature": "onClicked: console.log(\"delegate clicked\")",
+      "source_ref": "qml/Main.qml",
+      "span_end": 11,
+      "span_start": 11
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "onDeviceConnected",
+      "metadata": {
+        "byte_end": 278,
+        "byte_start": 218,
+        "component_path": "qml/DeviceDelegate.qml",
+        "degree": 5,
+        "handler_name": "onDeviceConnected",
+        "lineno": 12,
+        "parser_backend": "treesitter",
+        "qml_kind": "handler",
+        "qml_owner": "Main.DeviceDelegate",
+        "qt": "handler",
+        "signal_name": "deviceConnected"
+      },
+      "node_id": "symbol:qml/Main.qml:Main.DeviceDelegate.onDeviceConnected",
+      "signature": "onDeviceConnected: console.log(\"device connected\", deviceId)",
+      "source_ref": "qml/Main.qml",
+      "span_end": 12,
+      "span_start": 12
+    },
+    {
+      "granularity": "symbol",
+      "kind": "object",
+      "label": "DeviceManager",
+      "metadata": {
+        "byte_end": 115,
+        "byte_start": 99,
+        "degree": 2,
+        "lineno": 7,
+        "parent_owner": "symbol:qml/Main.qml:Main",
+        "parser_backend": "treesitter",
+        "qml_kind": "object",
+        "qml_owner": "Main.DeviceManager",
+        "type_name": "DeviceManager"
+      },
+      "node_id": "symbol:qml/Main.qml:Main.DeviceManager",
+      "signature": "DeviceManager {}",
+      "source_ref": "qml/Main.qml",
+      "span_end": 7,
+      "span_start": 7
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "sceneReady",
+      "metadata": {
+        "byte_end": 93,
+        "byte_start": 74,
+        "degree": 2,
+        "lineno": 5,
+        "parameters": [],
+        "parser_backend": "treesitter",
+        "qml_kind": "signal",
+        "qml_owner": "Main",
+        "qt": "signal"
+      },
+      "node_id": "symbol:qml/Main.qml:Main.sceneReady",
+      "signature": "signal sceneReady()",
+      "source_ref": "qml/Main.qml",
+      "span_end": 5,
+      "span_start": 5
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "DeviceManager",
+      "metadata": {
+        "degree": 2,
+        "lineno": 4,
+        "parser_backend": "treesitter",
+        "qualifier": "DeviceManager"
+      },
+      "node_id": "symbol:src/DeviceManager.cpp:DeviceManager",
+      "signature": "DeviceManager::DeviceManager(QObject *parent) : QObject(parent) {",
+      "source_ref": "src/DeviceManager.cpp",
+      "span_end": 7,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "onDeviceConnected",
+      "metadata": {
+        "degree": 2,
+        "lineno": 23,
+        "parser_backend": "treesitter",
+        "qualifier": "DeviceManager"
+      },
+      "node_id": "symbol:src/DeviceManager.cpp:onDeviceConnected",
+      "signature": "void DeviceManager::onDeviceConnected(int deviceId) {",
+      "source_ref": "src/DeviceManager.cpp",
+      "span_end": 25,
+      "span_start": 23
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "scan",
+      "metadata": {
+        "degree": 4,
+        "lineno": 9,
+        "parser_backend": "treesitter",
+        "qualifier": "DeviceManager"
+      },
+      "node_id": "symbol:src/DeviceManager.cpp:scan",
+      "signature": "void DeviceManager::scan() {",
+      "source_ref": "src/DeviceManager.cpp",
+      "span_end": 21,
+      "span_start": 9
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "DeviceModel",
+      "metadata": {
+        "degree": 1,
+        "lineno": 3,
+        "parser_backend": "treesitter",
+        "qualifier": "DeviceModel"
+      },
+      "node_id": "symbol:src/DeviceModel.cpp:DeviceModel",
+      "signature": "DeviceModel::DeviceModel(QObject *parent) : QObject(parent) {}",
+      "source_ref": "src/DeviceModel.cpp",
+      "span_end": 3,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "onDeviceConnected",
+      "metadata": {
+        "degree": 2,
+        "lineno": 5,
+        "parser_backend": "treesitter",
+        "qualifier": "DeviceModel"
+      },
+      "node_id": "symbol:src/DeviceModel.cpp:onDeviceConnected",
+      "signature": "void DeviceModel::onDeviceConnected(int deviceId) {",
+      "source_ref": "src/DeviceModel.cpp",
+      "span_end": 7,
+      "span_start": 5
+    },
+    {
+      "granularity": "symbol",
+      "kind": "target",
+      "label": "qt_app",
+      "metadata": {
+        "degree": 7,
+        "lineno": 6,
+        "parser_backend": "regex",
+        "qml_kind": "cmake_target"
+      },
+      "node_id": "target:qt_app",
+      "signature": "",
+      "source_ref": "CMakeLists.txt",
+      "span_end": 6,
+      "span_start": 6
+    }
+  ]
+}

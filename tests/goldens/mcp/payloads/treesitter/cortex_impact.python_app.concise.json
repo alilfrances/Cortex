@@ -1,0 +1,91 @@
+{
+  "items": [
+    {
+      "hotspot": {
+        "churn": 1,
+        "complexity": 0,
+        "score": 0
+      },
+      "node_id": "file:app/audit.py",
+      "path": "app/audit.py",
+      "score": 4.0,
+      "why": [
+        {
+          "confidence": "EXTRACTED",
+          "layer": "STRUCTURAL",
+          "relation": "calls",
+          "symbol": "__init__ -> AuditLog",
+          "weight": 1.0
+        },
+        {
+          "cochange_count": 1,
+          "confidence": "EXTRACTED",
+          "layer": "COCHANGE",
+          "relation": "cochange",
+          "weight": 1.0
+        },
+        {
+          "confidence": "EXTRACTED",
+          "layer": "STRUCTURAL",
+          "relation": "imports",
+          "weight": 1.0
+        }
+      ]
+    },
+    {
+      "hotspot": {
+        "churn": 1,
+        "complexity": 211,
+        "score": 211
+      },
+      "node_id": "file:app/session.py",
+      "path": "app/session.py",
+      "score": 4.0,
+      "why": [
+        {
+          "confidence": "EXTRACTED",
+          "layer": "STRUCTURAL",
+          "relation": "calls",
+          "symbol": "__init__ -> SessionStore",
+          "weight": 1.0
+        },
+        {
+          "cochange_count": 1,
+          "confidence": "EXTRACTED",
+          "layer": "COCHANGE",
+          "relation": "cochange",
+          "weight": 1.0
+        },
+        {
+          "confidence": "EXTRACTED",
+          "layer": "STRUCTURAL",
+          "relation": "imports",
+          "weight": 1.0
+        }
+      ]
+    },
+    {
+      "hotspot": {
+        "churn": 1,
+        "complexity": 0,
+        "score": 0
+      },
+      "node_id": "file:README.md",
+      "path": "README.md",
+      "score": 2.0,
+      "why": [
+        {
+          "cochange_count": 1,
+          "confidence": "EXTRACTED",
+          "layer": "COCHANGE",
+          "relation": "cochange",
+          "weight": 1.0
+        }
+      ]
+    }
+  ],
+  "repo_path": "<repo>",
+  "returned_count": 3,
+  "stale": false,
+  "truncated": false
+}

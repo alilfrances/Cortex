@@ -1,0 +1,80 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:ruby/mixin.rb:contains:Mixin",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "ruby/mixin.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/mixin.rb",
+      "target": "symbol:ruby/mixin.rb:Mixin",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:ruby/mixin.rb:contains:mixed",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "ruby/mixin.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/mixin.rb",
+      "target": "symbol:ruby/mixin.rb:mixed",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "ruby/mixin.rb",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "rb",
+        "size_bytes": 35
+      },
+      "node_id": "file:ruby/mixin.rb",
+      "signature": "",
+      "source_ref": "ruby/mixin.rb",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Mixin",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:ruby/mixin.rb:Mixin",
+      "signature": "module Mixin",
+      "source_ref": "ruby/mixin.rb",
+      "span_end": 1,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "mixed",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 2,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:ruby/mixin.rb:mixed",
+      "signature": "def mixed",
+      "source_ref": "ruby/mixin.rb",
+      "span_end": 2,
+      "span_start": 2
+    }
+  ]
+}

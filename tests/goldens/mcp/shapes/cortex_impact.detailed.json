@@ -1,0 +1,22 @@
+{
+  "first_item_keys": {
+    "items": [
+      "hotspot",
+      "node_id",
+      "path",
+      "score",
+      "why"
+    ]
+  },
+  "keys": [
+    "_meta",
+    "current_fingerprint",
+    "fingerprint",
+    "items",
+    "refresh_hint",
+    "repo_path",
+    "returned_count",
+    "stale",
+    "truncated"
+  ]
+}

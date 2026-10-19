@@ -1,0 +1,19 @@
+{
+  "edges": [],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "qmldir",
+      "metadata": {
+        "kind": "text",
+        "size_bytes": 140
+      },
+      "node_id": "file:qmldir",
+      "signature": "",
+      "source_ref": "qmldir",
+      "span_end": null,
+      "span_start": null
+    }
+  ]
+}

@@ -1,0 +1,320 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:Theme.qml:binds:binding:Theme.qml:Theme.accent:symbol:Theme.qml:Theme.accent:3",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "bound_name": "accent",
+        "lineno": 3,
+        "source_file": "Theme.qml"
+      },
+      "relation": "binds",
+      "source": "binding:Theme.qml:Theme.accent",
+      "target": "symbol:Theme.qml:Theme.accent",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:Theme.qml:contains:file:Theme.qml:binding:Theme.qml:Theme.accent:3",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "Theme.qml"
+      },
+      "relation": "contains",
+      "source": "file:Theme.qml",
+      "target": "binding:Theme.qml:Theme.accent",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:Theme.qml:contains:file:Theme.qml:import:Theme.qml:QtQuick:::2",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "Theme.qml"
+      },
+      "relation": "contains",
+      "source": "file:Theme.qml",
+      "target": "import:Theme.qml:QtQuick::",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:Theme.qml:contains:file:Theme.qml:pragma:Theme.qml:Singleton:1",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "Theme.qml"
+      },
+      "relation": "contains",
+      "source": "file:Theme.qml",
+      "target": "pragma:Theme.qml:Singleton",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:Theme.qml:contains:file:Theme.qml:symbol:Theme.qml:Theme.accent:3",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "Theme.qml"
+      },
+      "relation": "contains",
+      "source": "file:Theme.qml",
+      "target": "symbol:Theme.qml:Theme.accent",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:Theme.qml:contains:file:Theme.qml:symbol:Theme.qml:Theme.accentChanged:3",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "Theme.qml"
+      },
+      "relation": "contains",
+      "source": "file:Theme.qml",
+      "target": "symbol:Theme.qml:Theme.accentChanged",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:Theme.qml:contains:file:Theme.qml:symbol:Theme.qml:Theme:3",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "Theme.qml"
+      },
+      "relation": "contains",
+      "source": "file:Theme.qml",
+      "target": "symbol:Theme.qml:Theme",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:Theme.qml:contains:symbol:Theme.qml:Theme:binding:Theme.qml:Theme.accent:3",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "Theme.qml"
+      },
+      "relation": "contains",
+      "source": "symbol:Theme.qml:Theme",
+      "target": "binding:Theme.qml:Theme.accent",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:Theme.qml:contains:symbol:Theme.qml:Theme:symbol:Theme.qml:Theme.accent:3",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "Theme.qml"
+      },
+      "relation": "contains",
+      "source": "symbol:Theme.qml:Theme",
+      "target": "symbol:Theme.qml:Theme.accent",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:Theme.qml:contains:symbol:Theme.qml:Theme:symbol:Theme.qml:Theme.accentChanged:3",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "Theme.qml"
+      },
+      "relation": "contains",
+      "source": "symbol:Theme.qml:Theme",
+      "target": "symbol:Theme.qml:Theme.accentChanged",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:Theme.qml:imports:file:Theme.qml:module:QtQuick:2",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "alias": "",
+        "lineno": 2,
+        "source_file": "Theme.qml",
+        "unverified": true,
+        "uri": "QtQuick",
+        "version": ""
+      },
+      "relation": "imports",
+      "source": "file:Theme.qml",
+      "target": "module:QtQuick",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:Theme.qml:inherits:symbol:Theme.qml:Theme:module:QtObject:3",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "Theme.qml",
+        "type_name": "QtObject",
+        "unverified": true
+      },
+      "relation": "inherits",
+      "source": "symbol:Theme.qml:Theme",
+      "target": "module:QtObject",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "qml:Theme.qml:references:symbol:Theme.qml:Theme.accent:symbol:Theme.qml:Theme.accentChanged:3",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "implicit": true,
+        "lineno": 3,
+        "notify": true,
+        "source_file": "Theme.qml"
+      },
+      "relation": "references",
+      "source": "symbol:Theme.qml:Theme.accent",
+      "target": "symbol:Theme.qml:Theme.accentChanged",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "symbol",
+      "kind": "binding",
+      "label": "accent",
+      "metadata": {
+        "alias": false,
+        "bound_name": "accent",
+        "byte_end": 71,
+        "byte_start": 43,
+        "lineno": 3,
+        "parser_backend": "treesitter",
+        "qml_kind": "binding",
+        "qml_owner": "Theme"
+      },
+      "node_id": "binding:Theme.qml:Theme.accent",
+      "signature": "property color accent: \"red\"",
+      "source_ref": "Theme.qml",
+      "span_end": 3,
+      "span_start": 3
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "Theme.qml",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "qml",
+        "size_bytes": 74
+      },
+      "node_id": "file:Theme.qml",
+      "signature": "",
+      "source_ref": "Theme.qml",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "module",
+      "label": "QtQuick",
+      "metadata": {
+        "alias": "",
+        "byte_end": 31,
+        "byte_start": 17,
+        "lineno": 2,
+        "parser_backend": "treesitter",
+        "qml_kind": "import",
+        "uri": "QtQuick",
+        "version": ""
+      },
+      "node_id": "import:Theme.qml:QtQuick::",
+      "signature": "import QtQuick",
+      "source_ref": "Theme.qml",
+      "span_end": 2,
+      "span_start": 2
+    },
+    {
+      "granularity": "symbol",
+      "kind": "pragma",
+      "label": "Singleton",
+      "metadata": {
+        "byte_end": 16,
+        "byte_start": 0,
+        "lineno": 1,
+        "parser_backend": "treesitter",
+        "qml_kind": "pragma"
+      },
+      "node_id": "pragma:Theme.qml:Singleton",
+      "signature": "pragma Singleton",
+      "source_ref": "Theme.qml",
+      "span_end": 1,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Theme",
+      "metadata": {
+        "byte_end": 73,
+        "byte_start": 32,
+        "lineno": 3,
+        "parser_backend": "treesitter",
+        "qml_base_type": "QtObject",
+        "qml_kind": "component",
+        "qml_owner": "Theme"
+      },
+      "node_id": "symbol:Theme.qml:Theme",
+      "signature": "QtObject { property color accent: \"red\" }",
+      "source_ref": "Theme.qml",
+      "span_end": 3,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "property",
+      "label": "accent",
+      "metadata": {
+        "byte_end": 71,
+        "byte_start": 43,
+        "has_binding": true,
+        "lineno": 3,
+        "modifiers": [],
+        "parser_backend": "treesitter",
+        "qml_kind": "property",
+        "qml_owner": "Theme",
+        "type": "color"
+      },
+      "node_id": "symbol:Theme.qml:Theme.accent",
+      "signature": "property color accent: \"red\"",
+      "source_ref": "Theme.qml",
+      "span_end": 3,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "accentChanged",
+      "metadata": {
+        "byte_end": 71,
+        "byte_start": 43,
+        "implicit": true,
+        "lineno": 3,
+        "parser_backend": "treesitter",
+        "property_id": "symbol:Theme.qml:Theme.accent",
+        "qml_kind": "signal",
+        "qml_owner": "Theme",
+        "qt": "signal"
+      },
+      "node_id": "symbol:Theme.qml:Theme.accentChanged",
+      "signature": "signal accentChanged()",
+      "source_ref": "Theme.qml",
+      "span_end": 3,
+      "span_start": 3
+    }
+  ]
+}

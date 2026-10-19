@@ -1,0 +1,105 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:base.hpp:contains:Base",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "base.hpp"
+      },
+      "relation": "contains",
+      "source": "file:base.hpp",
+      "target": "symbol:base.hpp:Base",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:base.hpp:contains:ping",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "base.hpp"
+      },
+      "relation": "contains",
+      "source": "file:base.hpp",
+      "target": "symbol:base.hpp:ping",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:base.hpp:contains:tick",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 8,
+        "source_file": "base.hpp"
+      },
+      "relation": "contains",
+      "source": "file:base.hpp",
+      "target": "symbol:base.hpp:tick",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "base.hpp",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "hpp",
+        "size_bytes": 158
+      },
+      "node_id": "file:base.hpp",
+      "signature": "",
+      "source_ref": "base.hpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Base",
+      "metadata": {
+        "lineno": 3,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:base.hpp:Base",
+      "signature": "class Base {",
+      "source_ref": "base.hpp",
+      "span_end": 10,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "ping",
+      "metadata": {
+        "lineno": 5,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:base.hpp:ping",
+      "signature": "void ping() {",
+      "source_ref": "base.hpp",
+      "span_end": 7,
+      "span_start": 5
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "tick",
+      "metadata": {
+        "lineno": 8,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:base.hpp:tick",
+      "signature": "virtual void tick() {",
+      "source_ref": "base.hpp",
+      "span_end": 9,
+      "span_start": 8
+    }
+  ]
+}

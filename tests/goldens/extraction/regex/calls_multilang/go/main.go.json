@@ -1,0 +1,349 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/main.go:calls:Run:Do:25",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Do",
+        "enclosing_class": null,
+        "lineno": 25,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "go/main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:go/main.go:Run",
+      "target": "name:Do",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/main.go:calls:Run:Help:15",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Help",
+        "enclosing_class": null,
+        "lineno": 15,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "go/main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:go/main.go:Run",
+      "target": "name:Help",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/main.go:calls:Run:M:17",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "M",
+        "enclosing_class": null,
+        "lineno": 17,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "go/main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:go/main.go:Run",
+      "target": "name:M",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/main.go:calls:Run:M:19",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "M",
+        "enclosing_class": null,
+        "lineno": 19,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "go/main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:go/main.go:Run",
+      "target": "name:M",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/main.go:calls:Run:Println:22",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Println",
+        "enclosing_class": null,
+        "lineno": 22,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "go/main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:go/main.go:Run",
+      "target": "name:Println",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/main.go:calls:Run:Save:14",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Save",
+        "enclosing_class": null,
+        "lineno": 14,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "go/main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:go/main.go:Run",
+      "target": "name:Save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/main.go:calls:Run:Save:23",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Save",
+        "enclosing_class": null,
+        "lineno": 23,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "go/main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:go/main.go:Run",
+      "target": "name:Save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/main.go:calls:Run:Step:13",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Step",
+        "enclosing_class": null,
+        "lineno": 13,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "go/main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:go/main.go:Run",
+      "target": "name:Step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/main.go:calls:Run:local:20",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "local",
+        "enclosing_class": null,
+        "lineno": 20,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "go/main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:go/main.go:Run",
+      "target": "name:local",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/main.go:calls:Run:shared:21",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "shared",
+        "enclosing_class": null,
+        "lineno": 21,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "go/main.go"
+      },
+      "relation": "calls",
+      "source": "symbol:go/main.go:Run",
+      "target": "name:shared",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/main.go:contains:Run",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 12,
+        "source_file": "go/main.go"
+      },
+      "relation": "contains",
+      "source": "file:go/main.go",
+      "target": "symbol:go/main.go:Run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/main.go:contains:Step",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 28,
+        "source_file": "go/main.go"
+      },
+      "relation": "contains",
+      "source": "file:go/main.go",
+      "target": "symbol:go/main.go:Step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/main.go:contains:Svc",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 8,
+        "source_file": "go/main.go"
+      },
+      "relation": "contains",
+      "source": "file:go/main.go",
+      "target": "symbol:go/main.go:Svc",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/main.go:contains:local",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 31,
+        "source_file": "go/main.go"
+      },
+      "relation": "contains",
+      "source": "file:go/main.go",
+      "target": "symbol:go/main.go:local",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:go/main.go:import:2:1:fmt",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "go/main.go"
+      },
+      "relation": "imports",
+      "source": "file:go/main.go",
+      "target": "module:fmt",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "go/main.go",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "go",
+        "size_bytes": 328
+      },
+      "node_id": "file:go/main.go",
+      "signature": "",
+      "source_ref": "go/main.go",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "Run",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 12,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:go/main.go:Run",
+      "signature": "func (s *Svc) Run(r *Repo) {",
+      "source_ref": "go/main.go",
+      "span_end": 26,
+      "span_start": 12
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "Step",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 28,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:go/main.go:Step",
+      "signature": "func (s *Svc) Step() {",
+      "source_ref": "go/main.go",
+      "span_end": 29,
+      "span_start": 28
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Svc",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 8,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:go/main.go:Svc",
+      "signature": "type Svc struct {",
+      "source_ref": "go/main.go",
+      "span_end": 10,
+      "span_start": 8
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "local",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 31,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:go/main.go:local",
+      "signature": "func local() {",
+      "source_ref": "go/main.go",
+      "span_end": 32,
+      "span_start": 31
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Baz.java:contains:Baz",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "java/Baz.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Baz.java",
+      "target": "symbol:java/Baz.java:Baz",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Baz.java:contains:q",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "java/Baz.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Baz.java",
+      "target": "symbol:java/Baz.java:q",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "java/Baz.java",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "java",
+        "size_bytes": 49
+      },
+      "node_id": "file:java/Baz.java",
+      "signature": "",
+      "source_ref": "java/Baz.java",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Baz",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/Baz.java:Baz",
+      "signature": "public class Baz {",
+      "source_ref": "java/Baz.java",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "q",
+      "metadata": {
+        "lineno": 2,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/Baz.java:q",
+      "signature": "public void q() {",
+      "source_ref": "java/Baz.java",
+      "span_end": 3,
+      "span_start": 2
+    }
+  ]
+}

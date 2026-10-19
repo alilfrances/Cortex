@@ -1,0 +1,65 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:two/Card.qml:contains:Card",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "two/Card.qml"
+      },
+      "relation": "contains",
+      "source": "file:two/Card.qml",
+      "target": "symbol:two/Card.qml:Card",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:two/Card.qml:import:1:1:QtQuick",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "two/Card.qml"
+      },
+      "relation": "imports",
+      "source": "file:two/Card.qml",
+      "target": "module:QtQuick",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "two/Card.qml",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "qml",
+        "size_bytes": 46
+      },
+      "node_id": "file:two/Card.qml",
+      "signature": "",
+      "source_ref": "two/Card.qml",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Card",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 2,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:two/Card.qml:Card",
+      "signature": "Item { property int value: 2 }",
+      "source_ref": "two/Card.qml",
+      "span_end": 2,
+      "span_start": 2
+    }
+  ]
+}

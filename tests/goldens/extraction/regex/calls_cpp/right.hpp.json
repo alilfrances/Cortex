@@ -1,0 +1,80 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:right.hpp:contains:Right",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "right.hpp"
+      },
+      "relation": "contains",
+      "source": "file:right.hpp",
+      "target": "symbol:right.hpp:Right",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:right.hpp:contains:name",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "right.hpp"
+      },
+      "relation": "contains",
+      "source": "file:right.hpp",
+      "target": "symbol:right.hpp:name",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "right.hpp",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "hpp",
+        "size_bytes": 80
+      },
+      "node_id": "file:right.hpp",
+      "signature": "",
+      "source_ref": "right.hpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Right",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 3,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:right.hpp:Right",
+      "signature": "class Right {",
+      "source_ref": "right.hpp",
+      "span_end": 8,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "name",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 5,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:right.hpp:name",
+      "signature": "int name() {",
+      "source_ref": "right.hpp",
+      "span_end": 7,
+      "span_start": 5
+    }
+  ]
+}

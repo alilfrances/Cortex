@@ -1,0 +1,65 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:Theme.qml:contains:Theme",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "Theme.qml"
+      },
+      "relation": "contains",
+      "source": "file:Theme.qml",
+      "target": "symbol:Theme.qml:Theme",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:Theme.qml:import:2:1:QtQuick",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "Theme.qml"
+      },
+      "relation": "imports",
+      "source": "file:Theme.qml",
+      "target": "module:QtQuick",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "Theme.qml",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "qml",
+        "size_bytes": 74
+      },
+      "node_id": "file:Theme.qml",
+      "signature": "",
+      "source_ref": "Theme.qml",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Theme",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 3,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:Theme.qml:Theme",
+      "signature": "QtObject { property color accent: \"red\" }",
+      "source_ref": "Theme.qml",
+      "span_end": 3,
+      "span_start": 3
+    }
+  ]
+}

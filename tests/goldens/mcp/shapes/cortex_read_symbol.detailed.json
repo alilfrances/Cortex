@@ -1,0 +1,19 @@
+{
+  "first_item_keys": {},
+  "keys": [
+    "_meta",
+    "body",
+    "body_format",
+    "current_fingerprint",
+    "fingerprint",
+    "node_id",
+    "path",
+    "refresh_hint",
+    "repo_path",
+    "signature",
+    "span_end",
+    "span_start",
+    "stale",
+    "truncated"
+  ]
+}

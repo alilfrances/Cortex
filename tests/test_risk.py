@@ -229,3 +229,20 @@ def test_mcp_risk_meta_ledger_and_budget(tmp_path: Path, monkeypatch) -> None:
     store = CortexStore(default_db_path(repo))
     rows = store.fetch_tool_usage(repo)
     assert rows and rows[-1]["tool"] == "cortex_risk"
+
+
+def test_tests_to_run_block_survives_tight_mcp_budgets(tmp_path: Path) -> None:
+    """Task 10: concise cortex_risk carries tests_to_run; a tight budget drops the
+    list last and never drops tests_run_all (it flips to True when the list is cut)."""
+    repo = _repo(tmp_path)
+
+    roomy = _payload(call_tool("cortex_risk", {"repo_path": str(repo), "budget": 20000}))
+    assert [item["test"] for item in roomy["tests_to_run"]] == ["tests/test_a.py"]
+    assert "pair" in roomy["tests_to_run"][0]["via"]
+    assert roomy["tests_run_all"] is False
+
+    for budget in (400, 120, 40, 0):
+        tight = _payload(call_tool("cortex_risk", {"repo_path": str(repo), "budget": budget}))
+        assert "tests_run_all" in tight and "tests_run_all_reason" in tight
+        if tight.get("tests_to_run") != roomy["tests_to_run"]:
+            assert tight["tests_run_all"] is True

@@ -1,0 +1,24 @@
+{
+  "items": {
+    "code": [
+      {
+        "access": "definition",
+        "origin": "graph",
+        "text": "app/auth.py:11"
+      },
+      {
+        "access": "read",
+        "origin": "grep",
+        "text": "app/auth.py:17"
+      }
+    ],
+    "config": [],
+    "doc": [],
+    "other": [],
+    "script": []
+  },
+  "repo_path": "<repo>",
+  "returned_count": 2,
+  "stale": false,
+  "truncated": false
+}

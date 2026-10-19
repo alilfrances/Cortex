@@ -1,0 +1,157 @@
+{
+  "budget": 2000,
+  "budget_feasible": true,
+  "findings": [
+    {
+      "confidence": "low",
+      "file": "App.java",
+      "line": 3,
+      "reason": "no incoming edges; grep refs in code/config",
+      "symbol": "App"
+    },
+    {
+      "confidence": "low",
+      "file": "App.java",
+      "line": 4,
+      "reason": "no incoming edges; grep refs in code/config",
+      "symbol": "run"
+    },
+    {
+      "confidence": "low",
+      "file": "Main.qml",
+      "line": 3,
+      "reason": "no incoming edges; grep refs in code/config",
+      "symbol": "Main"
+    },
+    {
+      "confidence": "high",
+      "file": "Main.qml",
+      "line": 1,
+      "reason": "no incoming edges; no grep refs",
+      "symbol": "QtQuick"
+    },
+    {
+      "confidence": "high",
+      "file": "Main.qml",
+      "line": 6,
+      "reason": "no incoming edges; no grep refs",
+      "symbol": "launch"
+    },
+    {
+      "confidence": "high",
+      "file": "app.js",
+      "line": 7,
+      "reason": "no incoming edges; no grep refs",
+      "symbol": "AppController"
+    },
+    {
+      "confidence": "low",
+      "file": "app.js",
+      "line": 8,
+      "reason": "no incoming edges; grep refs in code/config",
+      "symbol": "run"
+    },
+    {
+      "confidence": "low",
+      "file": "client.ts",
+      "line": 3,
+      "reason": "no incoming edges; grep refs in code/config",
+      "symbol": "Client"
+    },
+    {
+      "confidence": "high",
+      "file": "client.ts",
+      "line": 4,
+      "reason": "no incoming edges; no grep refs",
+      "symbol": "connect"
+    },
+    {
+      "confidence": "low",
+      "file": "engine.cpp",
+      "line": 3,
+      "reason": "no incoming edges; grep refs in code/config",
+      "symbol": "Engine"
+    },
+    {
+      "confidence": "high",
+      "file": "engine.cpp",
+      "line": 4,
+      "reason": "no incoming edges; no grep refs",
+      "symbol": "Runner"
+    },
+    {
+      "confidence": "high",
+      "file": "engine.cpp",
+      "line": 9,
+      "reason": "no incoming edges; no grep refs",
+      "symbol": "compute"
+    },
+    {
+      "confidence": "low",
+      "file": "engine.cpp",
+      "line": 6,
+      "reason": "no incoming edges; grep refs in code/config",
+      "symbol": "start"
+    },
+    {
+      "confidence": "high",
+      "file": "engine.hpp",
+      "line": 4,
+      "reason": "no incoming edges; no grep refs",
+      "symbol": "EngineCore"
+    },
+    {
+      "confidence": "low",
+      "file": "lib.rs",
+      "line": 3,
+      "reason": "no incoming edges; grep refs in code/config",
+      "symbol": "Worker"
+    },
+    {
+      "confidence": "low",
+      "file": "lib.rs",
+      "line": 5,
+      "reason": "no incoming edges; grep refs in code/config",
+      "symbol": "run"
+    },
+    {
+      "confidence": "high",
+      "file": "main.c",
+      "line": 3,
+      "reason": "no incoming edges; no grep refs",
+      "symbol": "Counter"
+    },
+    {
+      "confidence": "high",
+      "file": "main.c",
+      "line": 7,
+      "reason": "no incoming edges; no grep refs",
+      "symbol": "add"
+    },
+    {
+      "confidence": "low",
+      "file": "main.go",
+      "line": 5,
+      "reason": "no incoming edges; grep refs in code/config",
+      "symbol": "Run"
+    },
+    {
+      "confidence": "low",
+      "file": "worker.rb",
+      "line": 3,
+      "reason": "no incoming edges; grep refs in code/config",
+      "symbol": "Worker"
+    },
+    {
+      "confidence": "low",
+      "file": "worker.rb",
+      "line": 4,
+      "reason": "no incoming edges; grep refs in code/config",
+      "symbol": "run"
+    }
+  ],
+  "repo_path": "<repo>",
+  "returned_count": 21,
+  "stale": false,
+  "truncated": false
+}

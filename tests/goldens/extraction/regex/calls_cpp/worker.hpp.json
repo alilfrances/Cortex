@@ -1,0 +1,126 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:worker.hpp:calls:work:ping:7",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "ping",
+        "enclosing_class": null,
+        "lineno": 7,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "worker.hpp"
+      },
+      "relation": "calls",
+      "source": "symbol:worker.hpp:work",
+      "target": "name:ping",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:worker.hpp:contains:Worker",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "worker.hpp"
+      },
+      "relation": "contains",
+      "source": "file:worker.hpp",
+      "target": "symbol:worker.hpp:Worker",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:worker.hpp:contains:work",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "worker.hpp"
+      },
+      "relation": "contains",
+      "source": "file:worker.hpp",
+      "target": "symbol:worker.hpp:work",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:worker.hpp:import:2:1:base.hpp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "worker.hpp"
+      },
+      "relation": "imports",
+      "source": "file:worker.hpp",
+      "target": "file:base.hpp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:worker.hpp:inherits:Worker:Base",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "worker.hpp"
+      },
+      "relation": "inherits",
+      "source": "symbol:worker.hpp:Worker",
+      "target": "name:Base",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "worker.hpp",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "hpp",
+        "size_bytes": 114
+      },
+      "node_id": "file:worker.hpp",
+      "signature": "",
+      "source_ref": "worker.hpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Worker",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 4,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:worker.hpp:Worker",
+      "signature": "class Worker : public Base {",
+      "source_ref": "worker.hpp",
+      "span_end": 9,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "work",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 6,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:worker.hpp:work",
+      "signature": "void work() {",
+      "source_ref": "worker.hpp",
+      "span_end": 8,
+      "span_start": 6
+    }
+  ]
+}

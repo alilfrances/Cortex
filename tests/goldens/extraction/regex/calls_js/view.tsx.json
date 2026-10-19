@@ -1,0 +1,85 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:view.tsx:calls:View:h:4",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "h",
+        "enclosing_class": null,
+        "lineno": 4,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "view.tsx"
+      },
+      "relation": "calls",
+      "source": "symbol:view.tsx:View",
+      "target": "name:h",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:view.tsx:contains:View",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "view.tsx"
+      },
+      "relation": "contains",
+      "source": "file:view.tsx",
+      "target": "symbol:view.tsx:View",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:view.tsx:import:1:1:./lib/helpers",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "view.tsx"
+      },
+      "relation": "imports",
+      "source": "file:view.tsx",
+      "target": "module:./lib/helpers",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "view.tsx",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "tsx",
+        "size_bytes": 98
+      },
+      "node_id": "file:view.tsx",
+      "signature": "",
+      "source_ref": "view.tsx",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "View",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 3,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:view.tsx:View",
+      "signature": "export function View() {",
+      "source_ref": "view.tsx",
+      "span_end": 6,
+      "span_start": 3
+    }
+  ]
+}

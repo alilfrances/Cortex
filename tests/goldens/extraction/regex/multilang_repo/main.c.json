@@ -1,0 +1,93 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:main.c:contains:Counter",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "main.c"
+      },
+      "relation": "contains",
+      "source": "file:main.c",
+      "target": "symbol:main.c:Counter",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:main.c:contains:add",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 7,
+        "source_file": "main.c"
+      },
+      "relation": "contains",
+      "source": "file:main.c",
+      "target": "symbol:main.c:add",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:main.c:import:1:1:stdio.h",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "main.c"
+      },
+      "relation": "imports",
+      "source": "file:main.c",
+      "target": "module:stdio.h",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "main.c",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "c",
+        "size_bytes": 114
+      },
+      "node_id": "file:main.c",
+      "signature": "",
+      "source_ref": "main.c",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Counter",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 3,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:main.c:Counter",
+      "signature": "struct Counter {",
+      "source_ref": "main.c",
+      "span_end": 5,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "add",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 7,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:main.c:add",
+      "signature": "int add(int left, int right) {",
+      "source_ref": "main.c",
+      "span_end": 9,
+      "span_start": 7
+    }
+  ]
+}

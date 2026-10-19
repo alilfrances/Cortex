@@ -1,0 +1,202 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:Widget.hpp:contains:Widget",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "Widget.hpp"
+      },
+      "relation": "contains",
+      "source": "file:Widget.hpp",
+      "target": "symbol:Widget.hpp:Widget",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:Widget.hpp:contains:Widget.update",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 8,
+        "source_file": "Widget.hpp"
+      },
+      "relation": "contains",
+      "source": "file:Widget.hpp",
+      "target": "symbol:Widget.hpp:Widget.update",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:Widget.hpp:contains:Widget.value",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "Widget.hpp"
+      },
+      "relation": "contains",
+      "source": "file:Widget.hpp",
+      "target": "symbol:Widget.hpp:Widget.value",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:Widget.hpp:contains:Widget.value:6",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "Widget.hpp"
+      },
+      "relation": "contains",
+      "source": "symbol:Widget.hpp:Widget",
+      "target": "symbol:Widget.hpp:Widget.value",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:Widget.hpp:contains:valueChanged",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 10,
+        "source_file": "Widget.hpp"
+      },
+      "relation": "contains",
+      "source": "file:Widget.hpp",
+      "target": "symbol:Widget.hpp:valueChanged",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:Widget.hpp:import:2:1:QObject",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "Widget.hpp"
+      },
+      "relation": "imports",
+      "source": "file:Widget.hpp",
+      "target": "module:QObject",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:Widget.hpp:inherits:Widget:QObject",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "Widget.hpp"
+      },
+      "relation": "inherits",
+      "source": "symbol:Widget.hpp:Widget",
+      "target": "name:QObject",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:Widget.hpp:registers:5:Widget",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "class_name": "Widget",
+        "lineno": 5,
+        "qml_name": "Widget",
+        "registration": "QML_NAMED_ELEMENT(Widget",
+        "source_file": "Widget.hpp"
+      },
+      "relation": "registers",
+      "source": "file:Widget.hpp",
+      "target": "module:Widget",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "Widget.hpp",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "hpp",
+        "size_bytes": 240
+      },
+      "node_id": "file:Widget.hpp",
+      "signature": "",
+      "source_ref": "Widget.hpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Widget",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 3,
+        "parser_backend": "regex",
+        "qml_element": true,
+        "qml_kind": "registered_type",
+        "qml_name": "Widget",
+        "qt": "qobject",
+        "registration": "QML_NAMED_ELEMENT(Widget"
+      },
+      "node_id": "symbol:Widget.hpp:Widget",
+      "signature": "class Widget : public QObject {",
+      "source_ref": "Widget.hpp",
+      "span_end": 11,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "update",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 8,
+        "parser_backend": "regex",
+        "qt": "invokable"
+      },
+      "node_id": "symbol:Widget.hpp:Widget.update",
+      "signature": "Q_INVOKABLE void update();",
+      "source_ref": "Widget.hpp",
+      "span_end": 8,
+      "span_start": 8
+    },
+    {
+      "granularity": "symbol",
+      "kind": "property",
+      "label": "value",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 6,
+        "parser_backend": "regex",
+        "qml_kind": "property",
+        "qml_owner": "Widget",
+        "qt": "property",
+        "type": "int"
+      },
+      "node_id": "symbol:Widget.hpp:Widget.value",
+      "signature": "Q_PROPERTY(int value READ value NOTIFY valueChanged)",
+      "source_ref": "Widget.hpp",
+      "span_end": 6,
+      "span_start": 6
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "valueChanged",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 10,
+        "parser_backend": "regex",
+        "qt": "signal"
+      },
+      "node_id": "symbol:Widget.hpp:valueChanged",
+      "signature": "void valueChanged();",
+      "source_ref": "Widget.hpp",
+      "span_end": 10,
+      "span_start": 10
+    }
+  ]
+}

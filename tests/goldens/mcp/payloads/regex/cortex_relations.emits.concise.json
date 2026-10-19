@@ -1,0 +1,36 @@
+{
+  "_meta": {
+    "cached": false,
+    "fingerprint_fresh": true
+  },
+  "items": [
+    {
+      "confidence": "LOW",
+      "layer": "STRUCTURAL",
+      "origin": "regex-parser",
+      "relation": "emits",
+      "source": "scan @ src/DeviceManager.cpp:9",
+      "target": "deviceConnected @ include/DeviceManager.hpp:11"
+    },
+    {
+      "confidence": "LOW",
+      "layer": "STRUCTURAL",
+      "origin": "regex-parser",
+      "relation": "emits",
+      "source": "scan @ src/DeviceManager.cpp:9",
+      "target": "deviceConnected @ include/DeviceManager.hpp:11"
+    },
+    {
+      "confidence": "LOW",
+      "layer": "STRUCTURAL",
+      "origin": "regex-parser",
+      "relation": "emits",
+      "source": "onDeviceConnected @ src/DeviceModel.cpp:5",
+      "target": "modelUpdated @ include/DeviceModel.hpp:13"
+    }
+  ],
+  "repo_path": "<repo>",
+  "returned_count": 3,
+  "stale": false,
+  "truncated": false
+}

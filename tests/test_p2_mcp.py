@@ -657,3 +657,46 @@ def test_cortex_read_symbol_returns_numbered_span_or_disambiguation(tmp_path: Pa
     assert "matches" in ambiguous
     assert ambiguous["hint"] == "call again with node_id"
     assert missing["isError"] is True
+
+
+def test_every_tool_has_title_and_boolean_annotations_and_only_refresh_writes() -> None:
+    from cortex.mcp.tools import TOOL_DEFINITIONS
+
+    hints = ("readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint")
+    for tool in TOOL_DEFINITIONS:
+        assert isinstance(tool["title"], str) and tool["title"].startswith("Cortex: "), tool["name"]
+        annotations = tool["annotations"]
+        assert annotations["title"] == tool["title"]
+        assert set(annotations) == {"title", *hints}
+        assert all(isinstance(annotations[hint], bool) for hint in hints)
+        assert annotations["destructiveHint"] is False
+        assert annotations["idempotentHint"] is True
+        assert annotations["openWorldHint"] is False
+        # name/description/inputSchema are untouched by the annotation pass.
+        assert {"name", "description", "inputSchema"} <= set(tool)
+    assert [t["name"] for t in TOOL_DEFINITIONS if not t["annotations"]["readOnlyHint"]] == ["cortex_refresh"]
+    assert len({t["title"] for t in TOOL_DEFINITIONS}) == len(TOOL_DEFINITIONS)
+
+
+def test_tools_list_serializes_annotations_over_stdio(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[1]
+    frames = [
+        {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18"}},
+        {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+    ]
+    result = subprocess.run(
+        [sys.executable, str(root / "bin" / "cortex-mcp.py")],
+        input="".join(json.dumps(frame) + "\n" for frame in frames),
+        capture_output=True,
+        text=True,
+        timeout=20,
+        cwd=root,
+        env={**os.environ, "CORTEX_MCP_ACTIVITY": "0"},
+    )
+    assert result.returncode == 0, result.stderr
+    responses = {item["id"]: item for item in map(json.loads, result.stdout.strip().splitlines())}
+    assert responses[1]["result"]["protocolVersion"] == "2025-06-18"
+    tools = responses[2]["result"]["tools"]
+    assert len(tools) == 15
+    assert all("title" in tool and "annotations" in tool for tool in tools)
+    assert {t["name"] for t in tools if t["annotations"]["readOnlyHint"] is False} == {"cortex_refresh"}

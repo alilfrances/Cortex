@@ -1,0 +1,21 @@
+{
+  "first_item_keys": {
+    "items": [
+      "path",
+      "score",
+      "snippet"
+    ]
+  },
+  "keys": [
+    "_meta",
+    "current_fingerprint",
+    "fingerprint",
+    "fts_available",
+    "items",
+    "refresh_hint",
+    "repo_path",
+    "returned_count",
+    "stale",
+    "truncated"
+  ]
+}

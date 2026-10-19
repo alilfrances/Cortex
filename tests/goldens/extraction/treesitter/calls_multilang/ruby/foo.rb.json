@@ -1,0 +1,78 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/foo.rb:contains:Foo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "ruby/foo.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/foo.rb",
+      "target": "symbol:ruby/foo.rb:Foo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:ruby/foo.rb:contains:m",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "ruby/foo.rb"
+      },
+      "relation": "contains",
+      "source": "file:ruby/foo.rb",
+      "target": "symbol:ruby/foo.rb:m",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "ruby/foo.rb",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "rb",
+        "size_bytes": 28
+      },
+      "node_id": "file:ruby/foo.rb",
+      "signature": "",
+      "source_ref": "ruby/foo.rb",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Foo",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:ruby/foo.rb:Foo",
+      "signature": "class Foo",
+      "source_ref": "ruby/foo.rb",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "m",
+      "metadata": {
+        "lineno": 2,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:ruby/foo.rb:m",
+      "signature": "def m",
+      "source_ref": "ruby/foo.rb",
+      "span_end": 3,
+      "span_start": 2
+    }
+  ]
+}

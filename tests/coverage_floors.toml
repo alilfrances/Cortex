@@ -1,0 +1,59 @@
+# Per-module line-coverage floors for the modules the 0.10.0 plan rewrites (Task 0).
+#
+# Measured once at 7b0e6e0 + the Task 0 baseline suite, with
+#
+#     python3 -m pytest tests/ -q --cov=cortex --cov-report=json:coverage.json
+#
+# (1003 tests passed; Python 3.14.4, macOS arm64, managed tree-sitter runtime ready,
+#  tiktoken installed).  `percent_covered` per module is line coverage (no branch data):
+#
+#   module                                 measured   lines          floor
+#   cortex.gitutils                          96.43    27/28            94
+#   cortex.cochange                         100.00    22/22            98
+#   cortex.hotspots                          93.53   130/139           91
+#   cortex.impact                           100.00    52/52            98
+#   cortex.pathfind                          97.96    48/49            95
+#   cortex.references                        96.96   255/263           94
+#   cortex.deadcode                          96.05   219/228           94
+#   cortex.risk                              93.51   490/524           91
+#   cortex.graph                             93.55   203/217           91
+#   cortex.ingest                            88.99   202/227           86
+#   cortex.store                             91.12   462/507           89
+#   cortex.ast_extract                       98.96    95/96            96
+#   cortex.structural.treesitter_backend     91.71   177/193           89
+#   cortex.structural.regex_backend          93.43   469/502           91
+#   cortex.mcp.tools                         91.60   971/1060          89
+#   cortex.mcp.server                        86.54   225/260           84
+#
+# Rule: floor = floor(measured) - 2 (an integer).  Floors only ever go UP: Task 12
+# re-measures and raises any floor whose measured value rose by >= 5 points; a floor is
+# never lowered to make a change pass -- add the missing tests instead.
+#
+# Task 12 re-measure (0.10.0 release, 1732 passed / 44 skipped, same platform): no module
+# rose by >= 5 points, so no floor changed.  Measured: gitutils 98.46, cochange 100.00,
+# hotspots 92.54, impact 100.00, pathfind 97.96, references 97.12, deadcode 96.05,
+# risk 93.84, graph 94.09, ingest 90.20, store 91.13, ast_extract 97.51,
+# treesitter_backend 93.67, regex_backend 94.69, mcp.tools 91.67, mcp.server 86.74.
+# Modules new in 0.10.0 are not floored (the plan scopes floors to the modules above):
+# callresolve 97.57, structural.call_sites 93.55, impacted_tests 98.37.
+#
+# Enforced by scripts/check_coverage_floors.py against coverage.json (see CONTRIBUTING.md).
+# The floors apply only to these modules, not repo-wide.
+
+[floors]
+"cortex.gitutils" = 94
+"cortex.cochange" = 98
+"cortex.hotspots" = 91
+"cortex.impact" = 98
+"cortex.pathfind" = 95
+"cortex.references" = 94
+"cortex.deadcode" = 94
+"cortex.risk" = 91
+"cortex.graph" = 91
+"cortex.ingest" = 86
+"cortex.store" = 89
+"cortex.ast_extract" = 96
+"cortex.structural.treesitter_backend" = 89
+"cortex.structural.regex_backend" = 91
+"cortex.mcp.tools" = 89
+"cortex.mcp.server" = 84

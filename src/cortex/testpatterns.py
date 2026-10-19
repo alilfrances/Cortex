@@ -12,7 +12,9 @@ _SUFFIX_PATTERNS: dict[str, tuple[tuple[str, str], ...]] = {
     ".swift": ((r"(?:Tests?|Test)+$", ""),),
     ".java": ((r"^Test(?=[A-Z_])", ""), (r"(?:Tests?|Test)+$", "")),
     ".kt": ((r"^Test(?=[A-Z_])", ""), (r"(?:Tests?|Test)+$", "")),
-    ".rb": ((r"(?:_spec|_test)+$", ""),),
+    # `foo_spec.rb`/`foo_test.rb` (RSpec, minitest) and `spec_foo.rb`/`test_foo.rb`
+    # (minitest/Rake `TestTask` globs such as rack's `test/**/spec_*.rb`).
+    ".rb": ((r"^(?:spec_|test_)+", ""), (r"(?:_spec|_test)+$", "")),
     ".js": ((r"(?:\.test|\.spec)+$", ""),),
     ".jsx": ((r"(?:\.test|\.spec)+$", ""),),
     ".ts": ((r"(?:\.test|\.spec)+$", ""),),

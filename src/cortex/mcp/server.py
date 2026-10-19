@@ -14,14 +14,26 @@ from typing import Any, TextIO
 from ..store import data_root
 from .tools import TOOL_DEFINITIONS, build_status_result, call_tool
 
-PROTOCOL_VERSION = "2024-11-05"
-SERVER_INFO = {"name": "cortex", "version": "0.9.2"}
+# Newest first. `initialize` answers with the client's requested version when
+# we support it, otherwise with our newest (MCP lifecycle negotiation); the
+# client then decides whether it can proceed.
+SUPPORTED_PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
+PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0]
+
+
+def negotiate_protocol_version(client_version: Any) -> str:
+    if isinstance(client_version, str) and client_version in SUPPORTED_PROTOCOL_VERSIONS:
+        return client_version
+    return PROTOCOL_VERSION
+SERVER_INFO = {"name": "cortex", "version": "0.10.0"}
 SERVER_INSTRUCTIONS = (
     "Use Cortex before Grep or raw file reads. Start with cortex_query for a coding task "
     "and cortex_context before multi-file edits. Search with cortex_search_symbols for "
     "named identifiers or cortex_search_text for body text and literals. Read indexed "
     "source with cortex_read_symbol or cortex_read_file. Check blast radius with "
-    "cortex_impact and cortex_references, and run cortex_risk before finishing. Fall back "
+    "cortex_impact and cortex_references; trace callers and callees with cortex_relations "
+    "relation=calls or cortex_path. Run cortex_risk before finishing, then run its "
+    "tests_to_run (everything when tests_run_all is true). Fall back "
     "to raw Grep or Read only when the index is missing or Cortex coverage is insufficient; "
     "call cortex_refresh for a missing or stale index."
 )
@@ -43,12 +55,11 @@ def _handle(frame: dict[str, Any], cancel: threading.Event | None = None) -> dic
     if method == "notifications/initialized":
         return None
     if method == "initialize":
-        client_version = params.get("protocolVersion")
         return _response(
             request_id,
             {
-                "protocolVersion": client_version or PROTOCOL_VERSION,
-                "capabilities": {"tools": {}},
+                "protocolVersion": negotiate_protocol_version(params.get("protocolVersion")),
+                "capabilities": {"tools": {"listChanged": False}},
                 "serverInfo": SERVER_INFO,
                 "instructions": SERVER_INSTRUCTIONS,
             },

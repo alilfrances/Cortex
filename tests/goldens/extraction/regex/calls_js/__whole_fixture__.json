@@ -1,0 +1,1214 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:Service:20",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Service",
+        "enclosing_class": null,
+        "lineno": 20,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:Service",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:Service:22",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Service",
+        "enclosing_class": null,
+        "lineno": 22,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:Service",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:baz:29",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "baz",
+        "enclosing_class": null,
+        "lineno": 29,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:baz",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:get:28",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "get",
+        "enclosing_class": null,
+        "lineno": 28,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:get",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:go:24",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "go",
+        "enclosing_class": null,
+        "lineno": 24,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:go",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:helper:15",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "helper",
+        "enclosing_class": null,
+        "lineno": 15,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:helper",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:helper:16",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "helper",
+        "enclosing_class": null,
+        "lineno": 16,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:helper",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:render:23",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "render",
+        "enclosing_class": null,
+        "lineno": 23,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:render",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:render:25",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "render",
+        "enclosing_class": null,
+        "lineno": 25,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:render",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:render:27",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "render",
+        "enclosing_class": null,
+        "lineno": 27,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:render",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:run:19",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "run",
+        "enclosing_class": null,
+        "lineno": 19,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:run:21",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "run",
+        "enclosing_class": null,
+        "lineno": 21,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:run:22",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "run",
+        "enclosing_class": null,
+        "lineno": 22,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:save:18",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "save",
+        "enclosing_class": null,
+        "lineno": 18,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:stop:17",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "stop",
+        "enclosing_class": null,
+        "lineno": 17,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:stop",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:Controller:useState:26",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "useState",
+        "enclosing_class": null,
+        "lineno": 26,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:Controller",
+      "target": "name:useState",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:unimported:render:36",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "render",
+        "enclosing_class": null,
+        "lineno": 36,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:unimported",
+      "target": "name:render",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:calls:unimported:save:37",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "save",
+        "enclosing_class": null,
+        "lineno": 37,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:app.ts:unimported",
+      "target": "name:save",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:contains:Controller",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 9,
+        "source_file": "app.ts"
+      },
+      "relation": "contains",
+      "source": "file:app.ts",
+      "target": "symbol:app.ts:Controller",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:contains:unimported",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 35,
+        "source_file": "app.ts"
+      },
+      "relation": "contains",
+      "source": "file:app.ts",
+      "target": "symbol:app.ts:unimported",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:import:1:1:./lib/helpers",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "app.ts"
+      },
+      "relation": "imports",
+      "source": "file:app.ts",
+      "target": "module:./lib/helpers",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:import:2:2:./lib/utils",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "app.ts"
+      },
+      "relation": "imports",
+      "source": "file:app.ts",
+      "target": "module:./lib/utils",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:import:3:3:./lib/service",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "app.ts"
+      },
+      "relation": "imports",
+      "source": "file:app.ts",
+      "target": "module:./lib/service",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:import:4:4:./lib/repo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "app.ts"
+      },
+      "relation": "imports",
+      "source": "file:app.ts",
+      "target": "module:./lib/repo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:import:5:5:./lib/panel_a",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "app.ts"
+      },
+      "relation": "imports",
+      "source": "file:app.ts",
+      "target": "module:./lib/panel_a",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:app.ts:import:6:6:react",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "app.ts"
+      },
+      "relation": "imports",
+      "source": "file:app.ts",
+      "target": "module:react",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:lib/helpers.js:contains:helper",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/helpers.js"
+      },
+      "relation": "contains",
+      "source": "file:lib/helpers.js",
+      "target": "symbol:lib/helpers.js:helper",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:lib/legacy.js:contains:go",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/legacy.js"
+      },
+      "relation": "contains",
+      "source": "file:lib/legacy.js",
+      "target": "symbol:lib/legacy.js:go",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:lib/other.js:contains:render",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/other.js"
+      },
+      "relation": "contains",
+      "source": "file:lib/other.js",
+      "target": "symbol:lib/other.js:render",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:lib/panel_a.ts:contains:Panel",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/panel_a.ts"
+      },
+      "relation": "contains",
+      "source": "file:lib/panel_a.ts",
+      "target": "symbol:lib/panel_a.ts:Panel",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:lib/panel_b.ts:contains:Panel",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/panel_b.ts"
+      },
+      "relation": "contains",
+      "source": "file:lib/panel_b.ts",
+      "target": "symbol:lib/panel_b.ts:Panel",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:lib/repo.ts:contains:Repo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/repo.ts"
+      },
+      "relation": "contains",
+      "source": "file:lib/repo.ts",
+      "target": "symbol:lib/repo.ts:Repo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:lib/shared.js:contains:render",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/shared.js"
+      },
+      "relation": "contains",
+      "source": "file:lib/shared.js",
+      "target": "symbol:lib/shared.js:render",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:lib/utils.ts:contains:helper",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/utils.ts"
+      },
+      "relation": "contains",
+      "source": "file:lib/utils.ts",
+      "target": "symbol:lib/utils.ts:helper",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:lib/worker.js:calls:Worker:step:3",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "step",
+        "enclosing_class": null,
+        "lineno": 3,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "lib/worker.js"
+      },
+      "relation": "calls",
+      "source": "symbol:lib/worker.js:Worker",
+      "target": "name:step",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:lib/worker.js:contains:Worker",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/worker.js"
+      },
+      "relation": "contains",
+      "source": "file:lib/worker.js",
+      "target": "symbol:lib/worker.js:Worker",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:loose.ts:calls:loose:render:2",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "render",
+        "enclosing_class": null,
+        "lineno": 2,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "loose.ts"
+      },
+      "relation": "calls",
+      "source": "symbol:loose.ts:loose",
+      "target": "name:render",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:loose.ts:contains:loose",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "loose.ts"
+      },
+      "relation": "contains",
+      "source": "file:loose.ts",
+      "target": "symbol:loose.ts:loose",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:main.js:calls:boot:Worker:4",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "Worker",
+        "enclosing_class": null,
+        "lineno": 4,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "main.js"
+      },
+      "relation": "calls",
+      "source": "symbol:main.js:boot",
+      "target": "name:Worker",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:main.js:calls:boot:run:5",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "run",
+        "enclosing_class": null,
+        "lineno": 5,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "main.js"
+      },
+      "relation": "calls",
+      "source": "symbol:main.js:boot",
+      "target": "name:run",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:main.js:contains:boot",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "main.js"
+      },
+      "relation": "contains",
+      "source": "file:main.js",
+      "target": "symbol:main.js:boot",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:main.js:import:1:1:./lib/worker.js",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "main.js"
+      },
+      "relation": "imports",
+      "source": "file:main.js",
+      "target": "file:lib/worker.js",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:view.tsx:calls:View:h:4",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "h",
+        "enclosing_class": null,
+        "lineno": 4,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "view.tsx"
+      },
+      "relation": "calls",
+      "source": "symbol:view.tsx:View",
+      "target": "name:h",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:view.tsx:contains:View",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "view.tsx"
+      },
+      "relation": "contains",
+      "source": "file:view.tsx",
+      "target": "symbol:view.tsx:View",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:view.tsx:import:1:1:./lib/helpers",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "view.tsx"
+      },
+      "relation": "imports",
+      "source": "file:view.tsx",
+      "target": "module:./lib/helpers",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "app.ts",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "ts",
+        "size_bytes": 752
+      },
+      "node_id": "file:app.ts",
+      "signature": "",
+      "source_ref": "app.ts",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/helpers.js",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "js",
+        "size_bytes": 41
+      },
+      "node_id": "file:lib/helpers.js",
+      "signature": "",
+      "source_ref": "lib/helpers.js",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/legacy.js",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "js",
+        "size_bytes": 56
+      },
+      "node_id": "file:lib/legacy.js",
+      "signature": "",
+      "source_ref": "lib/legacy.js",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/other.js",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "js",
+        "size_bytes": 47
+      },
+      "node_id": "file:lib/other.js",
+      "signature": "",
+      "source_ref": "lib/other.js",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/panel_a.ts",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "ts",
+        "size_bytes": 46
+      },
+      "node_id": "file:lib/panel_a.ts",
+      "signature": "",
+      "source_ref": "lib/panel_a.ts",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/panel_b.ts",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "ts",
+        "size_bytes": 46
+      },
+      "node_id": "file:lib/panel_b.ts",
+      "signature": "",
+      "source_ref": "lib/panel_b.ts",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/repo.ts",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "ts",
+        "size_bytes": 43
+      },
+      "node_id": "file:lib/repo.ts",
+      "signature": "",
+      "source_ref": "lib/repo.ts",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/service.ts",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "ts",
+        "size_bytes": 53
+      },
+      "node_id": "file:lib/service.ts",
+      "signature": "",
+      "source_ref": "lib/service.ts",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/shared.js",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "js",
+        "size_bytes": 48
+      },
+      "node_id": "file:lib/shared.js",
+      "signature": "",
+      "source_ref": "lib/shared.js",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/utils.ts",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "ts",
+        "size_bytes": 49
+      },
+      "node_id": "file:lib/utils.ts",
+      "signature": "",
+      "source_ref": "lib/utils.ts",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/worker.js",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "js",
+        "size_bytes": 85
+      },
+      "node_id": "file:lib/worker.js",
+      "signature": "",
+      "source_ref": "lib/worker.js",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "loose.ts",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "ts",
+        "size_bytes": 50
+      },
+      "node_id": "file:loose.ts",
+      "signature": "",
+      "source_ref": "loose.ts",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "main.js",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "js",
+        "size_bytes": 124
+      },
+      "node_id": "file:main.js",
+      "signature": "",
+      "source_ref": "main.js",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "view.tsx",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "tsx",
+        "size_bytes": 98
+      },
+      "node_id": "file:view.tsx",
+      "signature": "",
+      "source_ref": "view.tsx",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Controller",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 9,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:app.ts:Controller",
+      "signature": "export class Controller {",
+      "source_ref": "app.ts",
+      "span_end": 33,
+      "span_start": 9
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "unimported",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 35,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:app.ts:unimported",
+      "signature": "export function unimported(q: Panel, r: Repo) {",
+      "source_ref": "app.ts",
+      "span_end": 38,
+      "span_start": 35
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "helper",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:lib/helpers.js:helper",
+      "signature": "export function helper() {",
+      "source_ref": "lib/helpers.js",
+      "span_end": 3,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "go",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:lib/legacy.js:go",
+      "signature": "function go() {",
+      "source_ref": "lib/legacy.js",
+      "span_end": 3,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "render",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:lib/other.js:render",
+      "signature": "export function render() {",
+      "source_ref": "lib/other.js",
+      "span_end": 3,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Panel",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:lib/panel_a.ts:Panel",
+      "signature": "export class Panel {",
+      "source_ref": "lib/panel_a.ts",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Panel",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:lib/panel_b.ts:Panel",
+      "signature": "export class Panel {",
+      "source_ref": "lib/panel_b.ts",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Repo",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:lib/repo.ts:Repo",
+      "signature": "export class Repo {",
+      "source_ref": "lib/repo.ts",
+      "span_end": 4,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "render",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:lib/shared.js:render",
+      "signature": "export function render() {",
+      "source_ref": "lib/shared.js",
+      "span_end": 3,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "helper",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:lib/utils.ts:helper",
+      "signature": "export function helper(): number {",
+      "source_ref": "lib/utils.ts",
+      "span_end": 3,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Worker",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:lib/worker.js:Worker",
+      "signature": "export class Worker {",
+      "source_ref": "lib/worker.js",
+      "span_end": 9,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "loose",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:loose.ts:loose",
+      "signature": "export function loose(p: Panel) {",
+      "source_ref": "loose.ts",
+      "span_end": 3,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "boot",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 3,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:main.js:boot",
+      "signature": "export function boot() {",
+      "source_ref": "main.js",
+      "span_end": 7,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "View",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 3,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:view.tsx:View",
+      "signature": "export function View() {",
+      "source_ref": "view.tsx",
+      "span_end": 6,
+      "span_start": 3
+    }
+  ]
+}

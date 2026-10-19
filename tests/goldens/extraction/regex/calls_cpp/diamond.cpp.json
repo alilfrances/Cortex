@@ -1,0 +1,152 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:diamond.cpp:calls:go:name:7",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "name",
+        "enclosing_class": null,
+        "lineno": 7,
+        "name_only": true,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "diamond.cpp"
+      },
+      "relation": "calls",
+      "source": "symbol:diamond.cpp:go",
+      "target": "name:name",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:diamond.cpp:contains:Duo",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "diamond.cpp"
+      },
+      "relation": "contains",
+      "source": "file:diamond.cpp",
+      "target": "symbol:diamond.cpp:Duo",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:diamond.cpp:contains:go",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "diamond.cpp"
+      },
+      "relation": "contains",
+      "source": "file:diamond.cpp",
+      "target": "symbol:diamond.cpp:go",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:diamond.cpp:import:1:1:left.hpp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "diamond.cpp"
+      },
+      "relation": "imports",
+      "source": "file:diamond.cpp",
+      "target": "file:left.hpp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:diamond.cpp:import:2:2:right.hpp",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "diamond.cpp"
+      },
+      "relation": "imports",
+      "source": "file:diamond.cpp",
+      "target": "file:right.hpp",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:diamond.cpp:inherits:Duo:Left",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "diamond.cpp"
+      },
+      "relation": "inherits",
+      "source": "symbol:diamond.cpp:Duo",
+      "target": "name:Left",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:diamond.cpp:inherits:Duo:Right",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "diamond.cpp"
+      },
+      "relation": "inherits",
+      "source": "symbol:diamond.cpp:Duo",
+      "target": "name:Right",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "diamond.cpp",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "cpp",
+        "size_bytes": 137
+      },
+      "node_id": "file:diamond.cpp",
+      "signature": "",
+      "source_ref": "diamond.cpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Duo",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 4,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:diamond.cpp:Duo",
+      "signature": "class Duo : public Left, public Right {",
+      "source_ref": "diamond.cpp",
+      "span_end": 9,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "go",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 6,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:diamond.cpp:go",
+      "signature": "int go() {",
+      "source_ref": "diamond.cpp",
+      "span_end": 8,
+      "span_start": 6
+    }
+  ]
+}

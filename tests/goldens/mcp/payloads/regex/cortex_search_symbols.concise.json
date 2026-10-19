@@ -1,0 +1,101 @@
+{
+  "_meta": {
+    "cached": false,
+    "fingerprint_fresh": true
+  },
+  "items": [
+    {
+      "degree": 3,
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "DeviceManager",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "degree": 3,
+        "lineno": 4,
+        "parser_backend": "regex",
+        "qt": "qobject"
+      },
+      "node_id": "symbol:include/DeviceManager.hpp:DeviceManager",
+      "signature": "class DeviceManager : public QObject {",
+      "source_ref": "include/DeviceManager.hpp",
+      "span_end": 15,
+      "span_start": 4
+    },
+    {
+      "degree": 2,
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "DeviceModel",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "degree": 2,
+        "lineno": 4,
+        "parser_backend": "regex",
+        "qt": "qobject"
+      },
+      "node_id": "symbol:include/DeviceModel.hpp:DeviceModel",
+      "signature": "class DeviceModel : public QObject {",
+      "source_ref": "include/DeviceModel.hpp",
+      "span_end": 14,
+      "span_start": 4
+    },
+    {
+      "degree": 1,
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "DeviceDelegate",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "degree": 1,
+        "lineno": 3,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:qml/DeviceDelegate.qml:DeviceDelegate",
+      "signature": "Item {",
+      "source_ref": "qml/DeviceDelegate.qml",
+      "span_end": 11,
+      "span_start": 3
+    },
+    {
+      "degree": 4,
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "deviceConnected",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "degree": 4,
+        "lineno": 11,
+        "parser_backend": "regex",
+        "qt": "signal"
+      },
+      "node_id": "symbol:include/DeviceManager.hpp:deviceConnected",
+      "signature": "void deviceConnected(int deviceId);",
+      "source_ref": "include/DeviceManager.hpp",
+      "span_end": 11,
+      "span_start": 11
+    },
+    {
+      "degree": 2,
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "deviceConnected",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "degree": 2,
+        "lineno": 4,
+        "parser_backend": "regex",
+        "qml_kind": "signal",
+        "qml_owner": "DeviceDelegate",
+        "qt": "signal"
+      },
+      "node_id": "symbol:qml/DeviceDelegate.qml:DeviceDelegate.deviceConnected",
+      "signature": "signal deviceConnected(int deviceId)",
+      "source_ref": "qml/DeviceDelegate.qml",
+      "span_end": 4,
+      "span_start": 4
+    }
+  ],
+  "repo_path": "<repo>",
+  "stale": false
+}

@@ -1,0 +1,51 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:draw_b.cpp:contains:render",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "draw_b.cpp"
+      },
+      "relation": "contains",
+      "source": "file:draw_b.cpp",
+      "target": "symbol:draw_b.cpp:render",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "draw_b.cpp",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "cpp",
+        "size_bytes": 31
+      },
+      "node_id": "file:draw_b.cpp",
+      "signature": "",
+      "source_ref": "draw_b.cpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "render",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:draw_b.cpp:render",
+      "signature": "int render() {",
+      "source_ref": "draw_b.cpp",
+      "span_end": 3,
+      "span_start": 1
+    }
+  ]
+}

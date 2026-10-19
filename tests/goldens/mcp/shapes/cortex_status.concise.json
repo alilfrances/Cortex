@@ -1,0 +1,21 @@
+{
+  "first_item_keys": {
+    "in_flight": [
+      "elapsed_seconds",
+      "request_id",
+      "tool_name"
+    ]
+  },
+  "keys": [
+    "deadline_budget_seconds",
+    "fingerprint_ttl_seconds",
+    "in_flight",
+    "in_flight_count",
+    "per_tool",
+    "started_at",
+    "total_completed",
+    "total_deadline_exceeded",
+    "total_failed",
+    "uptime_seconds"
+  ]
+}

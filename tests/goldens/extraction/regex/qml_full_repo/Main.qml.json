@@ -1,0 +1,217 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:Main.qml:contains:Main",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 6,
+        "source_file": "Main.qml"
+      },
+      "relation": "contains",
+      "source": "file:Main.qml",
+      "target": "symbol:Main.qml:Main",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:Main.qml:contains:Main.Card.onValueChanged",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 20,
+        "source_file": "Main.qml"
+      },
+      "relation": "contains",
+      "source": "file:Main.qml",
+      "target": "symbol:Main.qml:Main.Card.onValueChanged",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:Main.qml:contains:Main.onValueChanged",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 25,
+        "source_file": "Main.qml"
+      },
+      "relation": "contains",
+      "source": "file:Main.qml",
+      "target": "symbol:Main.qml:Main.onValueChanged",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:Main.qml:contains:Main.refreshed",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 12,
+        "source_file": "Main.qml"
+      },
+      "relation": "contains",
+      "source": "file:Main.qml",
+      "target": "symbol:Main.qml:Main.refreshed",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:Main.qml:handles:20:onValueChanged",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "component_path": "Card.qml",
+        "handler_name": "onValueChanged",
+        "lineno": 20,
+        "signal_name": "valueChanged",
+        "source_file": "Main.qml",
+        "unverified": true
+      },
+      "relation": "handles",
+      "source": "symbol:Main.qml:Main.Card.onValueChanged",
+      "target": "module:valueChanged",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:Main.qml:import:2:1:QtQuick",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "Main.qml"
+      },
+      "relation": "imports",
+      "source": "file:Main.qml",
+      "target": "module:QtQuick",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:Main.qml:import:3:2:QtQuick.Controls",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "Main.qml"
+      },
+      "relation": "imports",
+      "source": "file:Main.qml",
+      "target": "module:QtQuick.Controls",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:Main.qml:import:4:3:\"helpers.js\"",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 4,
+        "source_file": "Main.qml"
+      },
+      "relation": "imports",
+      "source": "file:Main.qml",
+      "target": "file:helpers.js",
+      "weight": 1.0
+    },
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:Main.qml:instantiates:17:2:Card",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "component_kind": "qml",
+        "lineno": 17,
+        "source_file": "Main.qml",
+        "type_name": "Card"
+      },
+      "relation": "instantiates",
+      "source": "file:Main.qml",
+      "target": "file:Card.qml",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "Main.qml",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "qml",
+        "size_bytes": 729
+      },
+      "node_id": "file:Main.qml",
+      "signature": "",
+      "source_ref": "Main.qml",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Main",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 6,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:Main.qml:Main",
+      "signature": "ApplicationWindow {",
+      "source_ref": "Main.qml",
+      "span_end": 27,
+      "span_start": 6
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "onValueChanged",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "handler_name": "onValueChanged",
+        "lineno": 20,
+        "parser_backend": "regex",
+        "qml_kind": "handler",
+        "qml_owner": "Main.Card",
+        "qt": "handler",
+        "signal_name": "valueChanged"
+      },
+      "node_id": "symbol:Main.qml:Main.Card.onValueChanged",
+      "signature": "onValueChanged: refreshed(title)",
+      "source_ref": "Main.qml",
+      "span_end": 20,
+      "span_start": 20
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "onValueChanged",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 25,
+        "parser_backend": "regex",
+        "qml_kind": "method",
+        "qml_owner": "Main"
+      },
+      "node_id": "symbol:Main.qml:Main.onValueChanged",
+      "signature": "function onValueChanged(value) { root.count = value; Helpers.log(value) }",
+      "source_ref": "Main.qml",
+      "span_end": 25,
+      "span_start": 25
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "refreshed",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 12,
+        "parser_backend": "regex",
+        "qml_kind": "signal",
+        "qml_owner": "Main",
+        "qt": "signal"
+      },
+      "node_id": "symbol:Main.qml:Main.refreshed",
+      "signature": "signal refreshed(string value)",
+      "source_ref": "Main.qml",
+      "span_end": 12,
+      "span_start": 12
+    }
+  ]
+}

@@ -1,0 +1,97 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Amb.java:calls:go:p.draw:3",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "draw",
+        "enclosing_class": "Amb",
+        "lineno": 3,
+        "receiver": "p",
+        "receiver_kind": "var",
+        "receiver_type": "Panel",
+        "scope": null,
+        "source_file": "java/Amb.java"
+      },
+      "relation": "calls",
+      "source": "symbol:java/Amb.java:go",
+      "target": "name:draw",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Amb.java:contains:Amb",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "java/Amb.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Amb.java",
+      "target": "symbol:java/Amb.java:Amb",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:java/Amb.java:contains:go",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 2,
+        "source_file": "java/Amb.java"
+      },
+      "relation": "contains",
+      "source": "file:java/Amb.java",
+      "target": "symbol:java/Amb.java:go",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "java/Amb.java",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "java",
+        "size_bytes": 75
+      },
+      "node_id": "file:java/Amb.java",
+      "signature": "",
+      "source_ref": "java/Amb.java",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Amb",
+      "metadata": {
+        "lineno": 1,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/Amb.java:Amb",
+      "signature": "public class Amb {",
+      "source_ref": "java/Amb.java",
+      "span_end": 5,
+      "span_start": 1
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "go",
+      "metadata": {
+        "lineno": 2,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:java/Amb.java:go",
+      "signature": "public void go(Panel p) {",
+      "source_ref": "java/Amb.java",
+      "span_end": 4,
+      "span_start": 2
+    }
+  ]
+}

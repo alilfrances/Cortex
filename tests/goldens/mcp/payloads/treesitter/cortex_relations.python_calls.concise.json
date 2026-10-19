@@ -1,0 +1,36 @@
+{
+  "_meta": {
+    "cached": false,
+    "fingerprint_fresh": true
+  },
+  "items": [
+    {
+      "confidence": "EXTRACTED",
+      "layer": "STRUCTURAL",
+      "origin": "ast-parser",
+      "relation": "calls",
+      "source": "login @ app/auth.py:11",
+      "target": "ValueError"
+    },
+    {
+      "confidence": "EXTRACTED",
+      "layer": "STRUCTURAL",
+      "origin": "ast-parser",
+      "relation": "calls",
+      "source": "login @ app/auth.py:11",
+      "target": "record"
+    },
+    {
+      "confidence": "EXTRACTED",
+      "layer": "STRUCTURAL",
+      "origin": "ast-parser",
+      "relation": "calls",
+      "source": "login @ app/auth.py:11",
+      "target": "create"
+    }
+  ],
+  "repo_path": "<repo>",
+  "returned_count": 3,
+  "stale": false,
+  "truncated": false
+}

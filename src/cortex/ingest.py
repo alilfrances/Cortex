@@ -8,6 +8,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, NamedTuple
 
+from .callresolve import resolve_call_endpoints
 from .config import load_config
 from .gitutils import collect_recent_commits, discover_repo_root
 from .graph import (
@@ -19,7 +20,7 @@ from .graph import (
 )
 from .hotspots import annotate_file_nodes, compute_churn, compute_hotspots
 from .models import CommitRecord, GraphNode, SourceRecord
-from .store import CortexStore, default_db_path, write_repo_meta
+from .store import GRAPH_FORMAT_VERSION, CortexStore, default_db_path, ingest_lock, write_repo_meta
 
 _TEXT_SUFFIXES = {
     ".md",
@@ -313,10 +314,15 @@ def _commits_changed(store: CortexStore, repo_root: Path, commits: list[CommitRe
     """True when the freshly-collected commit SHAs differ from what's stored
     — the signal the incremental path uses to decide whether the COCHANGE
     layer (which depends only on commit history, not file contents) needs a
-    rebuild at all (P0-3 item 4)."""
-    stored_shas = {c.sha for c in store.fetch_commits(repo_root)}
-    current_shas = {c.sha for c in commits}
-    return stored_shas != current_shas
+    rebuild at all (P0-3 item 4).
+
+    Also true when the same SHAs carry different rename data: a database
+    written before rename-aware history (0.10.0) stores every commit with no
+    renames, and its COCHANGE layer and churn must be rebuilt once rather
+    than staying rename-blind until the next commit lands."""
+    stored = {c.sha: sorted(c.renames) for c in store.fetch_commits(repo_root)}
+    current = {c.sha: sorted(tuple(pair) for pair in c.renames) for c in commits}
+    return stored != current
 
 
 def _sync_semantic_embeddings(
@@ -358,12 +364,45 @@ def ingest_repository(
     commit_limit: int = 1000,
     db_path: Path | None = None,
     incremental: bool = False,
+    *,
+    lock_timeout: float | None = None,
 ) -> dict[str, Any]:
+    """Ingest (full or incremental) under the repo's cross-process ingest lock.
+
+    Two Cortex processes (e.g. a Claude Code and a Codex MCP server) may both
+    decide to refresh the same repository; the lock serializes them so their
+    delta writes never interleave. The lock is re-entrant within a thread, so
+    callers that already hold it (``mcp.tools._ensure_fresh``) do not deadlock.
+    Raises :class:`cortex.store.IngestLockTimeout` after ``lock_timeout``
+    (default ``cortex.store.INGEST_LOCK_TIMEOUT_SECONDS``).
+    """
     repo_root = discover_repo_root(repo_path)
+    with ingest_lock(repo_root, timeout=lock_timeout, db_path=db_path):
+        return _ingest_locked(repo_root, commit_limit, db_path, incremental)
+
+
+def _ingest_locked(
+    repo_root: Path,
+    commit_limit: int,
+    db_path: Path | None,
+    incremental: bool,
+) -> dict[str, Any]:
     config = load_config(repo_root)
     skip_dirs = _SKIP_DIRS | set(config.skip_dirs)
     store = CortexStore(db_path or default_db_path(repo_root))
     write_repo_meta(store.db_path, repo_root)
+
+    upgraded_from: int | None = None
+    if incremental:
+        stored_version = store.get_repo_graph_version(repo_root)
+        if stored_version < GRAPH_FORMAT_VERSION:
+            # An index from an older graph format (or none at all): an incremental
+            # refresh only re-extracts changed files, so untouched files would keep
+            # rows without the current extraction (e.g. pre-0.10.0 call edges with
+            # no call-site metadata).  Rebuild once in full instead.
+            incremental = False
+            if store.get_repo_fingerprint(repo_root):
+                upgraded_from = stored_version
 
     if incremental:
         # Stat-first: only the changed/new files are opened and hashed. The
@@ -382,7 +421,19 @@ def ingest_repository(
         # Delta graph writes: delete only the rows owned by changed/deleted
         # files, then append fresh rows for the changed/new files. Rows for
         # every untouched file are never read or rewritten (P0-3 items 1-2).
+        # Call-resolution scope for the merged pass below: the files re-extracted
+        # in this batch plus the callee labels of every symbol the batch adds or
+        # removes, and whether class/inheritance structure moved (see
+        # callresolve.resolve_call_endpoints).
+        call_files: set[str] = set()
+        call_labels: set[str] = set()
+        call_hierarchy = False
         if sources_to_process or stale_paths:
+            call_files = {s.path for s in sources_to_process}
+            if stale_paths:
+                old_labels, old_hierarchy = store.fetch_symbol_summary_for_sources(repo_root, stale_paths)
+                call_labels |= old_labels
+                call_hierarchy |= old_hierarchy
             # P0-4: a signal/slot this batch's emit/connect/handler sites
             # reference may be declared in a file that isn't part of this
             # batch (e.g. an unchanged header). Fetch the store's existing
@@ -404,6 +455,10 @@ def ingest_repository(
                 connect_names=config.connect_functions,
             )
             annotate_file_nodes(new_nodes, hotspot_overrides)
+            call_labels |= {n.label for n in new_nodes if n.granularity == "symbol"}
+            call_hierarchy = call_hierarchy or any(n.kind == "class" for n in new_nodes) or any(
+                e.relation == "inherits" for e in new_edges
+            )
             if stale_paths:
                 store.delete_graph_for_sources(repo_root, stale_paths)
             store.append_graph(repo_root, new_nodes, new_edges)
@@ -464,9 +519,20 @@ def ingest_repository(
         # ingest would write, persisting only the rows that actually changed.
         if sources_to_process or stale_paths or commits_changed:
             merged_nodes, merged_edges = store.fetch_graph(repo_root)
-            endpoints_before = {e.edge_id: (e.source, e.target, json.dumps(e.metadata, sort_keys=True)) for e in merged_edges}
+            endpoints_before = {
+                e.edge_id: (e.source, e.target, e.confidence, json.dumps(e.metadata, sort_keys=True))
+                for e in merged_edges
+            }
             degrees_before = {n.node_id: n.metadata.get("degree") for n in merged_nodes}
             resolved_edges = resolve_connect_endpoints(merged_nodes, merged_edges)
+            if call_files or call_labels:
+                resolved_edges = resolve_call_endpoints(
+                    merged_nodes,
+                    resolved_edges,
+                    affected_files=call_files,
+                    changed_labels=call_labels,
+                    widen_typed=call_hierarchy,
+                )
             try:
                 from .structural.qml_resolver import resolve_qml_edges
                 resolve_qml_edges(merged_nodes, resolved_edges, scan.current_paths)
@@ -480,7 +546,7 @@ def ingest_repository(
             else:
                 changed_edges = [
                     e for e in resolved_edges
-                    if endpoints_before[e.edge_id] != (e.source, e.target, json.dumps(e.metadata, sort_keys=True))
+                    if endpoints_before[e.edge_id] != (e.source, e.target, e.confidence, json.dumps(e.metadata, sort_keys=True))
                 ]
                 changed_nodes = [
                     n for n in merged_nodes
@@ -514,10 +580,11 @@ def ingest_repository(
     store.save_sources(repo_root, all_sources)
     store.save_commits(repo_root, commits)
     store.save_graph(repo_root, nodes, edges)
+    store.set_repo_graph_version(repo_root, GRAPH_FORMAT_VERSION)
     _sync_semantic_embeddings(store, repo_root, all_sources, nodes, replace_paths=[source.path for source in all_sources])
     parser_summary = _parser_summary(nodes)
 
-    return {
+    summary = {
         "repo_path": str(repo_root),
         "source_count": len(all_sources),
         "new_files": len(all_sources),
@@ -531,3 +598,9 @@ def ingest_repository(
         "parser_backend_counts": parser_summary["backend_counts"],
         "language_runtime": parser_summary["language_runtime"],
     }
+    if upgraded_from is not None:
+        store.clear_query_cache(repo_root)
+        summary["full_reindex_reason"] = (
+            f"index graph format {upgraded_from} is older than {GRAPH_FORMAT_VERSION}; rebuilt in full"
+        )
+    return summary

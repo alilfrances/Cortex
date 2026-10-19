@@ -1,0 +1,20 @@
+{
+  "_meta": {
+    "cached": false,
+    "fingerprint_fresh": true
+  },
+  "items": [
+    {
+      "confidence": "LOW",
+      "layer": "STRUCTURAL",
+      "origin": "regex-parser",
+      "relation": "calls",
+      "source": "onDeviceConnected @ src/DeviceManager.cpp:23",
+      "target": "scan"
+    }
+  ],
+  "repo_path": "<repo>",
+  "returned_count": 1,
+  "stale": false,
+  "truncated": false
+}

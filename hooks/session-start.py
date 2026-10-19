@@ -28,7 +28,7 @@ def _emit(additional_context: str) -> None:
 
 def _repo_status(repo_root: Path) -> tuple[str, int] | None:
     from cortex.ingest import compute_repo_fingerprint
-    from cortex.store import default_db_path
+    from cortex.store import GRAPH_FORMAT_VERSION, default_db_path
 
     db_path = default_db_path(repo_root)
     if not db_path.exists():
@@ -45,11 +45,21 @@ def _repo_status(repo_root: Path) -> tuple[str, int] | None:
             "SELECT COUNT(*) FROM sources WHERE repo_path = ?",
             (repo_key,),
         ).fetchone()
+        try:
+            version_row = connection.execute(
+                "SELECT graph_version FROM repos WHERE repo_path = ?",
+                (repo_key,),
+            ).fetchone()
+        except sqlite3.OperationalError:
+            version_row = None  # read-only open of a pre-0.10.0 database: no column yet
     finally:
         connection.close()
 
     stored_fingerprint = "" if stored_row is None else str(stored_row[0] or "")
     file_count = int(count_row[0] if count_row is not None else 0)
+    graph_version = int(version_row[0] or 0) if version_row is not None else 0
+    if graph_version < GRAPH_FORMAT_VERSION:
+        return ("outdated", file_count)
     current_fingerprint = compute_repo_fingerprint(repo_root)
     return ("fresh" if stored_fingerprint == current_fingerprint else "stale", file_count)
 
@@ -88,7 +98,9 @@ def main() -> int:
             "Grep/Glob/Read; delegate multi-step exploration to the cortex-explorer agent, keep "
             "single lookups direct."
         )
-        if state == "stale":
+        if freshness == "outdated":
+            context += " It was built by an older Cortex; the next read/query tool call or cortex_refresh rebuilds it in full."
+        elif state == "stale":
             context += " Read/query tools auto-refresh incrementally; cortex_refresh forces it."
         _emit(context + runtime_warning)
         return 0

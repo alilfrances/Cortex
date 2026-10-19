@@ -1,0 +1,52 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:lib/panel_b.ts:contains:Panel",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/panel_b.ts"
+      },
+      "relation": "contains",
+      "source": "file:lib/panel_b.ts",
+      "target": "symbol:lib/panel_b.ts:Panel",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/panel_b.ts",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "ts",
+        "size_bytes": 46
+      },
+      "node_id": "file:lib/panel_b.ts",
+      "signature": "",
+      "source_ref": "lib/panel_b.ts",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Panel",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:lib/panel_b.ts:Panel",
+      "signature": "export class Panel {",
+      "source_ref": "lib/panel_b.ts",
+      "span_end": 4,
+      "span_start": 1
+    }
+  ]
+}

@@ -5,6 +5,7 @@ from collections.abc import Iterable, Mapping
 from pathlib import PurePosixPath
 from typing import Any
 
+from .gitutils import canonical_commit_files
 from .models import CommitRecord, GraphNode, SourceRecord
 from .structural.regex_backend import _mask_comments_and_strings
 
@@ -39,14 +40,6 @@ _BINDING_RE = re.compile(
 _BINDING_EXCLUSIONS = {"case", "default", "else"}
 
 
-def _commit_files(commit: CommitRecord | Mapping[str, Any]) -> Iterable[str]:
-    if isinstance(commit, Mapping):
-        files = commit.get("files", ())
-    else:
-        files = getattr(commit, "files", ())
-    return files or ()
-
-
 def _normalise_path(path: Any) -> str:
     value = str(path).replace("\\", "/")
     if value.startswith("./"):
@@ -57,16 +50,19 @@ def _normalise_path(path: Any) -> str:
 def compute_churn(commits: Iterable[CommitRecord | Mapping[str, Any]]) -> dict[str, int]:
     """Return the number of distinct commits touching each repository path.
 
-    ``git log --name-only`` normally emits each path once per commit, but
-    de-duplicating each commit makes this function deterministic for callers
-    that construct ``CommitRecord`` values by hand. The result intentionally
+    ``git log`` normally emits each path once per commit, but de-duplicating
+    each commit makes this function deterministic for callers that construct
+    ``CommitRecord`` values by hand. Rename-aware since 0.10.0: ``commits``
+    are newest first, and a touch made under an older name counts for the
+    file's current path (see ``gitutils.canonical_commit_files``). The result intentionally
     uses integer touch counts; a caller that wants recency weighting can apply
     it as a separate ranking policy without changing the persisted statistic.
     """
     churn: dict[str, int] = {}
-    for commit in commits:
-        paths = sorted({_normalise_path(path) for path in _commit_files(commit) if str(path).strip()})
-        for path in paths:
+    # Rename-aware (0.10.0): touches made under an older name count for the
+    # file's current path (``commits`` newest first).
+    for files in canonical_commit_files(list(commits)):
+        for path in sorted(files):
             churn[path] = churn.get(path, 0) + 1
     return churn
 

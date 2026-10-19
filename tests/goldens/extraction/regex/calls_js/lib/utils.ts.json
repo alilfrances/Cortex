@@ -1,0 +1,52 @@
+{
+  "edges": [
+    {
+      "confidence": "LOW",
+      "edge_id": "regex:lib/utils.ts:contains:helper",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 1,
+        "source_file": "lib/utils.ts"
+      },
+      "relation": "contains",
+      "source": "file:lib/utils.ts",
+      "target": "symbol:lib/utils.ts:helper",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "lib/utils.ts",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "kind": "code",
+        "parser_backend": "regex",
+        "parser_diagnostics": [],
+        "parser_language": "ts",
+        "size_bytes": 49
+      },
+      "node_id": "file:lib/utils.ts",
+      "signature": "",
+      "source_ref": "lib/utils.ts",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "helper",
+      "metadata": {
+        "degraded_reason": "forced-fallback",
+        "lineno": 1,
+        "parser_backend": "regex"
+      },
+      "node_id": "symbol:lib/utils.ts:helper",
+      "signature": "export function helper(): number {",
+      "source_ref": "lib/utils.ts",
+      "span_end": 3,
+      "span_start": 1
+    }
+  ]
+}

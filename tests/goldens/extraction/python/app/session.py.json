@@ -1,0 +1,170 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/session.py:calls:SessionStore.__init__:AuditLog:6",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "AuditLog",
+        "enclosing_class": "SessionStore",
+        "import_module": "app.audit",
+        "lineno": 6,
+        "receiver": null,
+        "receiver_kind": "none",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/session.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/session.py:SessionStore.__init__",
+      "target": "name:AuditLog",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/session.py:calls:SessionStore.create:self.audit.record:12",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "record",
+        "enclosing_class": "SessionStore",
+        "lineno": 12,
+        "receiver": "self.audit",
+        "receiver_kind": "chain",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/session.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/session.py:SessionStore.create",
+      "target": "name:record",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/session.py:calls:SessionStore.prune_expired:self.sessions.items:16",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "callee": "items",
+        "enclosing_class": "SessionStore",
+        "lineno": 16,
+        "receiver": "self.sessions",
+        "receiver_kind": "chain",
+        "receiver_type": null,
+        "scope": null,
+        "source_file": "app/session.py"
+      },
+      "relation": "calls",
+      "source": "symbol:app/session.py:SessionStore.prune_expired",
+      "target": "name:items",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/session.py:contains:SessionStore",
+      "layer": "STRUCTURAL",
+      "metadata": {},
+      "relation": "contains",
+      "source": "file:app/session.py",
+      "target": "symbol:app/session.py:SessionStore",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/session.py:contains:SessionStore.__init__",
+      "layer": "STRUCTURAL",
+      "metadata": {},
+      "relation": "contains",
+      "source": "symbol:app/session.py:SessionStore",
+      "target": "symbol:app/session.py:SessionStore.__init__",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/session.py:contains:SessionStore.create",
+      "layer": "STRUCTURAL",
+      "metadata": {},
+      "relation": "contains",
+      "source": "symbol:app/session.py:SessionStore",
+      "target": "symbol:app/session.py:SessionStore.create",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/session.py:contains:SessionStore.prune_expired",
+      "layer": "STRUCTURAL",
+      "metadata": {},
+      "relation": "contains",
+      "source": "symbol:app/session.py:SessionStore",
+      "target": "symbol:app/session.py:SessionStore.prune_expired",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "ast:app/session.py:from:app.audit",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "level": 0,
+        "lineno": 1,
+        "module": "app.audit"
+      },
+      "relation": "imports",
+      "source": "file:app/session.py",
+      "target": "file:app/audit.py",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "SessionStore",
+      "metadata": {
+        "lineno": 4
+      },
+      "node_id": "symbol:app/session.py:SessionStore",
+      "signature": "class SessionStore:",
+      "source_ref": "app/session.py",
+      "span_end": 19,
+      "span_start": 4
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "__init__",
+      "metadata": {
+        "lineno": 5
+      },
+      "node_id": "symbol:app/session.py:SessionStore.__init__",
+      "signature": "def __init__(self, audit=None):",
+      "source_ref": "app/session.py",
+      "span_end": 7,
+      "span_start": 5
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "create",
+      "metadata": {
+        "lineno": 9
+      },
+      "node_id": "symbol:app/session.py:SessionStore.create",
+      "signature": "def create(self, user_id):",
+      "source_ref": "app/session.py",
+      "span_end": 13,
+      "span_start": 9
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "prune_expired",
+      "metadata": {
+        "lineno": 15
+      },
+      "node_id": "symbol:app/session.py:SessionStore.prune_expired",
+      "signature": "def prune_expired(self, now):",
+      "source_ref": "app/session.py",
+      "span_end": 19,
+      "span_start": 15
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+{
+  "edges": [
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:left.hpp:contains:Left",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 3,
+        "source_file": "left.hpp"
+      },
+      "relation": "contains",
+      "source": "file:left.hpp",
+      "target": "symbol:left.hpp:Left",
+      "weight": 1.0
+    },
+    {
+      "confidence": "EXTRACTED",
+      "edge_id": "treesitter:left.hpp:contains:name",
+      "layer": "STRUCTURAL",
+      "metadata": {
+        "lineno": 5,
+        "source_file": "left.hpp"
+      },
+      "relation": "contains",
+      "source": "file:left.hpp",
+      "target": "symbol:left.hpp:name",
+      "weight": 1.0
+    }
+  ],
+  "nodes": [
+    {
+      "granularity": "file",
+      "kind": "file",
+      "label": "left.hpp",
+      "metadata": {
+        "degraded_reason": "",
+        "kind": "code",
+        "parser_backend": "treesitter",
+        "parser_diagnostics": [],
+        "parser_language": "hpp",
+        "size_bytes": 79
+      },
+      "node_id": "file:left.hpp",
+      "signature": "",
+      "source_ref": "left.hpp",
+      "span_end": null,
+      "span_start": null
+    },
+    {
+      "granularity": "symbol",
+      "kind": "class",
+      "label": "Left",
+      "metadata": {
+        "lineno": 3,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:left.hpp:Left",
+      "signature": "class Left {",
+      "source_ref": "left.hpp",
+      "span_end": 8,
+      "span_start": 3
+    },
+    {
+      "granularity": "symbol",
+      "kind": "func",
+      "label": "name",
+      "metadata": {
+        "lineno": 5,
+        "parser_backend": "treesitter"
+      },
+      "node_id": "symbol:left.hpp:name",
+      "signature": "int name() {",
+      "source_ref": "left.hpp",
+      "span_end": 7,
+      "span_start": 5
+    }
+  ]
+}

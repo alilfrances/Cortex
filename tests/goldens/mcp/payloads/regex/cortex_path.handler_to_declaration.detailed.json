@@ -1,0 +1,25 @@
+{
+  "_meta": {
+    "cached": false,
+    "fingerprint_fresh": true
+  },
+  "paths": [
+    [
+      {
+        "confidence": "LOW",
+        "direction": "out",
+        "layer": "STRUCTURAL",
+        "node": "clicked @ qml/DeviceDelegate.qml:5",
+        "node_id": "symbol:qml/DeviceDelegate.qml:DeviceDelegate.clicked",
+        "origin": "regex-parser",
+        "relation": "handles"
+      }
+    ]
+  ],
+  "refresh_hint": "",
+  "repo_path": "<repo>",
+  "returned_count": 1,
+  "source": "onClicked @ qml/Main.qml:11",
+  "stale": false,
+  "target": "clicked @ qml/DeviceDelegate.qml:5"
+}
