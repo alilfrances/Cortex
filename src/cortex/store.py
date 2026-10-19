@@ -1299,6 +1299,32 @@ class CortexStore:
             for row in rows
         ]
 
+    def symbols_by_label(self, repo_path: Path, label: str, kind: str | None = None) -> list[GraphNode]:
+        """Every symbol whose label is exactly `label` (no ranking, no limit)."""
+        sql = (
+            "SELECT node_id, kind, label, source_ref, granularity, signature, span_start, span_end, metadata_json "
+            "FROM graph_nodes WHERE repo_path = ? AND granularity = 'symbol' AND label = ?"
+        )
+        params: list[Any] = [str(repo_path.resolve()), label]
+        if kind is not None:
+            sql += " AND kind = ?"
+            params.append(kind)
+        rows = self.connection.execute(sql + " ORDER BY node_id", tuple(params)).fetchall()
+        return [
+            GraphNode(
+                node_id=row['node_id'],
+                kind=row['kind'],
+                label=row['label'],
+                source_ref=row['source_ref'],
+                granularity=row['granularity'],
+                signature=row['signature'],
+                span_start=row['span_start'],
+                span_end=row['span_end'],
+                metadata=json.loads(row['metadata_json']),
+            )
+            for row in rows
+        ]
+
     def parser_backend_counts(self, repo_path: Path) -> dict[str, int]:
         """File nodes per recorded `parser_backend`, without loading the graph."""
         rows = self.connection.execute(

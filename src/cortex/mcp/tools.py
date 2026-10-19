@@ -22,7 +22,7 @@ from ..references import find_references
 from ..report import build_report_data, render_report
 from ..hotspots import top_hotspots
 from ..risk import analyze_risk, truncate_risk_result
-from ..store import GRAPH_FORMAT_VERSION, CortexStore, IngestLockTimeout, default_db_path, ingest_lock
+from ..store import GRAPH_FORMAT_VERSION, CortexStore, IngestLockTimeout, _search_tokens, default_db_path, ingest_lock
 from ..tokenizer import count_text_tokens, truncate_text_to_budget
 from .status import REGISTRY, RequestStatus
 
@@ -1896,17 +1896,86 @@ def _symbol_match_payload(node: Any) -> dict[str, Any]:
     }
 
 
+_IMPL_SUFFIXES = (".c", ".cc", ".cpp", ".cxx", ".m", ".mm")
+_HEADER_SUFFIXES = (".h", ".hh", ".hpp", ".hxx")
+_QUALIFIED_PATH_RE = re.compile(r"^(?P<path>[^:]+\.[A-Za-z0-9]+)(?:::|:)(?P<label>[^:].*)$")
+_QUALIFIED_MEMBER_RE = re.compile(r"^(?P<cls>[A-Za-z_]\w*)(?:::|\.)(?P<member>~?[A-Za-z_]\w*)$")
+
+
+def _qualified_matches(store: CortexStore, repo_root: Path, symbol: str) -> list[Any]:
+    """Symbols named by `path:label`, `path::label`, `Class::method` or `Class.method`."""
+    path_form = _QUALIFIED_PATH_RE.match(symbol)
+    if path_form:
+        node_id = f"symbol:{path_form.group('path')}:{path_form.group('label')}"
+        node = store.get_nodes(repo_root, [node_id]).get(node_id)
+        if node is not None:
+            return [node]
+    member_form = _QUALIFIED_MEMBER_RE.match(symbol)
+    if member_form:
+        cls, member = member_form.group("cls"), member_form.group("member")
+        classes = store.symbols_by_label(repo_root, cls, kind="class")
+        found = []
+        for candidate in store.symbols_by_label(repo_root, member):
+            signature = candidate.signature or ""
+            if f"{cls}::{member}" in signature or f"{cls}.{member}" in signature:
+                found.append(candidate)
+            elif any(
+                c.source_ref == candidate.source_ref
+                and c.span_start is not None and c.span_end is not None
+                and c.span_start <= (candidate.span_start or 0) <= c.span_end
+                for c in classes
+            ):
+                found.append(candidate)
+        return found
+    return []
+
+
+def _prefer_definition(matches: list[Any]) -> list[Any]:
+    """Among same-named candidates, one implementation file beats header declarations."""
+    if len(matches) < 2 or len({node.label for node in matches}) != 1:
+        return matches
+    implementations = [node for node in matches if node.source_ref.lower().endswith(_IMPL_SUFFIXES)]
+    others = [node for node in matches if node not in implementations]
+    if len(implementations) == 1 and others and all(n.source_ref.lower().endswith(_HEADER_SUFFIXES) for n in others):
+        return implementations
+    return matches
+
+
+def _did_you_mean(store: CortexStore, repo_root: Path, symbol: str, limit: int = 5) -> list[str]:
+    labels: list[str] = []
+    for node in store.search_nodes(repo_root, symbol, limit=20):
+        if node.label not in labels:
+            labels.append(node.label)
+        if len(labels) >= limit:
+            break
+    return labels
+
+
 def _resolve_symbol(store: CortexStore, repo_root: Path, symbol: str) -> tuple[Any | None, list[Any]]:
     exact = store.get_nodes(repo_root, [symbol]).get(symbol)
     if exact is not None:
         return exact, []
+    qualified = _prefer_definition(_qualified_matches(store, repo_root, symbol))
+    if len(qualified) == 1:
+        return qualified[0], []
+    if len(qualified) > 1:
+        return None, qualified[:20]
     matches = store.search_nodes(repo_root, symbol, limit=20)
     exact_label = [node for node in matches if node.label == symbol]
     if len(exact_label) == 1:
         return exact_label[0], []
-    if len(matches) == 1:
-        return matches[0], []
-    return None, matches
+    # A fuzzy hit that misses most of the query (`Not` inside `notEqualTo` for a
+    # nonsense name) is noise, not an ambiguity: keep candidates whose label or file
+    # path contains every query token (a file path as the "symbol" lists its symbols).
+    tokens = [token for token in _search_tokens(symbol) if token]
+    related = [
+        node for node in matches
+        if all(token in f"{node.label} {node.source_ref}".lower() for token in tokens)
+    ]
+    related = _prefer_definition(related)
+    if len(related) == 1:
+        return related[0], []
+    return None, related
 
 
 def _numbered_span(content: str, start: int, end: int) -> str:
@@ -1944,6 +2013,7 @@ def _call_read_symbol(arguments: dict[str, Any]) -> dict[str, Any]:
                     "error": "symbol_not_found",
                     "message": f"No symbol matched {symbol!r}.",
                     "hint": "try cortex_search_symbols",
+                    "did_you_mean": _did_you_mean(store, repo_root, symbol),
                 },
                 status,
                 response_format,
@@ -2238,6 +2308,7 @@ def _call_path(arguments: dict[str, Any]) -> dict[str, Any]:
                     "error": "symbol_not_found",
                     "message": f"No symbol matched {symbol!r}.",
                     "hint": "try cortex_search_symbols",
+                    "did_you_mean": _did_you_mean(store, repo_root, symbol),
                     **(status if response_format == "detailed" else _concise_status(status)),
                 },
                 is_error=True,
