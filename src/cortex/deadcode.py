@@ -53,6 +53,133 @@ def _decorated_lines(content: str) -> frozenset[int]:
     )
 
 
+_OVERRIDE_MARKER_RE = re.compile(r"@Override\b|\boverride\b|\bvirtual\b")
+_CLASS_QUALIFIER_RE = re.compile(r"\b([A-Za-z_]\w*)::~?[A-Za-z_]\w*\s*\(")
+_OVERRIDE_REASON = "no incoming edges; overrides a base-class or framework method"
+_METHOD_KINDS = frozenset({"func", "method"})
+
+
+class _OverrideIndex:
+    """Recognises methods that a base class or a framework may call.
+
+    A method is flagged when its declaration carries an override marker
+    (`@Override`, `override`, `virtual`) or when its enclosing class declares it
+    with one (an out-of-line C++ definition has no marker of its own, its header
+    declaration does), or when it shares a name with a method of a resolved base
+    class. The graph links methods to their file, not their class, so the
+    enclosing class comes from spans (Java, Kotlin, Swift, in-class C++) or from a
+    `Class::method` qualifier (out-of-line C++ definitions). A method of a class
+    with an external base and no marker is deliberately not flagged: nearly every
+    class has some framework base, so that rule would hide real dead code.
+    """
+
+    def __init__(self, nodes: Sequence[GraphNode], edges: Sequence[GraphEdge], sources: Mapping[str, str]) -> None:
+        self._sources = sources
+        self._classes_by_file: dict[str, list[GraphNode]] = defaultdict(list)
+        self._classes_by_label: dict[str, list[GraphNode]] = defaultdict(list)
+        self._methods_by_file: dict[str, list[GraphNode]] = defaultdict(list)
+        self._nodes_by_id = {node.node_id: node for node in nodes}
+        for node in nodes:
+            if node.granularity != "symbol":
+                continue
+            if node.kind == "class":
+                self._classes_by_file[node.source_ref].append(node)
+                self._classes_by_label[node.label].append(node)
+            elif node.kind in _METHOD_KINDS:
+                self._methods_by_file[node.source_ref].append(node)
+        self._bases: dict[str, list[str]] = defaultdict(list)
+        for edge in edges:
+            if edge.relation == "inherits":
+                self._bases[edge.source].append(edge.target)
+        self._lines: dict[str, list[str]] = {}
+
+    def _file_lines(self, path: str) -> list[str]:
+        lines = self._lines.get(path)
+        if lines is None:
+            lines = self._lines[path] = self._sources.get(path, "").splitlines()
+        return lines
+
+    def _declaration_text(self, node: GraphNode) -> str:
+        lines = self._file_lines(node.source_ref)
+        start = node.span_start or 0
+        if not 0 < start <= len(lines):
+            return node.signature
+        picked = [lines[start - 1]]
+        index = start - 2
+        while index >= 0 and start - 2 - index < 2 and lines[index].lstrip().startswith(("@", "[")):
+            picked.append(lines[index])
+            index -= 1
+        if lines[start - 1].lstrip().startswith("@") and start < len(lines):
+            picked.append(lines[start])  # the declaration under an annotation-only line
+        return "\n".join(picked)
+
+    def _enclosing_class(self, node: GraphNode) -> GraphNode | None:
+        start = node.span_start or 0
+        best: GraphNode | None = None
+        for cls in self._classes_by_file.get(node.source_ref, ()):
+            if cls.span_start is None or cls.span_end is None or cls.node_id == node.node_id:
+                continue
+            if cls.span_start <= start <= cls.span_end and (
+                best is None or (cls.span_end - cls.span_start) < ((best.span_end or 0) - (best.span_start or 0))
+            ):
+                best = cls
+        if best is not None:
+            return best
+        qualifier = _CLASS_QUALIFIER_RE.search(node.signature or "")
+        if qualifier:
+            matches = self._classes_by_label.get(qualifier.group(1), [])
+            if len(matches) == 1:
+                return matches[0]
+        return None
+
+    def _base_nodes(self, cls: GraphNode) -> list[GraphNode]:
+        """Base classes that are defined in the repository."""
+        resolved: list[GraphNode] = []
+        for target in self._bases.get(cls.node_id, ()):
+            base = self._nodes_by_id.get(target)
+            if base is not None and base.kind == "class":
+                resolved.append(base)
+        return resolved
+
+    def _class_declares_with_marker(self, cls: GraphNode, name: str) -> bool:
+        lines = self._file_lines(cls.source_ref)
+        start, end = cls.span_start or 0, cls.span_end or 0
+        if not 0 < start <= end:
+            return False
+        body = "\n".join(lines[start - 1:end])
+        escaped = re.escape(name)
+        return bool(
+            re.search(rf"\b{escaped}\s*\([^;{{}}]*\)[^;{{}}]*\boverride\b", body)
+            or re.search(rf"\bvirtual\b[^;{{}}]*\b{escaped}\s*\(", body)
+        )
+
+    def _declares_method(self, cls: GraphNode, name: str, seen: set[str], depth: int = 0) -> bool:
+        if cls.node_id in seen or depth > 6:
+            return False
+        seen.add(cls.node_id)
+        for method in self._methods_by_file.get(cls.source_ref, ()):
+            if method.label == name and cls.span_start is not None and cls.span_end is not None \
+                    and cls.span_start <= (method.span_start or 0) <= cls.span_end:
+                return True
+        for method in self._methods_by_file.values():
+            for candidate in method:
+                if candidate.label == name and f"{cls.label}::{name}" in (candidate.signature or ""):
+                    return True
+        return any(self._declares_method(base, name, seen, depth + 1) for base in self._base_nodes(cls))
+
+    def is_override(self, node: GraphNode) -> bool:
+        if node.kind not in _METHOD_KINDS:
+            return False
+        if _OVERRIDE_MARKER_RE.search(self._declaration_text(node)):
+            return True
+        cls = self._enclosing_class(node)
+        if cls is None:
+            return False
+        if self._class_declares_with_marker(cls, node.label):
+            return True
+        return any(self._declares_method(base, node.label, set()) for base in self._base_nodes(cls))
+
+
 class _AnalysisContext:
     """Per-analysis caches so per-symbol work does not repeat repo-wide I/O and parsing."""
 
@@ -75,11 +202,17 @@ class _AnalysisContext:
         # Both repo-wide qmlRegisterType patterns require this literal, so other sources cannot match.
         self.qml_register_sources: list[Any] = [source for source in all_sources if "qmlRegisterType" in source.content]
         self._decorated: dict[str, frozenset[int]] = {}
+        self._overrides: _OverrideIndex | None = None
         self._corpus: ReferenceCorpus | None = None
         self._references: dict[str, dict[str, Any]] = {}
 
     def content(self, path: str) -> str:
         return self.source_by_path.get(path) or ""
+
+    def is_override(self, node: GraphNode) -> bool:
+        if self._overrides is None:
+            self._overrides = _OverrideIndex(self._graph_nodes or (), self._graph_edges or (), self.source_by_path)
+        return self._overrides.is_override(node)
 
     def is_decorated(self, path: str, line: int | None) -> bool:
         if line is None:
@@ -240,6 +373,8 @@ def _candidate_reason(
 ) -> tuple[str, str]:
     if context is None:
         context = _AnalysisContext(repo_root, store, all_sources, reference_budget)
+    if context.is_override(node):
+        return "low", _OVERRIDE_REASON
     content = context.content(node.source_ref)
     qt_kind = node.metadata.get("qt") if isinstance(node.metadata, dict) else None
     qml_kind = node.metadata.get("qml_kind") if isinstance(node.metadata, dict) else None

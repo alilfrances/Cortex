@@ -345,22 +345,21 @@ Design decisions (implement exactly this):
 
 ### Task 4.2 — Framework overrides are low confidence
 
-- **Files:** `src/cortex/deadcode.py`.
+*Implemented, with one deliberate narrowing:* a method of a class whose base is
+outside the repository is **not** flagged unless it carries an override marker.
+Nearly every class has some framework base, so flagging all of them would hide
+real dead code (a plain `Activity` subclass method with no `@Override` stays
+high confidence).
+
+- **Files:** `src/cortex/deadcode.py` (`_OverrideIndex`, `_candidate_reason`).
 - **Change:** before the reference tier, return `("low", "no incoming edges;
-  overrides a base-class or framework method")` when either:
-  1. the declaration line (`node.span_start`, plus the preceding 2 lines for
-     annotations) matches an override marker for its language: C++
-     `\boverride\b` or `\bfinal\b` or a leading `virtual`; Java/Kotlin
-     `@Override` or Kotlin/Swift `\boverride\s+(fun|func|var|val)\b`; or
-  2. the graph shows the method's enclosing class `inherits` (transitively,
-     depth ≤ 6) from a class that has a method with the same short name, **or**
-     inherits from an unresolved/external base (`module:`/`name:` target).
-  Use `GraphNode.metadata` / `contains` edges to find the enclosing class;
-  build the inheritance index once per analysis in `_AnalysisContext`.
-- **Tests:** C++ `void onNewIntent(...) override`, a Java `@Override`
-  `onCreate`, a Kotlin `override fun onNewIntent`, and a C++ subclass method
-  overriding a repo base-class method are all `low` with this reason; an
-  ordinary unused function stays `high`.
+  overrides a base-class or framework method")` when the declaration carries
+  `@Override` / `override` / `virtual`, when the enclosing class declares the
+  method with `override`/`virtual` (an out-of-line C++ definition has no marker,
+  its header declaration does), or when it shares a name with a method of a
+  resolved base class (depth <= 6).
+- **Tests:** `tests/test_deadcode_overrides.py` (Java `@Override`, Swift
+  `override func`, C++ `override`/`virtual` in the header, resolved base).
 
 ### Task 4.3 — `path` argument for `cortex_dead_code`
 
