@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cortex-context-engine"
-version = "0.10.0"
+version = "0.10.1"
 description = "Local-first git-native context engine with graph, provenance, and token-budgeted retrieval bundles."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -17,7 +17,7 @@ authors = [
 # launches use the isolated runtime manager instead of writing to site-packages.
 dependencies = [
   "tree-sitter==0.26.0",
-  "tree-sitter-language-pack==1.12.5",
+  "tree-sitter-language-pack==1.22.1",
 ]
 
 [project.optional-dependencies]

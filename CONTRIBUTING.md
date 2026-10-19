@@ -71,6 +71,16 @@ then re-run without the variable to confirm no diff (`git diff --exit-code tests
 
 `GRAPH_FORMAT_VERSION` in `src/cortex/store.py` stamps every full ingest. Bump it in the same change whenever extraction or resolution output changes in a way an incremental refresh cannot repair, because an incremental refresh only re-extracts changed files. Examples: new edge kinds or metadata on existing edges, new symbol kinds, or changed node ids. Indexes stamped with an older version are then rebuilt in full on their next refresh, reported stale by the MCP tools and the SessionStart hook until then, and their query cache is cleared (`tests/test_graph_format_upgrade.py`). Say so in `CHANGELOG.md`.
 
+## Parser runtime pins
+
+`tree-sitter` and `tree-sitter-language-pack` are pinned in `pyproject.toml` (pip installs) and in both identical copies of `runtime-lock.json` (`src/cortex/` and `runtime/`, the managed runtime), which also carry every wheel and parser-archive SHA-256. The copies must agree (`tests/test_runtime_language_pack.py`). Dependabot bumps only `pyproject.toml`, so on its branch, or on your own, regenerate the rest:
+
+```bash
+python3 scripts/update_runtime_lock.py --language-pack <version> --runtime-version <next>
+```
+
+The script downloads and hashes every locked wheel and parser archive itself. Bump `--runtime-version` whenever the language pack changes so existing runtimes are left intact for rollback, bump `GRAPH_FORMAT_VERSION` (grammar changes alter extraction of unchanged files), and run the full checks, including goldens.
+
 ## Coverage floors
 
 Per-module line-coverage floors for the modules the 0.10.0 work rewrites live in `tests/coverage_floors.toml` (the file records the measured values). The rule is `floor = floor(measured) - 2`, raise-only: add tests instead of lowering a floor. Check them with:

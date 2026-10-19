@@ -14,6 +14,7 @@ only an explicit ensure/setup operation may do so.
 from __future__ import annotations
 
 import contextlib
+import functools
 import hashlib
 import json
 import os
@@ -33,7 +34,7 @@ from typing import Any, Iterator
 
 LOCK_PATH = Path(__file__).resolve().with_name("runtime-lock.json")
 RUNTIME_SCHEMA = 1
-RUNTIME_VERSION = "0.8.0"
+RUNTIME_VERSION = "0.9.0"
 DEFAULT_TIMEOUT = 30.0
 STALE_LOCK_SECONDS = 120.0
 MAX_ARCHIVE_FILES = 10_000
@@ -41,7 +42,7 @@ MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
 SUPPORTED_GRAMMARS = (
     "javascript", "typescript", "tsx", "go", "rust", "swift", "java", "ruby", "c", "cpp", "qml",
 )
-# Cortex calls the grammar qml while language-pack 1.12.x calls it qmljs.
+# Cortex calls the grammar qml while language-pack calls it qmljs.
 GRAMMAR_ALIASES = {"qml": "qmljs"}
 PARSER_PLATFORM_ALIASES = {
     "linux-glibc-arm64": "linux-aarch64",
@@ -469,18 +470,21 @@ def status() -> dict[str, Any]:
         downloaded = sorted(set(downloaded) | set(marker.get("downloaded_grammars", [])))
         missing = sorted(set(requested) - set(downloaded))
     reason = None
+    skew = _imported_language_pack_skew(lock)
     if _platform_key() is None:
         reason = "unsupported-platform"
+    elif skew:
+        reason = skew
     elif not marker:
         try:
             reason = previous_status.get("degraded_reason") or "runtime-not-ready"
         except (OSError, ValueError):
             reason = "runtime-not-ready"
     return RuntimeStatus(
-        ready=bool(marker and not missing),
+        ready=bool(marker and not missing and not skew),
         runtime_version=str(lock.get("runtime_version", RUNTIME_VERSION)),
         parser_version=str(lock.get("tree_sitter_version", "0.26.0")),
-        language_pack_version=str(lock.get("language_pack_version", "1.12.5")),
+        language_pack_version=str(lock.get("language_pack_version", "")),
         lock_digest=lock_digest(lock),
         python_abi=python_abi(),
         platform=_platform_key() or "unsupported",
@@ -490,7 +494,7 @@ def status() -> dict[str, Any]:
         downloaded_grammars=tuple(downloaded),
         missing_grammars=tuple(missing),
         backend_counts={},
-        degraded_reason=reason if not marker or missing else None,
+        degraded_reason=reason if not marker or missing or skew else None,
         last_attempt=previous_status.get("last_attempt"),
     ).to_dict()
 
@@ -523,8 +527,10 @@ def _prefetch_and_verify(target: Path, cache: Path, requested: list[str], offlin
         expected_sha = str(platform_manifest.get("sha256", "")).lower()
         expected_size = int(platform_manifest.get("size", 0) or 0)
         parser_platform = PARSER_PLATFORM_ALIASES.get(_platform_key() or "", _platform_key() or "")
-        bundle = cache.parent / "bundles" / f"{parser_platform}-{expected_sha}.tar.zst"
-        if not expected_sha or not bundle.is_file():
+        bundle_name = f"{parser_platform}-{expected_sha}.tar.zst"
+        bundles = [d / "bundles" / bundle_name for d in _pack_state_dirs(cache, lock)]
+        bundle = next((b for b in bundles if b.is_file()), None)
+        if not expected_sha or bundle is None:
             raise ValueError("language-pack did not retain the locked parser bundle")
         if expected_size and bundle.stat().st_size != expected_size:
             raise ValueError("locked parser bundle size mismatch")
@@ -539,10 +545,25 @@ def _prefetch_and_verify(target: Path, cache: Path, requested: list[str], offlin
     # The verified archive and upstream mutable manifest are installation-only.
     # The published runtime retains only the selected grammar libraries covered
     # by the ready marker's cache digest.
-    shutil.rmtree(cache.parent / "bundles", ignore_errors=True)
-    (cache.parent / "manifest.json").unlink(missing_ok=True)
-    (cache.parent / ".download.lock").unlink(missing_ok=True)
+    for state_dir in _pack_state_dirs(cache, lock):
+        shutil.rmtree(state_dir / "bundles", ignore_errors=True)
+        (state_dir / "manifest.json").unlink(missing_ok=True)
+        (state_dir / ".download.lock").unlink(missing_ok=True)
     return loaded
+
+
+def _pack_state_dirs(cache: Path, lock: dict[str, Any] | None) -> list[Path]:
+    """Directories where language-pack keeps setup-only download state.
+
+    1.12.x keeps ``bundles/``, ``manifest.json`` and ``.download.lock`` beside
+    the cache directory; 1.2x keeps them in a versioned directory inside it,
+    next to ``libs/``.
+    """
+    dirs = [cache.parent]
+    version = str((lock or {}).get("language_pack_version", ""))
+    if version:
+        dirs.append(cache / "tree-sitter-language-pack" / f"v{version}")
+    return dirs
 
 
 def _verify_bundle_checksum(bundle: Path) -> None:
@@ -797,6 +818,51 @@ def configure_parser_environment() -> Path | None:
     if str(site) not in sys.path:
         sys.path.insert(0, str(site))
     return target
+
+
+class LanguagePackVersionSkew(RuntimeError):
+    """The importable language pack is not the version the runtime locked."""
+
+
+@functools.lru_cache(maxsize=1)
+def _locked_language_pack_version() -> str:
+    return str(_load_lock().get("language_pack_version", ""))
+
+
+def _imported_language_pack_skew(lock: dict[str, Any]) -> str | None:
+    # Inspect only an already-imported module; status must not import parsers.
+    module = sys.modules.get("tree_sitter_language_pack")
+    actual = str(getattr(module, "__version__", "")) if module else ""
+    expected = str(lock.get("language_pack_version", ""))
+    if actual and expected and actual != expected:
+        return "language-pack-version-skew"
+    return None
+
+
+def language_pack() -> Any:
+    """Import the language pack and point it at the verified parser cache.
+
+    The managed runtime is configured before the import so its ``site``
+    directory wins over a site-packages copy. A copy imported earlier stays in
+    ``sys.modules``; if its version differs from the lock its parsers cannot
+    read the locked cache, so fail loudly instead of degrading silently.
+    """
+    cache = os.environ.get("CORTEX_PARSER_CACHE")
+    if not cache:
+        verified = configure_parser_environment()
+        cache = str(_cache_path(verified)) if verified else None
+    if not cache:
+        raise RuntimeError("managed parser runtime is not ready")
+    import tree_sitter_language_pack as pack
+    expected = _locked_language_pack_version()
+    actual = str(getattr(pack, "__version__", ""))
+    if expected and actual != expected:
+        raise LanguagePackVersionSkew(
+            f"tree-sitter-language-pack {actual or 'unknown'} is imported but the runtime "
+            f"is locked to {expected}; reinstall Cortex or run `cortex runtime repair`"
+        )
+    pack.configure(pack.PackConfig(cache_dir=cache, languages=[]))
+    return pack
 
 
 def repair() -> dict[str, Any]:

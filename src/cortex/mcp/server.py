@@ -25,7 +25,7 @@ def negotiate_protocol_version(client_version: Any) -> str:
     if isinstance(client_version, str) and client_version in SUPPORTED_PROTOCOL_VERSIONS:
         return client_version
     return PROTOCOL_VERSION
-SERVER_INFO = {"name": "cortex", "version": "0.10.0"}
+SERVER_INFO = {"name": "cortex", "version": "0.10.1"}
 SERVER_INSTRUCTIONS = (
     "Use Cortex before Grep or raw file reads. Start with cortex_query for a coding task "
     "and cortex_context before multi-file edits. Search with cortex_search_symbols for "

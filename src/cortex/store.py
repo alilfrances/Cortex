@@ -29,7 +29,9 @@ INGEST_LOCK_NAME = "ingest.lock"
 # an index stamped with an older version is re-ingested in full once, and the MCP
 # freshness check reports it stale.  1 = 0.10.0 (call-site contract on every
 # `calls` edge, C/C++/JS/TS/Go/Rust/Swift/Java/Ruby call edges, Ruby methods).
-GRAPH_FORMAT_VERSION = 1
+# 2 = tree-sitter-language-pack 1.22.1 grammars (an index must not mix files
+# parsed by two grammar versions).
+GRAPH_FORMAT_VERSION = 2
 INGEST_LOCK_TIMEOUT_SECONDS = 120.0
 _LOCK_POLL_SECONDS = 0.05
 
