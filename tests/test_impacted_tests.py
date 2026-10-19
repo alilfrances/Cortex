@@ -534,13 +534,15 @@ def test_coverage_breakdown_names_tests_per_changed_file_and_the_uncovered_ones(
 
     git("init", "-q")
     (repo / "covered.py").write_text("def covered():\n    return 1\n")
-    (repo / "orphan.py").write_text("def orphan():\n    return 1\n")
     (repo / "test_covered.py").write_text("from covered import covered\n\n\ndef test_it():\n    assert covered() == 1\n")
     git("add", "-A")
     git("commit", "-qm", "one")
+    (repo / "orphan.py").write_text("def orphan():\n    return 1\n")  # never changed together with a test
+    git("add", "-A")
+    git("commit", "-qm", "two")
     (repo / "covered.py").write_text("def covered():\n    return 2\n")
     (repo / "orphan.py").write_text("def orphan():\n    return 2\n")
-    git("commit", "-qam", "two")
+    git("commit", "-qam", "three")
     import os
     os.environ["CORTEX_DATA_DIR"] = str(tmp_path / "data")
     ingest_repository(repo)
