@@ -18,6 +18,7 @@ from pathlib import Path
 
 from cortex.ingest import ingest_repository
 from cortex.mcp.tools import call_tool
+from cortex.mcp import tools as tools_module
 from cortex.store import GRAPH_FORMAT_VERSION, CortexStore, default_db_path
 
 
@@ -82,7 +83,8 @@ def test_incremental_refresh_of_an_old_index_rebuilds_in_full(tmp_path: Path) ->
     assert "full_reindex_reason" not in again and "node_count" not in again
 
 
-def test_mcp_reports_an_old_index_stale_and_auto_refresh_upgrades_it(tmp_path: Path) -> None:
+def test_mcp_without_a_budget_auto_refreshes_an_old_index_in_full(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("CORTEX_TOOL_TIMEOUT_SECONDS", "0")
     repo = _repo(tmp_path)
     ingest_repository(repo)
     _downgrade_to_pre_010(repo)
@@ -92,6 +94,27 @@ def test_mcp_reports_an_old_index_stale_and_auto_refresh_upgrades_it(tmp_path: P
     assert payload["stale"] is False
     assert payload["auto_refreshed"]["full_reindex_reason"].startswith("index graph format 0")
     assert any(edge.target == "symbol:util.py:helper" for edge in _calls(repo))
+
+
+def test_mcp_with_a_budget_does_not_rebuild_in_full_inside_a_read_tool(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("CORTEX_TOOL_TIMEOUT_SECONDS", "30")
+    repo = _repo(tmp_path)
+    ingest_repository(repo)
+    _downgrade_to_pre_010(repo)
+    ingested: list[bool] = []
+    real = tools_module.ingest_repository
+    monkeypatch.setattr(tools_module, "ingest_repository", lambda *a, **k: ingested.append(True) or real(*a, **k))
+
+    payload = json.loads(call_tool("cortex_search_symbols", {"repo_path": str(repo), "query": "helper"})["content"][0]["text"])
+
+    assert ingested == []
+    assert payload["stale"] is True
+    assert "cortex_refresh" in payload["refresh_hint"]
+    assert "auto_refreshed" not in payload
+    # The explicit refresh does the rebuild.
+    refreshed = json.loads(call_tool("cortex_refresh", {"repo_path": str(repo), "mode": "full"})["content"][0]["text"])
+    assert refreshed["stale"] is False
+    assert CortexStore(default_db_path(repo)).get_repo_graph_version(repo) == GRAPH_FORMAT_VERSION
 
 
 def test_old_index_without_auto_refresh_is_reported_stale(tmp_path: Path, monkeypatch) -> None:

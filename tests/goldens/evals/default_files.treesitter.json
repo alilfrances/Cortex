@@ -59,9 +59,9 @@
     "files": [
       "app/cleanup.py",
       "app/session.py",
+      "app/audit.py",
       "app/auth.py",
       "app/orders.py",
-      "app/audit.py",
       "app/payments.py",
       "README.md",
       "docs/setup.md",
@@ -76,11 +76,11 @@
     "files": [
       "app/cleanup.py",
       "app/session.py",
+      "app/audit.py",
       "app/auth.py",
       "app/orders.py",
       "app/payments.py",
       "README.md",
-      "app/audit.py",
       "app/emailer.py",
       "app/retry.py",
       "docs/setup.md"
@@ -118,8 +118,8 @@
       "app/orders.py",
       "app/payments.py",
       "app/emailer.py",
-      "app/retry.py",
       "app/audit.py",
+      "app/retry.py",
       "app/session.py",
       "app/auth.py",
       "README.md",
@@ -135,11 +135,11 @@
       "app/orders.py",
       "app/payments.py",
       "app/emailer.py",
-      "README.md",
       "app/audit.py",
+      "app/retry.py",
+      "README.md",
       "app/auth.py",
       "app/cleanup.py",
-      "app/retry.py",
       "app/session.py",
       "docs/setup.md"
     ],
@@ -440,8 +440,8 @@
       "handlers/incidents.py",
       "tests/test_incidents.py",
       "config.py",
-      "server.py",
-      "integrations/slack.py"
+      "integrations/slack.py",
+      "server.py"
     ],
     "mode": "bfs",
     "repo": "web_service",
@@ -534,9 +534,9 @@
       "tests/test_incidents.py",
       "handlers/incidents.py",
       "storage/repository.py",
+      "integrations/slack.py",
       "server.py",
-      "config.py",
-      "integrations/slack.py"
+      "config.py"
     ],
     "mode": "bfs",
     "repo": "web_service",

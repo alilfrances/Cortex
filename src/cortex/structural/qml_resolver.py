@@ -46,7 +46,9 @@ def _local_component_candidates(name: str, source_path: str, known_paths: set[st
     direct = (directory / basename).as_posix()
     if direct in known_paths:
         return [direct]
-    return sorted(path for path in known_paths if PurePosixPath(path).name == basename)
+    from .regex_backend import _basename_index, _path_index
+
+    return sorted(_path_index("basename", known_paths, _basename_index).get(basename, ()))  # type: ignore[attr-defined]
 
 
 def _resolve_component(name: str, source_path: str, known_paths: set[str], index: QmlSymbolIndex) -> str | None:

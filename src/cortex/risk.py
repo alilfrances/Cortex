@@ -11,13 +11,15 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass, field
 import json
+import posixpath
 from pathlib import Path
 import re
 import subprocess
 from typing import Any, Iterable, Mapping, Sequence
 
+from .deadline import check_deadline
 from .gitutils import discover_repo_root
-from .impacted_tests import select_tests
+from .impacted_tests import select_tests_with_coverage
 from .report import _looks_like_src_test_pair
 from .store import CortexStore, default_db_path
 from .testpatterns import is_test_path
@@ -443,6 +445,29 @@ def _changed_paths(files: Sequence[DiffFile]) -> set[str]:
     return {item.path for item in files}
 
 
+_PAIR_INDEX_CACHE: list[Any] = []
+
+
+def _pair_index(paths: Iterable[str]) -> dict[str, list[tuple[str, str]]]:
+    """stem -> [(path, lowercase suffix)] over `paths`, built once per path set.
+
+    Pairing a header with its implementation used to scan every path for every
+    path, which made `cortex_risk` quadratic in file count. Sets are memoised by
+    identity and size (holding a strong reference, so a recycled `id()` can never
+    serve a stale index).
+    """
+    memoisable = isinstance(paths, (set, frozenset))
+    if memoisable and _PAIR_INDEX_CACHE and _PAIR_INDEX_CACHE[0] is paths and _PAIR_INDEX_CACHE[1] == len(paths):
+        return _PAIR_INDEX_CACHE[2]
+    index: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    for candidate in paths:
+        stem, suffix = posixpath.splitext(posixpath.basename(candidate))
+        index[stem].append((candidate, suffix.lower()))
+    if memoisable:
+        _PAIR_INDEX_CACHE[:] = [paths, len(paths), index]
+    return index
+
+
 def _pair_for(path: str, paths: Iterable[str]) -> list[str]:
     suffix = Path(path).suffix.lower()
     if suffix not in _CPP_HEADER_SUFFIXES | _CPP_IMPL_SUFFIXES:
@@ -450,8 +475,8 @@ def _pair_for(path: str, paths: Iterable[str]) -> list[str]:
     stem = Path(path).stem
     allowed = _CPP_IMPL_SUFFIXES if suffix in _CPP_HEADER_SUFFIXES else _CPP_HEADER_SUFFIXES
     return sorted(
-        candidate for candidate in paths
-        if candidate != path and Path(candidate).stem == stem and Path(candidate).suffix.lower() in allowed
+        candidate for candidate, candidate_suffix in _pair_index(paths).get(stem, ())
+        if candidate != path and candidate_suffix in allowed
     )
 
 
@@ -496,6 +521,7 @@ def _test_directives(changed: Sequence[DiffFile], all_paths: set[str]) -> list[d
     result: list[dict[str, str]] = []
     changed_paths = _changed_paths(changed)
     for item in changed:
+        check_deadline()
         if Path(item.path).suffix.lower() not in _SOURCE_SUFFIXES:
             continue
         if is_test_path(item.path):
@@ -521,7 +547,9 @@ def _qt_instantiation_directives(
             pair_map[path].add(partner)
     result: list[dict[str, str]] = []
     seen: set[tuple[str, str]] = set()
-    for edge in edges:
+    for index, edge in enumerate(edges):
+        if index % 5000 == 0:
+            check_deadline()
         if edge.layer != "STRUCTURAL" or edge.relation != "instantiates":
             continue
         source_node = nodes_by_id.get(edge.source)
@@ -739,11 +767,17 @@ def analyze_risk(
             }
         )
 
+    check_deadline()
     missing_tests = _test_directives(diff.files, all_paths)
+    check_deadline()
     qt_pairs = _pair_directives(diff.files, all_paths, graph_nodes, graph_edges)
+    check_deadline()
     qt_instantiations = _qt_instantiation_directives(diff.files, graph_nodes, graph_edges, all_paths)
+    check_deadline()
     qt_signal_sites = _qt_signal_site_directives(diff.files, graph_nodes, graph_edges)
+    check_deadline()
     build_system_misses = _build_reference_miss_directives(repo_root, diff.files, all_paths)
+    check_deadline()
 
     actionable_by_file: dict[str, int] = defaultdict(int)
     for record in missing_tests:
@@ -779,7 +813,7 @@ def analyze_risk(
 
     file_payloads.sort(key=lambda value: (-float(value["risk_score"]), str(value["path"]), str(value.get("previous_path", ""))))
     missing_cochange.sort(key=lambda value: (value["for"], -float(value["weight"]), value["path"]))
-    tests_to_run, tests_run_all, tests_run_all_reason = select_tests(
+    tests_to_run, tests_run_all, tests_run_all_reason, tests_by_changed_file, uncovered_changed_files = select_tests_with_coverage(
         diff.files,
         diff.raw_zero_context,
         graph_nodes,
@@ -828,6 +862,8 @@ def analyze_risk(
         "tests_to_run": tests_to_run,
         "tests_run_all": tests_run_all,
         "tests_run_all_reason": tests_run_all_reason,
+        "tests_by_changed_file": tests_by_changed_file,
+        "uncovered_changed_files": uncovered_changed_files,
     }
     return result
 
@@ -855,6 +891,7 @@ def truncate_risk_result(result: Mapping[str, Any], budget: int) -> dict[str, An
         # human-facing strings.  The unbudgeted result retains every bucket;
         # this order makes a small budget stable across Python versions.
         for key in (
+            "tests_by_changed_file",
             "missing_cochange",
             "missing_cochanges",
             "missing_tests",

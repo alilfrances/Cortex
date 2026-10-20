@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import contextlib
+import functools
 import re
 import sqlite3
 import threading
@@ -31,7 +32,8 @@ INGEST_LOCK_NAME = "ingest.lock"
 # `calls` edge, C/C++/JS/TS/Go/Rust/Swift/Java/Ruby call edges, Ruby methods).
 # 2 = tree-sitter-language-pack 1.22.1 grammars (an index must not mix files
 # parsed by two grammar versions).
-GRAPH_FORMAT_VERSION = 2
+# 3 = Qt Linguist `.ts` translation catalogues are text, not TypeScript code.
+GRAPH_FORMAT_VERSION = 3
 INGEST_LOCK_TIMEOUT_SECONDS = 120.0
 _LOCK_POLL_SECONDS = 0.05
 
@@ -63,14 +65,20 @@ def _make_private(path: Path, mode: int) -> None:
         pass
 
 
-def _split_identifier(token: str) -> list[str]:
-    normalized = re.sub(r'([a-z0-9])([A-Z])', r'\1 \2', token.replace('_', ' '))
-    return [part.lower() for part in re.findall(r'[A-Za-z0-9]+', normalized) if part]
+_CAMEL_SPLIT_RE = re.compile(r'([a-z0-9])([A-Z])')
+_ALNUM_RUN_RE = re.compile(r'[A-Za-z0-9]+')
+_IDENTIFIER_RUN_RE = re.compile(r'[A-Za-z0-9_]+')
+
+
+@functools.lru_cache(maxsize=65536)
+def _split_identifier(token: str) -> tuple[str, ...]:
+    normalized = _CAMEL_SPLIT_RE.sub(r'\1 \2', token.replace('_', ' '))
+    return tuple(part.lower() for part in _ALNUM_RUN_RE.findall(normalized) if part)
 
 
 def _search_tokens(text: str) -> list[str]:
     tokens: list[str] = []
-    for raw in re.findall(r'[A-Za-z0-9_]+', text):
+    for raw in _IDENTIFIER_RUN_RE.findall(text):
         tokens.extend(_split_identifier(raw))
     return list(dict.fromkeys(tokens))
 
@@ -1290,6 +1298,41 @@ class CortexStore:
             )
             for row in rows
         ]
+
+    def symbols_by_label(self, repo_path: Path, label: str, kind: str | None = None) -> list[GraphNode]:
+        """Every symbol whose label is exactly `label` (no ranking, no limit)."""
+        sql = (
+            "SELECT node_id, kind, label, source_ref, granularity, signature, span_start, span_end, metadata_json "
+            "FROM graph_nodes WHERE repo_path = ? AND granularity = 'symbol' AND label = ?"
+        )
+        params: list[Any] = [str(repo_path.resolve()), label]
+        if kind is not None:
+            sql += " AND kind = ?"
+            params.append(kind)
+        rows = self.connection.execute(sql + " ORDER BY node_id", tuple(params)).fetchall()
+        return [
+            GraphNode(
+                node_id=row['node_id'],
+                kind=row['kind'],
+                label=row['label'],
+                source_ref=row['source_ref'],
+                granularity=row['granularity'],
+                signature=row['signature'],
+                span_start=row['span_start'],
+                span_end=row['span_end'],
+                metadata=json.loads(row['metadata_json']),
+            )
+            for row in rows
+        ]
+
+    def parser_backend_counts(self, repo_path: Path) -> dict[str, int]:
+        """File nodes per recorded `parser_backend`, without loading the graph."""
+        rows = self.connection.execute(
+            "SELECT json_extract(metadata_json, '$.parser_backend') AS backend, COUNT(*) AS n "
+            "FROM graph_nodes WHERE repo_path = ? AND kind = 'file' GROUP BY backend",
+            (str(repo_path.resolve()),),
+        ).fetchall()
+        return {str(row["backend"]): int(row["n"]) for row in sorted(rows, key=lambda r: str(r["backend"])) if row["backend"]}
 
     def fetch_graph(self, repo_path: Path) -> tuple[list[GraphNode], list[GraphEdge]]:
         repo_key = str(repo_path.resolve())

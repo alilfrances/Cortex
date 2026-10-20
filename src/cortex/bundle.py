@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import hashlib
 import math
 import re
@@ -8,6 +9,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from .config import load_config
+from .deadline import check_deadline
 from .fusion import rrf_fuse
 from .gitutils import discover_repo_root
 from .models import BundleItem, GraphEdge, GraphNode, RetrievalBundle
@@ -42,6 +44,23 @@ ITEM_BUDGET_SHARE = 0.4
 SYMBOL_FILE_SCORE_SHARE = 0.25
 # Test/eval/fixture files are demoted unless the task itself is about them.
 AUX_PATH_DEMOTION = 0.5
+# Translation catalogues and other locale data match almost any task word (they
+# restate the UI text) but never implement behaviour, so they are demoted harder
+# unless the task is about translation or locales.
+LOCALE_PATH_DEMOTION = 0.25
+# Files connected by a resolved call or inheritance edge to one of the best-matching
+# files are lifted to at least this score (scaled by how strong the match is), so a
+# base class, a callee or a caller whose own text shares no word with the task can
+# still enter the bundle. Kept below PATH_MATCH_BONUS so it never beats a real
+# name or path hit.
+CALL_EXPANSION_BONUS = 20.0
+CALL_EXPANSION_SEEDS = 8
+LOCALE_PATH_RE = re.compile(r'(^|/)(i18n|l10n|locales?|translations?)(/|$)')
+LOCALE_SUFFIXES = frozenset({'.ts', '.po', '.pot', '.xlf', '.xliff', '.qm'})
+LOCALE_INTENT_TERMS = {
+    'translation', 'translations', 'translate', 'translated', 'locale', 'locales', 'i18n', 'l10n',
+    'localization', 'localisation', 'language', 'languages',
+}
 AUX_PATH_RE = re.compile(r'(^|/)(tests?|testing|evals?|fixtures?|examples?|benchmarks?|samples?)(/|$)')
 AUX_INTENT_TERMS = {
     'test', 'tests', 'testing', 'eval', 'evals', 'evaluation', 'fixture', 'fixtures',
@@ -101,6 +120,36 @@ def _language_hint_suffixes(task: str, task_terms: set[str]) -> frozenset[str]:
     if 'c++' in task.lower():
         suffixes.update(LANGUAGE_HINT_SUFFIXES['cplusplus'])
     return frozenset(suffixes)
+
+
+def _is_locale_source(path: str, kind: str) -> bool:
+    """A locale/translation file: under an i18n-style directory, or a translation
+    catalogue by extension (`.ts` only when it was indexed as text, i.e. Qt Linguist
+    XML rather than TypeScript)."""
+    suffix = Path(path).suffix.lower()
+    if suffix == '.ts':
+        return kind != 'code'
+    return bool(LOCALE_PATH_RE.search(path)) or suffix in LOCALE_SUFFIXES
+
+
+def _call_graph_file_neighbors(nodes: list[GraphNode], edges: list[GraphEdge]) -> dict[str, set[str]]:
+    """File -> files linked to it by a resolved `calls` or `inherits` edge.
+
+    Only edges whose endpoints are both known symbols count; `name:`/`module:`
+    targets are unresolved and same-file pairs add nothing.
+    """
+    file_of = {node.node_id: node.source_ref for node in nodes if node.granularity == 'symbol'}
+    neighbors: defaultdict[str, set[str]] = defaultdict(set)
+    for edge in edges:
+        if edge.relation not in ('calls', 'inherits'):
+            continue
+        source_file = file_of.get(edge.source)
+        target_file = file_of.get(edge.target)
+        if source_file is None or target_file is None or source_file == target_file:
+            continue
+        neighbors[source_file].add(target_file)
+        neighbors[target_file].add(source_file)
+    return neighbors
 
 
 def _is_aux_path(path: str) -> bool:
@@ -368,14 +417,20 @@ def _skeleton_item(
     )
 
 
-def _split_identifier(token: str) -> list[str]:
-    normalized = re.sub(r'([a-z0-9])([A-Z])', r'\1 \2', token.replace('_', ' '))
-    return [part.lower() for part in re.findall(r'[A-Za-z0-9]+', normalized) if part]
+_CAMEL_SPLIT_RE = re.compile(r'([a-z0-9])([A-Z])')
+_ALNUM_RUN_RE = re.compile(r'[A-Za-z0-9]+')
+_IDENTIFIER_RUN_RE = re.compile(r'[A-Za-z0-9_]+')
+
+
+@functools.lru_cache(maxsize=65536)
+def _split_identifier(token: str) -> tuple[str, ...]:
+    normalized = _CAMEL_SPLIT_RE.sub(r'\1 \2', token.replace('_', ' '))
+    return tuple(part.lower() for part in _ALNUM_RUN_RE.findall(normalized) if part)
 
 
 def _tokenize_text(text: str, *, drop_stopwords: bool = False) -> set[str]:
     terms: set[str] = set()
-    for token in re.findall(r'[A-Za-z0-9_]+', text):
+    for token in _IDENTIFIER_RUN_RE.findall(text):
         for part in _split_identifier(token):
             if drop_stopwords and part in STOPWORDS:
                 continue
@@ -536,20 +591,32 @@ def generate_bundle(
     output_format: str = 'md',
     rank: str = 'pagerank',
     hotspot_boost: bool = False,
+    *,
+    sources: list | None = None,
+    graph: tuple[list[GraphNode], list[GraphEdge]] | None = None,
 ) -> str | dict:
+    """Build a retrieval bundle for `task`.
+
+    `sources` and `graph` let a caller that already loaded them (the MCP query
+    tool needs both again afterwards) avoid a second full read of the database.
+    """
     repo_root = discover_repo_root(repo_path)
     store = CortexStore(db_path or default_db_path(repo_root))
-    sources = store.fetch_sources(repo_root)
+    if sources is None:
+        sources = store.fetch_sources(repo_root)
     commits = store.fetch_commits(repo_root)
-    nodes, edges = store.fetch_graph(repo_root)
+    nodes, edges = graph if graph is not None else store.fetch_graph(repo_root)
 
     config = load_config(repo_root)
     task_terms = _tokenize_query(task, config.synonyms)
     noise_terms = frozenset(
         term for identifier in config.noise_identifiers for term in _tokenize_text(identifier)
     )
+    check_deadline()
     term_weights = _term_weights(task_terms, sources)
+    check_deadline()
     demote_aux = not (task_terms & AUX_INTENT_TERMS)
+    demote_locale = not (task_terms & LOCALE_INTENT_TERMS)
     hotspot_by_path: dict[str, dict] = {}
     for node in nodes:
         if node.kind != 'file' or not isinstance(node.metadata.get('hotspot'), dict):
@@ -576,7 +643,9 @@ def generate_bundle(
 
     newest_commit = max((c.authored_at for c in commits), default=0)
     base_scores: dict[str, float] = {}
-    for source in sources:
+    for position, source in enumerate(sources):
+        if position % 500 == 0:
+            check_deadline()
         recency_weight = 0.0
         if newest_commit:
             recency_weight = max(0.0, 5.0 - math.log2(max(1, newest_commit - int(source.modified_at) + 1)))
@@ -673,6 +742,8 @@ def generate_bundle(
         score = base_scores[source.path] + fusion_scores.get(source.path, 0.0) * FUSION_SCORE_MULTIPLIER
         if demote_aux and _is_aux_path(source.path):
             score *= AUX_PATH_DEMOTION
+        if demote_locale and _is_locale_source(source.path, source.kind):
+            score *= LOCALE_PATH_DEMOTION
         if lang_suffixes and score > 0:
             # Multiplicative so unrelated files (score 0) are never seeded by
             # language alone; only reorders files the task already matches.
@@ -683,6 +754,25 @@ def generate_bundle(
                 score *= LANG_MISMATCH_DEMOTION
         source_scores[source.path] = score
 
+    check_deadline()
+    top_score = max(source_scores.values(), default=0.0)
+    if top_score > 0:
+        file_neighbors = _call_graph_file_neighbors(nodes, edges)
+        seeds = sorted(
+            ((path, score) for path, score in source_scores.items() if score > 0),
+            key=lambda item: (-item[1], item[0]),
+        )[:CALL_EXPANSION_SEEDS]
+        kind_by_path = {source.path: source.kind for source in sources}
+        for path, score in seeds:
+            bonus = CALL_EXPANSION_BONUS * (score / top_score)
+            for neighbor in sorted(file_neighbors.get(path, ())):
+                if neighbor not in source_scores or source_scores[neighbor] >= bonus:
+                    continue
+                if demote_aux and _is_aux_path(neighbor):
+                    continue
+                if demote_locale and _is_locale_source(neighbor, kind_by_path.get(neighbor, 'code')):
+                    continue
+                source_scores[neighbor] = bonus
     seed_scores = {f'file:{path}': score for path, score in source_scores.items() if score > 0}
     if rank == 'bfs':
         proximity = _bfs_proximity(set(seed_scores), adj, max_depth=2)
@@ -693,9 +783,12 @@ def generate_bundle(
     else:
         raise ValueError(f'Unknown rank mode: {rank}')
 
+    check_deadline()
     candidates: list[BundleItem] = []
 
-    for source in sources:
+    for position, source in enumerate(sources):
+        if position % 500 == 0:
+            check_deadline()
         file_node_id = f'file:{source.path}'
         keyword_score = source_scores[source.path]
         graph_bonus = proximity.get(file_node_id, 0.0)
@@ -737,7 +830,9 @@ def generate_bundle(
 
     source_by_path = {source.path: source for source in sources}
     symbol_items_by_path: defaultdict[str, list[BundleItem]] = defaultdict(list)
-    for path, path_symbols in symbols_by_path.items():
+    for position, (path, path_symbols) in enumerate(symbols_by_path.items()):
+        if position % 500 == 0:
+            check_deadline()
         source = source_by_path.get(path)
         if source is None or source.kind != 'code':
             continue
@@ -806,6 +901,8 @@ def generate_bundle(
     for item in candidates:
         if item.score <= 0 or item.item_id in selected_ids:
             continue
+        if item.token_count <= 0:
+            continue  # an empty file or span adds nothing to a bundle
         allowed = min(budget - total_tokens, item_cap)
         if item.kind == 'symbol':
             if item.path in files_fully_selected:

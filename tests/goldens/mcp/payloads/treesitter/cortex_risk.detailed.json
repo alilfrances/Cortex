@@ -104,10 +104,15 @@
   "staged": false,
   "stale": false,
   "status": "ok",
+  "tests_by_changed_file": {},
   "tests_run_all": true,
   "tests_run_all_reason": "no test files are indexed",
   "tests_to_run": [],
   "truncated": false,
+  "uncovered_changed_files": [
+    "qml/Main.qml",
+    "src/DeviceManager.cpp"
+  ],
   "unindexed": false,
   "unindexed_files": []
 }

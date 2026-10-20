@@ -42,9 +42,11 @@ TOP_LEVEL_KEYS = [
     "score_formula",
     "staged",
     "status",
+    "tests_by_changed_file",  # 0.11 (additive)
     "tests_run_all",  # Task 10 (additive)
     "tests_run_all_reason",  # Task 10 (additive)
     "tests_to_run",  # Task 10 (additive)
+    "uncovered_changed_files",  # 0.11 (additive)
     "unindexed",
     "unindexed_files",
 ]

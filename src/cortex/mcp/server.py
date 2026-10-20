@@ -7,7 +7,7 @@ import sys
 import tempfile
 import threading
 import time
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any, TextIO
 
@@ -25,7 +25,7 @@ def negotiate_protocol_version(client_version: Any) -> str:
     if isinstance(client_version, str) and client_version in SUPPORTED_PROTOCOL_VERSIONS:
         return client_version
     return PROTOCOL_VERSION
-SERVER_INFO = {"name": "cortex", "version": "0.10.1"}
+SERVER_INFO = {"name": "cortex", "version": "0.11.0"}
 SERVER_INSTRUCTIONS = (
     "Use Cortex before Grep or raw file reads. Start with cortex_query for a coding task "
     "and cortex_context before multi-file edits. Search with cortex_search_symbols for "
@@ -47,7 +47,11 @@ def _error(request_id: Any, code: int, message: str) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": message}}
 
 
-def _handle(frame: dict[str, Any], cancel: threading.Event | None = None) -> dict[str, Any] | None:
+def _handle(
+    frame: dict[str, Any],
+    cancel: threading.Event | None = None,
+    progress: Callable[[str, int, int], None] | None = None,
+) -> dict[str, Any] | None:
     method = frame.get("method")
     request_id = frame.get("id")
     params = frame.get("params") or {}
@@ -71,7 +75,8 @@ def _handle(frame: dict[str, Any], cancel: threading.Event | None = None) -> dic
         arguments = params.get("arguments") or {}
         if cancel is None:
             return _response(request_id, call_tool(str(name), arguments))
-        return _response(request_id, call_tool(str(name), arguments, cancel=cancel, request_id=request_id))
+        extra = {} if progress is None else {"progress": progress}
+        return _response(request_id, call_tool(str(name), arguments, cancel=cancel, request_id=request_id, **extra))
     if request_id is None:
         return None
     return _error(request_id, -32601, f"Method not found: {method}")
@@ -336,7 +341,7 @@ def _run_frame(frame: Any, state: _ServerState, writer: _Writer, activity: _Acti
 
     response: dict[str, Any] | None
     try:
-        response = _handle(frame, cancel)
+        response = _handle(frame, cancel, _progress_emitter(frame, writer))
     except Exception as exc:
         print(f"cortex mcp server error: {exc}", file=sys.stderr)
         answerable = request_id is not None or not is_dict
@@ -359,6 +364,51 @@ def _run_frame(frame: Any, state: _ServerState, writer: _Writer, activity: _Acti
     if response is None or suppress:
         return True
     return writer.send(response)
+
+
+_PROGRESS_STAGES = ("scan", "parse", "resolve", "cochange", "write")
+_PROGRESS_MIN_INTERVAL_SECONDS = 1.0
+
+
+def _progress_emitter(frame: Any, writer: _Writer) -> Callable[[str, int, int], None] | None:
+    """A throttled `notifications/progress` sender, when the client asked for one.
+
+    The client opts in with `params._meta.progressToken`. Progress values must
+    increase, so they are the stage index plus the fraction done within the stage;
+    a stage change is always sent, repeated reports within a stage at most once a
+    second.
+    """
+    params = frame.get("params") if isinstance(frame, dict) else None
+    meta = params.get("_meta") if isinstance(params, dict) else None
+    token = meta.get("progressToken") if isinstance(meta, dict) else None
+    if token is None:
+        return None
+    last_stage = ""
+    last_sent = 0.0
+
+    def emit(stage: str, done: int, total: int) -> None:
+        nonlocal last_stage, last_sent
+        now = time.monotonic()
+        if stage == last_stage and now - last_sent < _PROGRESS_MIN_INTERVAL_SECONDS:
+            return
+        last_stage, last_sent = stage, now
+        index = _PROGRESS_STAGES.index(stage) if stage in _PROGRESS_STAGES else 0
+        fraction = (done / total) if total else 0.0
+        message = f"{stage} {done}/{total}" if total else stage
+        writer.send(
+            {
+                "jsonrpc": "2.0",
+                "method": "notifications/progress",
+                "params": {
+                    "progressToken": token,
+                    "progress": round(index + min(1.0, fraction), 4),
+                    "total": float(len(_PROGRESS_STAGES)),
+                    "message": message,
+                },
+            }
+        )
+
+    return emit
 
 
 def main() -> int:

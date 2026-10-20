@@ -32,6 +32,7 @@ import re
 from typing import Any, Iterable, Mapping, Sequence
 
 from .callresolve import _base_label
+from .deadline import check_deadline
 from .models import GraphEdge
 from .report import _looks_like_src_test_pair
 from .testpatterns import is_test_path, test_base_name
@@ -200,6 +201,7 @@ class _Selection:
     def __init__(self) -> None:
         self.hits: dict[str, dict[str, _Hit]] = defaultdict(dict)
         self.covered: set[str] = set()  # changed files at least one test was selected for
+        self.tests_for: dict[str, set[str]] = defaultdict(set)  # changed file -> tests selected for it
 
     def add(self, test: str, tier: str, score: float, reason: str, *, for_path: str | None) -> None:
         previous = self.hits[test].get(tier)
@@ -207,6 +209,7 @@ class _Selection:
             self.hits[test][tier] = _Hit(score, reason)
         if for_path is not None:
             self.covered.add(for_path)
+            self.tests_for[for_path].add(test)
 
     def items(self) -> list[dict[str, Any]]:
         result = []
@@ -488,6 +491,26 @@ def select_tests(
     index_status: str,
 ) -> tuple[list[dict[str, Any]], bool, str]:
     """Return ``(tests_to_run, tests_run_all, tests_run_all_reason)``."""
+    tests_to_run, run_all, reason, _by_file, _uncovered = select_tests_with_coverage(
+        changed, raw_zero_context, nodes, edges,
+        all_paths=all_paths, indexed_paths=indexed_paths, cochange=cochange, index_status=index_status,
+    )
+    return tests_to_run, run_all, reason
+
+
+def select_tests_with_coverage(
+    changed: Sequence[Any],
+    raw_zero_context: str,
+    nodes: Sequence[Any],
+    edges: Sequence[Any],
+    *,
+    all_paths: Iterable[str],
+    indexed_paths: set[str],
+    cochange: Mapping[str, Sequence[tuple[str, float, Any]]],
+    index_status: str,
+) -> tuple[list[dict[str, Any]], bool, str, dict[str, list[str]], list[str]]:
+    """`select_tests` plus which tests were chosen for each changed file and which
+    reviewable changed files no test reaches (what the run-all reason refers to)."""
     index = _GraphIndex(nodes, edges)
     lines_by_path = parse_changed_lines(raw_zero_context)
     known_paths = set(all_paths) | set(indexed_paths)
@@ -497,6 +520,7 @@ def select_tests(
     reviewable: list[str] = []  # changed files that must be covered by some tier
 
     for item in sorted(changed, key=lambda value: value.path):
+        check_deadline()
         path = item.path
         if item.status == "D":
             if is_runnable_test(path):
@@ -554,7 +578,9 @@ def select_tests(
 
         # (c) filename pairing
         if not is_test_path(path):
-            for candidate in sorted(known_paths):
+            for position, candidate in enumerate(sorted(known_paths)):
+                if position % 5000 == 0:
+                    check_deadline()
                 if is_runnable_test(candidate) and _looks_like_src_test_pair(path, candidate):
                     selection.add(candidate, "pair", PAIR_SCORE, f"test file name pairs with {path}", for_path=path)
 
@@ -563,6 +589,8 @@ def select_tests(
         if test in deleted_tests:
             del selection.hits[test]
     tests_to_run = selection.items()
+    tests_by_changed_file = {path: sorted(tests) for path, tests in sorted(selection.tests_for.items())}
+    uncovered_changed_files = sorted(path for path in reviewable if path not in selection.covered)
 
     reason = ""
     build_changes = sorted(item.path for item in changed if is_build_config(item.path))
@@ -580,7 +608,7 @@ def select_tests(
         uncovered = [path for path in reviewable if path not in selection.covered]
         if uncovered:
             reason = f"no test reaches changed file {uncovered[0]}"
-    return tests_to_run, bool(reason), reason
+    return tests_to_run, bool(reason), reason, tests_by_changed_file, uncovered_changed_files
 
 
 __all__ = [
@@ -595,4 +623,5 @@ __all__ = [
     "is_runnable_test",
     "parse_changed_lines",
     "select_tests",
+    "select_tests_with_coverage",
 ]

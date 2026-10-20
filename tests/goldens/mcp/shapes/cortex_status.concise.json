@@ -16,6 +16,7 @@
     "total_completed",
     "total_deadline_exceeded",
     "total_failed",
+    "total_soft_deadline",
     "uptime_seconds"
   ]
 }

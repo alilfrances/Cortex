@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import difflib
 import hashlib
 import json
 import os
@@ -21,9 +22,9 @@ from ..references import find_references
 from ..report import build_report_data, render_report
 from ..hotspots import top_hotspots
 from ..risk import analyze_risk, truncate_risk_result
-from ..store import GRAPH_FORMAT_VERSION, CortexStore, IngestLockTimeout, default_db_path, ingest_lock
+from ..store import GRAPH_FORMAT_VERSION, CortexStore, IngestLockTimeout, _search_tokens, default_db_path, ingest_lock
 from ..tokenizer import count_text_tokens, truncate_text_to_budget
-from .status import REGISTRY
+from .status import REGISTRY, RequestStatus
 
 
 TOOL_DEFINITIONS: list[dict[str, Any]] = [
@@ -98,6 +99,10 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "type": "object",
             "properties": {
                 "repo_path": {"type": "string"},
+                "path": {
+                    "type": "string",
+                    "description": "Repo-relative file or directory; only symbols defined there are reported (references are still searched repo-wide).",
+                },
                 "budget": {"type": "integer", "default": 2000},
                 "response_format": {"type": "string", "enum": ["concise", "detailed"], "default": "concise"},
             },
@@ -515,10 +520,25 @@ def _staleness(store: CortexStore, repo_root: Path, *, bypass_ttl: bool = False)
     }
 
 
+def _needs_full_rebuild(store: CortexStore, repo_root: Path) -> bool:
+    try:
+        return store.get_repo_graph_version(repo_root) < GRAPH_FORMAT_VERSION
+    except Exception:
+        return False
+
+
 def _ensure_fresh(store: CortexStore, repo_root: Path) -> dict[str, Any]:
     """Auto-refresh a stale index (incremental) before answering, unless disabled."""
     status = _staleness(store, repo_root)
     if not status["stale"] or os.environ.get("CORTEX_AUTO_REFRESH", "1") == "0":
+        return status
+    if resolve_budget_seconds() > 0 and _needs_full_rebuild(store, repo_root):
+        # A full rebuild takes minutes on a large repository, far past any call
+        # budget; answer from the current index and let the caller ask for it.
+        status["refresh_hint"] = (
+            "The index needs a full rebuild (older graph format); call cortex_refresh. "
+            "This answer comes from the existing index."
+        )
         return status
     try:
         with ingest_lock(repo_root):
@@ -763,21 +783,27 @@ def _call_query(arguments: dict[str, Any]) -> dict[str, Any]:
             _cache_set(store, repo_root, cache_key, payload)
     else:
         task = str(arguments.get("task", ""))
+        # Load sources and the graph once: the bundle needs them, and so does the
+        # `why` annotation below.
+        all_sources = store.fetch_sources(repo_root)
+        graph = store.fetch_graph(repo_root)
         bundle = generate_bundle(
             repo_path=repo_root,
             task=task,
             budget=int(arguments.get("budget", 4000)),
             output_format="json",
             hotspot_boost=bool(arguments.get("hotspot_boost", False)),
+            sources=all_sources,
+            graph=graph,
         )
         assert isinstance(bundle, dict)
         terms = _tokenize_query(task)
         seed_paths = {
             source.path
-            for source in store.fetch_sources(repo_root)
+            for source in all_sources
             if any(term in f"{source.path}\n{source.content}".lower() for term in terms)
         }
-        _nodes, edges = store.fetch_graph(repo_root)
+        edges = graph[1]
         for item in bundle.get("items", []):
             item["why"] = _bundle_why(item, terms, seed_paths, edges)
         bundle["token_stats"] = _query_token_stats(bundle, arguments)
@@ -797,6 +823,8 @@ _OVERVIEW_DEFAULT_BUDGET = 2000
 _CONFIDENCE_PRIORITY = {"high": 0, "medium": 1, "low": 2}
 
 
+_MIN_FINDING_TOKENS = 8
+
 _PARTIAL_ANALYSIS_NOTE = (
     "Analysis stopped at the time budget, so dead-code findings are incomplete. "
     "Set CORTEX_TOOL_TIMEOUT_SECONDS to raise it (0 disables the budget)."
@@ -806,6 +834,10 @@ _PARTIAL_ANALYSIS_NOTE = (
 # single-slot overview-analysis memo here instead of threading them through
 # every helper. Both are reset when the outer call finishes.
 _current_cancel: threading.Event | None = None
+_current_request: RequestStatus | None = None
+# Optional (stage, done, total) callback the server installs when the client asked
+# for progress notifications on this request.
+_progress_sink: Callable[[str, int, int], None] | None = None
 _in_tool_call = False
 _analysis_memo: tuple[tuple[str, str], dict[str, Any]] | None = None
 
@@ -818,10 +850,16 @@ def _analysis_should_stop() -> Callable[[], bool]:
     cancel = _current_cancel
     deadline = current_deadline()
 
+    request = _current_request
+
     def should_stop() -> bool:
         if cancel is not None and cancel.is_set():
             return True
-        return deadline is not None and deadline.expired
+        if deadline is not None and deadline.expired:
+            if request is not None:
+                request.soft_deadline = True
+            return True
+        return False
 
     return should_stop
 
@@ -946,7 +984,10 @@ def _fit_overview_report(
         )
         return count_text_tokens(json.dumps(rendered, sort_keys=True)) <= budget
 
-    lo, hi, best = 0, len(findings), 0
+    # Every included finding renders to a report line of well over eight tokens,
+    # so no more than budget // 8 can ever fit; bounding the search there keeps
+    # the probes small when there are tens of thousands of findings.
+    lo, hi, best = 0, min(len(findings), budget // _MIN_FINDING_TOKENS + 1), 0
     while lo <= hi:
         mid = (lo + hi) // 2
         if _fits(mid):
@@ -975,12 +1016,7 @@ def _overview_detailed_capabilities(store: CortexStore, repo_root: Path) -> dict
     try:
         from ..runtime import public_capability
         runtime_payload = public_capability()
-        backend_counts: dict[str, int] = {}
-        for file_node in store.fetch_graph(repo_root)[0]:
-            if file_node.kind == "file" and file_node.metadata.get("parser_backend"):
-                key = str(file_node.metadata["parser_backend"])
-                backend_counts[key] = backend_counts.get(key, 0) + 1
-        runtime_payload = {**runtime_payload, "backend_counts": dict(sorted(backend_counts.items()))}
+        runtime_payload = {**runtime_payload, "backend_counts": store.parser_backend_counts(repo_root)}
     except Exception:
         runtime_payload = {"ready": False, "degraded_reason": "runtime status unavailable"}
     return {"semantic": semantic_payload, "language_runtime": runtime_payload}
@@ -1693,7 +1729,7 @@ def _call_context(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def _call_risk(arguments: dict[str, Any]) -> dict[str, Any]:
-    """Run risk with one shared freshness check and no query cache."""
+    """Run risk with one shared freshness check; results are cached per diff."""
     repo_root = _repo_root(arguments)
     db_path = default_db_path(repo_root)
     store = CortexStore(db_path) if db_path.exists() else None
@@ -1713,6 +1749,13 @@ def _call_risk(arguments: dict[str, Any]) -> dict[str, Any]:
             "index_age_seconds": 0,
         }
         graph_args = {"nodes": None, "edges": None}
+    response_format = _response_format(arguments)
+    cache_key = None
+    if store is not None:
+        cache_key = _risk_cache_key(repo_root, status["current_fingerprint"], arguments)
+        cached = _cache_get(store, repo_root, cache_key) if cache_key else None
+        if cached is not None:
+            return _content(_format_payload(cached, status, response_format, cached=True))
     result = analyze_risk(
         repo_root,
         arguments.get("range"),
@@ -1721,8 +1764,103 @@ def _call_risk(arguments: dict[str, Any]) -> dict[str, Any]:
         **graph_args,
     )
     result = truncate_risk_result(result, int(arguments.get("budget", 2000)))
-    response_format = _response_format(arguments)
+    if store is not None and cache_key and result.get("status") != "error":
+        _cache_set(store, repo_root, cache_key, result)
     return _content(_format_payload(result, status, response_format), is_error=result.get("status") == "error")
+
+
+def _risk_cache_key(repo_root: Path, fingerprint: str, arguments: dict[str, Any]) -> str | None:
+    """Cache key for a risk call: index fingerprint, arguments and the diff itself.
+
+    The diff text is hashed because the range (default `HEAD~1..HEAD`) and the
+    staged changes can change without any indexed file changing, so the index
+    fingerprint alone would serve a stale answer. None (do not cache) when git
+    cannot produce the diff.
+    """
+    try:
+        from ..risk import _diff_args, _git
+
+        staged = bool(arguments.get("staged", False))
+        # The same defaulting analyze_risk applies, so the hashed diff is the analysed one.
+        range_spec = arguments.get("range") or (None if staged else "HEAD~1..HEAD")
+        diff = _git(repo_root, _diff_args(range_spec, staged, "diff", "--unified=0", "--no-color", "--no-ext-diff"))
+    except Exception:
+        return None
+    digest = hashlib.sha256(diff).hexdigest()
+    return _cache_key(fingerprint, "cortex_risk", {**arguments, "diff_sha256": digest})
+
+
+_DEAD_CODE_ANALYSIS_CACHE_VERSION = 1
+
+
+def _normalise_scope(raw: Any) -> str:
+    """Repo-relative path with forward slashes and no leading `./` or trailing `/`; '' means the whole repo."""
+    value = str(raw or "").strip().replace("\\", "/")
+    while value.startswith("./"):
+        value = value[2:]
+    value = value.rstrip("/")
+    return "" if value == "." else value
+
+
+def _in_scope(path: str, scope: str) -> bool:
+    return not scope or path == scope or path.startswith(scope + "/")
+
+
+def _dead_code_analysis(
+    store: CortexStore, repo_root: Path, fingerprint: str, budget: int, scope: str = ""
+) -> dict[str, Any]:
+    """Dead-code findings for the current index, reusing earlier work.
+
+    The overview analysis already runs `analyze_dead_code` at the default
+    reference budget and caches it under the same fingerprint, so a dead-code
+    call after an overview (or a repeat call) costs nothing; a scoped call
+    filters such a cached repo-wide result. A partial result is never cached.
+    """
+    reference_budget = max(2000, budget)
+
+    def scoped(findings: list[dict[str, Any]]) -> dict[str, Any]:
+        kept = [item for item in findings if _in_scope(str(item.get("file", "")), scope)]
+        return {"repo_path": str(repo_root), "findings": kept, "partial": False}
+
+    if reference_budget == 2000:
+        cached = _cache_get(store, repo_root, _overview_analysis_cache_key(fingerprint))
+        if (
+            isinstance(cached, dict)
+            and cached.get("version") == _OVERVIEW_ANALYSIS_CACHE_VERSION
+            and _is_overview_analysis(cached.get("analysis"))
+            and not cached["analysis"].get("dead_code_partial", False)
+        ):
+            return scoped(list(cached["analysis"]["dead_code"]))
+    full_key = _cache_key(
+        fingerprint, "cortex_dead_code_analysis", {"budget": reference_budget, "v": _DEAD_CODE_ANALYSIS_CACHE_VERSION}
+    )
+    cached = _cache_get(store, repo_root, full_key)
+    if isinstance(cached, dict) and isinstance(cached.get("findings"), list):
+        return scoped(cached["findings"])
+    key = full_key
+    if scope:
+        key = _cache_key(
+            fingerprint,
+            "cortex_dead_code_analysis",
+            {"budget": reference_budget, "v": _DEAD_CODE_ANALYSIS_CACHE_VERSION, "scope": scope},
+        )
+        cached = _cache_get(store, repo_root, key)
+        if isinstance(cached, dict) and isinstance(cached.get("findings"), list):
+            return {"repo_path": str(repo_root), "findings": cached["findings"], "partial": False}
+    nodes, edges = store.fetch_graph(repo_root)
+    result = analyze_dead_code(
+        repo_root,
+        db_path=store.db_path,
+        store=store,
+        nodes=nodes,
+        edges=edges,
+        budget=budget,
+        should_stop=_analysis_should_stop(),
+        path_prefix=scope or None,
+    )
+    if not result.get("partial"):
+        _cache_set(store, repo_root, key, {"findings": result["findings"]})
+    return result
 
 
 def _call_dead_code(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -1732,22 +1870,28 @@ def _call_dead_code(arguments: dict[str, Any]) -> dict[str, Any]:
         return _content(error, is_error=True)
     assert store is not None
     status = _ensure_fresh(store, repo_root)
-    nodes, edges = store.fetch_graph(repo_root)
-    result = analyze_dead_code(
-        repo_root,
-        db_path=store.db_path,
-        store=store,
-        nodes=nodes,
-        edges=edges,
-        budget=int(arguments.get("budget", 2000)),
-        should_stop=_analysis_should_stop(),
-    )
-    result = truncate_dead_code_result(result, int(arguments.get("budget", 2000)))
+    response_format = _response_format(arguments)
+    budget = int(arguments.get("budget", 2000))
+    scope = _normalise_scope(arguments.get("path"))
+    if scope and not any(_in_scope(path, scope) for path in store.fetch_source_stats(repo_root)):
+        return _content(
+            _format_payload(
+                {
+                    "error": "unknown_path",
+                    "message": f"No indexed file or directory matches {scope!r}.",
+                    "hint": "Path must be a repo-relative file or directory as stored by cortex_refresh.",
+                },
+                status,
+                response_format,
+            ),
+            is_error=True,
+        )
+    result = _dead_code_analysis(store, repo_root, status["current_fingerprint"], budget, scope)
+    result = truncate_dead_code_result(result, budget)
     if result.get("partial"):
         result["note"] = _PARTIAL_ANALYSIS_NOTE
     else:
         result.pop("partial", None)
-    response_format = _response_format(arguments)
     return _content(_format_payload(result, status, response_format))
 
 
@@ -1781,17 +1925,86 @@ def _symbol_match_payload(node: Any) -> dict[str, Any]:
     }
 
 
+_IMPL_SUFFIXES = (".c", ".cc", ".cpp", ".cxx", ".m", ".mm")
+_HEADER_SUFFIXES = (".h", ".hh", ".hpp", ".hxx")
+_QUALIFIED_PATH_RE = re.compile(r"^(?P<path>[^:]+\.[A-Za-z0-9]+)(?:::|:)(?P<label>[^:].*)$")
+_QUALIFIED_MEMBER_RE = re.compile(r"^(?P<cls>[A-Za-z_]\w*)(?:::|\.)(?P<member>~?[A-Za-z_]\w*)$")
+
+
+def _qualified_matches(store: CortexStore, repo_root: Path, symbol: str) -> list[Any]:
+    """Symbols named by `path:label`, `path::label`, `Class::method` or `Class.method`."""
+    path_form = _QUALIFIED_PATH_RE.match(symbol)
+    if path_form:
+        node_id = f"symbol:{path_form.group('path')}:{path_form.group('label')}"
+        node = store.get_nodes(repo_root, [node_id]).get(node_id)
+        if node is not None:
+            return [node]
+    member_form = _QUALIFIED_MEMBER_RE.match(symbol)
+    if member_form:
+        cls, member = member_form.group("cls"), member_form.group("member")
+        classes = store.symbols_by_label(repo_root, cls, kind="class")
+        found = []
+        for candidate in store.symbols_by_label(repo_root, member):
+            signature = candidate.signature or ""
+            if f"{cls}::{member}" in signature or f"{cls}.{member}" in signature:
+                found.append(candidate)
+            elif any(
+                c.source_ref == candidate.source_ref
+                and c.span_start is not None and c.span_end is not None
+                and c.span_start <= (candidate.span_start or 0) <= c.span_end
+                for c in classes
+            ):
+                found.append(candidate)
+        return found
+    return []
+
+
+def _prefer_definition(matches: list[Any]) -> list[Any]:
+    """Among same-named candidates, one implementation file beats header declarations."""
+    if len(matches) < 2 or len({node.label for node in matches}) != 1:
+        return matches
+    implementations = [node for node in matches if node.source_ref.lower().endswith(_IMPL_SUFFIXES)]
+    others = [node for node in matches if node not in implementations]
+    if len(implementations) == 1 and others and all(n.source_ref.lower().endswith(_HEADER_SUFFIXES) for n in others):
+        return implementations
+    return matches
+
+
+def _did_you_mean(store: CortexStore, repo_root: Path, symbol: str, limit: int = 5) -> list[str]:
+    labels: list[str] = []
+    for node in store.search_nodes(repo_root, symbol, limit=20):
+        if node.label not in labels:
+            labels.append(node.label)
+        if len(labels) >= limit:
+            break
+    return labels
+
+
 def _resolve_symbol(store: CortexStore, repo_root: Path, symbol: str) -> tuple[Any | None, list[Any]]:
     exact = store.get_nodes(repo_root, [symbol]).get(symbol)
     if exact is not None:
         return exact, []
+    qualified = _prefer_definition(_qualified_matches(store, repo_root, symbol))
+    if len(qualified) == 1:
+        return qualified[0], []
+    if len(qualified) > 1:
+        return None, qualified[:20]
     matches = store.search_nodes(repo_root, symbol, limit=20)
     exact_label = [node for node in matches if node.label == symbol]
     if len(exact_label) == 1:
         return exact_label[0], []
-    if len(matches) == 1:
-        return matches[0], []
-    return None, matches
+    # A fuzzy hit that misses most of the query (`Not` inside `notEqualTo` for a
+    # nonsense name) is noise, not an ambiguity: keep candidates whose label or file
+    # path contains every query token (a file path as the "symbol" lists its symbols).
+    tokens = [token for token in _search_tokens(symbol) if token]
+    related = [
+        node for node in matches
+        if all(token in f"{node.label} {node.source_ref}".lower() for token in tokens)
+    ]
+    related = _prefer_definition(related)
+    if len(related) == 1:
+        return related[0], []
+    return None, related
 
 
 def _numbered_span(content: str, start: int, end: int) -> str:
@@ -1829,6 +2042,7 @@ def _call_read_symbol(arguments: dict[str, Any]) -> dict[str, Any]:
                     "error": "symbol_not_found",
                     "message": f"No symbol matched {symbol!r}.",
                     "hint": "try cortex_search_symbols",
+                    "did_you_mean": _did_you_mean(store, repo_root, symbol),
                 },
                 status,
                 response_format,
@@ -2123,6 +2337,7 @@ def _call_path(arguments: dict[str, Any]) -> dict[str, Any]:
                     "error": "symbol_not_found",
                     "message": f"No symbol matched {symbol!r}.",
                     "hint": "try cortex_search_symbols",
+                    "did_you_mean": _did_you_mean(store, repo_root, symbol),
                     **(status if response_format == "detailed" else _concise_status(status)),
                 },
                 is_error=True,
@@ -2232,10 +2447,20 @@ def _call_refresh(arguments: dict[str, Any]) -> dict[str, Any]:
     # Incremental needs an existing database to diff against.
     incremental = mode != "full" and default_db_path(repo_root).exists()
     _forget_fingerprint(repo_root)
+    request = _current_request
+    sink = _progress_sink
+
+    def report_progress(stage: str, done: int, total: int) -> None:
+        if request is not None:
+            request.set_progress(stage, done, total)
+        if sink is not None:
+            sink(stage, done, total)
+
     summary = ingest_repository(
         repo_root,
         commit_limit=int(arguments.get("commits", 1000)),
         incremental=incremental,
+        progress=report_progress,
     )
     try:
         _remember_fingerprint(repo_root, CortexStore(default_db_path(repo_root)).get_repo_fingerprint(repo_root))
@@ -2539,6 +2764,7 @@ def call_tool(
     *,
     cancel: threading.Event | None = None,
     request_id: Any = None,
+    progress: Callable[[str, int, int], None] | None = None,
 ) -> dict[str, Any]:
     """Dispatch one MCP tool call under a wall-clock budget.
 
@@ -2554,15 +2780,19 @@ def call_tool(
     `finally` cover `_record_tool_usage` too: the ledger's internal second
     `_call_overview` call must reuse the memoised analysis.
     """
-    global _current_cancel, _in_tool_call, _analysis_memo
+    global _current_cancel, _current_request, _progress_sink, _in_tool_call, _analysis_memo
     _current_cancel = cancel
+    _progress_sink = progress
     _in_tool_call = True
     try:
-        args = arguments or {}
+        args, argument_error = _normalise_arguments(name, arguments or {})
+        if argument_error is not None:
+            return _content(argument_error, is_error=True)
         budget_seconds = resolve_budget_seconds()
         tracked_id = "" if request_id is None else str(request_id)
         try:
-            with REGISTRY.track(name, tracked_id), deadline_scope(budget_seconds, tool_name=name):
+            with REGISTRY.track(name, tracked_id) as request_status, deadline_scope(budget_seconds, tool_name=name):
+                _current_request = request_status
                 result = _dispatch_tool(name, args)
         except DeadlineExceeded as exc:
             return _content(
@@ -2588,8 +2818,60 @@ def call_tool(
         return result
     finally:
         _current_cancel = None
+        _current_request = None
+        _progress_sink = None
         _in_tool_call = False
         _analysis_memo = None
+
+
+# Alternative names agents commonly use for a tool's identifier arguments. Each is
+# renamed to the canonical argument unless that one was also given.
+_ARGUMENT_ALIASES: dict[str, dict[str, str]] = {
+    "cortex_path": {"source": "symbol_a", "from": "symbol_a", "target": "symbol_b", "to": "symbol_b"},
+    "cortex_references": {"target": "symbol", "name": "symbol"},
+    "cortex_read_symbol": {"target": "symbol", "name": "symbol"},
+    "cortex_relations": {"name": "symbol"},
+    "cortex_query": {"query": "task", "prompt": "task"},
+    "cortex_search_symbols": {"pattern": "query", "text": "query"},
+    "cortex_search_text": {"pattern": "query", "text": "query"},
+}
+
+
+def _normalise_arguments(name: str, args: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """Apply argument aliases, then reject arguments the tool does not define.
+
+    Previously an unknown argument was silently ignored, so a misspelt `path`
+    turned a scoped request into a whole-repository run that used up its budget.
+    Keys starting with `_` (protocol metadata) are always allowed.
+    """
+    schema = next((tool["inputSchema"] for tool in TOOL_DEFINITIONS if tool["name"] == name), None)
+    if schema is None:
+        return args, None  # unknown tool: the dispatcher reports it
+    accepted = set(schema.get("properties", {}))
+    renamed = dict(args)
+    # Every tool takes a response format from agents that send it uniformly; tools
+    # with a single response shape simply ignore it.
+    if "format" in renamed and "response_format" not in renamed:
+        renamed["response_format"] = renamed.pop("format")
+    if "response_format" in renamed and "response_format" not in accepted:
+        renamed.pop("response_format")
+    for alias, canonical in _ARGUMENT_ALIASES.get(name, {}).items():
+        if alias in renamed and alias not in accepted and canonical not in renamed:
+            renamed[canonical] = renamed.pop(alias)
+    unknown = sorted(key for key in renamed if key not in accepted and not key.startswith("_"))
+    if not unknown:
+        return renamed, None
+    suggestions = {
+        key: difflib.get_close_matches(key, sorted(accepted), n=1) for key in unknown
+    }
+    hint = "; ".join(f"{key!r}: did you mean {match[0]!r}?" for key, match in suggestions.items() if match)
+    return renamed, {
+        "error": "unknown_argument",
+        "tool": name,
+        "unknown": unknown,
+        "accepted": sorted(accepted),
+        "hint": hint or f"Accepted arguments: {', '.join(sorted(accepted))}.",
+    }
 
 
 def _dispatch_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:

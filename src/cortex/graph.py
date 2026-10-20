@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from collections import Counter, defaultdict
+from collections.abc import Callable
 from typing import NamedTuple
 
 from .ast_extract import extract_python_edges
@@ -11,6 +12,9 @@ from .gitutils import canonical_commit_files
 from .hotspots import annotate_file_nodes, compute_hotspots
 from .models import CommitRecord, GraphEdge, GraphNode, SourceRecord
 from .structural import extract_structural_edges, supports_path
+
+# How many files are parsed between two progress reports.
+PROGRESS_EVERY = 50
 
 
 def _content_hash(content: str) -> str:
@@ -261,6 +265,7 @@ def build_file_layer(
     *,
     existing_qt_index: QtSymbolIndex | None = None,
     connect_names: list[str] | None = None,
+    progress: Callable[[str, int, int], None] | None = None,
 ) -> tuple[list[GraphNode], list[GraphEdge]]:
     """HEADING + STRUCTURAL layer nodes/edges for exactly the given `sources`.
 
@@ -284,17 +289,19 @@ def build_file_layer(
     edges: list[GraphEdge] = []
     section_index: defaultdict[str, int] = defaultdict(int)
 
-    for source in sources:
+    total_sources = len(sources)
+    for position, source in enumerate(sources):
+        if progress is not None and position % PROGRESS_EVERY == 0:
+            progress('parse', position, total_sources)
         file_node_id = f'file:{source.path}'
-        nodes.append(
-            GraphNode(
-                node_id=file_node_id,
-                kind='file',
-                label=source.path,
-                source_ref=source.path,
-                metadata={'kind': source.kind, 'size_bytes': source.size_bytes},
-            )
+        file_node = GraphNode(
+            node_id=file_node_id,
+            kind='file',
+            label=source.path,
+            source_ref=source.path,
+            metadata={'kind': source.kind, 'size_bytes': source.size_bytes},
         )
+        nodes.append(file_node)
 
         source_edges: list[GraphEdge] = []
 
@@ -338,16 +345,14 @@ def build_file_layer(
                 source.path, source.content, known_paths, connect_names
             )
             structural_nodes, structural_edges = structural_result
-            file_node = next((node for node in nodes if node.node_id == file_node_id), None)
-            if file_node is not None:
-                file_node.metadata.update({
-                    'parser_backend': structural_result.backend,
-                    'parser_language': structural_result.language,
-                    'parser_version': structural_result.parser_version,
-                    'runtime_version': structural_result.runtime_version,
-                    'parser_diagnostics': list(structural_result.diagnostics),
-                    'degraded_reason': structural_result.degraded_reason or '',
-                })
+            file_node.metadata.update({
+                'parser_backend': structural_result.backend,
+                'parser_language': structural_result.language,
+                'parser_version': structural_result.parser_version,
+                'runtime_version': structural_result.runtime_version,
+                'parser_diagnostics': list(structural_result.diagnostics),
+                'degraded_reason': structural_result.degraded_reason or '',
+            })
             nodes.extend(structural_nodes)
             source_edges.extend(structural_edges)
 
@@ -360,6 +365,9 @@ def build_file_layer(
             edge.metadata['source_file'] = source.path
         edges.extend(source_edges)
 
+    if progress is not None:
+        progress('parse', total_sources, total_sources)
+        progress('resolve', 0, 0)
     # P0-4: resolve Qt emit/connect/handle placeholders across file
     # boundaries now that every file in this batch has produced its nodes.
     qt_index = build_qt_symbol_index(nodes)
@@ -443,12 +451,13 @@ def build_graph(
     commits: list[CommitRecord],
     all_paths: set[str] | None = None,
     connect_names: list[str] | None = None,
+    progress: Callable[[str, int, int], None] | None = None,
 ) -> tuple[list[GraphNode], list[GraphEdge]]:
     # On incremental runs `sources` is only the changed subset; `all_paths`
     # keeps reference resolution and commit linking aware of the whole repo.
     known_paths = all_paths if all_paths is not None else {s.path for s in sources}
 
-    nodes, edges = build_file_layer(sources, known_paths, connect_names=connect_names)
+    nodes, edges = build_file_layer(sources, known_paths, connect_names=connect_names, progress=progress)
     # Class-qualified `name:Cls::member` connects endpoints resolve here, over
     # the full node set, not per-file: uniqueness of the defining file is a
     # repo-wide question. The incremental path re-runs this over the merged
@@ -458,6 +467,8 @@ def build_graph(
     # (and base-class / import scoping) is only knowable over the full node
     # set. See callresolve.py for the contract and tiers.
     edges = resolve_call_endpoints(nodes, edges)
+    if progress is not None:
+        progress('cochange', 0, 0)
     cochange_nodes, cochange_edges = build_cochange_layer(commits, known_paths)
     nodes.extend(cochange_nodes)
     edges.extend(cochange_edges)

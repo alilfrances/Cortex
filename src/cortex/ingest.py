@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 from collections import Counter
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -173,6 +174,24 @@ def _classify_path(path: Path) -> str:
     return "text"
 
 
+_LINGUIST_TS_PREFIXES = ("<?xml", "<!doctype ts", "<ts")
+
+
+def _classify_source(path: Path, content: str) -> str:
+    """`_classify_path`, corrected for files whose extension lies about them.
+
+    Qt Linguist translation catalogues use the `.ts` extension, but they are XML
+    data, not TypeScript. Treated as code they were parsed with the TypeScript
+    grammar and scored as source, so they crowded real code out of query bundles.
+    """
+    kind = _classify_path(path)
+    if kind == "code" and path.suffix.lower() == ".ts":
+        head = content.lstrip("\ufeff \t\r\n")[:16].lower()
+        if head.startswith(_LINGUIST_TS_PREFIXES):
+            return "text"
+    return kind
+
+
 def _content_hash(content: str) -> str:
     return hashlib.sha256(content.encode('utf-8', errors='replace')).hexdigest()
 
@@ -212,7 +231,7 @@ def _scan_sources(repo_root: Path, skip_dirs: set[str] | None = None) -> list[So
             SourceRecord(
                 path=rel_path,
                 content=content,
-                kind=_classify_path(path),
+                kind=_classify_source(path, content),
                 size_bytes=stat.st_size,
                 modified_at=stat.st_mtime,
                 content_hash=_content_hash(content),
@@ -284,7 +303,7 @@ def _scan_sources_incremental(
         record = SourceRecord(
             path=rel_path,
             content=content,
-            kind=_classify_path(path),
+            kind=_classify_source(path, content),
             size_bytes=stat.st_size,
             modified_at=stat.st_mtime,
             content_hash=content_hash,
@@ -350,13 +369,18 @@ def _parser_summary(nodes: list[GraphNode]) -> dict[str, Any]:
             backend = node.metadata.get("parser_backend")
             if backend:
                 counts[str(backend)] += 1
+    return _parser_summary_from_counts(counts)
+
+
+def _parser_summary_from_counts(counts: Mapping[str, int]) -> dict[str, Any]:
     try:
         from .runtime import public_capability
         runtime = public_capability()
     except Exception:
         runtime = {"ready": False, "degraded_reason": "runtime-status-unavailable"}
-    runtime = {**runtime, "backend_counts": dict(sorted(counts.items()))}
-    return {"backend_counts": dict(sorted(counts.items())), "language_runtime": runtime}
+    backend_counts = dict(sorted(counts.items()))
+    runtime = {**runtime, "backend_counts": backend_counts}
+    return {"backend_counts": dict(backend_counts), "language_runtime": runtime}
 
 
 def ingest_repository(
@@ -366,6 +390,7 @@ def ingest_repository(
     incremental: bool = False,
     *,
     lock_timeout: float | None = None,
+    progress: Callable[[str, int, int], None] | None = None,
 ) -> dict[str, Any]:
     """Ingest (full or incremental) under the repo's cross-process ingest lock.
 
@@ -375,10 +400,14 @@ def ingest_repository(
     callers that already hold it (``mcp.tools._ensure_fresh``) do not deadlock.
     Raises :class:`cortex.store.IngestLockTimeout` after ``lock_timeout``
     (default ``cortex.store.INGEST_LOCK_TIMEOUT_SECONDS``).
+
+    ``progress(stage, done, total)`` is called as the run moves through its
+    stages (``scan``, ``parse``, ``resolve``, ``cochange``, ``write``); ``done``
+    and ``total`` count files for ``parse`` and are 0 otherwise.
     """
     repo_root = discover_repo_root(repo_path)
     with ingest_lock(repo_root, timeout=lock_timeout, db_path=db_path):
-        return _ingest_locked(repo_root, commit_limit, db_path, incremental)
+        return _ingest_locked(repo_root, commit_limit, db_path, incremental, progress)
 
 
 def _ingest_locked(
@@ -386,7 +415,13 @@ def _ingest_locked(
     commit_limit: int,
     db_path: Path | None,
     incremental: bool,
+    progress: Callable[[str, int, int], None] | None = None,
 ) -> dict[str, Any]:
+    def report(stage: str, done: int = 0, total: int = 0) -> None:
+        if progress is not None:
+            progress(stage, done, total)
+
+    report("scan")
     config = load_config(repo_root)
     skip_dirs = _SKIP_DIRS | set(config.skip_dirs)
     store = CortexStore(db_path or default_db_path(repo_root))
@@ -453,6 +488,7 @@ def _ingest_locked(
                 scan.current_paths,
                 existing_qt_index=existing_qt_index,
                 connect_names=config.connect_functions,
+                progress=progress,
             )
             annotate_file_nodes(new_nodes, hotspot_overrides)
             call_labels |= {n.label for n in new_nodes if n.granularity == "symbol"}
@@ -490,6 +526,7 @@ def _ingest_locked(
         # actually changed -- or when a file was deleted, since a deleted
         # file's cochange/touches edges would otherwise dangle forever.
         if commits_changed or deleted_paths:
+            report("cochange")
             store.delete_cochange_layer(repo_root)
             cochange_nodes, cochange_edges = build_cochange_layer(
                 commits, scan.current_paths, filter_cochange_pairs=True
@@ -518,6 +555,7 @@ def _ingest_locked(
         # store so an incremental refresh converges to exactly what a full
         # ingest would write, persisting only the rows that actually changed.
         if sources_to_process or stale_paths or commits_changed:
+            report("resolve")
             merged_nodes, merged_edges = store.fetch_graph(repo_root)
             endpoints_before = {
                 e.edge_id: (e.source, e.target, e.confidence, json.dumps(e.metadata, sort_keys=True))
@@ -555,8 +593,9 @@ def _ingest_locked(
                 if changed_nodes or changed_edges:
                     store.save_graph(repo_root, changed_nodes, changed_edges)
 
+        report("write")
         store.set_repo_fingerprint(repo_root, scan.fingerprint)
-        parser_summary = _parser_summary(store.fetch_graph(repo_root)[0])
+        parser_summary = _parser_summary_from_counts(store.parser_backend_counts(repo_root))
 
         return {
             "repo_path": str(repo_root),
@@ -574,8 +613,9 @@ def _ingest_locked(
     all_sources = _scan_sources(repo_root, skip_dirs)
     fingerprint = compute_repo_fingerprint(repo_root, skip_dirs)
     commits = collect_recent_commits(repo_root, commit_limit)
-    nodes, edges = build_graph(all_sources, commits, connect_names=config.connect_functions)
+    nodes, edges = build_graph(all_sources, commits, connect_names=config.connect_functions, progress=progress)
 
+    report("write")
     store.reset_repo(repo_root, fingerprint=fingerprint)
     store.save_sources(repo_root, all_sources)
     store.save_commits(repo_root, commits)
