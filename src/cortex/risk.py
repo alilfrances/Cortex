@@ -15,6 +15,7 @@ import posixpath
 from pathlib import Path
 import re
 import subprocess
+from collections.abc import Callable
 from typing import Any, Iterable, Mapping, Sequence
 
 from .deadline import check_deadline
@@ -874,64 +875,154 @@ def analyze_risk(
     return result
 
 
+# Secondary buckets, in the order truncation gives them up once `files` is empty.
+# `tests_by_changed_file` goes last: it is the per-file explanation of `tests_to_run`.
+_RISK_DROP_ORDER = (
+    "score_formula",
+    "missing_cochanges",
+    "missing_cochange",
+    "missing_tests",
+    "missing_qt_pairs",
+    "missing_qt_instantiations",
+    "missing_qt_sites",
+    "build_system_misses",
+    "analysis_errors",
+    "unindexed_files",
+    "tests_by_changed_file",
+)
+_TESTS_TRUNCATED_REASON = "tests_to_run was truncated to fit the response budget"
+
+
+def _risk_tokens(output: Mapping[str, Any]) -> int:
+    return count_text_tokens(json.dumps(output, sort_keys=True))
+
+
+def _longest_fitting_prefix(count: int, fits: Callable[[int], bool]) -> int:
+    """Largest n in [0, count] with fits(n), assuming size only grows with n (0 if none fits)."""
+    lo, hi, best = 0, count, 0
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        if mid == 0 or fits(mid):
+            best, lo = mid, mid + 1
+        else:
+            hi = mid - 1
+    return best
+
+
+def _compact_tests_by_changed_file(output: dict[str, Any]) -> dict[str, list[int]] | None:
+    """`tests_by_changed_file` with each test replaced by its index in `tests_to_run`,
+    or None when some test is not in that list (then the full form cannot be encoded)."""
+    position = {item.get("test"): index for index, item in enumerate(output.get("tests_to_run") or [])}
+    compact: dict[str, list[int]] = {}
+    for path, tests in (output.get("tests_by_changed_file") or {}).items():
+        if any(test not in position for test in tests):
+            return None
+        compact[path] = sorted(position[test] for test in tests)
+    return compact
+
+
+def _pruned_compact_indices(compact: Mapping[str, list[int]], size: int) -> dict[str, list[int]]:
+    """Compact indices that still point into a `tests_to_run` shortened to `size`."""
+    pruned = {path: [i for i in indices if i < size] for path, indices in compact.items()}
+    return {path: indices for path, indices in pruned.items() if indices}
+
+
 def truncate_risk_result(result: Mapping[str, Any], budget: int) -> dict[str, Any]:
-    """Deterministically keep high-risk files and directives within a budget."""
+    """Deterministically keep high-risk files and directives within a budget.
+
+    Give-up order as the budget shrinks: lower-ranked `files`, then the secondary
+    buckets in `_RISK_DROP_ORDER` (`tests_by_changed_file` last, first re-encoded as
+    indices into `tests_to_run`), then `directives`, then `tests_to_run` (which
+    switches `tests_run_all` on). Every fully removed key is named in
+    `omitted_fields`. Prefix lengths are found by binary search: size only grows
+    with the prefix.
+    """
     output = json.loads(json.dumps(result, sort_keys=True))
     limit = max(0, int(budget))
     output["budget"] = limit
     output["truncated"] = False
-    # Always preserve error/status and the concise directive list.  Remove
-    # lower-ranked file detail first, then detailed formula/aliases if needed.
-    while count_text_tokens(json.dumps(output, sort_keys=True)) > limit and output.get("files"):
-        output["files"].pop()
+    omitted: list[str] = []
+
+    def over() -> bool:
+        return _risk_tokens(output) > limit
+
+    def shorten(key: str, probe: Callable[[list[Any], int], None] | None = None) -> None:
+        items = output.get(key)
+        if not items:
+            return
+
+        def fits(count: int) -> bool:
+            output[key] = items[:count]
+            if probe is not None:
+                probe(items, count)
+            return not over()
+
+        best = _longest_fitting_prefix(len(items), fits)
+        output[key] = items[:best]
+        if probe is not None:
+            probe(items, best)
+        if best < len(items):
+            output["truncated"] = True
+
+    def drop(key: str) -> None:
+        output.pop(key, None)
+        if key == "tests_by_changed_file":
+            output.pop("tests_by_changed_file_encoding", None)
+        omitted.append(key)
+        output["omitted_fields"] = list(omitted)
         output["truncated"] = True
-    if count_text_tokens(json.dumps(output, sort_keys=True)) > limit:
-        for key in ("score_formula", "missing_cochanges", "analysis_errors", "unindexed_files"):
-            if key in output and key not in {"analysis_errors", "unindexed_files"}:
-                output.pop(key, None)
+
+    # Always preserve error/status and the concise directive list: lower-ranked
+    # file detail goes first.
+    if over():
+        shorten("files")
+    for key in _RISK_DROP_ORDER:
+        if not over():
+            break
+        if key not in output:
+            continue
+        if key == "tests_by_changed_file":
+            compact = _compact_tests_by_changed_file(output)
+            if compact is not None:
+                full = output[key]
+                output[key] = compact
+                output["tests_by_changed_file_encoding"] = "tests_to_run_index"
                 output["truncated"] = True
-                if count_text_tokens(json.dumps(output, sort_keys=True)) <= limit:
+                if not over():
                     break
-    if count_text_tokens(json.dumps(output, sort_keys=True)) > limit:
-        # Remove redundant detailed directive buckets before shortening the
-        # human-facing strings.  The unbudgeted result retains every bucket;
-        # this order makes a small budget stable across Python versions.
-        for key in (
-            "tests_by_changed_file",
-            "missing_cochange",
-            "missing_cochanges",
-            "missing_tests",
-            "missing_qt_pairs",
-            "missing_qt_instantiations",
-            "missing_qt_sites",
-            "build_system_misses",
-            "score_formula",
-            "analysis_errors",
-            "unindexed_files",
-        ):
-            if key in output:
-                output.pop(key, None)
-                output["truncated"] = True
-                if count_text_tokens(json.dumps(output, sort_keys=True)) <= limit:
-                    break
-    if count_text_tokens(json.dumps(output, sort_keys=True)) > limit:
+                output[key] = full
+                output.pop("tests_by_changed_file_encoding", None)
+        drop(key)
+    if over():
         # Keep directives in stable order but drop from the end; the full
         # directive arrays remain available in an unbudgeted CLI analysis.
-        while output.get("directives") and count_text_tokens(json.dumps(output, sort_keys=True)) > limit:
-            output["directives"].pop()
-            output["truncated"] = True
-    if count_text_tokens(json.dumps(output, sort_keys=True)) > limit and output.get("tests_to_run"):
+        shorten("directives")
+    if over() and output.get("tests_to_run"):
         # The impacted-test list goes last, lowest score first.  A shortened
         # list can no longer be vouched for, so it switches to run-all;
         # ``tests_run_all``/``tests_run_all_reason`` themselves are never dropped.
-        while output.get("tests_to_run") and count_text_tokens(json.dumps(output, sort_keys=True)) > limit:
-            output["tests_to_run"].pop()
-            output["truncated"] = True
-            if not output.get("tests_run_all"):
+        was_run_all = bool(output.get("tests_run_all"))
+        original_reason = output.get("tests_run_all_reason")
+        compact = (
+            dict(output["tests_by_changed_file"])
+            if output.get("tests_by_changed_file_encoding") == "tests_to_run_index"
+            else None
+        )
+
+        def tests_probe(items: list[Any], count: int) -> None:
+            if count < len(items) and not was_run_all:
                 output["tests_run_all"] = True
-                output["tests_run_all_reason"] = "tests_to_run was truncated to fit the response budget"
+                output["tests_run_all_reason"] = _TESTS_TRUNCATED_REASON
+            else:
+                output["tests_run_all"] = was_run_all
+                if "tests_run_all_reason" in result:
+                    output["tests_run_all_reason"] = original_reason
+            if compact is not None:
+                output["tests_by_changed_file"] = _pruned_compact_indices(compact, count)
+
+        shorten("tests_to_run", tests_probe)
     output["returned_count"] = len(output.get("files", []))
-    output["budget_feasible"] = count_text_tokens(json.dumps(output, sort_keys=True)) <= limit
+    output["budget_feasible"] = not over()  # measured before the flag itself is added
     return output
 
 
