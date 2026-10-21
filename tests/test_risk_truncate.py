@@ -19,7 +19,7 @@ from cortex.risk import (
     analyze_risk,
     truncate_risk_result,
 )
-from cortex.tokenizer import count_text_tokens
+from cortex.tokenizer import _get_tiktoken_encoding, count_text_tokens
 
 
 def _file(path: str, weight: int) -> dict:
@@ -262,13 +262,31 @@ def test_below_the_floor_the_map_wins_over_tests_to_run() -> None:
     result = _large_diff_result()
     for budget in range(400, 1600, 50):
         out = truncate_risk_result(result, budget)
-        if len(out["tests_to_run"]) < 10 and out["tests_to_run"]:
-            # tests_to_run was cut below its floor, so the map must still be there.
-            assert out.get("tests_by_changed_file"), budget
         if "tests_by_changed_file" in out.get("omitted_fields", []):
-            # The map is dropped only once tests_to_run is gone, and only the ranked files remain.
-            assert not out["tests_to_run"], budget
-            assert out["files"], budget
+            # The map is dropped only when not one changed file fits beside the FILES_FLOOR
+            # ranked files with no tests at all: tests_to_run then gets the leftover room,
+            # which is below its floor, and files are not refilled past the floor at its cost.
+            assert len(out["tests_to_run"]) < TESTS_TO_RUN_FLOOR, budget
+            assert 0 < len(out["files"]) <= FILES_FLOOR, budget
+            with_one = dict(out, tests_to_run=[], files=out["files"][:FILES_FLOOR])
+            entry = next(iter(result["tests_by_changed_file"].items()))
+            with_one["tests_by_changed_file"] = {entry[0]: [0, 1, 2]}
+            with_one["tests_by_changed_file_tests"] = entry[1][:3]
+            with_one["tests_by_changed_file_encoding"] = "test_table"
+            with_one["tests_by_changed_file_omitted"] = len(result["tests_by_changed_file"]) - 1
+            with_one["omitted_fields"] = [n for n in out["omitted_fields"] if n != "tests_by_changed_file"]
+            with_one.pop("budget_feasible")
+            assert count_text_tokens(json.dumps(with_one, sort_keys=True)) > budget, budget
+
+
+def test_the_map_is_never_left_empty_while_tests_to_run_is_at_its_floor() -> None:
+    # 0.13.0 review: when step 7 fitted no changed file the empty map was "within budget", so
+    # step 8 did not run and the map lost to a full tests_to_run (budget 750 with tiktoken).
+    result = _large_diff_result()
+    for budget in range(400, 1600, 10):
+        out = truncate_risk_result(result, budget)
+        if len(out["tests_to_run"]) >= TESTS_TO_RUN_FLOOR:
+            assert out.get("tests_by_changed_file"), budget
 
 
 def test_the_map_outlives_directives_and_tests_to_run_reasons() -> None:
@@ -406,9 +424,9 @@ def _bench_result() -> dict:
 
 
 def test_bench_range_keeps_ranked_files_tests_and_most_of_the_map_at_the_default_budget() -> None:
-    # Measured targets (0.13.0).  Through 0.12.1 this range returned no ranked file and 15 of
-    # the 117 map entries at 2000; 117 entries at 2000 is not reachable while FILES_FLOOR files
-    # and TESTS_TO_RUN_FLOOR tests are kept (their compact forms alone take ~750 tokens).
+    # Measured targets (0.13.0).  Through 0.12.1 this range returned no ranked file and 9-12 of
+    # the 117 map entries at 2000; all 117 need about 2,180 tokens with tiktoken and 2,810 with
+    # the fallback estimate while FILES_FLOOR files and TESTS_TO_RUN_FLOOR tests are kept.
     result = _bench_result()
     assert len(result["tests_by_changed_file"]) == 117
 
@@ -417,7 +435,8 @@ def test_bench_range_keeps_ranked_files_tests_and_most_of_the_map_at_the_default
     assert out["budget_feasible"] is True and not out.get("minimal_payload")
     assert out["returned_count"] == len(out["files"]) >= FILES_FLOOR
     assert len(out["tests_to_run"]) >= TESTS_TO_RUN_FLOOR
-    assert len(out["tests_by_changed_file"]) >= 45
+    # o200k_base (the [tokens] extra, CI) counts this JSON at about 0.7x the fallback estimate.
+    assert len(out["tests_by_changed_file"]) >= (96 if _get_tiktoken_encoding() is not None else 45)
     assert len(out["tests_by_changed_file"]) + out["tests_by_changed_file_omitted"] == 117
 
 

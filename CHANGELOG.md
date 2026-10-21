@@ -47,17 +47,20 @@ Measured on `python scripts/perf/synthetic_repo.py DIR --modules 40 --commits 12
   - the map is no longer cut file by file first: every changed file keeps only its highest-scoring tests (`tests_to_run` order) at the largest of `MAP_TESTS_PER_FILE_CAPS = (10, 5, 3)` at which every changed file fits, and the new `tests_by_changed_file_more: {path: n}` counts the tests left out per file. Changed files are dropped (lowest risk first, `tests_by_changed_file_omitted`) only when 3 per file do not fit.
   - below the floors the order is `tests_to_run`, then the map, then `files`.
 
-  Measured (`tests/fixtures/risk/synthetic_head30.json.gz` is the `HEAD~30..HEAD` result: 172 ranked files, 117 changed files in the map, 185 tests, 46k tokens unbudgeted; the field-shape row is the range above):
+  Measured (`tests/fixtures/risk/synthetic_head30.json.gz` is the `HEAD~30..HEAD` result: 172 ranked files, 117 changed files in the map, 185 tests, 46k tokens unbudgeted; the field-shape row is the range above). The budget is counted by `count_text_tokens`: with the `[tokens]` extra (`tiktoken`, o200k_base; CI) or with the fallback estimate, which counts this JSON at about 1.4x. Both are given as tiktoken / fallback:
 
-  | range, budget | 0.12.1 | this branch before this entry | 0.13.0 |
-  |---|---|---|---|
-  | `HEAD~30`, 2000 | files 0, map 9 of 117 | files 0, map 15 of 117 | **files 10, map 45 of 117** (3 tests each, 22 files capped), 10 tests |
-  | `HEAD~30`, 3000 | | | files 16, **map 117 of 117** (3 each), 10 tests |
-  | `HEAD~30`, 4000 | files 0, map 103 of 117 | | files 28, map 117 of 117 (10 each), 10 tests |
-  | field-shape `HEAD~100`, 2000 | infeasible, all empty | files 0, map 30 of 72 | **files 10, map 41 of 72** (3 each), 10 tests |
-  | field-shape `HEAD~100`, 3000 | infeasible, all empty | | files 10, **map 72 of 72** (10 each), 10 tests |
+  | range, budget | 0.12.1 | 0.13.0 |
+  |---|---|---|
+  | `HEAD~30`, 2000 | files 0, map 12 / 9 of 117 | **files 10, map 96 / 45 of 117** (3 tests each), 10 tests |
+  | `HEAD~30`, 3000 | files 0, map 73 / - of 117 | files 21 / 16, **map 117 of 117** (10 / 3 tests each), 10 tests |
+  | `HEAD~30`, 4000 | files 0, map 117 / 103 of 117 | files 10 / 28, map 117 of 117, 37 / 10 tests |
+  | field-shape `HEAD~100`, 2000 | files 0, map 0 (infeasible) / infeasible | **files 10, map 72 / 41 of 72**, 10 tests |
+  | field-shape `HEAD~100`, 3000 | files 0, map 11 / infeasible | files 10, **map 72 of 72**, 27 / 10 tests |
 
-  **Not met:** every changed file of `HEAD~30` in the map at 2000. It is not reachable while 10 ranked files and 10 tests are kept: their compact forms and `omitted_fields` take about 680 of the 2000 tokens (283 + 344 + 55), and the 117 entries with their test table need about 1,600 even at 3 tests per file. All 117 fit from a budget of 2,810. `tests/test_risk_truncate.py` pins 45 at 2000 and 117 at 3000 and 4000 on the fixture.
+  All 117 map entries of `HEAD~30` fit from a budget of 2,180 (tiktoken) / 2,810 (fallback); the field-shape range's 72 fit at 2000 with tiktoken. `tests/test_risk_truncate.py` pins 96 / 45 at 2000 and 117 at 3000 and 4000 on the fixture.
+
+  **Not met:** every changed file of `HEAD~30` in the map at 2000. It is not reachable while 10 ranked files and 10 tests are kept: their compact forms and `omitted_fields` take 480 / 680 of the 2000 tokens, and the 117 entries with their test table need the rest and more even at 3 tests per file.
+  - Below the floors, when not even one changed file fits beside the 10 ranked files with no tests, the map is dropped and `tests_to_run` gets the leftover room (a test entry is smaller than a map entry with its table). A full `tests_to_run` never wins over the map (`test_the_map_is_never_left_empty_while_tests_to_run_is_at_its_floor`).
   - Shape changes for consumers of a truncated result: `tests_by_changed_file_more`, `files.detail`, compact `files` entries, and `files` present (at least 10 entries) where it used to be empty. An untruncated result is unchanged. The 0.11 oracle test (`files` cut first) is replaced by tests of the new order.
 - `cortex_refresh` reports `mode: "full"` when an incremental refresh of an older-format index was rebuilt in full (it said `incremental` next to a `full_reindex_reason` that said "rebuilt in full").
 

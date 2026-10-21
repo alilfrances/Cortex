@@ -1177,9 +1177,10 @@ def truncate_risk_result(result: Mapping[str, Any], budget: int, *, _pre_omitted
         shorten("uncovered_changed_files", uncovered_probe)  # below UNCOVERED_FLOOR, down to none
     if has_map and over():
         shorten_map()
-    if over():
+    if over() or (has_map and not output.get("tests_by_changed_file")):
         # Below the floor the map wins over `tests_to_run`: fit as much of the map as fits
-        # with no tests at all, then give `tests_to_run` whatever room is left.
+        # with no tests at all, then give `tests_to_run` whatever room is left.  This also
+        # runs when step 7 fitted no changed file at all (an empty map is within budget).
         kept_tests = output.get("tests_to_run") or []
         output["tests_to_run"] = []
         tests_probe(kept_tests, 0)
