@@ -78,6 +78,7 @@ class _OverrideIndex:
         self._classes_by_file: dict[str, list[GraphNode]] = defaultdict(list)
         self._classes_by_label: dict[str, list[GraphNode]] = defaultdict(list)
         self._methods_by_file: dict[str, list[GraphNode]] = defaultdict(list)
+        self._methods_by_label: dict[str, list[GraphNode]] = defaultdict(list)
         self._nodes_by_id = {node.node_id: node for node in nodes}
         for node in nodes:
             if node.granularity != "symbol":
@@ -87,6 +88,7 @@ class _OverrideIndex:
                 self._classes_by_label[node.label].append(node)
             elif node.kind in _METHOD_KINDS:
                 self._methods_by_file[node.source_ref].append(node)
+                self._methods_by_label[node.label].append(node)
         self._bases: dict[str, list[str]] = defaultdict(list)
         for edge in edges:
             if edge.relation == "inherits":
@@ -165,10 +167,9 @@ class _OverrideIndex:
             if method.label == name and cls.span_start is not None and cls.span_end is not None \
                     and cls.span_start <= (method.span_start or 0) <= cls.span_end:
                 return True
-        for method in self._methods_by_file.values():
-            for candidate in method:
-                if candidate.label == name and f"{cls.label}::{name}" in (candidate.signature or ""):
-                    return True
+        for candidate in self._methods_by_label.get(name, ()):
+            if f"{cls.label}::{name}" in (candidate.signature or ""):
+                return True
         return any(self._declares_method(base, name, seen, depth + 1) for base in self._base_nodes(cls))
 
     def is_override(self, node: GraphNode) -> bool:
@@ -472,6 +473,8 @@ def analyze_dead_code(
             break
         if _is_test_path(node.source_ref) or _is_dunder_or_entry_point(node) or node.label in reexports:
             continue
+        if node.kind == "target":
+            continue  # a CMake/qmake build target is an entry point, not code that something calls
         if node.metadata.get("qt") == "handler":
             continue
         if node.metadata.get("qml_kind") in _NON_DEFINITION_QML_KINDS:

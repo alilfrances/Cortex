@@ -336,3 +336,53 @@ def test_a_partial_result_reports_where_it_stopped(tmp_path: Path, monkeypatch) 
     assert len(result["cursor"]) == 3 and 0 <= result["progress"]["processed"] < result["progress"]["total"]
     complete = analyze_dead_code(repo, store=store, nodes=nodes, edges=edges)
     assert "cursor" not in complete and "progress" not in complete
+
+
+def test_cmake_targets_are_never_dead_code_candidates(tmp_path: Path, monkeypatch) -> None:
+    repo = tmp_path / "repo"
+    (repo / "src").mkdir(parents=True)
+    (repo / "CMakeLists.txt").write_text(
+        "add_library(core src/a.cpp)\nadd_executable(app src/main.cpp)\ntarget_link_libraries(app core)\n"
+    )
+    (repo / "src" / "a.cpp").write_text("int orphan_function(int v) {\n    return v + 1;\n}\n")
+    (repo / "src" / "main.cpp").write_text("int main() {\n    return 0;\n}\n")
+    _init_git(repo)
+    store = _ingest(repo, tmp_path / "data", monkeypatch)
+    nodes, edges = store.fetch_graph(repo)
+    assert {node.node_id for node in nodes if node.kind == "target"} == {"target:core", "target:app"}
+
+    findings = analyze_dead_code(repo, store=store, nodes=nodes, edges=edges)["findings"]
+
+    assert not [item for item in findings if item["file"] == "CMakeLists.txt"]
+    assert any(item["symbol"] == "orphan_function" for item in findings)
+
+
+def test_override_index_declares_method_matches_the_full_scan(tmp_path: Path, monkeypatch) -> None:
+    from cortex.deadcode import _OverrideIndex
+
+    repo = _build_qt_app(tmp_path)
+    store = _ingest(repo, tmp_path / "data", monkeypatch)
+    nodes, edges = store.fetch_graph(repo)
+    sources = {source.path: source.content for source in store.fetch_sources(repo)}
+    index = _OverrideIndex(nodes, edges, sources)
+
+    def old_declares(cls, name, seen, depth=0):  # the scan of every method in the repository
+        if cls.node_id in seen or depth > 6:
+            return False
+        seen.add(cls.node_id)
+        for method in index._methods_by_file.get(cls.source_ref, ()):
+            if method.label == name and cls.span_start is not None and cls.span_end is not None \
+                    and cls.span_start <= (method.span_start or 0) <= cls.span_end:
+                return True
+        for methods in index._methods_by_file.values():
+            for candidate in methods:
+                if candidate.label == name and f"{cls.label}::{name}" in (candidate.signature or ""):
+                    return True
+        return any(old_declares(base, name, seen, depth + 1) for base in index._base_nodes(cls))
+
+    classes = [node for node in nodes if node.granularity == "symbol" and node.kind == "class"]
+    names = {node.label for node in nodes if node.granularity == "symbol"}
+    assert classes and names
+    for cls in classes:
+        for name in names:
+            assert index._declares_method(cls, name, set()) == old_declares(cls, name, set()), (cls.node_id, name)

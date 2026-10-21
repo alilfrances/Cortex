@@ -8,13 +8,6 @@
   "findings": [
     {
       "confidence": "low",
-      "file": "CMakeLists.txt",
-      "line": 6,
-      "reason": "no incoming edges; regex/dynamic-language caveat",
-      "symbol": "qt_app"
-    },
-    {
-      "confidence": "low",
       "file": "include/DeviceModel.hpp",
       "line": 4,
       "reason": "no incoming edges; regex/dynamic-language caveat",
@@ -51,7 +44,7 @@
   ],
   "refresh_hint": "",
   "repo_path": "<repo>",
-  "returned_count": 6,
+  "returned_count": 5,
   "stale": false,
   "truncated": false
 }
