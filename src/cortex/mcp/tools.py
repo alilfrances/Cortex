@@ -12,6 +12,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
+from .. import __version__
 from ..bundle import _render_skeleton, _render_symbol_skeleton, _tokenize_query, generate_bundle
 from ..deadcode import analyze_dead_code, truncate_dead_code_result
 from ..deadline import DeadlineExceeded, current_deadline, deadline_scope, resolve_budget_seconds
@@ -2077,17 +2078,35 @@ def _call_search(arguments: dict[str, Any]) -> dict[str, Any]:
         return _content(error, is_error=True)
     assert store is not None
     status = _ensure_fresh(store, repo_root)
-    nodes = [node.to_dict() for node in store.search_nodes(repo_root, str(arguments.get("query", "")), int(arguments.get("limit", 20)))]
+    response_format = _response_format(arguments)
+    query = str(arguments.get("query", ""))
+    cache_key = _cache_key(status["current_fingerprint"], "cortex_search_symbols", arguments)
+    cached_payload = _cache_get(store, repo_root, cache_key)
+    if cached_payload is not None and isinstance(cached_payload.get("items"), list):
+        nodes = copy.deepcopy(cached_payload["items"])
+        if response_format == "concise":
+            # The ledger prices the detailed rendering, which is the cached concise one plus `why`.
+            detailed_nodes = copy.deepcopy(nodes)
+            for node in detailed_nodes:
+                node["why"] = [{"type": "like_query", "query": query}]
+            _stash_detailed_rendering(_content(_format_payload(
+                {"repo_path": str(repo_root), "items": detailed_nodes}, status, "detailed"
+            )))
+        result = _content(_format_payload({"repo_path": str(repo_root), "items": nodes}, status, response_format, cached=True))
+        if response_format == "detailed":
+            _stash_detailed_rendering(result)
+        return result
+    nodes = [node.to_dict() for node in store.search_nodes(repo_root, query, int(arguments.get("limit", 20)))]
     for node in nodes:
         node["degree"] = node.get("metadata", {}).get("degree", 0)
-        node["why"] = [{"type": "like_query", "query": str(arguments.get("query", ""))}]
-    response_format = _response_format(arguments)
+        node["why"] = [{"type": "like_query", "query": query}]
     if response_format == "concise":
         _stash_detailed_rendering(_content(_format_payload(
             {"repo_path": str(repo_root), "items": copy.deepcopy(nodes)}, status, "detailed"
         )))
         for node in nodes:
             node.pop("why", None)
+    _cache_set(store, repo_root, cache_key, {"repo_path": str(repo_root), "items": nodes})
     result = _content(_format_payload({"repo_path": str(repo_root), "items": nodes}, status, response_format))
     if response_format == "detailed":
         _stash_detailed_rendering(result)
@@ -2705,6 +2724,7 @@ def build_status_result(**extra_fields: Any) -> dict[str, Any]:
     running `call_tool`, so the server's reader thread can call it while a
     tool is executing."""
     snapshot = REGISTRY.snapshot()
+    snapshot["version"] = __version__
     snapshot["deadline_budget_seconds"] = resolve_budget_seconds()
     snapshot["fingerprint_ttl_seconds"] = fingerprint_ttl_seconds()
     snapshot["graph_cache"] = graph_cache_info()

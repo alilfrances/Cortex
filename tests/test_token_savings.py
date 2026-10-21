@@ -564,3 +564,29 @@ def test_status_slowest_seconds_includes_the_ledger(tmp_path, monkeypatch):
 
     per_tool = REGISTRY.snapshot()["per_tool"]["cortex_path"]
     assert per_tool["slowest_seconds"] >= 0.2
+
+
+def test_search_symbols_is_cached_and_prices_the_same_baseline(tmp_path, monkeypatch):
+    repo = _repo_with_index(tmp_path, monkeypatch)
+    store = CortexStore(default_db_path(repo))
+    for response_format in ("concise", "detailed"):
+        args = {"repo_path": str(repo), "query": "login", "response_format": response_format}
+        first = _payload(call_tool("cortex_search_symbols", args))
+        second = _payload(call_tool("cortex_search_symbols", args))
+
+        assert first["items"] and second["items"] == first["items"]
+        assert second["_meta"]["cached"] is True if "_meta" in second else response_format == "concise"
+        rows = [row for row in store.fetch_tool_usage(repo) if row["tool"] == "cortex_search_symbols"]
+        assert rows[-1]["baseline_tokens"] == rows[-2]["baseline_tokens"]
+        assert rows[-1]["response_tokens"] == rows[-2]["response_tokens"]
+
+
+def test_search_symbols_cache_distinguishes_arguments(tmp_path, monkeypatch):
+    repo = _repo_with_index(tmp_path, monkeypatch)
+
+    one = _payload(call_tool("cortex_search_symbols", {"repo_path": str(repo), "query": "verify", "limit": 1}))
+    many = _payload(call_tool("cortex_search_symbols", {"repo_path": str(repo), "query": "verify", "limit": 20}))
+    other = _payload(call_tool("cortex_search_symbols", {"repo_path": str(repo), "query": "charge"}))
+
+    assert len(one["items"]) == 1 and len(many["items"]) > 1
+    assert {item["label"] for item in other["items"]} != {item["label"] for item in many["items"]}

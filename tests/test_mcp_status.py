@@ -301,3 +301,13 @@ def test_in_flight_progress_is_reported_only_once_set() -> None:
         assert "progress" not in registry.snapshot()["in_flight"][0]
         status.set_progress("parse", 50, 200)
         assert registry.snapshot()["in_flight"][0]["progress"] == {"stage": "parse", "done": 50, "total": 200}
+
+
+def test_status_and_server_info_report_the_package_version() -> None:
+    import cortex
+    from cortex.mcp.server import SERVER_INFO
+    from cortex.mcp.tools import call_tool
+
+    payload = json.loads(call_tool("cortex_status", {})["content"][0]["text"])
+
+    assert payload["version"] == cortex.__version__ == SERVER_INFO["version"]
