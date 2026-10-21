@@ -40,7 +40,10 @@ _C_DEF_PATTERNS = [
 _CPP_DEF_PATTERNS = [
     _Pattern(re.compile(r"^\s*namespace\s+(?P<name>[A-Za-z_]\w*(?:::[A-Za-z_]\w*)*)\s*\{", re.MULTILINE), "class"),
     _Pattern(
-        re.compile(r"^\s*(?:class|struct|enum(?:\s+class)?|union)\s+(?P<name>[A-Za-z_]\w*)[^{;]*\{", re.MULTILINE),
+        re.compile(
+            r"^\s*(?:class|struct|enum(?:\s+class)?|union)\s+(?:[A-Z][A-Z0-9_]*\s+(?=[A-Za-z_]))?(?P<name>[A-Za-z_]\w*)[^{;]*\{",
+            re.MULTILINE,
+        ),
         "class",
     ),
     _Pattern(
@@ -65,10 +68,21 @@ _QML_DEF_PATTERNS = [
 _QML_OBJECT_RE = re.compile(r"^\s*(?P<name>[A-Z][A-Za-z0-9_]*)\s*\{", re.MULTILINE)
 _QT_SECTION_RE = re.compile(r"^\s*(?:(?:public|private|protected)\s+)?(?P<section>signals|slots|Q_SIGNALS|Q_SLOTS)\s*:?\s*$")
 _QT_ACCESS_RE = re.compile(r"^\s*(?:public|private|protected|signals|slots|Q_SIGNALS|Q_SLOTS)\s*:")
+# `class [EXPORT_MACRO] Name [final] [: bases] {` -- the brace may sit on a later
+# line (Qt style) and an all-caps export macro may precede the name.
+_EXPORT_MACRO = r"(?:[A-Z][A-Z0-9_]*\s+(?=[A-Za-z_]))?"
 _QT_CLASS_RE = re.compile(
-    r"^\s*(?:class|struct)\s+(?P<name>[A-Za-z_]\w*)\b(?:\s*:\s*(?P<bases>[^{;]+))?\s*\{",
+    # `^\s*` (not `^[ \t]*`) on purpose: it can start the match on a preceding blank
+    # line, which the frozen baseline goldens pin as the `inherits` edge's lineno.
+    r"^\s*(?:class|struct)\s+" + _EXPORT_MACRO + r"(?P<name>[A-Za-z_]\w*)\b(?:\s*final\b)?(?:\s*:\s*(?P<bases>[^{;]+))?\s*\{",
     re.MULTILINE,
 )
+# Declaration head only (no brace needed on this line); a `;` before any `{` is a
+# forward declaration or a member, not a class definition.
+_CLASS_DECL_RE = re.compile(
+    r"^\s*(?:template\s*<[^>]*>\s*)?(?:class|struct)\s+" + _EXPORT_MACRO + r"(?P<name>[A-Za-z_]\w*)\b[^;{]*(?:\{.*)?$"
+)
+_CLASS_SIGNATURE_RE = re.compile(r"^\s*(?:template\s*<[^>]*>\s*)?(?:class|struct)\b")
 _QT_MEMBER_RE = re.compile(
     r"^\s*(?:virtual\s+)?(?:[\w:<>,~*&\s]+\s+)?(?P<name>[A-Za-z_]\w*)\s*\([^;{}]*\)\s*(?:const\s*)?(?:=\s*0\s*)?;"
 )
@@ -632,6 +646,65 @@ def _extract_qrc_wiring(path: str, content: str, known_paths: set[str], edges: l
             _append_wiring_edge(path, source, f"file:{resolved}", "registers", _line_number(content, match.start()), edges)
 
 
+def _class_lines_by_scan(content: str) -> dict[int, str]:
+    """Line -> innermost class/struct name, by brace counting.
+
+    Fallback for files whose class symbols are missing or unreliable. A class
+    head may span lines and its `{` may sit on a later line; a `;` before any
+    `{` (forward declaration) cancels the pending class.
+    """
+    result: dict[int, str] = {}
+    stack: list[tuple[str, int]] = []  # (name, brace depth before the class opened)
+    pending = ""
+    depth = 0
+    for lineno, line in enumerate(content.splitlines(), start=1):
+        if not pending:
+            head = _CLASS_DECL_RE.match(line)
+            if head:
+                pending = head.group("name")
+        elif ";" in line and "{" not in line:
+            pending = ""
+        if pending and "{" in line:
+            stack.append((pending, depth))
+            pending = ""
+        owner = stack[-1][0] if stack else pending
+        if owner:
+            result[lineno] = owner
+        depth += line.count("{") - line.count("}")
+        while stack and depth <= stack[-1][1]:
+            stack.pop()
+    return result
+
+
+def _class_owner_by_line(path: str, content: str, nodes: list[GraphNode]) -> Callable[[int], str]:
+    """Return `line -> owning class name or ''` for one C++ file.
+
+    Prefers the class/struct symbols already extracted for the file (their spans
+    come from the parser); lines they do not cover fall back to a brace scan. A
+    line outside every class has no owner: callers must skip it rather than
+    invent one.
+    """
+    spans = [
+        (node.span_start, node.span_end, node.label)
+        for node in nodes
+        if node.source_ref == path
+        and node.granularity == "symbol"
+        and node.kind == "class"
+        and isinstance(node.span_start, int)
+        and isinstance(node.span_end, int)
+        and _CLASS_SIGNATURE_RE.match(node.signature or "")
+    ]
+    scanned = _class_lines_by_scan(content)
+
+    def owner(line: int) -> str:
+        containing = [item for item in spans if item[0] <= line <= item[1]]
+        if containing:
+            return min(containing, key=lambda item: (item[1] - item[0], item[2]))[2]
+        return scanned.get(line, "")
+
+    return owner
+
+
 def _extract_qt_cpp_edges(
     path: str,
     content: str,
@@ -641,8 +714,7 @@ def _extract_qt_cpp_edges(
     seen: set[str],
     connect_names: list[str] | None = None,
 ) -> None:
-    current_class = ""
-    class_depth = 0
+    owner_of = _class_owner_by_line(path, content, nodes)
     section = ""
     brace_depth = 0
     function_nodes = [
@@ -657,13 +729,11 @@ def _extract_qt_cpp_edges(
         for node in function_nodes:
             if node.span_start == lineno:
                 current_function = node
-        class_match = _QT_CLASS_RE.match(line)
-        if class_match:
-            current_class = class_match.group("name")
-            class_depth = brace_depth + line.count("{") - line.count("}")
+        if _CLASS_DECL_RE.match(line):
             section = ""
-        if current_class and "Q_OBJECT" in line:
-            symbol_id = f"symbol:{path}:{current_class}"
+        qobject_owner = owner_of(lineno) if "Q_OBJECT" in line else ""
+        if qobject_owner:
+            symbol_id = f"symbol:{path}:{qobject_owner}"
             for node in nodes:
                 if node.node_id == symbol_id:
                     node.metadata["qt"] = "qobject"
@@ -725,8 +795,7 @@ def _extract_qt_cpp_edges(
         brace_depth += line.count("{") - line.count("}")
         if current_function is not None and brace_depth <= 0:
             current_function = None
-        if current_class and brace_depth < class_depth:
-            current_class = ""
+        if section and not owner_of(lineno + 1):
             section = ""
 
     # Connect calls routinely span lines, so they are scanned over the whole
@@ -1058,16 +1127,7 @@ def _extract_qml_cpp_registration(
     seen: set[str],
 ) -> None:
     """Index Qt 5/6 QML registration macros and QObject members."""
-    current_class = ""
-    class_lines: dict[int, str] = {}
-    for lineno, line in enumerate(content.splitlines(), start=1):
-        match = _QT_CLASS_RE.match(line)
-        if match:
-            current_class = match.group("name")
-        if current_class:
-            class_lines[lineno] = current_class
-        if current_class and line.count("}") > line.count("{"):
-            current_class = ""
+    owner_of = _class_owner_by_line(path, content, nodes)
 
     def ensure_class(name: str, line: int) -> str:
         identifier = f"symbol:{path}:{name}"
@@ -1078,8 +1138,7 @@ def _extract_qml_cpp_registration(
     macros = re.compile(r"\b(QML_ELEMENT|QML_NAMED_ELEMENT\s*\(\s*([A-Za-z_]\w*)|QML_SINGLETON|QML_UNCREATABLE|QML_ANONYMOUS|QML_FOREIGN|QML_EXTENDED)\b")
     for match in macros.finditer(content):
         line = _line_number(content, match.start())
-        owner = class_lines.get(line, "")
-        owner = owner or class_lines.get(max((number for number in class_lines if number <= line), default=line), "")
+        owner = owner_of(line)
         qml_name = match.group(2) or owner
         if not qml_name:
             continue
@@ -1112,8 +1171,8 @@ def _extract_qml_cpp_registration(
         edges.append(GraphEdge(edge_id=f"regex:{path}:runtime-register:{line}:{match.group(1)}:{qml_name}", source=file_node_id, target=target, relation="registers", layer="STRUCTURAL", confidence="EXTRACTED", weight=1.0, metadata={"lineno": line, "source_file": path, "registration": match.group(1), "class_name": class_name, "qml_name": qml_name, "uri": match.group(3), "major": match.group(4), "minor": match.group(5)}))
 
     for lineno, line in enumerate(content.splitlines(), start=1):
-        owner = class_lines.get(lineno, "") or "QObject"
-        if "Q_PROPERTY" in line:
+        owner = owner_of(lineno)
+        if "Q_PROPERTY" in line and owner:
             match = re.search(r"Q_PROPERTY\s*\(\s*([\w:<>]+)\s+([A-Za-z_]\w*)([^)]*)\)", line)
             if match:
                 owner_id = ensure_class(owner, lineno)
@@ -1122,7 +1181,7 @@ def _extract_qml_cpp_registration(
                 prop = next(item for item in nodes if item.node_id == f"symbol:{path}:{name}")
                 prop.metadata.update({"qml_kind": "property", "qml_owner": owner, "type": match.group(1)})
                 edges.append(GraphEdge(edge_id=f"regex:{path}:contains:{name}:{lineno}", source=owner_id, target=prop.node_id, relation="contains", layer="STRUCTURAL", confidence="EXTRACTED", weight=1.0, metadata={"lineno": lineno, "source_file": path}))
-        if "Q_INVOKABLE" in line:
+        if "Q_INVOKABLE" in line and owner:
             match = re.search(r"Q_INVOKABLE\s+[^()]+?\b([A-Za-z_]\w*)\s*\(", line)
             if match:
                 _upsert_qt_symbol(path, f"{owner}.{match.group(1)}", "func", line.strip(), lineno, "invokable", nodes, edges, seen, file_node_id)

@@ -4,6 +4,10 @@
 
 Planned in `docs/plan-0.12-field-report.md` (verdict per claim of the 0.11.0 field report and task list).
 
+**Graph format 4 (full rebuild on first refresh).**
+
+- Qt headers no longer produce a fabricated `QObject` class. The regex Qt passes found a class's owner with a pattern that needed `{` on the `class` line; with Qt's usual brace-on-next-line style no owner was found and `Q_PROPERTY`/`Q_INVOKABLE` members were attached to a made-up `symbol:<file>:QObject` class (17 headers / 64 nodes in the vendored Qt fixture). Owners now come from the extracted class spans, with a brace-scan fallback that handles a brace on a later line and export macros (`class MYLIB_EXPORT Foo`); a member outside any class is skipped. Brace-on-next-line classes now also get their `qt: qobject` tag and, in the regex backend, their `inherits` edges. No checked-in golden changed (the fixtures use same-line braces); `tests/test_qt_owner_extraction.py` covers both backends and the vendored project.
+
 - Token-savings ledger no longer runs a tool a second time. `cortex_search_symbols`, `cortex_relations`, `cortex_path` and `cortex_overview` used to be re-dispatched in `detailed` format after the call, outside the deadline and the status registry (for `cortex_path` that was 2.85s of 6.3s on the 2.2k-file bench repo). The handlers now stash their detailed rendering and the ledger counts that; `saved_tokens` values are unchanged. The ledger also runs inside the status registry's timing, so `cortex_status.slowest_seconds` no longer under-reports.
 
 ## 0.11.0 — 2026-10-19
