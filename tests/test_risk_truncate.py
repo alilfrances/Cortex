@@ -3,11 +3,18 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 import pytest
 
-from cortex.risk import truncate_risk_result
+from cortex.risk import (
+    _RISK_REDUCIBLE_KEYS,
+    _RISK_SCALAR_KEYS,
+    UNCOVERED_FLOOR,
+    analyze_risk,
+    truncate_risk_result,
+)
 from cortex.tokenizer import count_text_tokens
 
 
@@ -135,6 +142,8 @@ def test_matches_the_old_loop_for_every_budget_without_tests_by_changed_file() -
     for budget in range(0, full + 40):
         new = truncate_risk_result(result, budget)
         old = old_truncate_risk_result(result, budget)
+        if new.get("minimal_payload"):
+            continue  # tiny budgets: the minimal fallback replaces the ordinary result
         # `returned_count` is now part of the fit, so a payload fitted to the limit keeps one
         # file fewer than the old loop where that count tipped it over.
         if "omitted_fields" not in new and len(new["files"]) == len(old["files"]):
@@ -253,7 +262,11 @@ def _large_diff_result() -> dict:
     result["directives"] = [f"missing_tests: {tests[i]['test']} for src/x{i}.cpp" for i in range(60)]
     result["tests_to_run"] = tests
     result["tests_by_changed_file"] = by_file
-    result["uncovered_changed_files"] = []
+    # Most changed files of a real large range have no reaching test (276 of 334 in the field
+    # report), and this list alone was over the default budget in 0.12.1.
+    result["uncovered_changed_files"] = [
+        f"src/subsystem_{n % 17}/platform/implementation/component_{n}_with_a_long_name.cpp" for n in range(250)
+    ]
     return result
 
 
@@ -277,6 +290,10 @@ def test_large_diff_keeps_the_per_file_test_map_at_the_default_budget() -> None:
     assert len(out["tests_by_changed_file"]) + out.get("tests_by_changed_file_omitted", 0) == len(original)
     assert len(out["tests_to_run"]) >= 10
     assert out["budget_feasible"] is True
+    assert len(out["tests_by_changed_file"]) >= 10
+    assert out["uncovered_changed_files_total"] == 250
+    assert out["uncovered_changed_files"] == result["uncovered_changed_files"][: len(out["uncovered_changed_files"])]
+    assert len(out["uncovered_changed_files"]) <= UNCOVERED_FLOOR
 
 
 def test_the_highest_risk_changed_files_keep_their_map_entries() -> None:
@@ -307,3 +324,117 @@ def test_the_map_outlives_directives_and_tests_to_run_reasons() -> None:
         out = truncate_risk_result(result, budget)
         if out.get("directives"):
             assert "tests_by_changed_file" in out, budget
+
+
+# --- 0.12.2: `uncovered_changed_files` is ranked, counted and cut; every collection key reducible ---
+
+
+def test_uncovered_changed_files_is_untouched_when_nothing_is_over_budget() -> None:
+    result = _large_diff_result()
+    out = truncate_risk_result(result, 1_000_000)
+    assert out["uncovered_changed_files"] == result["uncovered_changed_files"]
+    assert "uncovered_changed_files_total" not in out and out["truncated"] is False
+
+
+def test_uncovered_total_appears_only_when_the_list_was_shortened() -> None:
+    result = _large_diff_result()
+    result["uncovered_changed_files"] = result["uncovered_changed_files"][:3]
+    for budget in range(0, 6000, 150):
+        out = truncate_risk_result(result, budget)
+        shortened = len(out["uncovered_changed_files"]) < 3
+        assert ("uncovered_changed_files_total" in out) == shortened, budget
+        if shortened:
+            assert out["uncovered_changed_files_total"] == 3
+
+
+def test_the_uncovered_list_goes_below_its_floor_only_after_tests_to_run_reach_theirs() -> None:
+    result = _large_diff_result()
+    for budget in range(400, 4000, 50):
+        out = truncate_risk_result(result, budget)
+        if len(out["uncovered_changed_files"]) < min(UNCOVERED_FLOOR, 250):
+            assert len(out["tests_to_run"]) <= 10 or out["tests_to_run"] == [], budget
+            assert out["uncovered_changed_files_total"] == 250
+        assert out["uncovered_changed_files"] == result["uncovered_changed_files"][: len(out["uncovered_changed_files"])]
+
+
+def test_an_unknown_oversized_key_gets_the_minimal_payload() -> None:
+    result = _large_diff_result()
+    result["brand_new_bucket"] = [{"path": f"x/{n}", "why": "w" * 40} for n in range(400)]
+    out = truncate_risk_result(result, 2000)
+    assert out["budget_feasible"] is True and out["minimal_payload"] is True
+    assert "brand_new_bucket" in out["omitted_fields"] and "brand_new_bucket" not in out
+    for key in ("status", "range", "tests_run_all", "tests_run_all_reason"):
+        assert key in out
+    missing = [key for key in result if key not in out and key != "files"]
+    assert sorted(missing) == sorted(name for name in out["omitted_fields"] if name != "tests_to_run.reason")
+    assert out["tests_by_changed_file"]  # as much of the map as fits
+    assert out["uncovered_changed_files_total"] == 250
+
+
+def test_absurd_budgets_stay_honest() -> None:
+    result = _large_diff_result()
+    result["brand_new_bucket"] = ["x" * 50] * 200
+    out = truncate_risk_result(result, 0)
+    assert out["budget_feasible"] is False
+    out = truncate_risk_result(result, 5)
+    assert out["budget_feasible"] is False
+
+
+def test_normal_results_never_use_the_minimal_payload() -> None:
+    result = _large_diff_result()
+    for budget in range(600, 6000, 400):
+        assert "minimal_payload" not in truncate_risk_result(result, budget), budget
+
+
+def _inflate(value: Any) -> Any:
+    """Make a list/dict value ~50x bigger, filling an empty one with plausible junk."""
+    if isinstance(value, list):
+        return list(value) * 50 if value else [f"filler/{n}/some_long_path_component.cpp: detail text" for n in range(50)]
+    if isinstance(value, dict):
+        out = {f"{key}#{n}" if n else key: item for n in range(50) for key, item in value.items()}
+        return out or {f"filler_{n}": ["tests/t.cpp"] for n in range(50)}
+    return value
+
+
+def test_every_collection_key_is_reducible(tmp_path: Path) -> None:
+    """A list/dict key added to `analyze_risk` but not to the truncator fails here (0.12.1's bug class)."""
+    from tests.field_shape import build_field_shape_repo
+
+    repo = build_field_shape_repo(tmp_path / "field", modules=12, commits=30)
+    real = analyze_risk(repo, "HEAD~25..HEAD")
+    assert real["status"] in {"ok", "partial"} and real["uncovered_changed_files"] and real["tests_by_changed_file"]
+
+    unclassified = [
+        key for key, value in real.items() if key not in _RISK_SCALAR_KEYS and not isinstance(value, (list, dict))
+    ]
+    assert not unclassified, f"scalar key(s) missing from _RISK_SCALAR_KEYS: {unclassified}"
+    hidden = [key for key in _RISK_SCALAR_KEYS if isinstance(real.get(key), (list, dict))]
+    assert not hidden, f"collection(s) listed as scalar: {hidden}"
+    unreduced = [key for key, value in real.items() if isinstance(value, (list, dict)) and key not in _RISK_REDUCIBLE_KEYS]
+    assert not unreduced, f"collection key(s) with no truncation step: {unreduced}"
+
+    inflated = {key: _inflate(value) for key, value in real.items()}
+    out = truncate_risk_result(inflated, 2000)
+
+    assert out["budget_feasible"] is True
+    assert "minimal_payload" not in out, "the fallback must not be what makes a known key fit"
+    omitted = set(out.get("omitted_fields", []))
+    for key, value in inflated.items():
+        if not isinstance(value, (list, dict)):
+            continue
+        counted = f"{key}_total" in out or f"{key}_omitted" in out
+        shortened = key in out and len(out[key]) < len(value)
+        assert key in omitted or shortened or counted, f"{key} is neither shortened, omitted nor counted"
+
+
+def test_uncovered_changed_files_follow_the_files_risk_ranking(tmp_path: Path) -> None:
+    from tests.field_shape import build_field_shape_repo
+
+    repo = build_field_shape_repo(tmp_path / "field", modules=12, commits=30)
+    result = analyze_risk(repo, "HEAD~25..HEAD")
+    rank = {item["path"]: index for index, item in enumerate(result["files"])}
+    uncovered = result["uncovered_changed_files"]
+    assert len(uncovered) > UNCOVERED_FLOOR  # a prefix cut is meaningful on this profile
+    assert uncovered == sorted(uncovered, key=lambda path: (rank[path], path))
+    assert uncovered != sorted(uncovered)  # ranked, not alphabetical
+    assert not set(uncovered) & set(result["tests_by_changed_file"])

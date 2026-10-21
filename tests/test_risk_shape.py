@@ -331,6 +331,8 @@ def test_truncate_risk_result_drop_order_and_added_fields() -> None:
     removed_at: dict[str, int] = {}  # item -> largest budget at which it is gone
     for budget in range(full + 20, -1, -1):
         out = truncate_risk_result(result, budget)
+        if out.get("minimal_payload"):
+            continue  # the A.4 fallback (tiny budgets) drops by its own rules, see test_risk_truncate.py
         present = {f"file:{f['path']}" for f in out["files"]} | {k for k in result if k in out}
         present |= {f"directive:{d}" for d in out["directives"]}
         for item in DROP_ORDER:

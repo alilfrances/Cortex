@@ -117,6 +117,20 @@ def test_mcp_with_a_budget_does_not_rebuild_in_full_inside_a_read_tool(tmp_path:
     assert CortexStore(default_db_path(repo)).get_repo_graph_version(repo) == GRAPH_FORMAT_VERSION
 
 
+def test_refresh_reports_full_mode_when_an_old_index_is_rebuilt_in_full(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    ingest_repository(repo)
+    _downgrade_to_pre_010(repo)
+
+    upgraded = json.loads(call_tool("cortex_refresh", {"repo_path": str(repo)})["content"][0]["text"])  # incremental by default
+
+    assert upgraded["summary"]["full_reindex_reason"].startswith("index graph format 0")
+    assert upgraded["mode"] == "full"
+    # Once upgraded, an incremental request is incremental again, and says so.
+    again = json.loads(call_tool("cortex_refresh", {"repo_path": str(repo)})["content"][0]["text"])
+    assert "full_reindex_reason" not in again["summary"] and again["mode"] == "incremental"
+
+
 def test_old_index_without_auto_refresh_is_reported_stale(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("CORTEX_AUTO_REFRESH", "0")
     repo = _repo(tmp_path)

@@ -110,8 +110,8 @@
   "tests_to_run": [],
   "truncated": false,
   "uncovered_changed_files": [
-    "qml/Main.qml",
-    "src/DeviceManager.cpp"
+    "src/DeviceManager.cpp",
+    "qml/Main.qml"
   ],
   "unindexed": false,
   "unindexed_files": []

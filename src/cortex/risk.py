@@ -830,6 +830,12 @@ def analyze_risk(
         cochange=cochange,
         index_status=index_status,
     )
+    # Highest-risk changed file first (the `files` ranking), then path, so any prefix of the
+    # list is the riskiest subset and the truncator can cut it from the end.
+    uncovered_rank = {str(value["path"]): position for position, value in enumerate(file_payloads)}
+    uncovered_changed_files = sorted(
+        uncovered_changed_files, key=lambda path: (uncovered_rank.get(path, len(uncovered_rank)), path)
+    )
     directives = _directive_strings(
         missing_cochange, missing_tests, qt_pairs, qt_instantiations, qt_signal_sites, build_system_misses, tests_to_run
     )
@@ -892,7 +898,43 @@ _RISK_DROP_ORDER = (
 _TESTS_TRUNCATED_REASON = "tests_to_run was truncated to fit the response budget"
 # `tests_to_run` is cut down to this many entries before the per-file test map is touched.
 TESTS_TO_RUN_FLOOR = 10
+# `uncovered_changed_files` is cut to this many entries as soon as the result is over budget
+# (`uncovered_changed_files_total` keeps the full count); it goes below it only once everything
+# else is at its floor.
+UNCOVERED_FLOOR = 20
 _MAP_KEYS = ("tests_by_changed_file", "tests_by_changed_file_tests", "tests_by_changed_file_encoding", "tests_by_changed_file_omitted")
+# Every list/dict-valued key `analyze_risk` returns has a truncation step: these are cut,
+# the rest is in `_RISK_DROP_ORDER` (dropped whole) or handled by name in the truncator.
+_RISK_REDUCIBLE_KEYS = (
+    "files",
+    "directives",
+    "tests_to_run",
+    "tests_by_changed_file",
+    "uncovered_changed_files",
+) + _RISK_DROP_ORDER
+# Keys of `analyze_risk` whose values are bounded scalars.  A new key that is neither here nor
+# reduced by `truncate_risk_result` makes `test_every_collection_key_is_reducible` fail.
+_RISK_SCALAR_KEYS = frozenset(
+    {
+        "status",
+        "range",
+        "staged",
+        "repo_path",
+        "index_status",
+        "cochange_threshold",
+        "unindexed",
+        "tests_run_all",
+        "tests_run_all_reason",
+    }
+)
+# What survives the minimal fallback payload (see `truncate_risk_result`).
+_RISK_MINIMAL_KEYS = frozenset(
+    {
+        "status", "range", "staged", "index_status", "unindexed", "tests_run_all", "tests_run_all_reason",
+        "files", "directives", "tests_to_run", "uncovered_changed_files", "uncovered_changed_files_total",
+        "budget", "truncated", "returned_count", "budget_feasible", "omitted_fields", "minimal_payload",
+    }
+) | frozenset(_MAP_KEYS)
 
 
 def _risk_tokens(output: Mapping[str, Any]) -> int:
@@ -914,11 +956,14 @@ def _longest_fitting_prefix(count: int, fits: Callable[[int], bool], floor: int 
     return best
 
 
-def truncate_risk_result(result: Mapping[str, Any], budget: int) -> dict[str, Any]:
+def truncate_risk_result(result: Mapping[str, Any], budget: int, *, _pre_omitted: Sequence[str] = ()) -> dict[str, Any]:
     """Deterministically keep high-risk files and directives within a budget.
 
     Give-up order as the budget shrinks:
 
+    0. `uncovered_changed_files` (a diagnostic, ranked by the changed file's risk) is cut to
+       `UNCOVERED_FLOOR` entries and `uncovered_changed_files_total` records the full count;
+       the total only appears when the list was actually shortened;
     1. lower-ranked `files`;
     2. `tests_by_changed_file` is re-encoded (lossless) as indices into its own table
        of tests, `tests_by_changed_file_tests`, so cuts to `tests_to_run` cannot
@@ -928,6 +973,7 @@ def truncate_risk_result(result: Mapping[str, Any], budget: int) -> dict[str, An
     5. `directives`;
     6. `tests_to_run`, down to `TESTS_TO_RUN_FLOOR` entries (which switches
        `tests_run_all` on);
+    6b. `uncovered_changed_files` below `UNCOVERED_FLOOR`, down to none (the total stays);
     7. the per-file map itself, keeping the highest-risk changed files
        (`tests_by_changed_file_omitted` counts the rest);
     8. `tests_to_run` below the floor: the map is fitted first with no tests at all and the
@@ -936,12 +982,23 @@ def truncate_risk_result(result: Mapping[str, Any], budget: int) -> dict[str, An
 
     Every fully removed key is named in `omitted_fields`. Prefix lengths are found by
     binary search: size only grows with the prefix.
+
+    If the result is still over budget after every step (a key the steps above do not know,
+    or an oversized scalar), the truncation is rerun on a minimal payload (`_RISK_MINIMAL_KEYS`:
+    status, range, `tests_run_all` and its reason, the counts and as much of the lists and
+    map as fits) with `minimal_payload: true`; every key it leaves out is named in
+    `omitted_fields`.  It is used only when it fits.  When even that does not fit (budgets
+    near zero) the ordinary result is returned with `budget_feasible: false`.
     """
     output = json.loads(json.dumps(result, sort_keys=True))
     limit = max(0, int(budget))
     output["budget"] = limit
     output["truncated"] = False
-    omitted: list[str] = []
+    omitted: list[str] = list(_pre_omitted)
+    if omitted:
+        output["omitted_fields"] = list(omitted)
+        output["truncated"] = True
+        output["minimal_payload"] = True  # only set by the fallback below
 
     def over() -> bool:
         return _risk_tokens(output) > limit
@@ -1002,6 +1059,21 @@ def truncate_risk_result(result: Mapping[str, Any], budget: int) -> dict[str, An
 
     has_map = bool(pairs)
 
+    uncovered_total = len(output.get("uncovered_changed_files") or [])
+
+    def uncovered_probe(_items: list[Any], count: int) -> None:
+        if count < uncovered_total:
+            output["uncovered_changed_files_total"] = uncovered_total
+        else:
+            output.pop("uncovered_changed_files_total", None)
+
+    if over() and len(output.get("uncovered_changed_files") or []) > UNCOVERED_FLOOR:
+        # A diagnostic list: the count carries most of the information, and it is the one key
+        # that can dwarf everything else on a large range.  Cut it before the files are.
+        full_list = output["uncovered_changed_files"]
+        output["uncovered_changed_files"] = full_list[:UNCOVERED_FLOOR]
+        uncovered_probe(full_list, UNCOVERED_FLOOR)
+        output["truncated"] = True
     if over():
         # `returned_count` is part of the fit, so a payload fitted to the limit stays within it.
         shorten("files", lambda _items, count: output.__setitem__("returned_count", count))
@@ -1044,6 +1116,8 @@ def truncate_risk_result(result: Mapping[str, Any], budget: int) -> dict[str, An
 
     if over() and output.get("tests_to_run"):
         shorten("tests_to_run", tests_probe, floor=TESTS_TO_RUN_FLOOR)
+    if over() and output.get("uncovered_changed_files"):
+        shorten("uncovered_changed_files", uncovered_probe)  # below UNCOVERED_FLOOR, down to none
     if has_map and over():
         shorten_map()
     if over():
@@ -1063,6 +1137,16 @@ def truncate_risk_result(result: Mapping[str, Any], budget: int) -> dict[str, An
         drop_map()
     output["returned_count"] = len(output.get("files", []))
     output["budget_feasible"] = not over()  # measured before the flag itself is added
+    if not output["budget_feasible"] and not _pre_omitted:
+        dropped = [key for key in result if key not in _RISK_MINIMAL_KEYS]
+        if dropped:
+            minimal = truncate_risk_result(
+                {key: value for key, value in result.items() if key in _RISK_MINIMAL_KEYS},
+                budget,
+                _pre_omitted=dropped,
+            )
+            if minimal["budget_feasible"]:
+                return minimal
     return output
 
 

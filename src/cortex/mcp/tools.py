@@ -2712,7 +2712,10 @@ def _call_refresh(arguments: dict[str, Any]) -> dict[str, Any]:
         _remember_fingerprint(repo_root, CortexStore(default_db_path(repo_root)).get_repo_fingerprint(repo_root))
     except Exception:
         _forget_fingerprint(repo_root)
-    return _content({"summary": summary, "mode": "incremental" if incremental else "full", "stale": False})
+    # An incremental request against an older graph format is rebuilt in full by the ingest
+    # (and says so in `full_reindex_reason`); report what actually ran.
+    ran_incremental = incremental and not summary.get("full_reindex_reason")
+    return _content({"summary": summary, "mode": "incremental" if ran_incremental else "full", "stale": False})
 
 
 # Tools covered by the P0-1 token-savings ledger. cortex_refresh is excluded:
