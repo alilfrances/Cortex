@@ -11,7 +11,7 @@ from .gitutils import discover_repo_root
 from .hotspots import top_hotspots
 from .models import GraphEdge, GraphNode
 from .store import CortexStore, default_db_path
-from .testpatterns import test_base_name
+from .testpatterns import pairs_with_test, test_base_name
 
 
 def _normalized_test_base(path: str) -> tuple[str, bool]:
@@ -19,9 +19,8 @@ def _normalized_test_base(path: str) -> tuple[str, bool]:
 
 
 def _looks_like_src_test_pair(source: str, target: str) -> bool:
-    source_base, source_is_test = _normalized_test_base(source)
-    target_base, target_is_test = _normalized_test_base(target)
-    return source_is_test != target_is_test and source_base == target_base
+    """Symmetric: cochange endpoints arrive in either order."""
+    return pairs_with_test(source, target) or pairs_with_test(target, source)
 
 
 def default_report_path(repo_path: Path, db_path: Path | None = None) -> Path:
@@ -82,15 +81,20 @@ def build_report_data(
     db_path: Path | None = None,
     include_test_pairs: bool = False,
     should_stop: Callable[[], bool] | None = None,
+    graph: tuple[list[GraphNode], list[GraphEdge]] | None = None,
+    resume: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Collect the deterministic, JSON-serializable inputs to a report.
+
+    `graph` lets a caller that already holds the (read-only, shared) graph skip
+    a second `fetch_graph`.
 
     Community detection remains here (rather than in the renderer), so every
     report format has the same analysis and continues to persist communities.
     """
     repo_root = discover_repo_root(repo_path)
     store = CortexStore(db_path or default_db_path(repo_root))
-    nodes, edges = store.fetch_graph(repo_root)
+    nodes, edges = graph if graph is not None else store.fetch_graph(repo_root)
 
     detected_communities = detect_communities(nodes, edges)
     node_community = {
@@ -104,8 +108,10 @@ def build_report_data(
         {"community_id": community.community_id, "node_ids": sorted(community.node_ids), "label": community.label}
         for community in sorted(detected_communities, key=lambda item: item.community_id)
     ]
-    dead_code = analyze_dead_code(repo_root, store=store, nodes=nodes, edges=edges, should_stop=should_stop)
-    return {
+    dead_code = analyze_dead_code(
+        repo_root, store=store, nodes=nodes, edges=edges, should_stop=should_stop, resume=resume
+    )
+    data = {
         "repo_name": repo_root.name,
         "repo_path": str(repo_root),
         "file_count": sum(1 for node in nodes if node.kind == "file"),
@@ -126,6 +132,11 @@ def build_report_data(
         "dead_code": dead_code["findings"],
         "dead_code_partial": bool(dead_code.get("partial", False)),
     }
+    if dead_code.get("partial"):
+        # Where the stopped analysis can be continued from (see analyze_dead_code).
+        data["dead_code_cursor"] = dead_code.get("cursor")
+        data["dead_code_progress"] = dead_code.get("progress")
+    return data
 
 
 def render_report(

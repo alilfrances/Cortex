@@ -9,6 +9,7 @@
   "keys": [
     "deadline_budget_seconds",
     "fingerprint_ttl_seconds",
+    "graph_cache",
     "in_flight",
     "in_flight_count",
     "per_tool",
@@ -17,6 +18,7 @@
     "total_deadline_exceeded",
     "total_failed",
     "total_soft_deadline",
-    "uptime_seconds"
+    "uptime_seconds",
+    "version"
   ]
 }

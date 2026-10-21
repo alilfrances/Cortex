@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import difflib
 import hashlib
 import json
@@ -11,13 +12,16 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
+from .. import __version__
 from ..bundle import _render_skeleton, _render_symbol_skeleton, _tokenize_query, generate_bundle
 from ..deadcode import analyze_dead_code, truncate_dead_code_result
 from ..deadline import DeadlineExceeded, current_deadline, deadline_scope, resolve_budget_seconds
 from ..gitutils import discover_repo_root
 from ..impact import IMPACT_CACHE_VERSION, UnknownPathError, rank_file_impact
 from ..ingest import compute_repo_fingerprint, ingest_repository
+from ..models import GraphEdge, GraphNode
 from ..pathfind import shortest_paths
+from ..rank import collapse_to_file_graph
 from ..references import find_references
 from ..report import build_report_data, render_report
 from ..hotspots import top_hotspots
@@ -633,11 +637,29 @@ def _cache_set(store: CortexStore, repo_root: Path, cache_key: str, payload: dic
         pass
 
 
+def _seed_edge_index(seed_paths: set[str], edges: list) -> dict[str, list[tuple[str, Any]]]:
+    """`file:<path>` node -> [(seed path, edge)] for edges joining it to a seed file, in edge order.
+
+    One pass over the edges, so explaining N items no longer costs N passes. An edge
+    between two seeds is listed under both ends; a self-loop only once.
+    """
+    seed_nodes = {f"file:{path}" for path in seed_paths}
+    index: dict[str, list[tuple[str, Any]]] = {}
+    for edge in edges:
+        if edge.target in seed_nodes:
+            index.setdefault(edge.source, []).append((edge.target.removeprefix("file:"), edge))
+        if edge.source in seed_nodes and edge.source != edge.target:
+            index.setdefault(edge.target, []).append((edge.source.removeprefix("file:"), edge))
+    return index
+
+
 def _bundle_why(
     item: dict[str, Any],
     terms: set[str],
     seed_paths: set[str],
     edges: list,
+    *,
+    seed_edges: dict[str, list[tuple[str, Any]]] | None = None,
 ) -> list[dict[str, Any]]:
     node_id = str(item.get("metadata", {}).get("node_id", ""))
     symbol_name = node_id.split(":", 2)[-1] if node_id else ""
@@ -651,18 +673,13 @@ def _bundle_why(
         why.append(entry)
 
     item_node = f"file:{item.get('path', '')}"
-    seed_nodes = {f"file:{path}" for path in seed_paths}
     if item.get("path") in seed_paths:
         why.append({"type": "seed_path", "path": item.get("path", "")})
 
+    if seed_edges is None:
+        seed_edges = _seed_edge_index(seed_paths, edges)
     contributing_edges = []
-    for edge in edges:
-        if edge.source == item_node and edge.target in seed_nodes:
-            seed = edge.target.removeprefix("file:")
-        elif edge.target == item_node and edge.source in seed_nodes:
-            seed = edge.source.removeprefix("file:")
-        else:
-            continue
+    for seed, edge in seed_edges.get(item_node, ()):
         contributing_edges.append(
             {
                 "seed_path": seed,
@@ -735,7 +752,7 @@ def _query_token_stats(
 
 
 def _concise_query_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
-    compact = {
+    compact: dict[str, Any] = {
         "task": bundle.get("task", ""),
         "repo_path": bundle.get("repo_path", ""),
         "budget": bundle.get("budget", 0),
@@ -745,6 +762,8 @@ def _concise_query_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
         "open_questions": bundle.get("open_questions", []),
         "items": [],
     }
+    if bundle.get("degraded"):
+        compact["degraded"] = bundle["degraded"]
     for item in bundle.get("items", []):
         compact["items"].append(
             {
@@ -786,7 +805,7 @@ def _call_query(arguments: dict[str, Any]) -> dict[str, Any]:
         # Load sources and the graph once: the bundle needs them, and so does the
         # `why` annotation below.
         all_sources = store.fetch_sources(repo_root)
-        graph = store.fetch_graph(repo_root)
+        graph = _cached_graph(store, repo_root)
         bundle = generate_bundle(
             repo_path=repo_root,
             task=task,
@@ -795,6 +814,7 @@ def _call_query(arguments: dict[str, Any]) -> dict[str, Any]:
             hotspot_boost=bool(arguments.get("hotspot_boost", False)),
             sources=all_sources,
             graph=graph,
+            rank_graph=_cached_rank_graph(store, repo_root, graph),
         )
         assert isinstance(bundle, dict)
         terms = _tokenize_query(task)
@@ -804,21 +824,23 @@ def _call_query(arguments: dict[str, Any]) -> dict[str, Any]:
             if any(term in f"{source.path}\n{source.content}".lower() for term in terms)
         }
         edges = graph[1]
+        seed_edges = _seed_edge_index(seed_paths, edges)
         for item in bundle.get("items", []):
-            item["why"] = _bundle_why(item, terms, seed_paths, edges)
+            item["why"] = _bundle_why(item, terms, seed_paths, edges, seed_edges=seed_edges)
         bundle["token_stats"] = _query_token_stats(bundle, arguments)
         payload = bundle if response_format == "detailed" else _concise_query_bundle(bundle)
         # P1-5: cache the bare payload only, not status/`_meta` -- see
         # _cache_set. `_format_payload` (below) rebuilds `_meta` fresh on
         # every call, hit or miss.
-        _cache_set(store, repo_root, cache_key, payload)
+        if not bundle.get("degraded"):  # a time-budget fallback must not be served later
+            _cache_set(store, repo_root, cache_key, payload)
     return _content(_format_payload(payload, status, response_format, cached=cache_hit))
 
 
 # This is deliberately separate from the generic query-cache format.  The
 # cached value is analysis, not an MCP response, and changing this version is
 # an explicit invalidation when the report-data contract changes.
-_OVERVIEW_ANALYSIS_CACHE_VERSION = 1
+_OVERVIEW_ANALYSIS_CACHE_VERSION = 2
 _OVERVIEW_DEFAULT_BUDGET = 2000
 _CONFIDENCE_PRIORITY = {"high": 0, "medium": 1, "low": 2}
 
@@ -840,6 +862,81 @@ _current_request: RequestStatus | None = None
 _progress_sink: Callable[[str, int, int], None] | None = None
 _in_tool_call = False
 _analysis_memo: tuple[tuple[str, str], dict[str, Any]] | None = None
+# The `detailed` rendering of the current call, stashed by the structure-only
+# handlers so the token-savings ledger can price it without re-running the tool.
+_ledger_detailed: dict[str, Any] | None = None
+
+
+def _stash_detailed_rendering(result: dict[str, Any]) -> None:
+    global _ledger_detailed
+    if _in_tool_call:
+        _ledger_detailed = result
+
+
+# Single-slot graph cache for the read-only tools. `fetch_graph` JSON-decodes every
+# node and edge row (2s at 79k edges) and most tools call it, so consecutive calls
+# on an unchanged index reuse one result. Keyed by database, repo, the indexed
+# fingerprint and `indexed_at`, so another process's ingest changes the key.
+# Callers share the returned lists and objects and must not mutate them; ingest and
+# enrichment, which do mutate what they load, keep calling `fetch_graph` directly.
+_graph_cache: tuple[tuple[str, str, str, int], tuple[list[GraphNode], list[GraphEdge]]] | None = None
+
+
+def _graph_cache_enabled() -> bool:
+    return os.environ.get("CORTEX_GRAPH_CACHE", "1") != "0"
+
+
+def _graph_key(store: CortexStore, repo_root: Path) -> tuple[str, str, str, int]:
+    try:
+        indexed_at = int(store.get_repo_indexed_at(repo_root) or 0)
+    except Exception:
+        indexed_at = 0  # same degradation as _staleness: unknown, not fatal
+    return (
+        str(store.db_path),
+        str(repo_root.resolve()),
+        store.get_repo_fingerprint(repo_root) or "",
+        indexed_at,
+    )
+
+
+def _cached_graph(store: CortexStore, repo_root: Path) -> tuple[list[GraphNode], list[GraphEdge]]:
+    """`store.fetch_graph(repo_root)`, memoised for the current index. Read-only use."""
+    global _graph_cache
+    if not _graph_cache_enabled():
+        return store.fetch_graph(repo_root)
+    key = _graph_key(store, repo_root)
+    cached = _graph_cache
+    if cached is not None and cached[0] == key:
+        return cached[1]
+    graph = store.fetch_graph(repo_root)
+    _graph_cache = (key, graph)
+    return graph
+
+
+# The file-level graph `cortex_query` ranks files on, derived from the graph above.
+_rank_graph_cache: tuple[tuple[str, str, str, int], tuple[list[GraphNode], list[GraphEdge]]] | None = None
+
+
+def _cached_rank_graph(
+    store: CortexStore, repo_root: Path, graph: tuple[list[GraphNode], list[GraphEdge]]
+) -> tuple[list[GraphNode], list[GraphEdge]]:
+    global _rank_graph_cache
+    if not _graph_cache_enabled():
+        return collapse_to_file_graph(*graph)
+    key = _graph_key(store, repo_root)
+    cached = _rank_graph_cache
+    if cached is not None and cached[0] == key:
+        return cached[1]
+    collapsed = collapse_to_file_graph(*graph)
+    _rank_graph_cache = (key, collapsed)
+    return collapsed
+
+
+def graph_cache_info() -> dict[str, int] | None:
+    cached = _graph_cache
+    if cached is None:
+        return None
+    return {"nodes": len(cached[1][0]), "edges": len(cached[1][1])}
 
 
 def _analysis_should_stop() -> Callable[[], bool]:
@@ -1022,6 +1119,65 @@ def _overview_detailed_capabilities(store: CortexStore, repo_root: Path) -> dict
     return {"semantic": semantic_payload, "language_runtime": runtime_payload}
 
 
+def _resume_overview_dead_code(store: CortexStore, repo_root: Path, analysis: dict[str, Any]) -> dict[str, Any]:
+    """Continue a partial overview analysis' dead-code scan from its cursor.
+
+    Communities, hotspots, god nodes and surprising connections are kept as they are;
+    only the remaining candidates are examined, under the current call's deadline.
+    """
+    nodes, edges = _cached_graph(store, repo_root)
+    cursor = analysis.get("dead_code_cursor")
+    result = analyze_dead_code(
+        repo_root,
+        db_path=store.db_path,
+        store=store,
+        nodes=nodes,
+        edges=edges,
+        should_stop=_analysis_should_stop(),
+        resume={"cursor": cursor, "findings": analysis["dead_code"]} if cursor else None,
+    )
+    updated = {key: value for key, value in analysis.items() if key not in ("dead_code_cursor", "dead_code_progress")}
+    updated["dead_code"] = result["findings"]
+    updated["dead_code_partial"] = bool(result.get("partial"))
+    if result.get("partial"):
+        updated["dead_code_cursor"] = result.get("cursor")
+        updated["dead_code_progress"] = result.get("progress")
+    return updated
+
+
+def _overview_analysis(store: CortexStore, repo_root: Path, fingerprint: str) -> tuple[dict[str, Any], bool]:
+    """The overview analysis for this index and whether it came straight from the cache.
+
+    A stopped analysis is cached too, with the cursor of its dead-code scan, so each
+    further call continues instead of starting over: a repository too big for one
+    budget converges after a few calls.
+    """
+    cache_key = _overview_analysis_cache_key(fingerprint)
+    cached = _cache_get(store, repo_root, cache_key)
+    if (
+        isinstance(cached, dict)
+        and cached.get("version") == _OVERVIEW_ANALYSIS_CACHE_VERSION
+        and _is_overview_analysis(cached.get("analysis"))
+    ):
+        analysis = cached["analysis"]
+        if not analysis.get("dead_code_partial", False):
+            return analysis, True
+        analysis = _resume_overview_dead_code(store, repo_root, analysis)
+        _cache_set(store, repo_root, cache_key, {"version": _OVERVIEW_ANALYSIS_CACHE_VERSION, "analysis": analysis})
+        return analysis, False
+    global _analysis_memo
+    memo_key = (str(repo_root.resolve()), fingerprint)
+    if _analysis_memo is not None and _analysis_memo[0] == memo_key:
+        return _analysis_memo[1], False
+    analysis = build_report_data(
+        repo_root, graph=_cached_graph(store, repo_root), should_stop=_analysis_should_stop()
+    )
+    if _in_tool_call:
+        _analysis_memo = (memo_key, analysis)
+    _cache_set(store, repo_root, cache_key, {"version": _OVERVIEW_ANALYSIS_CACHE_VERSION, "analysis": analysis})
+    return analysis, False
+
+
 def _call_overview(arguments: dict[str, Any]) -> dict[str, Any]:
     repo_root = _repo_root(arguments)
     store, error = _store_or_error(repo_root)
@@ -1031,36 +1187,34 @@ def _call_overview(arguments: dict[str, Any]) -> dict[str, Any]:
     status = _ensure_fresh(store, repo_root)
     response_format = _response_format(arguments)
     budget = max(0, int(arguments.get("budget", _OVERVIEW_DEFAULT_BUDGET)))
-    cache_key = _overview_analysis_cache_key(status["current_fingerprint"])
-    cached_analysis = _cache_get(store, repo_root, cache_key)
-    cache_hit = (
-        isinstance(cached_analysis, dict)
-        and cached_analysis.get("version") == _OVERVIEW_ANALYSIS_CACHE_VERSION
-        and _is_overview_analysis(cached_analysis.get("analysis"))
-    )
-    global _analysis_memo
-    if cache_hit:
-        analysis = cached_analysis["analysis"]
-    else:
-        memo_key = (str(repo_root.resolve()), status["current_fingerprint"])
-        if _analysis_memo is not None and _analysis_memo[0] == memo_key:
-            analysis = _analysis_memo[1]
-        else:
-            analysis = build_report_data(repo_root, should_stop=_analysis_should_stop())
-            if _in_tool_call:
-                _analysis_memo = (memo_key, analysis)
-            if not analysis.get("dead_code_partial", False):
-                _cache_set(
-                    store, repo_root, cache_key, {"version": _OVERVIEW_ANALYSIS_CACHE_VERSION, "analysis": analysis}
-                )
+    analysis, cache_hit = _overview_analysis(store, repo_root, status["current_fingerprint"])
 
     # Capabilities describe current optional integrations, unlike graph
     # analysis. They count toward detailed content, while freshness/status
     # remains outside the budget and is merged only by `_format_payload`.
     extra_fields = _overview_detailed_capabilities(store, repo_root) if response_format == "detailed" else None
     if analysis.get("dead_code_partial", False):
-        extra_fields = {**(extra_fields or {}), "dead_code_partial": True, "note": _PARTIAL_ANALYSIS_NOTE}
+        extra_fields = {
+            **(extra_fields or {}),
+            "dead_code_partial": True,
+            "note": _PARTIAL_ANALYSIS_NOTE,
+            **({"dead_code_progress": analysis["dead_code_progress"]} if analysis.get("dead_code_progress") else {}),
+        }
     payload = _fit_overview_report(repo_root, analysis, budget, extra_fields=extra_fields)
+    if _in_tool_call:
+        if response_format == "detailed":
+            detailed_payload = payload
+        else:
+            detailed_extra = _overview_detailed_capabilities(store, repo_root)
+            if analysis.get("dead_code_partial", False):
+                detailed_extra = {
+                    **detailed_extra,
+                    "dead_code_partial": True,
+                    "note": _PARTIAL_ANALYSIS_NOTE,
+                    **({"dead_code_progress": analysis["dead_code_progress"]} if analysis.get("dead_code_progress") else {}),
+                }
+            detailed_payload = _fit_overview_report(repo_root, analysis, budget, extra_fields=detailed_extra)
+        _stash_detailed_rendering(_content(_format_payload(detailed_payload, status, "detailed", cached=cache_hit)))
     return _content(_format_payload(payload, status, response_format, cached=cache_hit))
 
 
@@ -1081,7 +1235,7 @@ def _call_impact(arguments: dict[str, Any]) -> dict[str, Any]:
     if cached_payload is not None:
         payload = cached_payload
         if any("hotspot" not in item for item in payload.get("items", [])):
-            graph_nodes, _graph_edges = store.fetch_graph(repo_root)
+            graph_nodes, _graph_edges = _cached_graph(store, repo_root)
             hotspot_by_id = {node.node_id: node.metadata.get("hotspot", {}) for node in graph_nodes}
             enriched_items = []
             for item in payload.get("items", []):
@@ -1102,7 +1256,7 @@ def _call_impact(arguments: dict[str, Any]) -> dict[str, Any]:
             payload = {**payload, "items": enriched_items}
             _cache_set(store, repo_root, cache_key, payload)
         return _content(_format_payload(payload, status, response_format, cached=True))
-    nodes, edges = store.fetch_graph(repo_root)
+    nodes, edges = _cached_graph(store, repo_root)
     try:
         items, truncated = rank_file_impact(
             str(arguments.get("path", "")),
@@ -1656,7 +1810,7 @@ def _call_context(arguments: dict[str, Any]) -> dict[str, Any]:
     # Exactly one freshness check covers the complete batch. The graph is
     # fetched once and target source records are loaded lazily/deduplicated.
     status = _ensure_fresh(store, repo_root)
-    nodes, edges = store.fetch_graph(repo_root)
+    nodes, edges = _cached_graph(store, repo_root)
     nodes_by_id = {node.node_id: node for node in nodes}
     file_nodes = {node.node_id: node for node in nodes if node.kind == "file" or node.node_id.startswith("file:")}
     files_by_path = {node.source_ref: node for node in file_nodes.values()}
@@ -1737,7 +1891,7 @@ def _call_risk(arguments: dict[str, Any]) -> dict[str, Any]:
         # Exactly one freshness check for the complete risk request.  The risk
         # engine receives this graph snapshot and never performs its own check.
         status = _ensure_fresh(store, repo_root)
-        nodes, edges = store.fetch_graph(repo_root)
+        nodes, edges = _cached_graph(store, repo_root)
         graph_args = {"nodes": nodes, "edges": edges}
     else:
         status = {
@@ -1814,7 +1968,8 @@ def _dead_code_analysis(
     The overview analysis already runs `analyze_dead_code` at the default
     reference budget and caches it under the same fingerprint, so a dead-code
     call after an overview (or a repeat call) costs nothing; a scoped call
-    filters such a cached repo-wide result. A partial result is never cached.
+    filters such a cached repo-wide result. A stopped repo-wide run is cached with
+    its cursor and continued by the next repo-wide call; a stopped scoped run is not.
     """
     reference_budget = max(2000, budget)
 
@@ -1823,20 +1978,34 @@ def _dead_code_analysis(
         return {"repo_path": str(repo_root), "findings": kept, "partial": False}
 
     if reference_budget == 2000:
-        cached = _cache_get(store, repo_root, _overview_analysis_cache_key(fingerprint))
+        overview_key = _overview_analysis_cache_key(fingerprint)
+        cached = _cache_get(store, repo_root, overview_key)
         if (
             isinstance(cached, dict)
             and cached.get("version") == _OVERVIEW_ANALYSIS_CACHE_VERSION
             and _is_overview_analysis(cached.get("analysis"))
-            and not cached["analysis"].get("dead_code_partial", False)
         ):
-            return scoped(list(cached["analysis"]["dead_code"]))
+            analysis = cached["analysis"]
+            if not analysis.get("dead_code_partial", False):
+                return scoped(list(analysis["dead_code"]))
+            if not scope:
+                # A repo-wide call continues the overview's stopped scan rather than redo it.
+                analysis = _resume_overview_dead_code(store, repo_root, analysis)
+                _cache_set(store, repo_root, overview_key, {"version": _OVERVIEW_ANALYSIS_CACHE_VERSION, "analysis": analysis})
+                result = {"repo_path": str(repo_root), "findings": list(analysis["dead_code"]), "partial": bool(analysis["dead_code_partial"])}
+                if result["partial"]:
+                    result["progress"] = analysis.get("dead_code_progress")
+                return result
     full_key = _cache_key(
         fingerprint, "cortex_dead_code_analysis", {"budget": reference_budget, "v": _DEAD_CODE_ANALYSIS_CACHE_VERSION}
     )
     cached = _cache_get(store, repo_root, full_key)
+    resume = None
     if isinstance(cached, dict) and isinstance(cached.get("findings"), list):
-        return scoped(cached["findings"])
+        if not cached.get("partial"):
+            return scoped(cached["findings"])
+        if not scope and cached.get("cursor"):
+            resume = {"cursor": cached["cursor"], "findings": cached["findings"]}
     key = full_key
     if scope:
         key = _cache_key(
@@ -1847,7 +2016,7 @@ def _dead_code_analysis(
         cached = _cache_get(store, repo_root, key)
         if isinstance(cached, dict) and isinstance(cached.get("findings"), list):
             return {"repo_path": str(repo_root), "findings": cached["findings"], "partial": False}
-    nodes, edges = store.fetch_graph(repo_root)
+    nodes, edges = _cached_graph(store, repo_root)
     result = analyze_dead_code(
         repo_root,
         db_path=store.db_path,
@@ -1857,9 +2026,16 @@ def _dead_code_analysis(
         budget=budget,
         should_stop=_analysis_should_stop(),
         path_prefix=scope or None,
+        resume=resume,
     )
     if not result.get("partial"):
         _cache_set(store, repo_root, key, {"findings": result["findings"]})
+    elif not scope:
+        # A repo-wide run that ran out of time: remember how far it got so the next call continues.
+        _cache_set(
+            store, repo_root, key,
+            {"findings": result["findings"], "partial": True, "cursor": result.get("cursor"), "progress": result.get("progress")},
+        )
     return result
 
 
@@ -1902,15 +2078,39 @@ def _call_search(arguments: dict[str, Any]) -> dict[str, Any]:
         return _content(error, is_error=True)
     assert store is not None
     status = _ensure_fresh(store, repo_root)
-    nodes = [node.to_dict() for node in store.search_nodes(repo_root, str(arguments.get("query", "")), int(arguments.get("limit", 20)))]
+    response_format = _response_format(arguments)
+    query = str(arguments.get("query", ""))
+    cache_key = _cache_key(status["current_fingerprint"], "cortex_search_symbols", arguments)
+    cached_payload = _cache_get(store, repo_root, cache_key)
+    if cached_payload is not None and isinstance(cached_payload.get("items"), list):
+        nodes = copy.deepcopy(cached_payload["items"])
+        if response_format == "concise":
+            # The ledger prices the detailed rendering, which is the cached concise one plus `why`.
+            detailed_nodes = copy.deepcopy(nodes)
+            for node in detailed_nodes:
+                node["why"] = [{"type": "like_query", "query": query}]
+            _stash_detailed_rendering(_content(_format_payload(
+                {"repo_path": str(repo_root), "items": detailed_nodes}, status, "detailed"
+            )))
+        result = _content(_format_payload({"repo_path": str(repo_root), "items": nodes}, status, response_format, cached=True))
+        if response_format == "detailed":
+            _stash_detailed_rendering(result)
+        return result
+    nodes = [node.to_dict() for node in store.search_nodes(repo_root, query, int(arguments.get("limit", 20)))]
     for node in nodes:
         node["degree"] = node.get("metadata", {}).get("degree", 0)
-        node["why"] = [{"type": "like_query", "query": str(arguments.get("query", ""))}]
-    response_format = _response_format(arguments)
+        node["why"] = [{"type": "like_query", "query": query}]
     if response_format == "concise":
+        _stash_detailed_rendering(_content(_format_payload(
+            {"repo_path": str(repo_root), "items": copy.deepcopy(nodes)}, status, "detailed"
+        )))
         for node in nodes:
             node.pop("why", None)
-    return _content(_format_payload({"repo_path": str(repo_root), "items": nodes}, status, response_format))
+    _cache_set(store, repo_root, cache_key, {"repo_path": str(repo_root), "items": nodes})
+    result = _content(_format_payload({"repo_path": str(repo_root), "items": nodes}, status, response_format))
+    if response_format == "detailed":
+        _stash_detailed_rendering(result)
+    return result
 
 
 def _symbol_match_payload(node: Any) -> dict[str, Any]:
@@ -2297,11 +2497,26 @@ def _call_relations(arguments: dict[str, Any]) -> dict[str, Any]:
     all_items: list[dict[str, Any]] = [_relation_item(edge, nodes, response_format) for edge in edges]
     budget = int(arguments.get("budget", 2000))
     items, truncated = _prefix_fit_items(all_items, budget)
-    return _content(_format_payload(
+    if response_format == "concise":
+        detailed_items, detailed_truncated = _prefix_fit_items(
+            [_relation_item(edge, nodes, "detailed") for edge in edges], budget
+        )
+        _stash_detailed_rendering(_content(_format_payload(
+            {
+                "repo_path": str(repo_root), "items": detailed_items,
+                "truncated": detailed_truncated, "returned_count": len(detailed_items),
+            },
+            status,
+            "detailed",
+        )))
+    result = _content(_format_payload(
         {"repo_path": str(repo_root), "items": items, "truncated": truncated, "returned_count": len(items)},
         status,
         response_format,
     ))
+    if response_format == "detailed":
+        _stash_detailed_rendering(result)
+    return result
 
 
 def _call_path(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -2322,16 +2537,14 @@ def _call_path(arguments: dict[str, Any]) -> dict[str, Any]:
         node, matches = _resolve_symbol(store, repo_root, symbol)
         if node is None:
             if matches:
-                return _content(_format_payload(
-                    {
-                        "repo_path": str(repo_root),
-                        "hint": "call again with node_id",
-                        "ambiguous": key,
-                        "matches": [_symbol_match_payload(match) for match in matches],
-                    },
-                    status,
-                    response_format,
-                ))
+                ambiguous = {
+                    "repo_path": str(repo_root),
+                    "hint": "call again with node_id",
+                    "ambiguous": key,
+                    "matches": [_symbol_match_payload(match) for match in matches],
+                }
+                _stash_detailed_rendering(_content(_format_payload(ambiguous, status, "detailed")))
+                return _content(_format_payload(ambiguous, status, response_format))
             return _content(
                 {
                     "error": "symbol_not_found",
@@ -2344,7 +2557,7 @@ def _call_path(arguments: dict[str, Any]) -> dict[str, Any]:
             )
         resolved[key] = node
 
-    graph_nodes, graph_edges = store.fetch_graph(repo_root)
+    graph_nodes, graph_edges = _cached_graph(store, repo_root)
     node_by_id = {node.node_id: node for node in graph_nodes}
     edge_by_id = {edge.edge_id: edge for edge in graph_edges}
     max_depth = int(arguments.get("max_depth", 6))
@@ -2379,6 +2592,7 @@ def _call_path(arguments: dict[str, Any]) -> dict[str, Any]:
     }
     if not paths:
         payload["note"] = f"No path between the symbols within {max_depth} hops (COCHANGE edges and commit nodes excluded)."
+    _stash_detailed_rendering(_content(_format_payload(payload, status, "detailed")))
     return _content(_format_payload(payload, status, response_format))
 
 
@@ -2447,6 +2661,9 @@ def _call_refresh(arguments: dict[str, Any]) -> dict[str, Any]:
     # Incremental needs an existing database to diff against.
     incremental = mode != "full" and default_db_path(repo_root).exists()
     _forget_fingerprint(repo_root)
+    global _graph_cache, _rank_graph_cache
+    _graph_cache = None
+    _rank_graph_cache = None
     request = _current_request
     sink = _progress_sink
 
@@ -2507,8 +2724,10 @@ def build_status_result(**extra_fields: Any) -> dict[str, Any]:
     running `call_tool`, so the server's reader thread can call it while a
     tool is executing."""
     snapshot = REGISTRY.snapshot()
+    snapshot["version"] = __version__
     snapshot["deadline_budget_seconds"] = resolve_budget_seconds()
     snapshot["fingerprint_ttl_seconds"] = fingerprint_ttl_seconds()
+    snapshot["graph_cache"] = graph_cache_info()
     snapshot.update(extra_fields)
     return _content(snapshot)
 
@@ -2542,13 +2761,14 @@ def _referenced_file_tokens(store: CortexStore, repo_root: Path, paths: set[str]
 
 
 def _detailed_rendering_tokens(tool: str, arguments: dict[str, Any]) -> int:
-    """Re-run a structure-only tool with response_format=detailed and count it.
+    """Count the `detailed` rendering of a structure-only tool call.
 
     Used only as an input to _estimate_baseline's policy for search/relations/
-    path/overview (see its docstring). Re-dispatching is simple, deterministic, and
-    cheap (local SQLite reads); any failure here is caught by the caller's
-    non-fatal wrapper. This calls _call_* directly (not call_tool), so it
-    never goes through the P0-1 ledger itself -- only the outer call does.
+    path/overview (see its docstring). Inside a tool call the handler has
+    already stashed its detailed rendering (`_stash_detailed_rendering`), so it
+    is counted without running the tool a second time -- that second run used
+    to happen outside the deadline and the status registry. Outside a tool call
+    (direct callers, tests) the tool is re-dispatched, as before.
 
     P1-5: the detailed rendering always carries a `_meta` envelope, which is
     excluded here via `_without_meta` -- this baseline prices the *data*
@@ -2556,6 +2776,12 @@ def _detailed_rendering_tokens(tool: str, arguments: dict[str, Any]) -> int:
     and excluding it keeps the count independent of `_meta`'s own contents
     (e.g. whether saved_tokens ended up folded into a sibling call's meta).
     """
+    detailed_result = _ledger_detailed
+    if detailed_result is None and _in_tool_call:
+        return 0  # never re-dispatch a tool from inside a tool call
+    if detailed_result is not None:
+        detailed_payload = json.loads(detailed_result["content"][0]["text"])
+        return count_text_tokens(json.dumps(_without_meta(detailed_payload)))
     detailed_args = {**arguments, "response_format": "detailed"}
     if tool == "cortex_search_symbols":
         detailed_result = _call_search(detailed_args)
@@ -2776,11 +3002,11 @@ def call_tool(
     structured error payload rather than a crash -- the server must stay
     responsive for the rest of the batch.
 
-    `cancel` is the per-request cancellation event. The globals reset in the
-    `finally` cover `_record_tool_usage` too: the ledger's internal second
-    `_call_overview` call must reuse the memoised analysis.
+    `cancel` is the per-request cancellation event. The token-savings ledger runs
+    inside `track` but after the deadline scope, and prices the detailed rendering
+    the handler stashed rather than running the tool again.
     """
-    global _current_cancel, _current_request, _progress_sink, _in_tool_call, _analysis_memo
+    global _current_cancel, _current_request, _progress_sink, _in_tool_call, _analysis_memo, _ledger_detailed
     _current_cancel = cancel
     _progress_sink = progress
     _in_tool_call = True
@@ -2791,9 +3017,13 @@ def call_tool(
         budget_seconds = resolve_budget_seconds()
         tracked_id = "" if request_id is None else str(request_id)
         try:
-            with REGISTRY.track(name, tracked_id) as request_status, deadline_scope(budget_seconds, tool_name=name):
+            with REGISTRY.track(name, tracked_id) as request_status:
                 _current_request = request_status
-                result = _dispatch_tool(name, args)
+                with deadline_scope(budget_seconds, tool_name=name):
+                    result = _dispatch_tool(name, args)
+                # Inside `track` (so the status registry times it) but outside the
+                # deadline: the ledger only counts tokens and never raises.
+                _record_tool_usage(name, args, result)
         except DeadlineExceeded as exc:
             return _content(
                 {
@@ -2814,7 +3044,6 @@ def call_tool(
         except Exception as exc:
             return _content({"error": type(exc).__name__, "message": str(exc)}, is_error=True)
 
-        _record_tool_usage(name, args, result)
         return result
     finally:
         _current_cancel = None
@@ -2822,6 +3051,7 @@ def call_tool(
         _progress_sink = None
         _in_tool_call = False
         _analysis_memo = None
+        _ledger_detailed = None
 
 
 # Alternative names agents commonly use for a tool's identifier arguments. Each is

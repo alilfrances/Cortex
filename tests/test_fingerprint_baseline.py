@@ -295,9 +295,10 @@ def test_ttl_zero_recomputes_every_call(
 
     counts = [_call(counter, qt_repo, "cortex_query")[0] for _ in range(3)]
 
-    # cortex_search_symbols-style ledger re-entry is back to 2 with the memo off.
+    # The ledger no longer re-runs structure-only tools (0.12), so even with the
+    # memo off a cortex_search_symbols call computes the fingerprint once.
     assert counts == [1, 1, 1]
-    assert _call(counter, qt_repo, "cortex_search_symbols")[0] == 2
+    assert _call(counter, qt_repo, "cortex_search_symbols")[0] == 1
     assert tools._FINGERPRINT_MEMO.get(str(qt_repo.resolve())) is None
 
 

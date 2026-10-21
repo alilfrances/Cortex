@@ -62,7 +62,7 @@
   {
     "file_recall": 1.0,
     "mode": "skeleton_on",
-    "precision": 0.666667,
+    "precision": 0.5,
     "precision_at_3": 0.666667,
     "recall": 0.75,
     "repo": "python_app",
@@ -72,7 +72,7 @@
   {
     "file_recall": 1.0,
     "mode": "skeleton_off",
-    "precision": 0.666667,
+    "precision": 0.5,
     "precision_at_3": 0.666667,
     "recall": 0.75,
     "repo": "python_app",
@@ -192,7 +192,7 @@
   {
     "file_recall": 1.0,
     "mode": "skeleton_off",
-    "precision": 0.4,
+    "precision": 0.5,
     "precision_at_3": 0.666667,
     "recall": 1.0,
     "repo": "python_app",

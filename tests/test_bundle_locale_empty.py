@@ -49,11 +49,28 @@ def _paths(repo: Path, task: str, budget: int = 4000) -> list[str]:
     return [item["path"] for item in bundle["items"]]
 
 
-def test_translation_catalogue_does_not_outrank_the_implementation(repo):
-    paths = _paths(repo, "device card reconnect state wrong")
-    assert "src/core.hpp" in paths
-    if "i18n/app_de.ts" in paths:
-        assert paths.index("src/core.hpp") < paths.index("i18n/app_de.ts")
+def _keyword_score(repo: Path, task: str, path: str) -> float:
+    bundle = generate_bundle(repo_path=repo, task=task, budget=4000, output_format="json")
+    item = next(item for item in bundle["items"] if item["path"] == path)
+    return item["score"] - item["metadata"]["graph_bonus"]
+
+
+def test_translation_catalogue_is_demoted_for_a_non_translation_task(repo, monkeypatch):
+    # This used to assert that core.hpp is listed before app_de.ts. In this 3-file repo that
+    # ordering came from the graph bonus (the symbol-level walk bled rank out of the catalogue
+    # file into its many message symbols); with a dozen unrelated files added the catalogue
+    # outranks the implementation both with the old and the file-level walk. What this test
+    # can stably guard is the demotion itself, on the keyword score, free of graph effects.
+    from cortex import bundle as bundle_mod
+
+    task = "device card reconnect state wrong"
+    demoted = _keyword_score(repo, task, "i18n/app_de.ts")
+    monkeypatch.setattr(bundle_mod, "LOCALE_PATH_DEMOTION", 1.0)
+    undemoted = _keyword_score(repo, task, "i18n/app_de.ts")
+
+    assert undemoted > 0
+    assert demoted == pytest.approx(undemoted * 0.25)
+    assert "src/core.hpp" in _paths(repo, task)
 
 
 def test_a_task_about_translation_still_finds_the_catalogue(repo):

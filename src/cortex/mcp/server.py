@@ -11,6 +11,7 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any, TextIO
 
+from .. import __version__
 from ..store import data_root
 from .tools import TOOL_DEFINITIONS, build_status_result, call_tool
 
@@ -25,7 +26,7 @@ def negotiate_protocol_version(client_version: Any) -> str:
     if isinstance(client_version, str) and client_version in SUPPORTED_PROTOCOL_VERSIONS:
         return client_version
     return PROTOCOL_VERSION
-SERVER_INFO = {"name": "cortex", "version": "0.11.0"}
+SERVER_INFO = {"name": "cortex", "version": __version__}
 SERVER_INSTRUCTIONS = (
     "Use Cortex before Grep or raw file reads. Start with cortex_query for a coding task "
     "and cortex_context before multi-file edits. Search with cortex_search_symbols for "

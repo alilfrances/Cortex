@@ -5,11 +5,11 @@ import json
 import re
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any, Callable, Collection, Mapping, Sequence
 
 from .gitutils import discover_repo_root
 from .models import GraphEdge, GraphNode
-from .references import GraphReferenceIndex, ReferenceCorpus, find_references
+from .references import AnalysisStopped, GraphReferenceIndex, ReferenceCorpus, find_references
 from .store import CortexStore, default_db_path
 from .testpatterns import is_test_path
 from .tokenizer import count_text_tokens
@@ -78,6 +78,7 @@ class _OverrideIndex:
         self._classes_by_file: dict[str, list[GraphNode]] = defaultdict(list)
         self._classes_by_label: dict[str, list[GraphNode]] = defaultdict(list)
         self._methods_by_file: dict[str, list[GraphNode]] = defaultdict(list)
+        self._methods_by_label: dict[str, list[GraphNode]] = defaultdict(list)
         self._nodes_by_id = {node.node_id: node for node in nodes}
         for node in nodes:
             if node.granularity != "symbol":
@@ -87,6 +88,7 @@ class _OverrideIndex:
                 self._classes_by_label[node.label].append(node)
             elif node.kind in _METHOD_KINDS:
                 self._methods_by_file[node.source_ref].append(node)
+                self._methods_by_label[node.label].append(node)
         self._bases: dict[str, list[str]] = defaultdict(list)
         for edge in edges:
             if edge.relation == "inherits":
@@ -165,10 +167,9 @@ class _OverrideIndex:
             if method.label == name and cls.span_start is not None and cls.span_end is not None \
                     and cls.span_start <= (method.span_start or 0) <= cls.span_end:
                 return True
-        for method in self._methods_by_file.values():
-            for candidate in method:
-                if candidate.label == name and f"{cls.label}::{name}" in (candidate.signature or ""):
-                    return True
+        for candidate in self._methods_by_label.get(name, ()):
+            if f"{cls.label}::{name}" in (candidate.signature or ""):
+                return True
         return any(self._declares_method(base, name, seen, depth + 1) for base in self._base_nodes(cls))
 
     def is_override(self, node: GraphNode) -> bool:
@@ -195,7 +196,11 @@ class _AnalysisContext:
         reference_budget: int,
         graph_nodes: Sequence[GraphNode] | None = None,
         graph_edges: Sequence[GraphEdge] | None = None,
+        should_stop: Callable[[], bool] | None = None,
+        corpus_symbols: Collection[str] | None = None,
     ) -> None:
+        self.should_stop = should_stop
+        self.corpus_symbols = corpus_symbols
         self.repo_root = repo_root
         self.store = store
         self.reference_budget = reference_budget
@@ -230,12 +235,10 @@ class _AnalysisContext:
         result = self._references.get(label)
         if result is None:
             if self._corpus is None:
-                symbols = (
-                    None
-                    if self._graph_nodes is None
-                    else {node.label for node in self._graph_nodes if node.granularity == "symbol"}
-                )
-                self._corpus = ReferenceCorpus(self.repo_root, symbols)
+                symbols = self.corpus_symbols
+                if symbols is None and self._graph_nodes is not None:
+                    symbols = {node.label for node in self._graph_nodes if node.granularity == "symbol"}
+                self._corpus = ReferenceCorpus(self.repo_root, symbols, self.should_stop)
             if self._graph_index is None and self._graph_nodes is not None and self._graph_edges is not None:
                 self._graph_index = GraphReferenceIndex(self._graph_nodes, self._graph_edges)
             result = self._references[label] = find_references(
@@ -401,10 +404,16 @@ def analyze_dead_code(
     edges: Sequence[GraphEdge] | None = None,
     should_stop: Callable[[], bool] | None = None,
     path_prefix: str | None = None,
+    resume: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Dead-code candidates. `path_prefix` (a repo-relative file or directory)
     restricts which symbols are *reported*; references are still searched
-    repo-wide, so a use outside the prefix still credits a symbol inside it."""
+    repo-wide, so a use outside the prefix still credits a symbol inside it.
+
+    A run stopped by `should_stop` is `partial` and carries `cursor` (the first
+    candidate not yet examined) and `progress`. Passing `{"cursor": ..., "findings": ...}`
+    from such a result as `resume` continues from there; resuming to the end gives
+    exactly the findings of one uninterrupted run."""
     repo_root = discover_repo_root(Path(repo_path))
     active_store = store or CortexStore(db_path or default_db_path(repo_root))
     graph_nodes, graph_edges = (
@@ -432,20 +441,40 @@ def analyze_dead_code(
                 credited_labels.add(str(value))
 
     reexports = _reexported_symbols(all_sources)
-    context = _AnalysisContext(repo_root, active_store, all_sources, max(2000, int(budget)), graph_nodes, graph_edges)
-    findings: list[dict[str, Any]] = []
-    partial = False
-    for node in sorted(
-        (item for item in graph_nodes if item.granularity == "symbol"),
+    def in_scope(node: GraphNode) -> bool:
+        return not path_prefix or node.source_ref == path_prefix or node.source_ref.startswith(path_prefix.rstrip("/") + "/")
+
+    # Only the candidates' own names are ever looked up, so a scoped run indexes just those
+    # (any other name would fall back to a slower substring test, but is never asked for).
+    corpus_symbols = (
+        {item.label for item in graph_nodes if item.granularity == "symbol" and in_scope(item)} if path_prefix else None
+    )
+    context = _AnalysisContext(
+        repo_root, active_store, all_sources, max(2000, int(budget)), graph_nodes, graph_edges,
+        should_stop=should_stop, corpus_symbols=corpus_symbols,
+    )
+    # Candidates are visited in a fixed order, so a stopped run can say where it stopped and
+    # a later run can continue from there: `resume` carries that cursor and the findings so far.
+    candidates = sorted(
+        (item for item in graph_nodes if item.granularity == "symbol" and in_scope(item)),
         key=lambda item: (item.source_ref, item.label, item.node_id),
-    ):
-        if path_prefix and not (node.source_ref == path_prefix or node.source_ref.startswith(path_prefix.rstrip("/") + "/")):
+    )
+    resume_cursor = tuple(resume["cursor"]) if resume and resume.get("cursor") else None
+    findings: list[dict[str, Any]] = [dict(item) for item in resume.get("findings", [])] if resume else []
+    partial = False
+    cursor: list[str] | None = None
+    processed = 0
+    for processed, node in enumerate(candidates):
+        key = (node.source_ref, node.label, node.node_id)
+        if resume_cursor is not None and key < resume_cursor:
             continue
         if should_stop is not None and should_stop():
-            partial = True
+            partial, cursor = True, list(key)
             break
         if _is_test_path(node.source_ref) or _is_dunder_or_entry_point(node) or node.label in reexports:
             continue
+        if node.kind == "target":
+            continue  # a CMake/qmake build target is an entry point, not code that something calls
         if node.metadata.get("qt") == "handler":
             continue
         if node.metadata.get("qml_kind") in _NON_DEFINITION_QML_KINDS:
@@ -457,9 +486,13 @@ def analyze_dead_code(
             continue
         if node.node_id in credited_nodes or node.label in credited_labels:
             continue
-        tier, reason = _candidate_reason(
-            repo_root, active_store, node, all_sources, context.reference_budget, context
-        )
+        try:
+            tier, reason = _candidate_reason(
+                repo_root, active_store, node, all_sources, context.reference_budget, context
+            )
+        except AnalysisStopped:
+            partial, cursor = True, list(key)  # stopped building the reference corpus: this candidate is unfinished
+            break
         findings.append(
             {
                 "symbol": node.label,
@@ -471,7 +504,11 @@ def analyze_dead_code(
         )
 
     findings.sort(key=lambda item: (str(item["file"]), str(item["symbol"]), int(item["line"])))
-    return {"repo_path": str(repo_root), "findings": findings, "partial": partial}
+    result: dict[str, Any] = {"repo_path": str(repo_root), "findings": findings, "partial": partial}
+    if partial:
+        result["cursor"] = cursor
+        result["progress"] = {"processed": processed, "total": len(candidates)}
+    return result
 
 
 def truncate_dead_code_result(result: dict[str, Any], budget: int) -> dict[str, Any]:
