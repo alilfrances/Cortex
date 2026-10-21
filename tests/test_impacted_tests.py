@@ -446,7 +446,9 @@ def test_truncation_drops_tests_last_and_switches_to_run_all() -> None:
             assert "missing_tests" not in out or len(out["tests_to_run"]) == 12
             if len(out["tests_to_run"]) < 12:
                 assert out["directives"] == [] and "missing_tests" not in out
-                assert out["tests_to_run"] == result["tests_to_run"][: len(out["tests_to_run"])]
+                # (Under pressure `reason` is stripped first, 0.12.1.)
+                kept = [{k: v for k, v in t.items() if k != "reason"} for t in result["tests_to_run"]]
+                assert out["tests_to_run"] == kept[: len(out["tests_to_run"])]
                 assert out["tests_run_all"] is True
                 assert out["tests_run_all_reason"] == "tests_to_run was truncated to fit the response budget"
                 seen_partial = True

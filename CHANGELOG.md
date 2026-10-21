@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.12.1 — 2026-10-21
+
+Fixes for a test review of 0.12.0 on a large C++/QML repository (verdict, evidence and task list: `docs/plan-0.12.1-review.md`). No graph format change.
+
+- `cortex_risk` keeps `tests_by_changed_file` on large diffs. The 0.12.0 entry below said the map is "given up last"; it was not. The map was decided (re-encoded or dropped) before `directives` and `tests_to_run` were shortened, and on a big diff `tests_to_run` alone is larger than the whole budget, so the map was always dropped (`HEAD~30..HEAD` on the 2.2k-file bench repo, 117 changed files and 185 tests, default budget 2000). The new order when over budget: shorten `files`; re-encode the map (lossless) against its own test table; drop the other secondary buckets; drop the `reason` text of `tests_to_run` entries (named as `tests_to_run.reason` in `omitted_fields`); shorten `directives`; shorten `tests_to_run` down to 10 entries (`TESTS_TO_RUN_FLOOR`); shorten the map to the highest-risk changed files (`tests_by_changed_file_omitted` counts the rest); only then cut `tests_to_run` below the floor, retry the map, and drop it whole. Result on that range: at budget 2000 the map is kept for 12 of the 117 changed files (the long paths alone are about 1.4k tokens in index form), at 4000 for all of them. **Breaking for parsers of the 0.12.0 shape:** the index encoding `tests_to_run_index` (indices into `tests_to_run`) is replaced by `tests_by_changed_file_encoding: "test_table"` with its own `tests_by_changed_file_tests` list, so cutting `tests_to_run` can no longer invalidate the map. `returned_count` now counts toward the fit, so a fitted payload no longer ends one token over its limit. Regression tests: `tests/test_risk_truncate.py` (`_large_diff_result`).
+
 ## 0.12.0 — 2026-10-21
 
 Fixes for the "Cortex 0.11.0 field report" (verdict per claim, evidence and task list: `docs/plan-0.12-field-report.md`). Benchmarks use `scripts/perf/synthetic_repo.py` (2.2k files, 17k nodes, 79k edges) driven by `scripts/perf/bench_tools.py`, cold, budget disabled, Linux x86_64, Python 3.13. Rankings are checked with `scripts/perf/eval_compare.py`.

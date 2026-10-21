@@ -123,13 +123,21 @@ def _strip(output: Mapping[str, Any]) -> dict:
     return {k: v for k, v in output.items() if k != "omitted_fields"}
 
 
+def _without_reasons(result: dict) -> dict:
+    return {**result, "tests_to_run": [{k: v for k, v in t.items() if k != "reason"} for t in result["tests_to_run"]]}
+
+
 def test_matches_the_old_loop_for_every_budget_without_tests_by_changed_file() -> None:
-    result = _result(with_by_file=False)
+    # The old loop never touched `reason`; with none present the new order's extra step is a no-op,
+    # and with no map the remaining order (files, buckets, directives, tests_to_run) is unchanged.
+    result = _without_reasons(_result(with_by_file=False))
     full = count_text_tokens(json.dumps(result, sort_keys=True))
     for budget in range(0, full + 40):
         new = truncate_risk_result(result, budget)
         old = old_truncate_risk_result(result, budget)
-        if "omitted_fields" not in new:
+        # `returned_count` is now part of the fit, so a payload fitted to the limit keeps one
+        # file fewer than the old loop where that count tipped it over.
+        if "omitted_fields" not in new and len(new["files"]) == len(old["files"]):
             assert {k: v for k, v in new.items() if k != "budget_feasible"} == {
                 k: v for k, v in old.items() if k != "budget_feasible"
             }, budget
@@ -141,35 +149,47 @@ def test_matches_the_old_loop_for_every_budget_without_tests_by_changed_file() -
             assert new[key] == old[key][: len(new[key])], (budget, key)
 
 
-def test_tests_by_changed_file_is_dropped_after_the_other_buckets_and_before_directives() -> None:
-    result = _result(with_by_file=True)
-    first_gone: dict[str, int] = {}
-    for budget in range(count_text_tokens(json.dumps(result, sort_keys=True)) + 10, -1, -1):
-        out = truncate_risk_result(result, budget)
-        for key in ("unindexed_files", "analysis_errors", "tests_by_changed_file"):
-            if key not in out:
-                first_gone.setdefault(key, budget)
-        if "tests_by_changed_file" not in out:
-            assert out["omitted_fields"][-1] == "tests_by_changed_file"
-    assert first_gone["analysis_errors"] >= first_gone["unindexed_files"] >= first_gone["tests_by_changed_file"]
+def _decode(out: dict) -> dict[str, set[str]]:
+    table = out["tests_by_changed_file_tests"]
+    return {path: {table[i] for i in indices} for path, indices in out["tests_by_changed_file"].items()}
 
 
-def test_compact_form_uses_in_range_indices_into_tests_to_run() -> None:
+def test_the_map_is_encoded_against_its_own_table_and_dropped_last() -> None:
     result = _result(with_by_file=True)
-    compact_seen = False
+    original = {path: set(tests) for path, tests in result["tests_by_changed_file"].items()}
+    encoded = dropped = False
+    first_dropped_other: dict[str, int] = {}
     for budget in range(count_text_tokens(json.dumps(result, sort_keys=True)), -1, -1):
         out = truncate_risk_result(result, budget)
-        if out.get("tests_by_changed_file_encoding") != "tests_to_run_index":
+        for key in ("unindexed_files", "analysis_errors", "directives"):
+            if not out.get(key) and key not in first_dropped_other:
+                first_dropped_other[key] = budget
+        if "tests_by_changed_file" not in out:
+            dropped = True
+            assert out["omitted_fields"][-1] == "tests_by_changed_file"
+            assert not [k for k in out if k.startswith("tests_by_changed_file_")]
             continue
-        compact_seen = True
-        size = len(out["tests_to_run"])
-        assert all(0 <= i < size for indices in out["tests_by_changed_file"].values() for i in indices)
-        assert all(indices for indices in out["tests_by_changed_file"].values())
-        # Decoding recovers a subset of the original mapping.
-        original = result["tests_by_changed_file"]
-        for path, indices in out["tests_by_changed_file"].items():
-            assert {out["tests_to_run"][i]["test"] for i in indices} <= set(original[path])
-    assert compact_seen
+        if out.get("tests_by_changed_file_encoding") == "test_table":
+            encoded = True
+            decoded = _decode(out)
+            assert all(tests <= original[path] for path, tests in decoded.items())
+            assert all(0 <= i < len(out["tests_by_changed_file_tests"]) for v in out["tests_by_changed_file"].values() for i in v)
+    assert encoded and dropped
+    # The map goes after the bucket-level fields and before every directive is gone.
+    assert first_dropped_other["unindexed_files"] >= first_dropped_other.get("directives", 0)
+
+
+def test_cutting_tests_to_run_cannot_invalidate_the_map() -> None:
+    result = _large_diff_result()
+    original = {path: set(tests) for path, tests in result["tests_by_changed_file"].items()}
+    cut = 0
+    for budget in range(300, 6000, 100):
+        out = truncate_risk_result(result, budget)
+        if len(out["tests_to_run"]) < len(result["tests_to_run"]) and "tests_by_changed_file" in out:
+            cut += 1
+            assert all(tests <= original[path] for path, tests in _decode(out).items()), budget
+            assert out["tests_run_all"] is True
+    assert cut
 
 
 def test_omitted_fields_names_exactly_the_removed_keys() -> None:
@@ -177,8 +197,14 @@ def test_omitted_fields_names_exactly_the_removed_keys() -> None:
     for budget in range(count_text_tokens(json.dumps(result, sort_keys=True)) + 10, -1, -1):
         out = truncate_risk_result(result, budget)
         missing = [key for key in result if key not in out and key not in {"files"}]
-        assert sorted(out.get("omitted_fields", [])) == sorted(missing), budget
-        if not missing:
+        named = [name for name in out.get("omitted_fields", []) if name != "tests_to_run.reason"]
+        assert sorted(named) == sorted(missing), budget
+        stripped = "tests_to_run.reason" in out.get("omitted_fields", [])
+        if any("reason" in t for t in out["tests_to_run"]):
+            assert not stripped, budget
+        if stripped:
+            assert not any("reason" in t for t in out["tests_to_run"]), budget
+        if not missing and "tests_to_run.reason" not in out.get("omitted_fields", []):
             assert "omitted_fields" not in out
 
 
@@ -189,14 +215,12 @@ def test_truncation_does_not_mutate_its_input() -> None:
     assert json.dumps(result, sort_keys=True) == snapshot
 
 
-def test_shortening_tests_to_run_switches_to_run_all_and_keeps_indices_valid() -> None:
+def test_shortening_tests_to_run_switches_to_run_all() -> None:
     result = _result(with_by_file=True)
     for budget in range(count_text_tokens(json.dumps(result, sort_keys=True)), -1, -1):
         out = truncate_risk_result(result, budget)
         if len(out["tests_to_run"]) < len(result["tests_to_run"]):
             assert out["tests_run_all"] is True and out["truncated"] is True
-        if out.get("tests_by_changed_file_encoding"):
-            assert all(i < len(out["tests_to_run"]) for v in out["tests_by_changed_file"].values() for i in v)
 
 
 @pytest.mark.parametrize("budget", [-3, 0])
@@ -233,7 +257,6 @@ def _large_diff_result() -> dict:
     return result
 
 
-@pytest.mark.xfail(strict=True, reason="0.12.0 drops the map before shortening tests_to_run; fixed by plan 0.12.1 Task A.1")
 def test_large_diff_keeps_the_per_file_test_map_at_the_default_budget() -> None:
     result = _large_diff_result()
     assert count_text_tokens(json.dumps(result["tests_to_run"], sort_keys=True)) > 2000
@@ -246,7 +269,6 @@ def test_large_diff_keeps_the_per_file_test_map_at_the_default_budget() -> None:
     assert "tests_by_changed_file" not in out.get("omitted_fields", [])
 
 
-@pytest.mark.xfail(strict=True, reason="0.12.0 drops the map before shortening directives; fixed by plan 0.12.1 Task A.1")
 def test_the_map_outlives_directives_and_tests_to_run_reasons() -> None:
     result = _large_diff_result()
     full = count_text_tokens(json.dumps(result, sort_keys=True))
