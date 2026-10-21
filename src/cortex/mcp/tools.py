@@ -636,11 +636,29 @@ def _cache_set(store: CortexStore, repo_root: Path, cache_key: str, payload: dic
         pass
 
 
+def _seed_edge_index(seed_paths: set[str], edges: list) -> dict[str, list[tuple[str, Any]]]:
+    """`file:<path>` node -> [(seed path, edge)] for edges joining it to a seed file, in edge order.
+
+    One pass over the edges, so explaining N items no longer costs N passes. An edge
+    between two seeds is listed under both ends; a self-loop only once.
+    """
+    seed_nodes = {f"file:{path}" for path in seed_paths}
+    index: dict[str, list[tuple[str, Any]]] = {}
+    for edge in edges:
+        if edge.target in seed_nodes:
+            index.setdefault(edge.source, []).append((edge.target.removeprefix("file:"), edge))
+        if edge.source in seed_nodes and edge.source != edge.target:
+            index.setdefault(edge.target, []).append((edge.source.removeprefix("file:"), edge))
+    return index
+
+
 def _bundle_why(
     item: dict[str, Any],
     terms: set[str],
     seed_paths: set[str],
     edges: list,
+    *,
+    seed_edges: dict[str, list[tuple[str, Any]]] | None = None,
 ) -> list[dict[str, Any]]:
     node_id = str(item.get("metadata", {}).get("node_id", ""))
     symbol_name = node_id.split(":", 2)[-1] if node_id else ""
@@ -654,18 +672,13 @@ def _bundle_why(
         why.append(entry)
 
     item_node = f"file:{item.get('path', '')}"
-    seed_nodes = {f"file:{path}" for path in seed_paths}
     if item.get("path") in seed_paths:
         why.append({"type": "seed_path", "path": item.get("path", "")})
 
+    if seed_edges is None:
+        seed_edges = _seed_edge_index(seed_paths, edges)
     contributing_edges = []
-    for edge in edges:
-        if edge.source == item_node and edge.target in seed_nodes:
-            seed = edge.target.removeprefix("file:")
-        elif edge.target == item_node and edge.source in seed_nodes:
-            seed = edge.source.removeprefix("file:")
-        else:
-            continue
+    for seed, edge in seed_edges.get(item_node, ()):
         contributing_edges.append(
             {
                 "seed_path": seed,
@@ -810,8 +823,9 @@ def _call_query(arguments: dict[str, Any]) -> dict[str, Any]:
             if any(term in f"{source.path}\n{source.content}".lower() for term in terms)
         }
         edges = graph[1]
+        seed_edges = _seed_edge_index(seed_paths, edges)
         for item in bundle.get("items", []):
-            item["why"] = _bundle_why(item, terms, seed_paths, edges)
+            item["why"] = _bundle_why(item, terms, seed_paths, edges, seed_edges=seed_edges)
         bundle["token_stats"] = _query_token_stats(bundle, arguments)
         payload = bundle if response_format == "detailed" else _concise_query_bundle(bundle)
         # P1-5: cache the bare payload only, not status/`_meta` -- see

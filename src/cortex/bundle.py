@@ -500,10 +500,13 @@ def _score_text(
     return sum(term_weights.get(term, 1.0) for term in overlap) * 10.0 + recency_weight
 
 
-def _term_weights(task_terms: set[str], sources: list) -> dict[str, float]:
+def _term_weights(
+    task_terms: set[str], sources: list, docs: list[set[str]] | None = None
+) -> dict[str, float]:
     if not task_terms:
         return {}
-    docs = [_tokenize_text(f'{source.path}\n{source.content}') for source in sources]
+    if docs is None:
+        docs = [_tokenize_text(f'{source.path}\n{source.content}') for source in sources]
     total = len(docs)
     if total == 0:
         return {term: 1.0 for term in task_terms}
@@ -644,7 +647,15 @@ def generate_bundle(
         term for identifier in config.noise_identifiers for term in _tokenize_text(identifier)
     )
     check_deadline()
-    term_weights = _term_weights(task_terms, sources)
+    # Tokenized once: term weights, the symbol-span prefilter and the semantic gate all use it.
+    file_tokens: dict[str, set[str]] = (
+        {source.path: _tokenize_text(f'{source.path}\n{source.content}') for source in sources}
+        if task_terms
+        else {}
+    )
+    term_weights = _term_weights(
+        task_terms, sources, [file_tokens[source.path] for source in sources] if task_terms else None
+    )
     check_deadline()
     demote_aux = not (task_terms & AUX_INTENT_TERMS)
     demote_locale = not (task_terms & LOCALE_INTENT_TERMS)
@@ -749,7 +760,7 @@ def generate_bundle(
             lexical_signal_paths = {
                 source.path
                 for source in sources
-                if task_terms and task_terms & _tokenize_text(f"{source.path}\n{source.content}")
+                if task_terms and task_terms & file_tokens[source.path]
             }
             if not lexical_signal_paths:
                 semantic_rank_list = [
@@ -873,6 +884,14 @@ def generate_bundle(
         source = source_by_path.get(path)
         if source is None or source.kind != 'code':
             continue
+        # A span can only score through a task term it contains, and its text is a run of whole
+        # lines of the file, so a file that shares no (non-noise) term with the task can only
+        # yield spans whose symbol name matches: skip everything else without cutting the text.
+        file_matches = bool(task_terms & (file_tokens.get(path, set()) - noise_terms))
+        if not file_matches:
+            path_symbols = [s for s in path_symbols if task_terms & _tokenize_text(s.label)]
+            if not path_symbols:
+                continue
         lines = source.content.splitlines()
         file_share = SYMBOL_FILE_SCORE_SHARE * source_scores.get(path, 0.0)
         for symbol in path_symbols:
