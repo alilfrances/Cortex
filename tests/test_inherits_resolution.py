@@ -251,3 +251,44 @@ def test_a_second_class_with_the_label_in_an_unrelated_file_reopens_then_closes_
     _commit(repo, "gone")
     ingest_repository(repo)
     assert _inherit_targets(repo) == _fresh_targets(repo, tmp_path, monkeypatch, "full-4")
+
+
+def _resolution_state(repo):
+    nodes, edges = CortexStore(default_db_path(repo)).fetch_graph(repo)
+    edge_state = {
+        e.edge_id: (e.target, e.confidence, {k: e.metadata.get(k) for k in ("unresolved_target", "resolution", "candidates", "ambiguous")})
+        for e in edges if e.relation in ("calls", "inherits")
+    }
+    alias_state = {n.node_id: n.metadata.get("path_aliases") for n in nodes if n.kind == "file"}
+    return edge_state, alias_state
+
+
+def test_an_incremental_refresh_of_a_field_shape_repository_converges_with_a_full_one(tmp_path, monkeypatch):
+    """Delete a mock and a derived class, add a second real-looking base and a new derived class, edit the
+    manager: calls, inherits and path aliases must be exactly what a fresh full index writes."""
+    from tests.field_shape import build_field_shape_repo
+
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "incremental-data"))
+    repo = build_field_shape_repo(tmp_path / "repo", modules=12, commits=30)
+
+    (repo / "tests/mocks/mock_a/coredevice.h").unlink()
+    (repo / "src/field/widgetwaitready.h").unlink()
+    (repo / "src/field/widgetwaitready.cpp").unlink()
+    (repo / "src/field/extra").mkdir()
+    (repo / "src/field/extra/coredevice.h").write_text("class CoreDevice {\npublic:\n    virtual bool isReady() const;\n};\n")
+    (repo / "src/field/extra/gadgetspinlock.h").write_text(
+        '#include "coredevice.h"\nclass GadgetSpinLockStep : public CoreDevice\n{\npublic:\n    bool isReady() const override;\n};\n'
+    )
+    (repo / "src/field/extra/gadgetspinlock.cpp").write_text(
+        '#include "gadgetspinlock.h"\nbool GadgetSpinLockStep::isReady() const { return true; }\n'
+    )
+    manager = repo / "src/field/devicemanager.cpp"
+    manager.write_text(manager.read_text() + "\nvoid DeviceManager::extra()\n{\n    auto *g = qobject_cast<GadgetSpinLockStep*>(m_devices.value(0));\n    g->isReady();\n}\n")
+    _commit(repo, "churn")
+    ingest_repository(repo, commit_limit=35)  # incremental
+    incremental = _resolution_state(repo)
+
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "full-data"))
+    ingest_repository(repo, commit_limit=35, incremental=False)
+
+    assert incremental == _resolution_state(repo)
