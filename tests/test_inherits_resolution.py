@@ -292,3 +292,24 @@ def test_an_incremental_refresh_of_a_field_shape_repository_converges_with_a_ful
     ingest_repository(repo, commit_limit=35, incremental=False)
 
     assert incremental == _resolution_state(repo)
+
+
+def test_the_server_answers_status_with_the_resolution_block_from_its_reader_thread(tmp_path):
+    """`cortex_status` is answered while another call may be running, outside the work queue."""
+    import io
+
+    from cortex.mcp.server import serve
+
+    repo = make_repo(tmp_path / "repo", FILES)
+    frame = {
+        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": {"name": "cortex_status", "arguments": {"repo_path": str(repo), "response_format": "detailed"}},
+    }
+    plain = {**frame, "id": 2, "params": {"name": "cortex_status", "arguments": {"repo_path": str(repo)}}}
+    out = io.StringIO()
+
+    serve(iter([json.dumps(frame) + "\n", json.dumps(plain) + "\n"]), out)
+
+    replies = {r["id"]: json.loads(r["result"]["content"][0]["text"]) for r in map(json.loads, out.getvalue().splitlines())}
+    assert replies[1]["resolution"]["inherits"]["symbol"] == 1
+    assert "resolution" not in replies[2]

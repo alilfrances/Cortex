@@ -2790,10 +2790,15 @@ def status_extras(arguments: dict[str, Any] | None) -> dict[str, Any]:
     if not arguments or _response_format(arguments) != "detailed" or not arguments.get("repo_path"):
         return {}
     try:
-        db_path = default_db_path(_repo_root(arguments))
+        repo_root = _repo_root(arguments)
+        db_path = default_db_path(repo_root)
         if not db_path.exists():
             return {}
-        return {"resolution": CortexStore(db_path).resolution_counts(_repo_root(arguments))}
+        store = CortexStore(db_path)
+        try:
+            return {"resolution": store.resolution_counts(repo_root)}
+        finally:
+            store.connection.close()
     except Exception:  # noqa: BLE001 - a diagnostic call must not fail on a broken index
         return {}
 

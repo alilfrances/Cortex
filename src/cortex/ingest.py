@@ -384,7 +384,7 @@ def _parser_summary_from_counts(counts: Mapping[str, int]) -> dict[str, Any]:
     return {"backend_counts": dict(backend_counts), "language_runtime": runtime}
 
 
-def _node_state(node) -> tuple:
+def _node_state(node: GraphNode) -> tuple:
     """What the merged resolution pass can change on a node: its degree and its path aliases."""
     return node.metadata.get("degree"), tuple(node.metadata.get("path_aliases") or ())
 
