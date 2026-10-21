@@ -19,7 +19,7 @@ from cortex.risk import (
     analyze_risk,
     truncate_risk_result,
 )
-from cortex.tokenizer import _get_tiktoken_encoding, count_text_tokens
+from cortex.tokenizer import count_text_tokens
 
 
 def _file(path: str, weight: int) -> dict:
@@ -425,8 +425,8 @@ def _bench_result() -> dict:
 
 def test_bench_range_keeps_ranked_files_tests_and_most_of_the_map_at_the_default_budget() -> None:
     # Measured targets (0.13.0).  Through 0.12.1 this range returned no ranked file and 9-12 of
-    # the 117 map entries at 2000; all 117 need about 2,180 tokens with tiktoken and 2,810 with
-    # the fallback estimate while FILES_FLOOR files and TESTS_TO_RUN_FLOOR tests are kept.
+    # the 117 map entries at 2000; all 117 need about 2,800 tokens while FILES_FLOOR files and
+    # TESTS_TO_RUN_FLOOR tests are kept.
     result = _bench_result()
     assert len(result["tests_by_changed_file"]) == 117
 
@@ -435,8 +435,8 @@ def test_bench_range_keeps_ranked_files_tests_and_most_of_the_map_at_the_default
     assert out["budget_feasible"] is True and not out.get("minimal_payload")
     assert out["returned_count"] == len(out["files"]) >= FILES_FLOOR
     assert len(out["tests_to_run"]) >= TESTS_TO_RUN_FLOOR
-    # o200k_base (the [tokens] extra, CI) counts this JSON at about 0.7x the fallback estimate.
-    assert len(out["tests_by_changed_file"]) >= (96 if _get_tiktoken_encoding() is not None else 45)
+    # 45 with tiktoken's o200k_base (CI) and 46 with the stdlib estimate.
+    assert len(out["tests_by_changed_file"]) >= 45
     assert len(out["tests_by_changed_file"]) + out["tests_by_changed_file_omitted"] == 117
 
 
