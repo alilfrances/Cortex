@@ -20,9 +20,8 @@ from typing import Any, Iterable, Mapping, Sequence
 from .deadline import check_deadline
 from .gitutils import discover_repo_root
 from .impacted_tests import select_tests_with_coverage
-from .report import _looks_like_src_test_pair
 from .store import CortexStore, default_db_path
-from .testpatterns import is_test_path
+from .testpatterns import is_test_path, pairs_with_test, test_name_info
 from .tokenizer import count_text_tokens
 
 # A direct COCHANGE edge is already normalised to [0, 1] by cochange.py.  A
@@ -520,15 +519,22 @@ def _pair_directives(changed: Sequence[DiffFile], all_paths: set[str], nodes: Se
 def _test_directives(changed: Sequence[DiffFile], all_paths: set[str]) -> list[dict[str, str]]:
     result: list[dict[str, str]] = []
     changed_paths = _changed_paths(changed)
+    tests_by_base: dict[str, list[str]] | None = None
     for item in changed:
         check_deadline()
         if Path(item.path).suffix.lower() not in _SOURCE_SUFFIXES:
             continue
         if is_test_path(item.path):
             continue
+        if tests_by_base is None:
+            tests_by_base = defaultdict(list)
+            for candidate in all_paths:
+                info = test_name_info(candidate)
+                if info.is_test:
+                    tests_by_base[info.base].append(candidate)
         candidates = sorted(
-            candidate for candidate in all_paths
-            if candidate not in changed_paths and _looks_like_src_test_pair(item.path, candidate)
+            candidate for candidate in tests_by_base.get(test_name_info(item.path).base, ())
+            if candidate not in changed_paths and pairs_with_test(item.path, candidate)
         )
         for candidate in candidates:
             result.append({"source": item.path, "test": candidate, "reason": "paired test is untouched"})

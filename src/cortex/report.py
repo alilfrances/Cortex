@@ -11,7 +11,7 @@ from .gitutils import discover_repo_root
 from .hotspots import top_hotspots
 from .models import GraphEdge, GraphNode
 from .store import CortexStore, default_db_path
-from .testpatterns import test_base_name
+from .testpatterns import pairs_with_test, test_base_name
 
 
 def _normalized_test_base(path: str) -> tuple[str, bool]:
@@ -19,9 +19,8 @@ def _normalized_test_base(path: str) -> tuple[str, bool]:
 
 
 def _looks_like_src_test_pair(source: str, target: str) -> bool:
-    source_base, source_is_test = _normalized_test_base(source)
-    target_base, target_is_test = _normalized_test_base(target)
-    return source_is_test != target_is_test and source_base == target_base
+    """Symmetric: cochange endpoints arrive in either order."""
+    return pairs_with_test(source, target) or pairs_with_test(target, source)
 
 
 def default_report_path(repo_path: Path, db_path: Path | None = None) -> Path:

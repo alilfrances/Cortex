@@ -34,10 +34,13 @@ from typing import Any, Iterable, Mapping, Sequence
 from .callresolve import _base_label
 from .deadline import check_deadline
 from .models import GraphEdge
-from .report import _looks_like_src_test_pair
-from .testpatterns import is_test_path, test_base_name
+from .testpatterns import is_test_path, pairs_with_test, test_base_name
 
 STRUCTURAL_MAX_DEPTH = 3
+# A base class label shared by more repo classes than this cannot be resolved by
+# name (typically a fabricated or ubiquitous `QObject`): attaching its `inherits`
+# edges to all of them would select every subclass's tests.
+LABEL_ATTACH_MAX = 3
 COCHANGE_TEST_THRESHOLD = 0.50
 PAIR_SCORE = 0.6
 CHANGED_SCORE = 1.0
@@ -272,7 +275,10 @@ class _GraphIndex:
         for edge in edges:
             if edge.layer != "STRUCTURAL" or edge.relation != "inherits" or edge.target in self.nodes:
                 continue
-            for base in self._classes_by_label.get(_base_label(edge.target), []):
+            candidates = self._classes_by_label.get(_base_label(edge.target), [])
+            if len(candidates) > LABEL_ATTACH_MAX:
+                continue
+            for base in candidates:
                 if base.node_id != edge.source:
                     self.reverse[base.node_id].append(edge)
                     attached.add(base.node_id)
@@ -284,7 +290,10 @@ class _GraphIndex:
             if not isinstance(declared, list):
                 continue
             for raw in sorted({str(item) for item in declared}):
-                for base in self._classes_by_label.get(_base_label(f"name:{raw}"), []):
+                candidates = self._classes_by_label.get(_base_label(f"name:{raw}"), [])
+                if len(candidates) > LABEL_ATTACH_MAX:
+                    continue
+                for base in candidates:
                     if base.node_id == node.node_id:
                         continue
                     self.reverse[base.node_id].append(
@@ -479,6 +488,18 @@ def _structural(
         pending.sort()
 
 
+def _runnable_tests_by_base(paths: Iterable[str]) -> dict[str, list[str]]:
+    """Normalised file-name base -> sorted runnable test paths, so pairing a changed file
+    is one lookup instead of a scan (and sort) of every known path."""
+    index: dict[str, list[str]] = defaultdict(list)
+    for position, candidate in enumerate(sorted(paths)):
+        if position % 5000 == 0:
+            check_deadline()
+        if is_runnable_test(candidate):
+            index[test_base_name(candidate)[0]].append(candidate)
+    return index
+
+
 def select_tests(
     changed: Sequence[Any],
     raw_zero_context: str,
@@ -518,6 +539,7 @@ def select_tests_with_coverage(
     deleted: list[str] = []
     unindexed: list[str] = []
     reviewable: list[str] = []  # changed files that must be covered by some tier
+    tests_by_base: dict[str, list[str]] | None = None  # built on the first non-test file
 
     for item in sorted(changed, key=lambda value: value.path):
         check_deadline()
@@ -578,10 +600,10 @@ def select_tests_with_coverage(
 
         # (c) filename pairing
         if not is_test_path(path):
-            for position, candidate in enumerate(sorted(known_paths)):
-                if position % 5000 == 0:
-                    check_deadline()
-                if is_runnable_test(candidate) and _looks_like_src_test_pair(path, candidate):
+            if tests_by_base is None:
+                tests_by_base = _runnable_tests_by_base(known_paths)
+            for candidate in tests_by_base.get(test_base_name(path)[0], ()):
+                if pairs_with_test(path, candidate):
                     selection.add(candidate, "pair", PAIR_SCORE, f"test file name pairs with {path}", for_path=path)
 
     deleted_tests = {item.path for item in changed if item.status == "D"}

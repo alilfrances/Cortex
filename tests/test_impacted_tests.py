@@ -315,7 +315,9 @@ def test_cpp_change_outside_the_slot_does_not_select_the_connect_site(
     result = _change(repo, "src/Device.cpp", DEVICE_CPP.replace("emit found(1);", "emit found(2);"))
 
     tests = _by_test(result)
-    assert "tests/tst_device.cpp" not in tests  # scan() is not connected anywhere
+    # scan() is not connected anywhere, so the connect site is not reached structurally.
+    # The QTest-named file still pairs with Device.cpp by name (tst_<name>.cpp, 0.12).
+    assert tests["tests/tst_device.cpp"]["via"] == ["pair"]
     assert "structural" in tests["tests/tst_qml.qml"]["via"]  # still a Device member
 
 
@@ -553,3 +555,36 @@ def test_coverage_breakdown_names_tests_per_changed_file_and_the_uncovered_ones(
     assert result["tests_by_changed_file"] == {"covered.py": ["test_covered.py"]}
     assert result["uncovered_changed_files"] == ["orphan.py"]
     assert "orphan.py" in result["tests_run_all_reason"]
+
+
+# --- base-label attachment cap (0.12) ---
+
+
+def _class(node_id: str, path: str):
+    from cortex.models import GraphNode
+
+    label = node_id.rsplit(":", 1)[-1]
+    return GraphNode(
+        node_id=node_id, kind="class", label=label, source_ref=path, granularity="symbol",
+        span_start=1, span_end=5, metadata={},
+    )
+
+
+def _inherits(source: str, base: str):
+    from cortex.models import GraphEdge
+
+    return GraphEdge(
+        edge_id=f"e:{source}", source=source, target=base, relation="inherits",
+        layer="STRUCTURAL", confidence="LOW", weight=1.0, metadata={"source_file": "x.h"},
+    )
+
+
+@pytest.mark.parametrize(("same_label", "attached"), [(2, True), (5, False)])
+def test_unresolved_inherits_attaches_only_to_unambiguous_labels(same_label: int, attached: bool) -> None:
+    from cortex.impacted_tests import _GraphIndex
+
+    bases = [_class(f"symbol:base{i}.h:Item", f"base{i}.h") for i in range(same_label)]
+    child = _class("symbol:child.h:Child", "child.h")
+    index = _GraphIndex([*bases, child], [_inherits(child.node_id, "name:Item")])
+
+    assert any(index.reverse.get(base.node_id) for base in bases) is attached
