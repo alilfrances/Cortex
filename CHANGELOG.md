@@ -1,8 +1,21 @@
 # Changelog
 
-## Unreleased
+## 0.12.0 — 2026-10-21
 
-Planned in `docs/plan-0.12-field-report.md` (verdict per claim of the 0.11.0 field report and task list).
+Fixes for the "Cortex 0.11.0 field report" (verdict per claim, evidence and task list: `docs/plan-0.12-field-report.md`). Benchmarks use `scripts/perf/synthetic_repo.py` (2.2k files, 17k nodes, 79k edges) driven by `scripts/perf/bench_tools.py`, cold, budget disabled, Linux x86_64, Python 3.13. Rankings are checked with `scripts/perf/eval_compare.py`.
+
+| Step (2.2k-file repo) | 0.11.0 | 0.12.0 |
+|---|---|---|
+| `cortex_query`, first call of a fresh process, unseen task | 10.5s | 2.7-3.3s |
+| `cortex_path` | 6.3s | 0.2-0.4s |
+| `cortex_impact` (graph already cached) | 3.8s | 0.13s |
+| `cortex_risk` (`HEAD~3..HEAD`) | 3.1s | 0.9s |
+| `cortex_overview` cold | 11.1s | 8.3s |
+| `cortex_overview` with a 4s budget | never completes | complete in 4 calls |
+| `analyze_dead_code` | 8.2s | 6.1-6.9s |
+| full ingest | 10.5s | 11.3s (unchanged) |
+
+Upgrading: the graph format is 5; an older index is rebuilt in full by its next refresh (the MCP tools report it stale until then).
 
 **Graph format 5 (full rebuild on first refresh).**
 
