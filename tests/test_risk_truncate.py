@@ -85,9 +85,10 @@ def _file(path: str, weight: int) -> dict:
 
 def _result(*, with_by_file: bool) -> dict:
     record = {"path": "b.py", "weight": 0.9, "for": "a.py"}
+    names = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot"]
     tests = [
-        {"test": f"tests/test_{name}.py", "via": ["structural"], "reason": "structural: calls path (depth 1)", "score": 1.0 - i / 10}
-        for i, name in enumerate("abcdef")
+        {"test": f"tests/integration/subsystem/test_{name}_behaviour.py", "via": ["structural"], "reason": "r", "score": 1.0 - i / 10}
+        for i, name in enumerate(names)
     ]
     result = {
         "status": "ok", "range": "HEAD~1..HEAD", "staged": False, "repo_path": "/r", "index_status": "available",
@@ -109,9 +110,11 @@ def _result(*, with_by_file: bool) -> dict:
         "uncovered_changed_files": [],
     }
     if with_by_file:
+        # Many changed files each pointing at several long test paths: the full mapping is large,
+        # its index form small, so a wide budget window separates the two whatever the tokenizer.
         result["tests_by_changed_file"] = {
-            "a.py": ["tests/test_a.py", "tests/test_b.py"],
-            "b.py": ["tests/test_c.py", "tests/test_f.py"],
+            f"src/subsystem/module_{n}/implementation_file_{n}.py": [t["test"] for t in tests[n % 3 : n % 3 + 3]]
+            for n in range(8)
         }
     return result
 
