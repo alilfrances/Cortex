@@ -1,12 +1,19 @@
 # Plan: Cortex 0.12.1 — review findings on 0.12.0
 
-Status: proposed. Regression tests are in place (strict `xfail` on 0.12.0):
-`tests/test_risk_truncate.py::test_large_diff_keeps_the_per_file_test_map_at_the_default_budget`,
-`::test_the_map_outlives_directives_and_tests_to_run_reasons` (Task A.1), and
-`tests/test_bundle_call_expansion.py::test_callees_of_the_top_match_are_packed` with the
-`companion_repo` fixture and `COMPANION_GOLD_TASKS` (Task B.0, done). Each fixing task
-removes its `xfail` marks; a strict `xfail` that starts passing fails the suite, so the
-marks cannot be forgotten.
+Status: **implemented in 0.12.1.** Outcomes and deviations from the text below:
+- A.1: as planned, plus `returned_count` now counts toward the fit (found while checking
+  `budget_feasible`). Acceptance was "map kept for at least half of the 117 changed files at
+  budget 2000"; the result is 12 of 117 (all 117 at 4000): the changed-file paths alone are
+  about 1.4k tokens even in index form. The map is kept and encoded before any other bucket is
+  dropped, which is what the review asked for.
+- B.1: same-file calls are walked through without spending a hop (otherwise a delegating
+  helper ended the chain); `CALLEE_HOP_SHARE` is (0.9, 0.8) instead of (0.9, 0.6), because at
+  0.6 a hop-2 callee scored below ~35 term-only files; the call index is memoised with the graph
+  cache; the file item carries the route so the `why` also shows for whole-file picks. The
+  0.12 reserve was removed and the eval gate passed without restoring it.
+- The regression tests described below were added first as strict `xfail`s and their marks
+  removed by the fixing tasks.
+
 Input: test review of 0.12.0 on a C++/QML repository (about 3.7k files, 161k nodes, 622k edges)
 Base: `main` at 0.12.0 (`aa98ec6`)
 Target release: **0.12.1** (bug fixes; no graph format change)
