@@ -244,5 +244,6 @@ def test_tests_to_run_block_survives_tight_mcp_budgets(tmp_path: Path) -> None:
     for budget in (400, 120, 40, 0):
         tight = _payload(call_tool("cortex_risk", {"repo_path": str(repo), "budget": budget}))
         assert "tests_run_all" in tight and "tests_run_all_reason" in tight
-        if tight.get("tests_to_run") != roomy["tests_to_run"]:
+        # A stripped `reason` (named in omitted_fields) leaves the list itself intact.
+        if [item["test"] for item in tight.get("tests_to_run") or []] != [item["test"] for item in roomy["tests_to_run"]]:
             assert tight["tests_run_all"] is True

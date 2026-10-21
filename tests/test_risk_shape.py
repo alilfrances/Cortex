@@ -310,7 +310,6 @@ def _synthetic_result() -> dict:
 
 # Order in which truncation gives things up as the budget shrinks.
 DROP_ORDER = [
-    "file:c.py", "file:b.py", "file:a.py",
     "score_formula", "missing_cochanges", "missing_cochange", "missing_tests",
     "missing_qt_pairs", "missing_qt_instantiations", "missing_qt_sites", "build_system_misses",
     "analysis_errors", "unindexed_files",
@@ -318,6 +317,8 @@ DROP_ORDER = [
     "directive:missing_qt_pair: a.hpp for a.cpp",
     "directive:missing_cochange: b.py (0.90) for a.py",
     "directive:build_system_miss: x.qml",
+    # `files` goes last since 0.13.0 (it went first, so a large range kept no ranked file)
+    "file:c.py", "file:b.py", "file:a.py",
 ]
 
 
