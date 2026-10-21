@@ -55,6 +55,14 @@ LOCALE_PATH_DEMOTION = 0.25
 # name or path hit.
 CALL_EXPANSION_BONUS = 20.0
 CALL_EXPANSION_SEEDS = 8
+# Every span of a name-matching file scores +NAME_MATCH_BONUS, so one file's methods can
+# fill the whole budget and starve the call-expanded files (callees/callers/bases of the
+# best matches). This share of the budget is held back from symbol spans for them.
+CALL_EXPANSION_BUDGET_SHARE = 0.15
+# A file's first spans may use the whole budget; only from this many selected spans on
+# does the reserve apply, so a lone gold hit is never squeezed but a file that already
+# holds several spans cannot take the rest.
+SPANS_BEFORE_RESERVE = 2
 LOCALE_PATH_RE = re.compile(r'(^|/)(i18n|l10n|locales?|translations?)(/|$)')
 LOCALE_SUFFIXES = frozenset({'.ts', '.po', '.pot', '.xlf', '.xliff', '.qm'})
 LOCALE_INTENT_TERMS = {
@@ -132,14 +140,18 @@ def _is_locale_source(path: str, kind: str) -> bool:
     return bool(LOCALE_PATH_RE.search(path)) or suffix in LOCALE_SUFFIXES
 
 
-def _call_graph_file_neighbors(nodes: list[GraphNode], edges: list[GraphEdge]) -> dict[str, set[str]]:
-    """File -> files linked to it by a resolved `calls` or `inherits` edge.
+def _call_graph_links(
+    nodes: list[GraphNode], edges: list[GraphEdge]
+) -> tuple[dict[str, set[str]], dict[tuple[str, str], set[str]]]:
+    """File -> files linked to it by a resolved `calls` or `inherits` edge, and
+    (file, other file) -> the symbols of `file` on those edges.
 
     Only edges whose endpoints are both known symbols count; `name:`/`module:`
     targets are unresolved and same-file pairs add nothing.
     """
     file_of = {node.node_id: node.source_ref for node in nodes if node.granularity == 'symbol'}
     neighbors: defaultdict[str, set[str]] = defaultdict(set)
+    symbols: defaultdict[tuple[str, str], set[str]] = defaultdict(set)
     for edge in edges:
         if edge.relation not in ('calls', 'inherits'):
             continue
@@ -149,7 +161,14 @@ def _call_graph_file_neighbors(nodes: list[GraphNode], edges: list[GraphEdge]) -
             continue
         neighbors[source_file].add(target_file)
         neighbors[target_file].add(source_file)
-    return neighbors
+        symbols[(source_file, target_file)].add(edge.source)
+        symbols[(target_file, source_file)].add(edge.target)
+    return neighbors, symbols
+
+
+def _call_graph_file_neighbors(nodes: list[GraphNode], edges: list[GraphEdge]) -> dict[str, set[str]]:
+    """File -> files linked to it by a resolved `calls` or `inherits` edge."""
+    return _call_graph_links(nodes, edges)[0]
 
 
 def _is_aux_path(path: str) -> bool:
@@ -798,8 +817,9 @@ def generate_bundle(
 
     check_deadline()
     top_score = max(source_scores.values(), default=0.0)
+    expanded_symbols: dict[str, set[str]] = {}  # call-expanded file -> its symbols on the linking edges
     if top_score > 0:
-        file_neighbors = _call_graph_file_neighbors(nodes, edges)
+        file_neighbors, linked_symbols = _call_graph_links(nodes, edges)
         seeds = sorted(
             ((path, score) for path, score in source_scores.items() if score > 0),
             key=lambda item: (-item[1], item[0]),
@@ -815,6 +835,7 @@ def generate_bundle(
                 if demote_locale and _is_locale_source(neighbor, kind_by_path.get(neighbor, 'code')):
                     continue
                 source_scores[neighbor] = bonus
+                expanded_symbols.setdefault(neighbor, set()).update(linked_symbols.get((neighbor, path), ()))
     seed_scores = {f'file:{path}': score for path, score in source_scores.items() if score > 0}
     degraded = False
     if rank == 'bfs':
@@ -955,79 +976,139 @@ def generate_bundle(
         if item.kind == 'markdown':
             doc_tokens += item.token_count
 
-    for item in candidates:
-        if item.score <= 0 or item.item_id in selected_ids:
-            continue
-        if item.token_count <= 0:
-            continue  # an empty file or span adds nothing to a bundle
-        allowed = min(budget - total_tokens, item_cap)
-        if item.kind == 'symbol':
-            if item.path in files_fully_selected:
+    selected_spans: dict[str, list[tuple[int, int]]] = defaultdict(list)
+
+    def inside_selected_span(item: BundleItem) -> bool:
+        start, end = item.metadata.get('span_start'), item.metadata.get('span_end')
+        if start is None or end is None:
+            return False
+        return any(lo <= start and end <= hi for lo, hi in selected_spans[item.path])
+
+    def select_span(item: BundleItem) -> None:
+        select(item)
+        if item.metadata.get('span_start') is not None and item.metadata.get('span_end') is not None:
+            selected_spans[item.path].append((item.metadata['span_start'], item.metadata['span_end']))
+
+    def pack(span_ceiling: int) -> None:
+        """One pass over the candidates by score. Whole files and skeletons may use the
+        whole budget; symbol spans stop at `span_ceiling`, which is what keeps a file with
+        many name-matching methods from taking the share held back for expanded files
+        (a file's first `SPANS_BEFORE_RESERVE` spans are exempt)."""
+        for item in candidates:
+            if item.score <= 0 or item.item_id in selected_ids:
                 continue
-            file_item = file_item_by_path.get(item.path)
-            # Prefer the whole file when it fits outright; symbol spans exist
-            # to surface relevant code from files that cannot be included whole.
-            if (
-                file_item is not None
-                and file_item.item_id not in selected_ids
-                and file_item.token_count <= allowed
-            ):
-                select(file_item)
-                files_fully_selected.add(file_item.path)
-                continue
-            if 0 < item.token_count <= allowed:
-                select(item)
-                paths_with_symbols.add(item.path)
-            continue
-        if item.kind == 'code' and item.path in paths_with_symbols:
-            continue
-        is_doc = item.kind == 'markdown'
-        if is_doc:
-            allowed = min(allowed, doc_cap - doc_tokens)
-        if item.token_count <= allowed:
-            select(item)
-            if item.kind == 'code':
-                files_fully_selected.add(item.path)
-            continue
-        remaining = allowed
-        if remaining <= 16:
-            continue
-        if item.kind == 'code':
-            picked_symbol = False
-            for symbol_item in symbol_items_by_path.get(item.path, []):
-                if symbol_item.item_id in selected_ids:
+            if item.token_count <= 0:
+                continue  # an empty file or span adds nothing to a bundle
+            allowed = min(budget - total_tokens, item_cap)
+            if item.kind == 'symbol':
+                held = span_ceiling if len(selected_spans[item.path]) >= SPANS_BEFORE_RESERVE else budget
+                span_allowed = min(held - total_tokens, item_cap)
+                if item.path in files_fully_selected or inside_selected_span(item):
                     continue
-                if 0 < symbol_item.token_count <= remaining:
-                    select(symbol_item)
-                    remaining -= symbol_item.token_count
-                    picked_symbol = True
-            if picked_symbol:
-                paths_with_symbols.add(item.path)
+                file_item = file_item_by_path.get(item.path)
+                # Prefer the whole file when it fits outright; symbol spans exist
+                # to surface relevant code from files that cannot be included whole.
+                if (
+                    file_item is not None
+                    and file_item.item_id not in selected_ids
+                    and file_item.token_count <= allowed
+                ):
+                    select(file_item)
+                    files_fully_selected.add(file_item.path)
+                    continue
+                if 0 < item.token_count <= span_allowed:
+                    select_span(item)
+                    paths_with_symbols.add(item.path)
                 continue
-            symbols = symbols_by_path.get(item.path, [])
-            if symbols:
-                skeleton = _skeleton_item(item, symbols, symbol_scores, remaining)
+            if item.kind == 'code' and item.path in paths_with_symbols:
+                continue
+            is_doc = item.kind == 'markdown'
+            if is_doc:
+                allowed = min(allowed, doc_cap - doc_tokens)
+            if item.token_count <= allowed:
+                select(item)
+                if item.kind == 'code':
+                    files_fully_selected.add(item.path)
+                continue
+            remaining = allowed
+            if remaining <= 16:
+                continue
+            if item.kind == 'code':
+                picked_symbol = False
+                for symbol_item in symbol_items_by_path.get(item.path, []):
+                    if symbol_item.item_id in selected_ids or inside_selected_span(symbol_item):
+                        continue
+                    held = span_ceiling if len(selected_spans[item.path]) >= SPANS_BEFORE_RESERVE else budget
+                    if 0 < symbol_item.token_count <= min(remaining, held - total_tokens):
+                        select_span(symbol_item)
+                        remaining -= symbol_item.token_count
+                        picked_symbol = True
+                if picked_symbol:
+                    paths_with_symbols.add(item.path)
+                    continue
+                symbols = symbols_by_path.get(item.path, [])
+                if symbols:
+                    skeleton = _skeleton_item(item, symbols, symbol_scores, remaining)
+                    if skeleton is not None:
+                        select(skeleton)
+                    # Code files with indexed symbols never degrade to file[0:N].
+                    continue
+            token_kind = str(item.metadata.get('source_kind', item.kind))
+            truncated = truncate_text_to_budget(item.content, remaining, kind=token_kind)
+            truncated_tokens = count_text_tokens(truncated, kind=token_kind)
+            if truncated_tokens <= 0:
+                continue
+            select(
+                BundleItem(
+                    item_id=item.item_id,
+                    kind=item.kind,
+                    title=item.title,
+                    path=item.path,
+                    content=truncated,
+                    token_count=truncated_tokens,
+                    score=item.score,
+                    metadata={**item.metadata, 'truncated': True},
+                )
+            )
+
+    def pack_call_expanded(reserve_tokens: int) -> None:
+        """Give each call-expanded file that is still missing a skeleton of just the
+        symbols the best matches call into (else the whole-file skeleton), using at
+        most `reserve_tokens` in total so lower-ranked matches keep their room."""
+        spent = 0
+        for path in sorted(expanded_symbols, key=lambda p: (-source_scores.get(p, 0.0), p)):
+            file_item = file_item_by_path.get(path)
+            if (
+                file_item is None
+                or file_item.item_id in selected_ids
+                or path in files_fully_selected
+                or path in paths_with_symbols
+                or file_item.token_count <= 0
+            ):
+                continue
+            remaining = min(budget - total_tokens, item_cap, reserve_tokens - spent)
+            if remaining <= 16:
+                break
+            if file_item.token_count <= remaining:
+                select(file_item)
+                files_fully_selected.add(path)
+                spent += file_item.token_count
+                continue
+            all_symbols = symbols_by_path.get(path, [])
+            called = [symbol for symbol in all_symbols if symbol.node_id in expanded_symbols[path]]
+            for group in (called, all_symbols):
+                skeleton = _skeleton_item(file_item, group, symbol_scores, remaining) if group else None
                 if skeleton is not None:
                     select(skeleton)
-                # Code files with indexed symbols never degrade to file[0:N].
-                continue
-        token_kind = str(item.metadata.get('source_kind', item.kind))
-        truncated = truncate_text_to_budget(item.content, remaining, kind=token_kind)
-        truncated_tokens = count_text_tokens(truncated, kind=token_kind)
-        if truncated_tokens <= 0:
-            continue
-        select(
-            BundleItem(
-                item_id=item.item_id,
-                kind=item.kind,
-                title=item.title,
-                path=item.path,
-                content=truncated,
-                token_count=truncated_tokens,
-                score=item.score,
-                metadata={**item.metadata, 'truncated': True},
-            )
-        )
+                    paths_with_symbols.add(path)
+                    spent += skeleton.token_count
+                    break
+
+    reserve = int(budget * CALL_EXPANSION_BUDGET_SHARE) if expanded_symbols else 0
+    pack(budget - reserve)
+    if reserve:
+        pack_call_expanded(reserve)
+        pack(budget)
 
     bundle = RetrievalBundle(
         task=task,

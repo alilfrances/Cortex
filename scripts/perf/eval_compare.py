@@ -52,9 +52,10 @@ def compare(before: Path, after: Path) -> int:
         if changed or a[key]["files"] != b[key]["files"]:
             print(f"changed: {key}\n    {changed or 'files only'}")
         failed |= any(b[key][m] < a[key][m] for m in GATED)
+    common = sorted(set(a) & set(b))  # rows added or removed between the runs are listed above
     for metric in METRICS:
-        mean_a = statistics.mean(v[metric] for v in a.values())
-        mean_b = statistics.mean(v[metric] for v in b.values())
+        mean_a = statistics.mean(a[key][metric] for key in common)
+        mean_b = statistics.mean(b[key][metric] for key in common)
         print(f"mean {metric}: {mean_a:.4f} -> {mean_b:.4f}")
         failed |= metric in GATED and mean_b < mean_a
     print("EVAL GATE:", "FAIL" if failed else "pass")

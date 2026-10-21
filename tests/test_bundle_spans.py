@@ -206,3 +206,66 @@ def test_bundle_runs_graph_rank_when_time_remains(tmp_path, monkeypatch):
     result = generate_bundle(repo, "login", 2000, db_path=tmp_path / "db.sqlite", output_format="json", sources=sources, graph=graph)
 
     assert "degraded" not in result
+
+
+# --- spread the budget across files (0.12, Task 5.3) ---
+
+
+def _packed(tmp_path, content: str, symbols: list[tuple[str, int, int]], task: str, budget: int) -> dict:
+    repo = _make_repo(tmp_path)
+    db_path = tmp_path / "cortex.db"
+    store = CortexStore(db_path)
+    nodes = [_file_node("w.py")] + [_symbol_node("w.py", name, start, end) for name, start, end in symbols]
+    store.reset_repo(repo)
+    store.save_sources(repo, [_source("w.py", content)])
+    store.save_graph(repo, nodes, [])
+    bundle = generate_bundle(repo_path=repo, task=task, budget=budget, db_path=db_path, output_format="json")
+    assert isinstance(bundle, dict)
+    return bundle
+
+
+def test_a_span_nested_in_a_selected_span_is_not_selected_again(tmp_path):
+    padding = "\n".join(f"def pad_{i}():\n    return unrelated_widget_{i} + gadget_{i}\n" for i in range(60))
+    content = (
+        "class ReconnectHandler:\n"
+        "    def reconnect_device(self):\n"
+        "        return self.reconnect_state\n"
+        "\n"
+        f"{padding}\n"
+    )
+    bundle = _packed(
+        tmp_path, content, [("ReconnectHandler", 1, 3), ("reconnect_device", 2, 3)], "reconnect device state", budget=400
+    )
+
+    spans = [item["item_id"] for item in bundle["items"] if item["kind"] == "symbol"]
+    # The whole file does not fit, but the class span and the method span (its last two
+    # lines) both do; selecting both would print the same lines twice.
+    assert len(spans) == 1, spans
+
+
+def test_the_spread_task_reaches_the_helpers_its_spans_call_into(tmp_path, monkeypatch):
+    from evals.run_evals import SPREAD_GOLD_TASKS, build_fixture_repos
+
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("CORTEX_SEMANTIC", "0")
+    from cortex.ingest import ingest_repository
+
+    task = SPREAD_GOLD_TASKS[0]
+    repo = build_fixture_repos(tmp_path)["spread_repo"]
+    ingest_repository(repo)
+
+    bundle = generate_bundle(repo, task=task.description, budget=task.budget, output_format="json")
+
+    paths = {item["path"] for item in bundle["items"]}
+    assert set(task.expected_files) <= paths
+    assert bundle["total_tokens"] <= task.budget
+
+
+def test_a_files_first_spans_may_use_the_whole_budget(tmp_path):
+    body = "\n".join(f"    value_{i} = reconnect_{i} + timeout" for i in range(25))
+    content = f"def reconnect_timeout():\n{body}\n    return 1\n"
+    end = len(content.splitlines())
+    bundle = _packed(tmp_path, content, [("reconnect_timeout", 1, end), ("reconnect_other", 1, 2)], "reconnect timeout", budget=500)
+
+    # The held-back share must never squeeze the only good hit of a file.
+    assert any("reconnect_timeout" in item["content"] for item in bundle["items"])

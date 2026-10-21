@@ -94,7 +94,7 @@
       "app/cleanup.py",
       "app/session.py",
       "app/session.py",
-      "app/session.py",
+      "app/audit.py",
       "README.md"
     ],
     "mode": "skeleton_on",
@@ -106,7 +106,7 @@
       "app/cleanup.py",
       "app/session.py",
       "app/session.py",
-      "app/session.py",
+      "app/audit.py",
       "README.md"
     ],
     "mode": "skeleton_off",

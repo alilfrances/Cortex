@@ -45,6 +45,20 @@ QML_GOLD_TASKS: tuple[GoldTask, ...] = (
 )
 
 
+# Report 0.11 #6: spans of two files that all match the task must leave room for the helper
+# files they call into. Kept out of GOLD_TASKS (like the QML golds) so the 17 historical
+# rows stay comparable; tests/test_bundle_spans.py runs it.
+SPREAD_GOLD_TASKS: tuple[GoldTask, ...] = (
+    GoldTask(
+        repo="spread_repo",
+        description="fix the device reconnect timeout handling",
+        expected_files=("src/device_session.cpp", "src/device_pool.cpp", "src/base.cpp", "src/manager.cpp"),
+        budget=1500,
+        tight_budget=1500,
+    ),
+)
+
+
 GOLD_TASKS: tuple[GoldTask, ...] = (
     GoldTask(
         repo="python_app",
@@ -519,6 +533,31 @@ def helper():
     return repo
 
 
+def _build_spread_repo(base: Path) -> Path:
+    """Two files whose many methods all match the task, which call into two helper
+    files that share no word with it: the spans must not use up the whole budget."""
+    repo = base / "spread_repo"
+    _init_repo(repo)
+
+    def method(cls: str, name: str) -> str:
+        steps = "\n".join(f"    int step{i} = value_ + {i};  // {name} reconnect timeout handling" for i in range(6))
+        return f"int {cls}::{name}(int value_) {{\n{steps}\n    Base::init(value_);\n    Manager::track(value_);\n    return value_;\n}}\n\n"
+
+    session = ("reconnectDevice", "reconnectTimeout", "handleReconnect", "timeoutReconnect", "reconnectDelay", "reconnectLimit")
+    pool = ("reconnectAll", "reconnectPending", "timeoutPool", "reconnectBackoff", "poolReconnect")
+    includes = '#include "base.h"\n#include "manager.h"\n'
+    _write(repo / "src/device_session.cpp", includes + "\n" + "".join(method("DeviceSession", n) for n in session))
+    _write(repo / "src/device_pool.cpp", includes + "\n" + "".join(method("DevicePool", n) for n in pool))
+    _write(repo / "src/device_session.h", "class DeviceSession {\npublic:\n" + "".join(f"  int {n}(int);\n" for n in session) + "};\n")
+    _write(repo / "src/device_pool.h", "class DevicePool {\npublic:\n" + "".join(f"  int {n}(int);\n" for n in pool) + "};\n")
+    _write(repo / "src/base.h", "class Base { public: static void init(int); };\n")
+    _write(repo / "src/manager.h", "class Manager { public: static void track(int); };\n")
+    _write(repo / "src/base.cpp", '#include "base.h"\nvoid Base::init(int v) {\n    int state = v;\n    state += 1;\n}\n')
+    _write(repo / "src/manager.cpp", '#include "manager.h"\nvoid Manager::track(int v) {\n    int seen = v;\n    seen += 2;\n}\n')
+    _commit_all(repo, "add spread fixture")
+    return repo
+
+
 def _build_qt_app(base: Path) -> Path:
     """Small Qt/C++/QML fixture: two QObject classes wired via connect(), plus a QML
     scene that instantiates a local component and a real C++ ``DeviceManager``
@@ -790,6 +829,7 @@ def build_fixture_repos(base: Path) -> dict[str, Path]:
         "web_service": _build_web_service(base),
         "noisy_lib": _build_noisy_lib(base),
         "refresh_distractors": _build_refresh_distractors(base),
+        "spread_repo": _build_spread_repo(base),
         "qt_app": _build_qt_app(base),
         "body_text_repo": _build_body_text_repo(base),
     }
