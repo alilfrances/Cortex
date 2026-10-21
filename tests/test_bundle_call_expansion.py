@@ -58,7 +58,6 @@ def test_files_linked_by_calls_and_inheritance_are_lifted_by_the_expansion(repo)
 # --- 0.12.0 review: callees of the top match (docs/plan-0.12.1-review.md, Task B.0) ---
 
 
-@pytest.mark.xfail(strict=True, reason="0.12.0 lifts callees only to CALL_EXPANSION_BONUS; fixed by plan 0.12.1 Task B.1")
 @pytest.mark.parametrize("budget", [600, 900])
 def test_callees_of_the_top_match_are_packed(tmp_path, monkeypatch, budget):
     from evals.run_evals import COMPANION_GOLD_TASKS, _build_companion_repo
@@ -88,3 +87,78 @@ def test_the_companion_fixture_has_the_resolved_call_chain(tmp_path, monkeypatch
 
     assert ("symbol:src/device_manager.cpp:reportDevice", "symbol:src/peripheral_core.cpp:assignCompanion") in resolved
     assert ("symbol:src/peripheral_core.cpp:releaseCompanion", "symbol:src/registry.cpp:drop") in resolved
+
+
+# --- the callee walk (docs/plan-0.12.1-review.md, Task B.1) ---
+
+
+def _walk(seeds, calls, files=None, bases=None, owner=None):
+    from cortex.bundle import _callee_scores
+
+    file_of = lambda sid: (files or {}).get(sid, sid.split(":")[1] if sid.count(":") >= 2 else None)  # noqa: E731
+    return _callee_scores(seeds, calls, file_of, lambda sid: (owner or {}).get(sid), bases or {})
+
+
+def test_walk_scores_callees_from_the_seed_and_passes_through_same_file_calls() -> None:
+    from cortex.bundle import CALLEE_HOP_SHARE
+
+    calls = {
+        "symbol:a.cpp:top": ["symbol:b.cpp:direct"],
+        "symbol:b.cpp:direct": ["symbol:b.cpp:sibling"],      # same file: no hop spent
+        "symbol:b.cpp:sibling": ["symbol:c.cpp:far"],         # second crossing
+        "symbol:c.cpp:far": ["symbol:d.cpp:too_far"],         # third crossing: out of range
+    }
+    got = _walk([("symbol:a.cpp:top", 100.0)], calls)
+
+    assert got["symbol:b.cpp:direct"] == (100.0 * CALLEE_HOP_SHARE[0], "symbol:a.cpp:top", 1)
+    assert got["symbol:b.cpp:sibling"][2] == 1
+    assert got["symbol:c.cpp:far"] == (100.0 * CALLEE_HOP_SHARE[1], "symbol:a.cpp:top", 2)
+    assert "symbol:d.cpp:too_far" not in got
+    assert "symbol:a.cpp:top" not in got
+
+
+def test_walk_keeps_the_best_route_over_several_seeds_and_never_expands_callers() -> None:
+    calls = {"symbol:a.cpp:s1": ["symbol:x.cpp:shared"], "symbol:b.cpp:s2": ["symbol:x.cpp:shared"]}
+    got = _walk([("symbol:a.cpp:s1", 80.0), ("symbol:b.cpp:s2", 120.0)], calls)
+
+    assert got["symbol:x.cpp:shared"][1:] == ("symbol:b.cpp:s2", 1)
+    # A caller of a seed is not a callee of anything: nothing lifts it.
+    got = _walk([("symbol:x.cpp:shared", 100.0)], calls)
+    assert got == {}
+
+
+def test_walk_caps_other_file_callees_per_function() -> None:
+    from cortex.bundle import CALLEES_PER_SEED
+
+    targets = [f"symbol:f{i}.cpp:t{i}" for i in range(10)]
+    got = _walk([("symbol:a.cpp:top", 100.0)], {"symbol:a.cpp:top": targets})
+
+    assert sorted(got) == sorted(targets[:CALLEES_PER_SEED])  # call-site order decides
+
+
+def test_walk_scores_the_bases_of_the_seeds_class() -> None:
+    from cortex.bundle import BASE_CLASS_SHARE
+
+    got = _walk(
+        [("symbol:a.cpp:method", 100.0)], {}, owner={"symbol:a.cpp:method": "symbol:a.h:Derived"},
+        bases={"symbol:a.h:Derived": ["symbol:base.h:Base"]},
+    )
+
+    assert got == {"symbol:base.h:Base": (100.0 * BASE_CLASS_SHARE, "symbol:a.cpp:method", 1)}
+
+
+def test_expanded_items_say_why_they_were_selected(tmp_path, monkeypatch) -> None:
+    from cortex.mcp.tools import _bundle_why, _compact_why
+    from evals.run_evals import COMPANION_GOLD_TASKS, _build_companion_repo
+
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("CORTEX_SEMANTIC", "0")
+    repo = _build_companion_repo(tmp_path)
+    ingest_repository(repo)
+    bundle = generate_bundle(repo, task=COMPANION_GOLD_TASKS[0].description, budget=900, output_format="json")
+
+    routed = [item for item in bundle["items"] if item["metadata"].get("call_expansion")]
+    assert routed, "the callee must carry its route"
+    why = _bundle_why(routed[0], set(), set(), [])
+    assert any(entry["type"] == "call" and entry["hop"] >= 1 for entry in why)
+    assert _compact_why(why).startswith("calls: ")

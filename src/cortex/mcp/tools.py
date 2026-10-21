@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import __version__
-from ..bundle import _render_skeleton, _render_symbol_skeleton, _tokenize_query, generate_bundle
+from ..bundle import _call_graph_links, _render_skeleton, _render_symbol_skeleton, _tokenize_query, generate_bundle
 from ..deadcode import analyze_dead_code, truncate_dead_code_result
 from ..deadline import DeadlineExceeded, current_deadline, deadline_scope, resolve_budget_seconds
 from ..gitutils import discover_repo_root
@@ -672,6 +672,10 @@ def _bundle_why(
             entry["node_id"] = node_id
         why.append(entry)
 
+    route = item.get("metadata", {}).get("call_expansion")
+    if isinstance(route, dict) and (route.get("to") or node_id):
+        why.append({"type": "call", "from": route.get("from", ""), "to": route.get("to") or node_id, "hop": route.get("hop", 1)})
+
     item_node = f"file:{item.get('path', '')}"
     if item.get("path") in seed_paths:
         why.append({"type": "seed_path", "path": item.get("path", "")})
@@ -701,6 +705,12 @@ def _bundle_why(
 
 
 def _compact_why(why: list[dict[str, Any]]) -> str:
+    for entry in why:
+        if entry.get("type") == "call":
+            def label(node_id: str) -> str:
+                return str(node_id).split(":", 2)[-1]
+
+            return f"calls: {label(entry.get('from', ''))} -> {label(entry.get('to', ''))}"
     for entry in why:
         if entry.get("type") == "keyword":
             terms = ", ".join(entry.get("terms", [])[:4])
@@ -815,6 +825,7 @@ def _call_query(arguments: dict[str, Any]) -> dict[str, Any]:
             sources=all_sources,
             graph=graph,
             rank_graph=_cached_rank_graph(store, repo_root, graph),
+            call_links=_cached_call_links(store, repo_root, graph),
         )
         assert isinstance(bundle, dict)
         terms = _tokenize_query(task)
@@ -930,6 +941,23 @@ def _cached_rank_graph(
     collapsed = collapse_to_file_graph(*graph)
     _rank_graph_cache = (key, collapsed)
     return collapsed
+
+
+# `_call_graph_links` of the graph above (one pass over every edge), shared by `cortex_query` calls.
+_call_links_cache: tuple[tuple[str, str, str, int], tuple] | None = None
+
+
+def _cached_call_links(store: CortexStore, repo_root: Path, graph: tuple[list[GraphNode], list[GraphEdge]]) -> tuple:
+    global _call_links_cache
+    if not _graph_cache_enabled():
+        return _call_graph_links(*graph)
+    key = _graph_key(store, repo_root)
+    cached = _call_links_cache
+    if cached is not None and cached[0] == key:
+        return cached[1]
+    links = _call_graph_links(*graph)
+    _call_links_cache = (key, links)
+    return links
 
 
 def graph_cache_info() -> dict[str, int] | None:
@@ -2661,9 +2689,10 @@ def _call_refresh(arguments: dict[str, Any]) -> dict[str, Any]:
     # Incremental needs an existing database to diff against.
     incremental = mode != "full" and default_db_path(repo_root).exists()
     _forget_fingerprint(repo_root)
-    global _graph_cache, _rank_graph_cache
+    global _graph_cache, _rank_graph_cache, _call_links_cache
     _graph_cache = None
     _rank_graph_cache = None
+    _call_links_cache = None
     request = _current_request
     sink = _progress_sink
 
