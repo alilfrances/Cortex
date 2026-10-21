@@ -6,7 +6,7 @@ import math
 import re
 import time
 from collections import defaultdict, deque
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 
 from .config import load_config
@@ -14,6 +14,7 @@ from .deadline import DeadlineExceeded, check_deadline, current_deadline, deadli
 from .fusion import rrf_fuse
 from .gitutils import discover_repo_root
 from .models import BundleItem, GraphEdge, GraphNode, RetrievalBundle
+from .pathalias import parts_from_labels
 from .rank import collapse_to_file_graph, personalized_pagerank
 from .store import CortexStore, default_db_path
 from .structural.regex_backend import _QT_SECTION_RE
@@ -519,13 +520,22 @@ def _split_identifier(token: str) -> tuple[str, ...]:
     return tuple(part.lower() for part in _ALNUM_RUN_RE.findall(normalized) if part)
 
 
-def _tokenize_text(text: str, *, drop_stopwords: bool = False) -> set[str]:
+def _tokenize_text(text: str, *, drop_stopwords: bool = False, labels: Iterable[str] = ()) -> set[str]:
+    """Lower-cased word parts of `text`.
+
+    `labels` are the class/qualifier names declared in the file the text names (a path): a lower-case
+    concatenated token such as the stem `widgetwaitready` also yields the parts of a label it is a
+    prefix of (`WidgetWaitReadyStep` -> widget, wait, ready, step). The unsplit token is kept.
+    """
     terms: set[str] = set()
+    labels = tuple(labels)
     for token in _IDENTIFIER_RUN_RE.findall(text):
         for part in _split_identifier(token):
             if drop_stopwords and part in STOPWORDS:
                 continue
             terms.add(part)
+        if labels:
+            terms.update(parts_from_labels(token, labels))
     return terms
 
 
@@ -739,9 +749,19 @@ def generate_bundle(
         term for identifier in config.noise_identifiers for term in _tokenize_text(identifier)
     )
     check_deadline()
+    # Words of concatenated lowercase stems (`widgetwaitready.cpp` -> widget wait ready), set at ingest.
+    path_aliases: dict[str, str] = {}
+    for node in nodes:
+        if node.kind == 'file' and node.granularity != 'symbol':
+            aliases = node.metadata.get('path_aliases')
+            if aliases:
+                path_aliases[node.source_ref] = ' '.join(aliases)
     # Tokenized once: term weights, the symbol-span prefilter and the semantic gate all use it.
     file_tokens: dict[str, set[str]] = (
-        {source.path: _tokenize_text(f'{source.path}\n{source.content}') for source in sources}
+        {
+            source.path: _tokenize_text(f'{source.path} {path_aliases.get(source.path, "")}\n{source.content}')
+            for source in sources
+        }
         if task_terms
         else {}
     )
@@ -783,14 +803,17 @@ def generate_bundle(
         recency_weight = 0.0
         if newest_commit:
             recency_weight = max(0.0, 5.0 - math.log2(max(1, newest_commit - int(source.modified_at) + 1)))
-        name_candidates = _tokenize_text(Path(source.path).stem) | symbol_names_by_path.get(source.path, set())
+        name_candidates = (
+            _tokenize_text(f'{Path(source.path).stem} {path_aliases.get(source.path, "")}')
+            | symbol_names_by_path.get(source.path, set())
+        )
         name_bonus = NAME_MATCH_BONUS if task_terms & name_candidates else 0.0
         dir_tokens = _tokenize_text("/".join(Path(source.path).parts[:-1]))
         path_bonus = PATH_MATCH_BONUS if task_terms & dir_tokens else 0.0
         haystack = _strip_boilerplate(source.content) if source.kind == 'code' else source.content
         score = name_bonus + path_bonus + _score_text(
             task_terms,
-            f'{source.path}\n{haystack}',
+            f'{source.path} {path_aliases.get(source.path, "")}\n{haystack}',
             recency_weight,
             term_weights,
             noise_terms,

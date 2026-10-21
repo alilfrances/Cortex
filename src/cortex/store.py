@@ -33,7 +33,8 @@ INGEST_LOCK_NAME = "ingest.lock"
 # 2 = tree-sitter-language-pack 1.22.1 grammars (an index must not mix files
 # parsed by two grammar versions).
 # 3 = Qt Linguist `.ts` translation catalogues are text, not TypeScript code.
-GRAPH_FORMAT_VERSION = 5
+# 6 = 0.12.2: resolved `inherits` targets (`metadata.unresolved_target`) and `path_aliases` on file nodes.
+GRAPH_FORMAT_VERSION = 6
 INGEST_LOCK_TIMEOUT_SECONDS = 120.0
 _LOCK_POLL_SECONDS = 0.05
 

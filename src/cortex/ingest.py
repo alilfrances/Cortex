@@ -21,6 +21,7 @@ from .graph import (
 )
 from .hotspots import annotate_file_nodes, compute_churn, compute_hotspots
 from .models import CommitRecord, GraphNode, SourceRecord
+from .pathalias import apply_path_aliases
 from .store import GRAPH_FORMAT_VERSION, CortexStore, default_db_path, ingest_lock, write_repo_meta
 
 _TEXT_SUFFIXES = {
@@ -383,6 +384,11 @@ def _parser_summary_from_counts(counts: Mapping[str, int]) -> dict[str, Any]:
     return {"backend_counts": dict(backend_counts), "language_runtime": runtime}
 
 
+def _node_state(node) -> tuple:
+    """What the merged resolution pass can change on a node: its degree and its path aliases."""
+    return node.metadata.get("degree"), tuple(node.metadata.get("path_aliases") or ())
+
+
 def ingest_repository(
     repo_path: Path,
     commit_limit: int = 1000,
@@ -561,7 +567,7 @@ def _ingest_locked(
                 e.edge_id: (e.source, e.target, e.confidence, json.dumps(e.metadata, sort_keys=True))
                 for e in merged_edges
             }
-            degrees_before = {n.node_id: n.metadata.get("degree") for n in merged_nodes}
+            node_state_before = {n.node_id: _node_state(n) for n in merged_nodes}
             resolved_edges = resolve_connect_endpoints(merged_nodes, merged_edges)
             if call_files or call_labels:
                 resolved_edges = resolve_call_endpoints(
@@ -576,6 +582,7 @@ def _ingest_locked(
                 resolve_qml_edges(merged_nodes, resolved_edges, scan.current_paths)
             except Exception:
                 pass
+            apply_path_aliases(merged_nodes)
             annotate_degree(merged_nodes, resolved_edges)
             if len(resolved_edges) != len(endpoints_before):
                 # Resolution dropped self-loop artifacts; an upsert cannot
@@ -588,7 +595,7 @@ def _ingest_locked(
                 ]
                 changed_nodes = [
                     n for n in merged_nodes
-                    if degrees_before[n.node_id] != n.metadata.get("degree")
+                    if node_state_before[n.node_id] != _node_state(n)
                 ]
                 if changed_nodes or changed_edges:
                     store.save_graph(repo_root, changed_nodes, changed_edges)
