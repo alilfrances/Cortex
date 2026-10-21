@@ -49,10 +49,14 @@ What it writes (all under ``src/field``, ``tests/field``, ``tests/mocks``, ``js`
   80% of the files changed over a 100-commit range have no reaching test (83% measured at
   ``--modules 40``, 84% at ``--modules 200``).
 
-Known gap against the field statistics: the manager's out-calls are mostly unresolved
-(``name:``, about 80% of them), but the rest of the repository comes from the default
-generator, whose calls all resolve, so repository-wide only about 10% of ``calls`` targets are
-``name:`` (field: 66%).  Test the manager's file, not the repository-wide ratio.
+Known gap against the field statistics: only the manager's out-calls and the base-class
+lookups were shaped to defeat the 0.12.1 resolver (about 80% of the manager's calls stayed
+``name:``, 0 of the ``inherits`` edges resolved); the rest of the repository comes from the
+default generator, whose calls all resolve, so repository-wide only about 11% of ``calls``
+targets are ``name:`` with 0.12.1 (field: 66%).  With 0.12.2 the manager's calls resolve to
+about 80% and in-repo bases to 100% (``scripts/perf/audit_unresolved_calls.py`` prints both);
+the profile is still what a regression of those fixes looks like.  Test the manager's file,
+not the repository-wide ratio.
 """
 from __future__ import annotations
 

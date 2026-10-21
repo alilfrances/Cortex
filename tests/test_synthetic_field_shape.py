@@ -44,10 +44,13 @@ def test_the_profile_has_the_field_report_shape(tmp_path: Path) -> None:
     base = names["base_class"]
     classes = [n for n in nodes if n.label == base and n.kind == "class"]
     assert len(classes) == 6  # real header, 3 mocks, a nested class and the JS helper
+    # The extractor writes `name:`/`module:` bases (0.12.2 resolves them: the original stays in
+    # `metadata.unresolved_target`), so the profile is checked on what was extracted.
     inherits = [e for e in edges if e.relation == "inherits"]
-    assert inherits and not any(e.target.startswith("symbol:") for e in inherits)
-    assert {e.target.split(":", 1)[0] for e in inherits} == {"name", "module"}
-    assert sum(e.target == f"name:{base}" for e in inherits) >= 10
+    written = [e.metadata.get("unresolved_target", e.target) for e in inherits]
+    assert inherits and {target.split(":", 1)[0] for target in written} == {"name", "module"}
+    assert sum(target == f"name:{base}" for target in written) >= 10
     manager_calls = [e for e in edges if e.relation == "calls" and e.source.startswith(f"symbol:{names['manager_impl']}:")]
     assert len(manager_calls) > 100
-    assert sum(e.target.startswith("name:") for e in manager_calls) > len(manager_calls) / 2
+    # mostly calls through a variable (a `CoreDevice *` or a cast local), the receivers that stayed `name:` in 0.12.1
+    assert sum(e.metadata.get("receiver_kind") == "var" for e in manager_calls) > len(manager_calls) / 2

@@ -324,16 +324,16 @@ def _select_seeds(
             continue
         eligible.append(item)
     eligible.sort(key=lambda item: (-item.score, item.item_id))
-    chosen: list[BundleItem] = []
+    chosen: dict[str, BundleItem] = {}
     files = sorted({item.path for item in eligible}, key=lambda path: (-file_scores.get(path, 0.0), path))
     for path in files[:SEED_FILES]:
-        chosen.append(next(item for item in eligible if item.path == path))
+        best = next(item for item in eligible if item.path == path)
+        chosen[best.item_id] = best
     for item in eligible:
         if len(chosen) >= CALLEE_SEEDS:
             break
-        if item not in chosen:
-            chosen.append(item)
-    return sorted(chosen, key=lambda item: (-item.score, item.item_id))[:max(CALLEE_SEEDS, SEED_FILES)]
+        chosen.setdefault(item.item_id, item)
+    return sorted(chosen.values(), key=lambda item: (-item.score, item.item_id))
 
 
 def _call_graph_file_neighbors(nodes: list[GraphNode], edges: list[GraphEdge]) -> dict[str, set[str]]:
@@ -824,7 +824,7 @@ def generate_bundle(
     sources: list | None = None,
     graph: tuple[list[GraphNode], list[GraphEdge]] | None = None,
     rank_graph: tuple[list[GraphNode], list[GraphEdge]] | None = None,
-    call_links: tuple | None = None,
+    call_links: CallLinks | None = None,
 ) -> str | dict:
     """Build a retrieval bundle for `task`.
 
