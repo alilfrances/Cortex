@@ -510,7 +510,7 @@ def test_dead_code_stops_when_cancel_event_is_set(tmp_path, monkeypatch):
     assert payload["partial"] is True
 
 
-def test_partial_overview_computes_once_and_is_not_persisted(tmp_path, monkeypatch):
+def test_partial_overview_is_persisted_and_the_next_call_continues_it(tmp_path, monkeypatch):
     repo = _indexed_repo(tmp_path, monkeypatch)
     calls = _count_report_builds(monkeypatch)
     args = {"repo_path": str(repo)}
@@ -523,14 +523,16 @@ def test_partial_overview_computes_once_and_is_not_persisted(tmp_path, monkeypat
     assert partial["_meta"]["cached"] is False
     assert calls["n"] == 1
 
+    # The stopped analysis was kept: the next call continues its dead-code scan instead of
+    # rebuilding communities, hotspots and the rest (report 0.11 #7).
     complete = _payload(call_tool("cortex_overview", args))
 
-    assert calls["n"] == 2
+    assert calls["n"] == 1
     assert "dead_code_partial" not in complete
     assert "note" not in complete
 
     call_tool("cortex_overview", args)
-    assert calls["n"] == 2, "the complete analysis is persisted and reused"
+    assert calls["n"] == 1, "the complete analysis is persisted and reused"
 
 
 def test_overview_with_disabled_budget_is_complete(tmp_path, monkeypatch):

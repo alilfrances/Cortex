@@ -275,3 +275,64 @@ def test_scoped_run_equals_the_full_run_filtered_to_the_scope(tmp_path: Path, mo
 
     assert scoped == [item for item in full if item["file"].startswith("b/")]
     assert any(item["symbol"] == "only_in_b" for item in scoped)
+
+
+def _resume_in_slices(repo: Path, store: CortexStore, nodes, edges, slice_size: int) -> tuple[list[dict], list[int]]:
+    resume = None
+    processed: list[int] = []
+    for _ in range(10_000):
+        polls = [0]
+
+        def stop() -> bool:
+            polls[0] += 1
+            return polls[0] > slice_size
+
+        result = analyze_dead_code(repo, store=store, nodes=nodes, edges=edges, should_stop=stop, resume=resume)
+        if not result["partial"]:
+            return result["findings"], processed
+        processed.append(result["progress"]["processed"])
+        resume = {"cursor": result["cursor"], "findings": result["findings"]}
+    raise AssertionError("resuming never finished")
+
+
+def test_resuming_in_small_slices_equals_one_uninterrupted_run(tmp_path: Path, monkeypatch) -> None:
+    repo = _many_unused_repo(tmp_path)
+    store = _ingest(repo, tmp_path / "data", monkeypatch)
+    nodes, edges = store.fetch_graph(repo)
+    full = analyze_dead_code(repo, store=store, nodes=nodes, edges=edges)
+
+    findings, processed = _resume_in_slices(repo, store, nodes, edges, slice_size=3)
+
+    assert findings == full["findings"]
+    assert processed == sorted(processed) and len(set(processed)) == len(processed)  # always advances
+    assert len(processed) >= 2
+
+
+def test_resuming_equals_one_run_on_the_qt_fixture(tmp_path: Path, monkeypatch) -> None:
+    repo = _build_qt_app(tmp_path)
+    store = _ingest(repo, tmp_path / "data", monkeypatch)
+    nodes, edges = store.fetch_graph(repo)
+    full = analyze_dead_code(repo, store=store, nodes=nodes, edges=edges)
+
+    findings, _ = _resume_in_slices(repo, store, nodes, edges, slice_size=4)
+
+    assert findings == full["findings"]
+
+
+def test_a_partial_result_reports_where_it_stopped(tmp_path: Path, monkeypatch) -> None:
+    repo = _many_unused_repo(tmp_path)
+    store = _ingest(repo, tmp_path / "data", monkeypatch)
+    nodes, edges = store.fetch_graph(repo)
+    polls = [0]
+
+    def stop() -> bool:
+        polls[0] += 1
+        return polls[0] > 2
+
+    result = analyze_dead_code(repo, store=store, nodes=nodes, edges=edges, should_stop=stop)
+
+    assert result["partial"] is True
+    # (The stop may land inside the first candidate's corpus build; the cursor then names it.)
+    assert len(result["cursor"]) == 3 and 0 <= result["progress"]["processed"] < result["progress"]["total"]
+    complete = analyze_dead_code(repo, store=store, nodes=nodes, edges=edges)
+    assert "cursor" not in complete and "progress" not in complete

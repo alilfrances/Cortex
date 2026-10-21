@@ -82,6 +82,7 @@ def build_report_data(
     include_test_pairs: bool = False,
     should_stop: Callable[[], bool] | None = None,
     graph: tuple[list[GraphNode], list[GraphEdge]] | None = None,
+    resume: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Collect the deterministic, JSON-serializable inputs to a report.
 
@@ -107,8 +108,10 @@ def build_report_data(
         {"community_id": community.community_id, "node_ids": sorted(community.node_ids), "label": community.label}
         for community in sorted(detected_communities, key=lambda item: item.community_id)
     ]
-    dead_code = analyze_dead_code(repo_root, store=store, nodes=nodes, edges=edges, should_stop=should_stop)
-    return {
+    dead_code = analyze_dead_code(
+        repo_root, store=store, nodes=nodes, edges=edges, should_stop=should_stop, resume=resume
+    )
+    data = {
         "repo_name": repo_root.name,
         "repo_path": str(repo_root),
         "file_count": sum(1 for node in nodes if node.kind == "file"),
@@ -129,6 +132,11 @@ def build_report_data(
         "dead_code": dead_code["findings"],
         "dead_code_partial": bool(dead_code.get("partial", False)),
     }
+    if dead_code.get("partial"):
+        # Where the stopped analysis can be continued from (see analyze_dead_code).
+        data["dead_code_cursor"] = dead_code.get("cursor")
+        data["dead_code_progress"] = dead_code.get("progress")
+    return data
 
 
 def render_report(

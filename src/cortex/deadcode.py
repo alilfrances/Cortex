@@ -403,10 +403,16 @@ def analyze_dead_code(
     edges: Sequence[GraphEdge] | None = None,
     should_stop: Callable[[], bool] | None = None,
     path_prefix: str | None = None,
+    resume: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Dead-code candidates. `path_prefix` (a repo-relative file or directory)
     restricts which symbols are *reported*; references are still searched
-    repo-wide, so a use outside the prefix still credits a symbol inside it."""
+    repo-wide, so a use outside the prefix still credits a symbol inside it.
+
+    A run stopped by `should_stop` is `partial` and carries `cursor` (the first
+    candidate not yet examined) and `progress`. Passing `{"cursor": ..., "findings": ...}`
+    from such a result as `resume` continues from there; resuming to the end gives
+    exactly the findings of one uninterrupted run."""
     repo_root = discover_repo_root(Path(repo_path))
     active_store = store or CortexStore(db_path or default_db_path(repo_root))
     graph_nodes, graph_edges = (
@@ -446,16 +452,23 @@ def analyze_dead_code(
         repo_root, active_store, all_sources, max(2000, int(budget)), graph_nodes, graph_edges,
         should_stop=should_stop, corpus_symbols=corpus_symbols,
     )
-    findings: list[dict[str, Any]] = []
-    partial = False
-    for node in sorted(
-        (item for item in graph_nodes if item.granularity == "symbol"),
+    # Candidates are visited in a fixed order, so a stopped run can say where it stopped and
+    # a later run can continue from there: `resume` carries that cursor and the findings so far.
+    candidates = sorted(
+        (item for item in graph_nodes if item.granularity == "symbol" and in_scope(item)),
         key=lambda item: (item.source_ref, item.label, item.node_id),
-    ):
-        if not in_scope(node):
+    )
+    resume_cursor = tuple(resume["cursor"]) if resume and resume.get("cursor") else None
+    findings: list[dict[str, Any]] = [dict(item) for item in resume.get("findings", [])] if resume else []
+    partial = False
+    cursor: list[str] | None = None
+    processed = 0
+    for processed, node in enumerate(candidates):
+        key = (node.source_ref, node.label, node.node_id)
+        if resume_cursor is not None and key < resume_cursor:
             continue
         if should_stop is not None and should_stop():
-            partial = True
+            partial, cursor = True, list(key)
             break
         if _is_test_path(node.source_ref) or _is_dunder_or_entry_point(node) or node.label in reexports:
             continue
@@ -475,7 +488,7 @@ def analyze_dead_code(
                 repo_root, active_store, node, all_sources, context.reference_budget, context
             )
         except AnalysisStopped:
-            partial = True  # stopped while building the reference corpus: this candidate is unfinished
+            partial, cursor = True, list(key)  # stopped building the reference corpus: this candidate is unfinished
             break
         findings.append(
             {
@@ -488,7 +501,11 @@ def analyze_dead_code(
         )
 
     findings.sort(key=lambda item: (str(item["file"]), str(item["symbol"]), int(item["line"])))
-    return {"repo_path": str(repo_root), "findings": findings, "partial": partial}
+    result: dict[str, Any] = {"repo_path": str(repo_root), "findings": findings, "partial": partial}
+    if partial:
+        result["cursor"] = cursor
+        result["progress"] = {"processed": processed, "total": len(candidates)}
+    return result
 
 
 def truncate_dead_code_result(result: dict[str, Any], budget: int) -> dict[str, Any]:

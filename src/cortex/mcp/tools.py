@@ -839,7 +839,7 @@ def _call_query(arguments: dict[str, Any]) -> dict[str, Any]:
 # This is deliberately separate from the generic query-cache format.  The
 # cached value is analysis, not an MCP response, and changing this version is
 # an explicit invalidation when the report-data contract changes.
-_OVERVIEW_ANALYSIS_CACHE_VERSION = 1
+_OVERVIEW_ANALYSIS_CACHE_VERSION = 2
 _OVERVIEW_DEFAULT_BUDGET = 2000
 _CONFIDENCE_PRIORITY = {"high": 0, "medium": 1, "low": 2}
 
@@ -1118,6 +1118,65 @@ def _overview_detailed_capabilities(store: CortexStore, repo_root: Path) -> dict
     return {"semantic": semantic_payload, "language_runtime": runtime_payload}
 
 
+def _resume_overview_dead_code(store: CortexStore, repo_root: Path, analysis: dict[str, Any]) -> dict[str, Any]:
+    """Continue a partial overview analysis' dead-code scan from its cursor.
+
+    Communities, hotspots, god nodes and surprising connections are kept as they are;
+    only the remaining candidates are examined, under the current call's deadline.
+    """
+    nodes, edges = _cached_graph(store, repo_root)
+    cursor = analysis.get("dead_code_cursor")
+    result = analyze_dead_code(
+        repo_root,
+        db_path=store.db_path,
+        store=store,
+        nodes=nodes,
+        edges=edges,
+        should_stop=_analysis_should_stop(),
+        resume={"cursor": cursor, "findings": analysis["dead_code"]} if cursor else None,
+    )
+    updated = {key: value for key, value in analysis.items() if key not in ("dead_code_cursor", "dead_code_progress")}
+    updated["dead_code"] = result["findings"]
+    updated["dead_code_partial"] = bool(result.get("partial"))
+    if result.get("partial"):
+        updated["dead_code_cursor"] = result.get("cursor")
+        updated["dead_code_progress"] = result.get("progress")
+    return updated
+
+
+def _overview_analysis(store: CortexStore, repo_root: Path, fingerprint: str) -> tuple[dict[str, Any], bool]:
+    """The overview analysis for this index and whether it came straight from the cache.
+
+    A stopped analysis is cached too, with the cursor of its dead-code scan, so each
+    further call continues instead of starting over: a repository too big for one
+    budget converges after a few calls.
+    """
+    cache_key = _overview_analysis_cache_key(fingerprint)
+    cached = _cache_get(store, repo_root, cache_key)
+    if (
+        isinstance(cached, dict)
+        and cached.get("version") == _OVERVIEW_ANALYSIS_CACHE_VERSION
+        and _is_overview_analysis(cached.get("analysis"))
+    ):
+        analysis = cached["analysis"]
+        if not analysis.get("dead_code_partial", False):
+            return analysis, True
+        analysis = _resume_overview_dead_code(store, repo_root, analysis)
+        _cache_set(store, repo_root, cache_key, {"version": _OVERVIEW_ANALYSIS_CACHE_VERSION, "analysis": analysis})
+        return analysis, False
+    global _analysis_memo
+    memo_key = (str(repo_root.resolve()), fingerprint)
+    if _analysis_memo is not None and _analysis_memo[0] == memo_key:
+        return _analysis_memo[1], False
+    analysis = build_report_data(
+        repo_root, graph=_cached_graph(store, repo_root), should_stop=_analysis_should_stop()
+    )
+    if _in_tool_call:
+        _analysis_memo = (memo_key, analysis)
+    _cache_set(store, repo_root, cache_key, {"version": _OVERVIEW_ANALYSIS_CACHE_VERSION, "analysis": analysis})
+    return analysis, False
+
+
 def _call_overview(arguments: dict[str, Any]) -> dict[str, Any]:
     repo_root = _repo_root(arguments)
     store, error = _store_or_error(repo_root)
@@ -1127,37 +1186,19 @@ def _call_overview(arguments: dict[str, Any]) -> dict[str, Any]:
     status = _ensure_fresh(store, repo_root)
     response_format = _response_format(arguments)
     budget = max(0, int(arguments.get("budget", _OVERVIEW_DEFAULT_BUDGET)))
-    cache_key = _overview_analysis_cache_key(status["current_fingerprint"])
-    cached_analysis = _cache_get(store, repo_root, cache_key)
-    cache_hit = (
-        isinstance(cached_analysis, dict)
-        and cached_analysis.get("version") == _OVERVIEW_ANALYSIS_CACHE_VERSION
-        and _is_overview_analysis(cached_analysis.get("analysis"))
-    )
-    global _analysis_memo
-    if cache_hit:
-        analysis = cached_analysis["analysis"]
-    else:
-        memo_key = (str(repo_root.resolve()), status["current_fingerprint"])
-        if _analysis_memo is not None and _analysis_memo[0] == memo_key:
-            analysis = _analysis_memo[1]
-        else:
-            analysis = build_report_data(
-                repo_root, graph=_cached_graph(store, repo_root), should_stop=_analysis_should_stop()
-            )
-            if _in_tool_call:
-                _analysis_memo = (memo_key, analysis)
-            if not analysis.get("dead_code_partial", False):
-                _cache_set(
-                    store, repo_root, cache_key, {"version": _OVERVIEW_ANALYSIS_CACHE_VERSION, "analysis": analysis}
-                )
+    analysis, cache_hit = _overview_analysis(store, repo_root, status["current_fingerprint"])
 
     # Capabilities describe current optional integrations, unlike graph
     # analysis. They count toward detailed content, while freshness/status
     # remains outside the budget and is merged only by `_format_payload`.
     extra_fields = _overview_detailed_capabilities(store, repo_root) if response_format == "detailed" else None
     if analysis.get("dead_code_partial", False):
-        extra_fields = {**(extra_fields or {}), "dead_code_partial": True, "note": _PARTIAL_ANALYSIS_NOTE}
+        extra_fields = {
+            **(extra_fields or {}),
+            "dead_code_partial": True,
+            "note": _PARTIAL_ANALYSIS_NOTE,
+            **({"dead_code_progress": analysis["dead_code_progress"]} if analysis.get("dead_code_progress") else {}),
+        }
     payload = _fit_overview_report(repo_root, analysis, budget, extra_fields=extra_fields)
     if _in_tool_call:
         if response_format == "detailed":
@@ -1165,7 +1206,12 @@ def _call_overview(arguments: dict[str, Any]) -> dict[str, Any]:
         else:
             detailed_extra = _overview_detailed_capabilities(store, repo_root)
             if analysis.get("dead_code_partial", False):
-                detailed_extra = {**detailed_extra, "dead_code_partial": True, "note": _PARTIAL_ANALYSIS_NOTE}
+                detailed_extra = {
+                    **detailed_extra,
+                    "dead_code_partial": True,
+                    "note": _PARTIAL_ANALYSIS_NOTE,
+                    **({"dead_code_progress": analysis["dead_code_progress"]} if analysis.get("dead_code_progress") else {}),
+                }
             detailed_payload = _fit_overview_report(repo_root, analysis, budget, extra_fields=detailed_extra)
         _stash_detailed_rendering(_content(_format_payload(detailed_payload, status, "detailed", cached=cache_hit)))
     return _content(_format_payload(payload, status, response_format, cached=cache_hit))
@@ -1921,7 +1967,8 @@ def _dead_code_analysis(
     The overview analysis already runs `analyze_dead_code` at the default
     reference budget and caches it under the same fingerprint, so a dead-code
     call after an overview (or a repeat call) costs nothing; a scoped call
-    filters such a cached repo-wide result. A partial result is never cached.
+    filters such a cached repo-wide result. A stopped repo-wide run is cached with
+    its cursor and continued by the next repo-wide call; a stopped scoped run is not.
     """
     reference_budget = max(2000, budget)
 
@@ -1930,20 +1977,34 @@ def _dead_code_analysis(
         return {"repo_path": str(repo_root), "findings": kept, "partial": False}
 
     if reference_budget == 2000:
-        cached = _cache_get(store, repo_root, _overview_analysis_cache_key(fingerprint))
+        overview_key = _overview_analysis_cache_key(fingerprint)
+        cached = _cache_get(store, repo_root, overview_key)
         if (
             isinstance(cached, dict)
             and cached.get("version") == _OVERVIEW_ANALYSIS_CACHE_VERSION
             and _is_overview_analysis(cached.get("analysis"))
-            and not cached["analysis"].get("dead_code_partial", False)
         ):
-            return scoped(list(cached["analysis"]["dead_code"]))
+            analysis = cached["analysis"]
+            if not analysis.get("dead_code_partial", False):
+                return scoped(list(analysis["dead_code"]))
+            if not scope:
+                # A repo-wide call continues the overview's stopped scan rather than redo it.
+                analysis = _resume_overview_dead_code(store, repo_root, analysis)
+                _cache_set(store, repo_root, overview_key, {"version": _OVERVIEW_ANALYSIS_CACHE_VERSION, "analysis": analysis})
+                result = {"repo_path": str(repo_root), "findings": list(analysis["dead_code"]), "partial": bool(analysis["dead_code_partial"])}
+                if result["partial"]:
+                    result["progress"] = analysis.get("dead_code_progress")
+                return result
     full_key = _cache_key(
         fingerprint, "cortex_dead_code_analysis", {"budget": reference_budget, "v": _DEAD_CODE_ANALYSIS_CACHE_VERSION}
     )
     cached = _cache_get(store, repo_root, full_key)
+    resume = None
     if isinstance(cached, dict) and isinstance(cached.get("findings"), list):
-        return scoped(cached["findings"])
+        if not cached.get("partial"):
+            return scoped(cached["findings"])
+        if not scope and cached.get("cursor"):
+            resume = {"cursor": cached["cursor"], "findings": cached["findings"]}
     key = full_key
     if scope:
         key = _cache_key(
@@ -1964,9 +2025,16 @@ def _dead_code_analysis(
         budget=budget,
         should_stop=_analysis_should_stop(),
         path_prefix=scope or None,
+        resume=resume,
     )
     if not result.get("partial"):
         _cache_set(store, repo_root, key, {"findings": result["findings"]})
+    elif not scope:
+        # A repo-wide run that ran out of time: remember how far it got so the next call continues.
+        _cache_set(
+            store, repo_root, key,
+            {"findings": result["findings"], "partial": True, "cursor": result.get("cursor"), "progress": result.get("progress")},
+        )
     return result
 
 
