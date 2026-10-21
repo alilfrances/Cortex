@@ -6,8 +6,8 @@
       "app/audit.py",
       "app/cleanup.py",
       "app/orders.py",
-      "README.md",
       "app/payments.py",
+      "README.md",
       "app/emailer.py",
       "app/retry.py",
       "docs/setup.md"
@@ -64,8 +64,8 @@
       "app/orders.py",
       "app/payments.py",
       "README.md",
-      "docs/setup.md",
       "app/emailer.py",
+      "docs/setup.md",
       "app/retry.py"
     ],
     "mode": "pagerank",
@@ -122,8 +122,8 @@
       "app/retry.py",
       "app/session.py",
       "app/auth.py",
-      "README.md",
       "app/cleanup.py",
+      "README.md",
       "docs/setup.md"
     ],
     "mode": "pagerank",
@@ -176,10 +176,10 @@
       "app/auth.py",
       "app/orders.py",
       "app/session.py",
-      "app/emailer.py",
       "app/audit.py",
-      "README.md",
+      "app/emailer.py",
       "app/cleanup.py",
+      "README.md",
       "docs/setup.md"
     ],
     "mode": "pagerank",
@@ -230,9 +230,9 @@
       "README.md",
       "app/session.py",
       "app/cleanup.py",
-      "app/retry.py",
       "app/audit.py",
       "app/auth.py",
+      "app/retry.py",
       "app/orders.py",
       "app/payments.py",
       "app/emailer.py"
@@ -274,8 +274,7 @@
       "docs/setup.md",
       "README.md",
       "app/cleanup.py",
-      "app/retry.py",
-      "app/emailer.py"
+      "app/audit.py"
     ],
     "mode": "skeleton_off",
     "repo": "python_app",
@@ -290,8 +289,8 @@
       "app/emailer.py",
       "app/session.py",
       "app/retry.py",
-      "README.md",
       "app/cleanup.py",
+      "README.md",
       "docs/setup.md"
     ],
     "mode": "pagerank",
@@ -647,13 +646,13 @@
   {
     "files": [
       "src/cortex/mcp/tools.py",
+      "CHANGELOG.md",
+      "README.md",
+      "docs/noise.md",
       "src/cortex/cli.py",
       "src/cortex/ingest.py",
       "src/cortex/report.py",
       "src/cortex/store.py",
-      "CHANGELOG.md",
-      "README.md",
-      "docs/noise.md",
       "tests/test_watch.py"
     ],
     "mode": "pagerank",
@@ -679,9 +678,9 @@
   {
     "files": [
       "src/cortex/mcp/tools.py",
-      "src/cortex/cli.py",
-      "src/cortex/ingest.py",
-      "src/cortex/report.py"
+      "CHANGELOG.md",
+      "README.md",
+      "docs/noise.md"
     ],
     "mode": "skeleton_on",
     "repo": "refresh_distractors",
@@ -690,9 +689,9 @@
   {
     "files": [
       "src/cortex/mcp/tools.py",
-      "src/cortex/cli.py",
-      "src/cortex/ingest.py",
-      "src/cortex/report.py"
+      "CHANGELOG.md",
+      "README.md",
+      "docs/noise.md"
     ],
     "mode": "skeleton_off",
     "repo": "refresh_distractors",
@@ -706,8 +705,8 @@
       "include/DeviceModel.hpp",
       "src/DeviceModel.cpp",
       "src/DeviceManager.cpp",
-      "resources.qrc",
-      "CMakeLists.txt"
+      "CMakeLists.txt",
+      "resources.qrc"
     ],
     "mode": "pagerank",
     "repo": "qt_app",
@@ -759,8 +758,8 @@
       "CMakeLists.txt",
       "resources.qrc",
       "src/DeviceManager.cpp",
-      "include/DeviceModel.hpp",
       "include/DeviceManager.hpp",
+      "include/DeviceModel.hpp",
       "src/DeviceModel.cpp"
     ],
     "mode": "pagerank",
@@ -809,8 +808,8 @@
       "CMakeLists.txt",
       "resources.qrc",
       "src/DeviceManager.cpp",
-      "include/DeviceModel.hpp",
       "include/DeviceManager.hpp",
+      "include/DeviceModel.hpp",
       "src/DeviceModel.cpp"
     ],
     "mode": "pagerank",

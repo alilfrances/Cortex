@@ -161,3 +161,48 @@ def test_whole_file_still_returned_when_it_fits(tmp_path):
     assert len(code_items) == 1
     assert code_items[0]["content"] == content
     assert not any(item["kind"] == "symbol" for item in items)
+
+
+# --- file-level ranking and the deadline reserve (0.12) ---
+
+
+class _FakeDeadline:
+    enabled = True
+    budget_seconds = 30.0
+
+    def __init__(self, remaining: float) -> None:
+        self.remaining = remaining
+
+
+def _tiny_repo(tmp_path):
+    repo = _make_repo(tmp_path)
+    store = CortexStore(tmp_path / "db.sqlite")
+    sources = [
+        _source("auth.py", "def login():\n    return verify()\n"),
+        _source("verify.py", "def verify():\n    return True\n"),
+    ]
+    nodes = [_file_node("auth.py"), _file_node("verify.py"), _symbol_node("auth.py", "login", 1, 2), _symbol_node("verify.py", "verify", 1, 2)]
+    return repo, store, sources, (nodes, [])
+
+
+def test_bundle_skips_graph_rank_when_the_time_reserve_is_gone(tmp_path, monkeypatch):
+    repo, store, sources, graph = _tiny_repo(tmp_path)
+    monkeypatch.setattr(bundle_mod, "current_deadline", lambda: _FakeDeadline(remaining=1.0))
+    calls = []
+    monkeypatch.setattr(bundle_mod, "personalized_pagerank", lambda *a, **k: calls.append(1) or {})
+
+    result = generate_bundle(repo, "login", 2000, db_path=tmp_path / "db.sqlite", output_format="json", sources=sources, graph=graph)
+
+    assert calls == []
+    assert result["degraded"] == ["graph_rank"]
+    assert "Graph ranking skipped to fit the time budget." in result["confidence_notes"]
+    assert result["items"]  # keyword results are still returned
+
+
+def test_bundle_runs_graph_rank_when_time_remains(tmp_path, monkeypatch):
+    repo, store, sources, graph = _tiny_repo(tmp_path)
+    monkeypatch.setattr(bundle_mod, "current_deadline", lambda: _FakeDeadline(remaining=29.0))
+
+    result = generate_bundle(repo, "login", 2000, db_path=tmp_path / "db.sqlite", output_format="json", sources=sources, graph=graph)
+
+    assert "degraded" not in result

@@ -9,11 +9,11 @@ from collections import defaultdict
 from pathlib import Path
 
 from .config import load_config
-from .deadline import check_deadline
+from .deadline import DeadlineExceeded, check_deadline, current_deadline, deadline_scope
 from .fusion import rrf_fuse
 from .gitutils import discover_repo_root
 from .models import BundleItem, GraphEdge, GraphNode, RetrievalBundle
-from .rank import personalized_pagerank
+from .rank import collapse_to_file_graph, personalized_pagerank
 from .store import CortexStore, default_db_path
 from .structural.regex_backend import _QT_SECTION_RE
 from .tokenizer import count_text_tokens, truncate_text_to_budget
@@ -583,6 +583,34 @@ def _bundle_markdown(bundle: RetrievalBundle) -> str:
     return '\n'.join(lines).strip()
 
 
+# Share of the call's time budget kept back for candidate building and packing.
+RANK_RESERVE_SHARE = 0.25
+RANK_RESERVE_MIN_SECONDS = 2.0
+
+
+def _bounded_pagerank(
+    graph: tuple[list[GraphNode], list[GraphEdge]], seed_scores: dict[str, float]
+) -> tuple[dict[str, float], bool]:
+    """Personalized PageRank that cannot use up the whole call budget.
+
+    The rank bonus only orders files with no keyword hit, so under a deadline it is
+    the first thing to give up: the inner scope always expires before the outer one,
+    leaving a reserve to build and pack the bundle. Returns `(scores, degraded)`;
+    without a deadline it runs to completion.
+    """
+    outer = current_deadline()
+    if outer is None or not outer.enabled:
+        return personalized_pagerank(*graph, seed_scores), False
+    allowance = outer.remaining - max(RANK_RESERVE_MIN_SECONDS, RANK_RESERVE_SHARE * outer.budget_seconds)
+    if allowance <= 0:
+        return {}, True
+    try:
+        with deadline_scope(allowance, tool_name='pagerank'):
+            return personalized_pagerank(*graph, seed_scores), False
+    except DeadlineExceeded:
+        return {}, True
+
+
 def generate_bundle(
     repo_path: Path,
     task: str,
@@ -594,11 +622,14 @@ def generate_bundle(
     *,
     sources: list | None = None,
     graph: tuple[list[GraphNode], list[GraphEdge]] | None = None,
+    rank_graph: tuple[list[GraphNode], list[GraphEdge]] | None = None,
 ) -> str | dict:
     """Build a retrieval bundle for `task`.
 
     `sources` and `graph` let a caller that already loaded them (the MCP query
-    tool needs both again afterwards) avoid a second full read of the database.
+    tool needs both again afterwards) avoid a second full read of the database;
+    `rank_graph` is the matching `collapse_to_file_graph` result, for a caller that
+    memoises it.
     """
     repo_root = discover_repo_root(repo_path)
     store = CortexStore(db_path or default_db_path(repo_root))
@@ -774,12 +805,17 @@ def generate_bundle(
                     continue
                 source_scores[neighbor] = bonus
     seed_scores = {f'file:{path}': score for path, score in source_scores.items() if score > 0}
+    degraded = False
     if rank == 'bfs':
         proximity = _bfs_proximity(set(seed_scores), adj, max_depth=2)
         pagerank_scores: dict[str, float] = {}
     elif rank == 'pagerank':
         proximity = {}
-        pagerank_scores = personalized_pagerank(nodes, edges, seed_scores) if seed_scores else {}
+        pagerank_scores = {}
+        if seed_scores:
+            if rank_graph is None:
+                rank_graph = collapse_to_file_graph(nodes, edges)
+            pagerank_scores, degraded = _bounded_pagerank(rank_graph, seed_scores)
     else:
         raise ValueError(f'Unknown rank mode: {rank}')
 
@@ -830,6 +866,7 @@ def generate_bundle(
 
     source_by_path = {source.path: source for source in sources}
     symbol_items_by_path: defaultdict[str, list[BundleItem]] = defaultdict(list)
+    symbol_scores: dict[str, float] = {}
     for position, (path, path_symbols) in enumerate(symbols_by_path.items()):
         if position % 500 == 0:
             check_deadline()
@@ -869,6 +906,7 @@ def generate_bundle(
             )
             candidates.append(item)
             symbol_items_by_path[path].append(item)
+            symbol_scores[symbol.node_id] = score
     for items in symbol_items_by_path.values():
         items.sort(key=lambda item: (-item.score, item.item_id))
 
@@ -949,7 +987,7 @@ def generate_bundle(
                 continue
             symbols = symbols_by_path.get(item.path, [])
             if symbols:
-                skeleton = _skeleton_item(item, symbols, pagerank_scores, remaining)
+                skeleton = _skeleton_item(item, symbols, symbol_scores, remaining)
                 if skeleton is not None:
                     select(skeleton)
                 # Code files with indexed symbols never degrade to file[0:N].
@@ -983,11 +1021,15 @@ def generate_bundle(
             f'Graph-aware packing: keyword-matched files + {rank} graph ranking.',
             'STRUCTURAL (AST) and COCHANGE (git) edges inform neighbor selection.',
             'Token counts use Cortex byte-safe local estimator.',
+            *(['Graph ranking skipped to fit the time budget.'] if degraded else []),
         ],
         open_questions=[] if selected else ['No matching sources found. Run cortex ingest . first.'],
     )
     store.save_bundle(repo_root, bundle)
 
     if output_format == 'json':
-        return bundle.to_dict()
+        result = bundle.to_dict()
+        if degraded:
+            result['degraded'] = ['graph_rank']
+        return result
     return _bundle_markdown(bundle)

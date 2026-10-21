@@ -135,3 +135,20 @@ def test_status_reports_the_cache(repo: Path) -> None:
     call_tool("cortex_impact", {"repo_path": str(repo), "path": "auth.py"})
     info = _payload(call_tool("cortex_status", {}))["graph_cache"]
     assert info["nodes"] > 0 and info["edges"] > 0
+
+
+def test_degraded_query_is_not_cached(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from cortex import bundle as bundle_mod
+
+    monkeypatch.setattr(bundle_mod, "_bounded_pagerank", lambda graph, seeds: ({}, True))
+    args = {"repo_path": str(repo), "task": "login verify", "response_format": "detailed"}
+
+    first = _payload(call_tool("cortex_query", args))
+    second = _payload(call_tool("cortex_query", args))
+
+    assert first["degraded"] == ["graph_rank"]
+    assert second["degraded"] == ["graph_rank"] and second["_meta"]["cached"] is False
+
+    monkeypatch.undo()
+    healthy = _payload(call_tool("cortex_query", args))
+    assert "degraded" not in healthy

@@ -20,6 +20,7 @@ from ..impact import IMPACT_CACHE_VERSION, UnknownPathError, rank_file_impact
 from ..ingest import compute_repo_fingerprint, ingest_repository
 from ..models import GraphEdge, GraphNode
 from ..pathfind import shortest_paths
+from ..rank import collapse_to_file_graph
 from ..references import find_references
 from ..report import build_report_data, render_report
 from ..hotspots import top_hotspots
@@ -737,7 +738,7 @@ def _query_token_stats(
 
 
 def _concise_query_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
-    compact = {
+    compact: dict[str, Any] = {
         "task": bundle.get("task", ""),
         "repo_path": bundle.get("repo_path", ""),
         "budget": bundle.get("budget", 0),
@@ -747,6 +748,8 @@ def _concise_query_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
         "open_questions": bundle.get("open_questions", []),
         "items": [],
     }
+    if bundle.get("degraded"):
+        compact["degraded"] = bundle["degraded"]
     for item in bundle.get("items", []):
         compact["items"].append(
             {
@@ -797,6 +800,7 @@ def _call_query(arguments: dict[str, Any]) -> dict[str, Any]:
             hotspot_boost=bool(arguments.get("hotspot_boost", False)),
             sources=all_sources,
             graph=graph,
+            rank_graph=_cached_rank_graph(store, repo_root, graph),
         )
         assert isinstance(bundle, dict)
         terms = _tokenize_query(task)
@@ -813,7 +817,8 @@ def _call_query(arguments: dict[str, Any]) -> dict[str, Any]:
         # P1-5: cache the bare payload only, not status/`_meta` -- see
         # _cache_set. `_format_payload` (below) rebuilds `_meta` fresh on
         # every call, hit or miss.
-        _cache_set(store, repo_root, cache_key, payload)
+        if not bundle.get("degraded"):  # a time-budget fallback must not be served later
+            _cache_set(store, repo_root, cache_key, payload)
     return _content(_format_payload(payload, status, response_format, cached=cache_hit))
 
 
@@ -866,27 +871,50 @@ def _graph_cache_enabled() -> bool:
     return os.environ.get("CORTEX_GRAPH_CACHE", "1") != "0"
 
 
-def _cached_graph(store: CortexStore, repo_root: Path) -> tuple[list[GraphNode], list[GraphEdge]]:
-    """`store.fetch_graph(repo_root)`, memoised for the current index. Read-only use."""
-    global _graph_cache
-    if not _graph_cache_enabled():
-        return store.fetch_graph(repo_root)
+def _graph_key(store: CortexStore, repo_root: Path) -> tuple[str, str, str, int]:
     try:
         indexed_at = int(store.get_repo_indexed_at(repo_root) or 0)
     except Exception:
         indexed_at = 0  # same degradation as _staleness: unknown, not fatal
-    key = (
+    return (
         str(store.db_path),
         str(repo_root.resolve()),
         store.get_repo_fingerprint(repo_root) or "",
         indexed_at,
     )
+
+
+def _cached_graph(store: CortexStore, repo_root: Path) -> tuple[list[GraphNode], list[GraphEdge]]:
+    """`store.fetch_graph(repo_root)`, memoised for the current index. Read-only use."""
+    global _graph_cache
+    if not _graph_cache_enabled():
+        return store.fetch_graph(repo_root)
+    key = _graph_key(store, repo_root)
     cached = _graph_cache
     if cached is not None and cached[0] == key:
         return cached[1]
     graph = store.fetch_graph(repo_root)
     _graph_cache = (key, graph)
     return graph
+
+
+# The file-level graph `cortex_query` ranks files on, derived from the graph above.
+_rank_graph_cache: tuple[tuple[str, str, str, int], tuple[list[GraphNode], list[GraphEdge]]] | None = None
+
+
+def _cached_rank_graph(
+    store: CortexStore, repo_root: Path, graph: tuple[list[GraphNode], list[GraphEdge]]
+) -> tuple[list[GraphNode], list[GraphEdge]]:
+    global _rank_graph_cache
+    if not _graph_cache_enabled():
+        return collapse_to_file_graph(*graph)
+    key = _graph_key(store, repo_root)
+    cached = _rank_graph_cache
+    if cached is not None and cached[0] == key:
+        return cached[1]
+    collapsed = collapse_to_file_graph(*graph)
+    _rank_graph_cache = (key, collapsed)
+    return collapsed
 
 
 def graph_cache_info() -> dict[str, int] | None:
@@ -2532,8 +2560,9 @@ def _call_refresh(arguments: dict[str, Any]) -> dict[str, Any]:
     # Incremental needs an existing database to diff against.
     incremental = mode != "full" and default_db_path(repo_root).exists()
     _forget_fingerprint(repo_root)
-    global _graph_cache
+    global _graph_cache, _rank_graph_cache
     _graph_cache = None
+    _rank_graph_cache = None
     request = _current_request
     sink = _progress_sink
 

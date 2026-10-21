@@ -56,6 +56,55 @@ def _transition_graph(nodes: list[GraphNode], edges: list[GraphEdge]) -> dict[st
     return dict(adjacency)
 
 
+def collapse_to_file_graph(
+    nodes: list[GraphNode], edges: list[GraphEdge]
+) -> tuple[list[GraphNode], list[GraphEdge]]:
+    """File-level view of a graph for ranking files.
+
+    Every symbol node maps to its `file:<source_ref>` node, edges that become
+    self-loops are dropped, and parallel edges are merged per (source, target,
+    layer) with their weights summed (the layer multiplier is linear, so a merged
+    edge carries the same total transition weight). Commit nodes and edges that
+    touch unknown nodes are omitted, exactly as `_transition_graph` omits them.
+    Merged edges are emitted in sorted order so float accumulation is deterministic.
+    """
+    collapsed: dict[str, str] = {}
+    kept: list[GraphNode] = []
+    kept_ids: set[str] = set()
+    for node in nodes:
+        if node.kind == "commit" or node.node_id.startswith("commit:"):
+            continue
+        if node.granularity == "symbol":
+            collapsed[node.node_id] = f"file:{node.source_ref}"
+            continue
+        collapsed[node.node_id] = node.node_id
+        if node.node_id not in kept_ids:
+            kept_ids.add(node.node_id)
+            kept.append(node)
+    merged: defaultdict[tuple[str, str, str], float] = defaultdict(float)
+    for edge in edges:
+        source, target = collapsed.get(edge.source), collapsed.get(edge.target)
+        if source is None or target is None or source == target or edge.weight <= 0:
+            continue
+        if source not in kept_ids or target not in kept_ids:
+            continue
+        merged[(source, target, edge.layer)] += edge.weight
+    file_edges = [
+        GraphEdge(
+            edge_id=f"file-rank:{source}>{target}>{layer}",
+            source=source,
+            target=target,
+            relation="aggregate",
+            layer=layer,
+            confidence="EXTRACTED",
+            weight=weight,
+            metadata={},
+        )
+        for (source, target, layer), weight in sorted(merged.items())
+    ]
+    return kept, file_edges
+
+
 def personalized_pagerank(
     nodes: list[GraphNode],
     edges: list[GraphEdge],
