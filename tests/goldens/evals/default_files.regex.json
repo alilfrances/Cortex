@@ -94,7 +94,7 @@
       "app/cleanup.py",
       "app/session.py",
       "app/session.py",
-      "app/audit.py",
+      "app/session.py",
       "README.md"
     ],
     "mode": "skeleton_on",
@@ -106,7 +106,7 @@
       "app/cleanup.py",
       "app/session.py",
       "app/session.py",
-      "app/audit.py",
+      "app/session.py",
       "README.md"
     ],
     "mode": "skeleton_off",
@@ -118,8 +118,8 @@
       "app/orders.py",
       "app/payments.py",
       "app/emailer.py",
-      "app/audit.py",
       "app/retry.py",
+      "app/audit.py",
       "app/session.py",
       "app/auth.py",
       "app/cleanup.py",
@@ -135,8 +135,8 @@
       "app/orders.py",
       "app/payments.py",
       "app/emailer.py",
-      "app/audit.py",
       "app/retry.py",
+      "app/audit.py",
       "README.md",
       "app/auth.py",
       "app/cleanup.py",
@@ -152,7 +152,7 @@
       "app/orders.py",
       "app/payments.py",
       "app/emailer.py",
-      "app/orders.py"
+      "app/retry.py"
     ],
     "mode": "skeleton_on",
     "repo": "python_app",
@@ -163,7 +163,7 @@
       "app/orders.py",
       "app/payments.py",
       "app/emailer.py",
-      "app/orders.py"
+      "app/retry.py"
     ],
     "mode": "skeleton_off",
     "repo": "python_app",
@@ -377,11 +377,11 @@
   {
     "files": [
       "server.py",
-      "integrations/slack.py",
-      "tests/test_incidents.py",
-      "handlers/incidents.py",
       "config.py",
-      "storage/repository.py"
+      "handlers/incidents.py",
+      "integrations/slack.py",
+      "storage/repository.py",
+      "tests/test_incidents.py"
     ],
     "mode": "pagerank",
     "repo": "web_service",
@@ -390,11 +390,11 @@
   {
     "files": [
       "server.py",
-      "integrations/slack.py",
-      "tests/test_incidents.py",
-      "handlers/incidents.py",
       "config.py",
-      "storage/repository.py"
+      "handlers/incidents.py",
+      "integrations/slack.py",
+      "storage/repository.py",
+      "tests/test_incidents.py"
     ],
     "mode": "bfs",
     "repo": "web_service",
@@ -403,8 +403,8 @@
   {
     "files": [
       "server.py",
-      "integrations/slack.py",
-      "tests/test_incidents.py"
+      "config.py",
+      "handlers/incidents.py"
     ],
     "mode": "skeleton_on",
     "repo": "web_service",
@@ -413,8 +413,8 @@
   {
     "files": [
       "server.py",
-      "integrations/slack.py",
-      "tests/test_incidents.py"
+      "config.py",
+      "handlers/incidents.py"
     ],
     "mode": "skeleton_off",
     "repo": "web_service",
@@ -425,9 +425,9 @@
       "storage/repository.py",
       "handlers/incidents.py",
       "tests/test_incidents.py",
+      "integrations/slack.py",
       "config.py",
-      "server.py",
-      "integrations/slack.py"
+      "server.py"
     ],
     "mode": "pagerank",
     "repo": "web_service",
@@ -438,8 +438,8 @@
       "storage/repository.py",
       "handlers/incidents.py",
       "tests/test_incidents.py",
-      "config.py",
       "integrations/slack.py",
+      "config.py",
       "server.py"
     ],
     "mode": "bfs",
@@ -451,7 +451,7 @@
       "storage/repository.py",
       "handlers/incidents.py",
       "tests/test_incidents.py",
-      "config.py"
+      "integrations/slack.py"
     ],
     "mode": "skeleton_on",
     "repo": "web_service",
@@ -461,58 +461,58 @@
     "files": [
       "storage/repository.py",
       "handlers/incidents.py",
-      "config.py"
-    ],
-    "mode": "skeleton_off",
-    "repo": "web_service",
-    "task": "Find repository code that saves incidents to SQLite"
-  },
-  {
-    "files": [
-      "server.py",
-      "handlers/incidents.py",
-      "config.py",
-      "integrations/slack.py",
-      "storage/repository.py",
-      "tests/test_incidents.py"
-    ],
-    "mode": "pagerank",
-    "repo": "web_service",
-    "task": "Explain health check route and configuration loading"
-  },
-  {
-    "files": [
-      "server.py",
-      "config.py",
-      "handlers/incidents.py",
-      "integrations/slack.py",
-      "storage/repository.py",
-      "tests/test_incidents.py"
-    ],
-    "mode": "bfs",
-    "repo": "web_service",
-    "task": "Explain health check route and configuration loading"
-  },
-  {
-    "files": [
-      "server.py",
-      "server.py",
-      "handlers/incidents.py",
-      "config.py"
-    ],
-    "mode": "skeleton_on",
-    "repo": "web_service",
-    "task": "Explain health check route and configuration loading"
-  },
-  {
-    "files": [
-      "server.py",
-      "server.py",
-      "config.py",
       "integrations/slack.py"
     ],
     "mode": "skeleton_off",
     "repo": "web_service",
+    "task": "Find repository code that saves incidents to SQLite"
+  },
+  {
+    "files": [
+      "server.py",
+      "config.py",
+      "handlers/incidents.py",
+      "integrations/slack.py",
+      "storage/repository.py",
+      "tests/test_incidents.py"
+    ],
+    "mode": "pagerank",
+    "repo": "web_service",
+    "task": "Explain health check route and configuration loading"
+  },
+  {
+    "files": [
+      "server.py",
+      "config.py",
+      "handlers/incidents.py",
+      "integrations/slack.py",
+      "storage/repository.py",
+      "tests/test_incidents.py"
+    ],
+    "mode": "bfs",
+    "repo": "web_service",
+    "task": "Explain health check route and configuration loading"
+  },
+  {
+    "files": [
+      "server.py",
+      "server.py",
+      "config.py",
+      "handlers/incidents.py"
+    ],
+    "mode": "skeleton_on",
+    "repo": "web_service",
+    "task": "Explain health check route and configuration loading"
+  },
+  {
+    "files": [
+      "server.py",
+      "server.py",
+      "config.py",
+      "handlers/incidents.py"
+    ],
+    "mode": "skeleton_off",
+    "repo": "web_service",
     "task": "Explain health check route and configuration loading"
   },
   {
@@ -520,8 +520,8 @@
       "tests/test_incidents.py",
       "handlers/incidents.py",
       "storage/repository.py",
-      "server.py",
       "integrations/slack.py",
+      "server.py",
       "config.py"
     ],
     "mode": "pagerank",
@@ -545,7 +545,7 @@
     "files": [
       "tests/test_incidents.py",
       "handlers/incidents.py",
-      "storage/repository.py"
+      "integrations/slack.py"
     ],
     "mode": "skeleton_on",
     "repo": "web_service",
@@ -555,7 +555,7 @@
     "files": [
       "tests/test_incidents.py",
       "handlers/incidents.py",
-      "storage/repository.py"
+      "integrations/slack.py"
     ],
     "mode": "skeleton_off",
     "repo": "web_service",

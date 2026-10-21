@@ -59,6 +59,20 @@ SPREAD_GOLD_TASKS: tuple[GoldTask, ...] = (
 )
 
 
+# 0.12.0 review: the cause sits in the callees of the top match (a base-class implementation
+# and a registry), reached only by resolved `calls` edges. Kept out of GOLD_TASKS; run by
+# tests/test_bundle_call_expansion.py. See docs/plan-0.12.1-review.md, Task B.0.
+COMPANION_GOLD_TASKS: tuple[GoldTask, ...] = (
+    GoldTask(
+        repo="companion_repo",
+        description="device is reported and then deleted when its accessory case is replugged",
+        expected_files=("src/device_manager.cpp", "src/peripheral_core.cpp", "src/registry.cpp"),
+        budget=900,
+        tight_budget=900,
+    ),
+)
+
+
 GOLD_TASKS: tuple[GoldTask, ...] = (
     GoldTask(
         repo="python_app",
@@ -533,6 +547,51 @@ def helper():
     return repo
 
 
+def _build_companion_repo(base: Path) -> Path:
+    """0.12.0 review: the top match calls into a base-class implementation and a registry
+    whose file names share no word with the task, among many files that only share words."""
+    repo = base / "companion_repo"
+    _init_repo(repo)
+    pad = "\n".join(f"    int pad{i} = state_ + {i};" for i in range(40))
+    big = "\n".join(f"    int pad{i} = device + {i};" for i in range(150))
+    _write(repo / "src/device_manager.h", (
+        "class PeripheralCore;\nclass DeviceManager {\npublic:\n  void onAccessoryCaseReplugged(PeripheralCore* d);\n"
+        "  void reportDevice(PeripheralCore* d);\n  void deleteDevice(PeripheralCore* d);\n  int state_ = 0;\n};\n"
+    ))
+    _write(repo / "src/device_manager.cpp", (
+        '#include "device_manager.h"\n#include "peripheral_core.h"\n\n'
+        "void DeviceManager::onAccessoryCaseReplugged(PeripheralCore* d) {\n"
+        "    // accessory case replugged: the device is reported again\n    reportDevice(d);\n}\n\n"
+        f"void DeviceManager::reportDevice(PeripheralCore* d) {{\n    // device reported\n    d->assignCompanion();\n{pad}\n}}\n\n"
+        f"void DeviceManager::deleteDevice(PeripheralCore* d) {{\n    // device deleted\n{pad}\n}}\n"
+    ))
+    _write(repo / "src/peripheral_core.h", "class PeripheralCore {\npublic:\n  void assignCompanion();\n  void releaseCompanion();\n  int pairing_ = 0;\n};\n")
+    _write(repo / "src/peripheral_core.cpp", (
+        '#include "peripheral_core.h"\n#include "registry.h"\n\n'
+        "void PeripheralCore::assignCompanion() {\n    if (pairing_ == 0) {\n        releaseCompanion();\n    }\n}\n\n"
+        "void PeripheralCore::releaseCompanion() {\n    Registry::drop(pairing_);\n}\n"
+    ))
+    _write(repo / "src/registry.h", "class Registry {\npublic:\n  static void drop(int id);\n};\n")
+    _write(repo / "src/registry.cpp", '#include "registry.h"\nvoid Registry::drop(int id) {\n    int gone = id;\n    gone += 1;\n}\n')
+    _write(repo / "src/tag_helper.cpp", f"// device tag helper: reported device names, case tags, accessory labels\nint tagFor(int device) {{\n{big}\n    return device;\n}}\n")
+    _write(repo / "src/admin_control.cpp", (
+        '#include "device_manager.h"\n// admin control: delete a reported device, replugged accessory case\n'
+        f"void adminDelete(DeviceManager* m, PeripheralCore* d) {{\n    m->deleteDevice(d);\n{pad}\n}}\n"
+    ))
+    _write(repo / "qml/DevicePopup.qml", (
+        "import QtQuick 2.15\nItem {\n    // popup: device reported, deleted, accessory case replugged\n"
+        '    property string text: "Device deleted"\n' + "".join(f"    property int p{i}: {i}\n" for i in range(30)) + "}\n"
+    ))
+    names = ("device_list_model", "case_status", "accessory_icons", "report_log", "replug_watch")
+    for name in names + tuple(f"device_widget_{k}" for k in range(30)):
+        words = name.replace("_", " ")
+        _write(repo / f"src/{name}.cpp", (
+            f"// {words}: device reported, accessory case, deleted entries\nint {name}_fn(int device) {{\n{big}\n    return device;\n}}\n"
+        ))
+    _commit_all(repo, "add companion fixture")
+    return repo
+
+
 def _build_spread_repo(base: Path) -> Path:
     """Two files whose many methods all match the task, which call into two helper
     files that share no word with it: the spans must not use up the whole budget."""
@@ -830,6 +889,7 @@ def build_fixture_repos(base: Path) -> dict[str, Path]:
         "noisy_lib": _build_noisy_lib(base),
         "refresh_distractors": _build_refresh_distractors(base),
         "spread_repo": _build_spread_repo(base),
+        "companion_repo": _build_companion_repo(base),
         "qt_app": _build_qt_app(base),
         "body_text_repo": _build_body_text_repo(base),
     }

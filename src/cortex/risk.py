@@ -876,7 +876,7 @@ def analyze_risk(
 
 
 # Secondary buckets, in the order truncation gives them up once `files` is empty.
-# `tests_by_changed_file` goes last: it is the per-file explanation of `tests_to_run`.
+# `tests_by_changed_file` is not among them: it is re-encoded first and given up last.
 _RISK_DROP_ORDER = (
     "score_formula",
     "missing_cochanges",
@@ -888,54 +888,54 @@ _RISK_DROP_ORDER = (
     "build_system_misses",
     "analysis_errors",
     "unindexed_files",
-    "tests_by_changed_file",
 )
 _TESTS_TRUNCATED_REASON = "tests_to_run was truncated to fit the response budget"
+# `tests_to_run` is cut down to this many entries before the per-file test map is touched.
+TESTS_TO_RUN_FLOOR = 10
+_MAP_KEYS = ("tests_by_changed_file", "tests_by_changed_file_tests", "tests_by_changed_file_encoding", "tests_by_changed_file_omitted")
 
 
 def _risk_tokens(output: Mapping[str, Any]) -> int:
     return count_text_tokens(json.dumps(output, sort_keys=True))
 
 
-def _longest_fitting_prefix(count: int, fits: Callable[[int], bool]) -> int:
-    """Largest n in [0, count] with fits(n), assuming size only grows with n (0 if none fits)."""
-    lo, hi, best = 0, count, 0
+def _longest_fitting_prefix(count: int, fits: Callable[[int], bool], floor: int = 0) -> int:
+    """Largest n in [floor, count] with fits(n), assuming size only grows with n.
+
+    `floor` itself is never probed: it is what you get when nothing larger fits.
+    """
+    lo, hi, best = floor + 1, count, floor
     while lo <= hi:
         mid = (lo + hi) // 2
-        if mid == 0 or fits(mid):
+        if fits(mid):
             best, lo = mid, mid + 1
         else:
             hi = mid - 1
     return best
 
 
-def _compact_tests_by_changed_file(output: dict[str, Any]) -> dict[str, list[int]] | None:
-    """`tests_by_changed_file` with each test replaced by its index in `tests_to_run`,
-    or None when some test is not in that list (then the full form cannot be encoded)."""
-    position = {item.get("test"): index for index, item in enumerate(output.get("tests_to_run") or [])}
-    compact: dict[str, list[int]] = {}
-    for path, tests in (output.get("tests_by_changed_file") or {}).items():
-        if any(test not in position for test in tests):
-            return None
-        compact[path] = sorted(position[test] for test in tests)
-    return compact
-
-
-def _pruned_compact_indices(compact: Mapping[str, list[int]], size: int) -> dict[str, list[int]]:
-    """Compact indices that still point into a `tests_to_run` shortened to `size`."""
-    pruned = {path: [i for i in indices if i < size] for path, indices in compact.items()}
-    return {path: indices for path, indices in pruned.items() if indices}
-
-
 def truncate_risk_result(result: Mapping[str, Any], budget: int) -> dict[str, Any]:
     """Deterministically keep high-risk files and directives within a budget.
 
-    Give-up order as the budget shrinks: lower-ranked `files`, then the secondary
-    buckets in `_RISK_DROP_ORDER` (`tests_by_changed_file` last, first re-encoded as
-    indices into `tests_to_run`), then `directives`, then `tests_to_run` (which
-    switches `tests_run_all` on). Every fully removed key is named in
-    `omitted_fields`. Prefix lengths are found by binary search: size only grows
-    with the prefix.
+    Give-up order as the budget shrinks:
+
+    1. lower-ranked `files`;
+    2. `tests_by_changed_file` is re-encoded (lossless) as indices into its own table
+       of tests, `tests_by_changed_file_tests`, so cuts to `tests_to_run` cannot
+       invalidate it;
+    3. the secondary buckets in `_RISK_DROP_ORDER`;
+    4. the `reason` text of every `tests_to_run` entry;
+    5. `directives`;
+    6. `tests_to_run`, down to `TESTS_TO_RUN_FLOOR` entries (which switches
+       `tests_run_all` on);
+    7. the per-file map itself, keeping the highest-risk changed files
+       (`tests_by_changed_file_omitted` counts the rest);
+    8. `tests_to_run` below the floor: the map is fitted first with no tests at all and the
+       tests get the room left over;
+    9. only then the map as a whole.
+
+    Every fully removed key is named in `omitted_fields`. Prefix lengths are found by
+    binary search: size only grows with the prefix.
     """
     output = json.loads(json.dumps(result, sort_keys=True))
     limit = max(0, int(budget))
@@ -946,7 +946,12 @@ def truncate_risk_result(result: Mapping[str, Any], budget: int) -> dict[str, An
     def over() -> bool:
         return _risk_tokens(output) > limit
 
-    def shorten(key: str, probe: Callable[[list[Any], int], None] | None = None) -> None:
+    def mark_omitted(name: str) -> None:
+        omitted.append(name)
+        output["omitted_fields"] = list(omitted)
+        output["truncated"] = True
+
+    def shorten(key: str, probe: Callable[[list[Any], int], None] | None = None, floor: int = 0) -> None:
         items = output.get(key)
         if not items:
             return
@@ -957,70 +962,105 @@ def truncate_risk_result(result: Mapping[str, Any], budget: int) -> dict[str, An
                 probe(items, count)
             return not over()
 
-        best = _longest_fitting_prefix(len(items), fits)
+        best = _longest_fitting_prefix(len(items), fits, min(floor, len(items)))
         output[key] = items[:best]
         if probe is not None:
             probe(items, best)
         if best < len(items):
             output["truncated"] = True
 
-    def drop(key: str) -> None:
-        output.pop(key, None)
-        if key == "tests_by_changed_file":
-            output.pop("tests_by_changed_file_encoding", None)
-        omitted.append(key)
-        output["omitted_fields"] = list(omitted)
+    # --- the per-file map, as (changed file, tests) pairs, highest-risk file first -----
+    rank = {item.get("path"): index for index, item in enumerate(result.get("files") or [])}
+    pairs = sorted(
+        (output.get("tests_by_changed_file") or {}).items(),
+        key=lambda pair: (rank.get(pair[0], len(rank)), pair[0]),
+    )
+    ordered_tests = [item.get("test") for item in result.get("tests_to_run") or []]
+    ordered_tests += sorted({t for _path, tests in pairs for t in tests} - set(ordered_tests))
+
+    def set_map(count: int) -> None:
+        """Write the first `count` changed files of the map, encoded against their own test table."""
+        kept = pairs[:count]
+        used = {test for _path, tests in kept for test in tests}
+        table = [test for test in ordered_tests if test in used]
+        index = {test: position for position, test in enumerate(table)}
+        output["tests_by_changed_file"] = {path: sorted(index[test] for test in tests) for path, tests in kept}
+        output["tests_by_changed_file_tests"] = table
+        output["tests_by_changed_file_encoding"] = "test_table"
+        if count < len(pairs):
+            output["tests_by_changed_file_omitted"] = len(pairs) - count
+        else:
+            output.pop("tests_by_changed_file_omitted", None)
         output["truncated"] = True
 
-    # Always preserve error/status and the concise directive list: lower-ranked
-    # file detail goes first.
+    def shorten_map() -> None:
+        def fits(count: int) -> bool:
+            set_map(count)
+            return not over()
+
+        set_map(_longest_fitting_prefix(len(pairs), fits))
+
+    has_map = bool(pairs)
+
     if over():
-        shorten("files")
+        # `returned_count` is part of the fit, so a payload fitted to the limit stays within it.
+        shorten("files", lambda _items, count: output.__setitem__("returned_count", count))
+        output["returned_count"] = len(output.get("files", []))
+    if has_map and over():
+        set_map(len(pairs))
     for key in _RISK_DROP_ORDER:
         if not over():
             break
-        if key not in output:
-            continue
-        if key == "tests_by_changed_file":
-            compact = _compact_tests_by_changed_file(output)
-            if compact is not None:
-                full = output[key]
-                output[key] = compact
-                output["tests_by_changed_file_encoding"] = "tests_to_run_index"
-                output["truncated"] = True
-                if not over():
-                    break
-                output[key] = full
-                output.pop("tests_by_changed_file_encoding", None)
-        drop(key)
+        if key in output:
+            output.pop(key)
+            mark_omitted(key)
+    if over() and any("reason" in item for item in output.get("tests_to_run") or []):
+        output["tests_to_run"] = [{k: v for k, v in item.items() if k != "reason"} for item in output["tests_to_run"]]
+        mark_omitted("tests_to_run.reason")
     if over():
         # Keep directives in stable order but drop from the end; the full
         # directive arrays remain available in an unbudgeted CLI analysis.
         shorten("directives")
+
+    # A shortened impacted-test list can no longer be vouched for, so it switches to run-all;
+    # ``tests_run_all``/``tests_run_all_reason`` themselves are never dropped.
+    original_tests = len(output.get("tests_to_run") or [])
+    original_run_all = bool(output.get("tests_run_all"))
+    original_reason = output.get("tests_run_all_reason")
+
+    def tests_probe(_items: list[Any], count: int) -> None:
+        if count < original_tests and not original_run_all:
+            output["tests_run_all"] = True
+            output["tests_run_all_reason"] = _TESTS_TRUNCATED_REASON
+        else:
+            output["tests_run_all"] = original_run_all
+            if "tests_run_all_reason" in result:
+                output["tests_run_all_reason"] = original_reason
+
+    def drop_map() -> None:
+        for key in _MAP_KEYS:
+            output.pop(key, None)
+        mark_omitted("tests_by_changed_file")
+
     if over() and output.get("tests_to_run"):
-        # The impacted-test list goes last, lowest score first.  A shortened
-        # list can no longer be vouched for, so it switches to run-all;
-        # ``tests_run_all``/``tests_run_all_reason`` themselves are never dropped.
-        was_run_all = bool(output.get("tests_run_all"))
-        original_reason = output.get("tests_run_all_reason")
-        compact = (
-            dict(output["tests_by_changed_file"])
-            if output.get("tests_by_changed_file_encoding") == "tests_to_run_index"
-            else None
-        )
-
-        def tests_probe(items: list[Any], count: int) -> None:
-            if count < len(items) and not was_run_all:
-                output["tests_run_all"] = True
-                output["tests_run_all_reason"] = _TESTS_TRUNCATED_REASON
-            else:
-                output["tests_run_all"] = was_run_all
-                if "tests_run_all_reason" in result:
-                    output["tests_run_all_reason"] = original_reason
-            if compact is not None:
-                output["tests_by_changed_file"] = _pruned_compact_indices(compact, count)
-
+        shorten("tests_to_run", tests_probe, floor=TESTS_TO_RUN_FLOOR)
+    if has_map and over():
+        shorten_map()
+    if over():
+        # Below the floor the map wins over `tests_to_run`: fit as much of the map as fits
+        # with no tests at all, then give `tests_to_run` whatever room is left.
+        kept_tests = output.get("tests_to_run") or []
+        output["tests_to_run"] = []
+        tests_probe(kept_tests, 0)
+        if has_map:
+            shorten_map()
+            if not output.get("tests_by_changed_file"):
+                drop_map()  # not even one changed file fits: give its room back to the tests
+        output["tests_to_run"] = kept_tests
+        tests_probe(kept_tests, len(kept_tests))
         shorten("tests_to_run", tests_probe)
+    if has_map and "tests_by_changed_file" not in omitted and (not output.get("tests_by_changed_file") or over()):
+        drop_map()
     output["returned_count"] = len(output.get("files", []))
     output["budget_feasible"] = not over()  # measured before the flag itself is added
     return output
