@@ -13,6 +13,12 @@ Status: **implemented in 0.12.1.** Outcomes and deviations from the text below:
   0.12 reserve was removed and the eval gate passed without restoring it.
 - The regression tests described below were added first as strict `xfail`s and their marks
   removed by the fixing tasks.
+- Review against this plan before merging found and fixed two defects and two test gaps:
+  step 8 cut `tests_to_run` below the floor while the empty map keys still held their room
+  (now the map is fitted first with no tests, and the tests get what is left); the callee
+  walk was FIFO, so a function first met through a longer route kept the lower hop score
+  (now 0-1 BFS); the large-diff test now has every assertion listed under A.1 "Tests"; and
+  a test runs the companion and spread tasks in all four eval modes (B.1 acceptance).
 
 Input: test review of 0.12.0 on a C++/QML repository (about 3.7k files, 161k nodes, 622k edges)
 Base: `main` at 0.12.0 (`aa98ec6`)

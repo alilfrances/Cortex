@@ -5,7 +5,7 @@ import hashlib
 import math
 import re
 import time
-from collections import defaultdict
+from collections import defaultdict, deque
 from collections.abc import Callable
 from pathlib import Path
 
@@ -211,25 +211,27 @@ def _callee_scores(
             best[symbol_id] = (score, seed_id, hop)
 
     for seed_id, seed_score in seeds:
-        seen = {seed_id}
-        stack = [(seed_id, 0)]
-        while stack:
-            current, hop = stack.pop(0)
+        # 0-1 BFS: a same-file call costs no hop and goes to the front of the queue, so every
+        # function is settled (expanded) at its smallest hop count, whatever order calls are met in.
+        settled: set[str] = set()
+        queue: deque[tuple[str, int]] = deque([(seed_id, 0)])
+        while queue:
+            current, hop = queue.popleft()
+            if current in settled:
+                continue
+            settled.add(current)
+            if hop >= 1:
+                offer(current, seed_score * CALLEE_HOP_SHARE[hop - 1], seed_id, hop)
             current_file = file_of(current)
             crossings = 0
             for callee in calls_from.get(current, ()):
-                if callee in seen:
+                if callee in settled:
                     continue
-                crosses = file_of(callee) != current_file
-                if crosses:
-                    if crossings >= CALLEES_PER_SEED or hop + 1 > len(CALLEE_HOP_SHARE):
-                        continue
+                if file_of(callee) == current_file:
+                    queue.appendleft((callee, hop))
+                elif crossings < CALLEES_PER_SEED and hop + 1 <= len(CALLEE_HOP_SHARE):
                     crossings += 1
-                next_hop = hop + 1 if crosses else hop
-                seen.add(callee)
-                if next_hop >= 1:
-                    offer(callee, seed_score * CALLEE_HOP_SHARE[next_hop - 1], seed_id, next_hop)
-                stack.append((callee, next_hop))
+                    queue.append((callee, hop + 1))
         owner = class_of(seed_id)
         for base in bases_of.get(owner, ()) if owner else ():
             offer(base, seed_score * BASE_CLASS_SHARE, seed_id, 1)

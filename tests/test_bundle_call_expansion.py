@@ -162,3 +162,41 @@ def test_expanded_items_say_why_they_were_selected(tmp_path, monkeypatch) -> Non
     why = _bundle_why(routed[0], set(), set(), [])
     assert any(entry["type"] == "call" and entry["hop"] >= 1 for entry in why)
     assert _compact_why(why).startswith("calls: ")
+
+
+def test_walk_keeps_the_shortest_route_when_a_longer_one_is_met_first() -> None:
+    from cortex.bundle import CALLEE_HOP_SHARE
+
+    calls = {
+        # The seed calls y.cpp first: a FIFO walk reaches x.cpp:deep from there at hop 2 before
+        # it expands x.cpp:entry, whose same-file call reaches the same function at hop 1.
+        "symbol:a.cpp:top": ["symbol:y.cpp:p", "symbol:x.cpp:entry"],
+        "symbol:y.cpp:p": ["symbol:x.cpp:deep"],
+        "symbol:x.cpp:entry": ["symbol:x.cpp:deep"],
+    }
+    got = _walk([("symbol:a.cpp:top", 100.0)], calls)
+
+    assert got["symbol:x.cpp:deep"] == (100.0 * CALLEE_HOP_SHARE[0], "symbol:a.cpp:top", 1)
+
+
+@pytest.mark.parametrize("mode", ["pagerank", "bfs", "skeleton_on", "skeleton_off"])
+@pytest.mark.parametrize("which", ["companion", "spread"])
+def test_focused_gold_tasks_reach_full_recall_in_every_mode(tmp_path, monkeypatch, which, mode):
+    """Plan 0.12.1 Task B.1 acceptance: the companion task at recall 1.0 in all four modes, and the
+    0.12 spread task still at 1.0 without the reserve it was built for."""
+    from evals.run_evals import COMPANION_GOLD_TASKS, SPREAD_GOLD_TASKS, _build_companion_repo, _build_spread_repo, _score_task
+    from tests.baseline_helpers import fixed_git_env
+
+    fixed_git_env(monkeypatch)
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    task, build = {
+        "companion": (COMPANION_GOLD_TASKS[0], _build_companion_repo),
+        "spread": (SPREAD_GOLD_TASKS[0], _build_spread_repo),
+    }[which]
+    repo = build(tmp_path)
+    db_path = tmp_path / f"{which}.db"
+    ingest_repository(repo, commit_limit=20, db_path=db_path)
+
+    row = _score_task(task, mode, repo, db_path)
+
+    assert row["file_recall"] == 1.0, row["files"]

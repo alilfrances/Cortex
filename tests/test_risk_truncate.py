@@ -267,6 +267,37 @@ def test_large_diff_keeps_the_per_file_test_map_at_the_default_budget() -> None:
     assert "tests_by_changed_file" in out, out.get("omitted_fields")
     assert out["tests_by_changed_file"]  # at least some changed files keep their tests
     assert "tests_by_changed_file" not in out.get("omitted_fields", [])
+    # The plan's acceptance for the encoded, partial map (docs/plan-0.12.1-review.md, Task A.1).
+    assert out["tests_by_changed_file_encoding"] == "test_table"
+    table = out["tests_by_changed_file_tests"]
+    assert all(0 <= i < len(table) for indices in out["tests_by_changed_file"].values() for i in indices)
+    original = result["tests_by_changed_file"]
+    for path, indices in out["tests_by_changed_file"].items():
+        assert {table[i] for i in indices} <= set(original[path])
+    assert len(out["tests_by_changed_file"]) + out.get("tests_by_changed_file_omitted", 0) == len(original)
+    assert len(out["tests_to_run"]) >= 10
+    assert out["budget_feasible"] is True
+
+
+def test_the_highest_risk_changed_files_keep_their_map_entries() -> None:
+    result = _large_diff_result()
+    out = truncate_risk_result(result, 2000)
+
+    by_risk = [item["path"] for item in result["files"]]
+    kept = list(out["tests_by_changed_file"])
+    assert kept == by_risk[: len(kept)]
+
+
+def test_below_the_floor_the_map_wins_over_tests_to_run() -> None:
+    result = _large_diff_result()
+    for budget in range(400, 1600, 50):
+        out = truncate_risk_result(result, budget)
+        if len(out["tests_to_run"]) < 10 and out["tests_to_run"]:
+            # tests_to_run was cut below its floor, so the map must still be there.
+            assert out.get("tests_by_changed_file"), budget
+        if "tests_by_changed_file" in out.get("omitted_fields", []):
+            # The floor protects TESTS_TO_RUN_FLOOR tests ahead of the map (plan steps 6-7).
+            assert len(out["tests_to_run"]) >= 10, budget
 
 
 def test_the_map_outlives_directives_and_tests_to_run_reasons() -> None:

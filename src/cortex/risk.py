@@ -930,7 +930,8 @@ def truncate_risk_result(result: Mapping[str, Any], budget: int) -> dict[str, An
        `tests_run_all` on);
     7. the per-file map itself, keeping the highest-risk changed files
        (`tests_by_changed_file_omitted` counts the rest);
-    8. `tests_to_run` below the floor, then the map again with the room that frees;
+    8. `tests_to_run` below the floor: the map is fitted first with no tests at all and the
+       tests get the room left over;
     9. only then the map as a whole.
 
     Every fully removed key is named in `omitted_fields`. Prefix lengths are found by
@@ -1036,18 +1037,30 @@ def truncate_risk_result(result: Mapping[str, Any], budget: int) -> dict[str, An
             if "tests_run_all_reason" in result:
                 output["tests_run_all_reason"] = original_reason
 
+    def drop_map() -> None:
+        for key in _MAP_KEYS:
+            output.pop(key, None)
+        mark_omitted("tests_by_changed_file")
+
     if over() and output.get("tests_to_run"):
         shorten("tests_to_run", tests_probe, floor=TESTS_TO_RUN_FLOOR)
     if has_map and over():
         shorten_map()
-    if over() and output.get("tests_to_run"):
+    if over():
+        # Below the floor the map wins over `tests_to_run`: fit as much of the map as fits
+        # with no tests at all, then give `tests_to_run` whatever room is left.
+        kept_tests = output.get("tests_to_run") or []
+        output["tests_to_run"] = []
+        tests_probe(kept_tests, 0)
+        if has_map:
+            shorten_map()
+            if not output.get("tests_by_changed_file"):
+                drop_map()  # not even one changed file fits: give its room back to the tests
+        output["tests_to_run"] = kept_tests
+        tests_probe(kept_tests, len(kept_tests))
         shorten("tests_to_run", tests_probe)
-        if has_map and output.get("tests_by_changed_file_omitted"):
-            shorten_map()  # room freed by the shorter tests_to_run
-    if has_map and (not output.get("tests_by_changed_file") or over()):
-        for key in _MAP_KEYS:
-            output.pop(key, None)
-        mark_omitted("tests_by_changed_file")
+    if has_map and "tests_by_changed_file" not in omitted and (not output.get("tests_by_changed_file") or over()):
+        drop_map()
     output["returned_count"] = len(output.get("files", []))
     output["budget_feasible"] = not over()  # measured before the flag itself is added
     return output
