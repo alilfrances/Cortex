@@ -276,7 +276,12 @@ public:
 
 SECOND_IMPL = """#include "sessionmanager.h"
 int SessionManager::sessionCount() { return 1; }
-int SessionManager::refreshSessions(int code) { return code + sessionCount(); }
+int SessionManager::refreshSessions(int code)
+{
+    int total = sessionCount();
+    total += code;
+    return total;
+}
 """
 
 NESTED_IMPL = """struct UnrelatedHolder

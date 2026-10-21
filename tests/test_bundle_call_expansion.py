@@ -209,7 +209,6 @@ def _items_by_path(bundle: dict) -> dict[str, dict]:
     return {item["path"]: item for item in bundle["items"] if item["kind"] in ("code", "symbol")}
 
 
-@pytest.mark.xfail(strict=True, reason="B.1 + B.2: bases are unresolved and no override is walked")
 @pytest.mark.parametrize("budget", [600, 900])
 def test_derived_override_is_packed(tmp_path, monkeypatch, budget):
     """The manager calls `Base::apply` through a `Base*`; the behaviour is in `Derived::apply`, in a
@@ -236,7 +235,6 @@ def test_derived_override_is_packed(tmp_path, monkeypatch, budget):
     assert _compact_why(why).startswith("override: ")
 
 
-@pytest.mark.xfail(strict=True, reason="B.3: callees are taken in call-site order and accessors are not skipped")
 def test_callees_are_not_accessors(tmp_path, monkeypatch):
     """Ten accessors are called before the callee that matters: that callee is selected, no accessor is."""
     from tests.bundle_shapes import ACCESSOR_TASK, build_accessor_repo
@@ -256,7 +254,6 @@ def test_callees_are_not_accessors(tmp_path, monkeypatch):
     assert not [path for path in routed if path.startswith("src/props_")], routed
 
 
-@pytest.mark.xfail(strict=True, reason="B.3: seeds are class nodes and trivial spans; the handler is never a seed")
 @pytest.mark.parametrize("budget", [600, 900])
 def test_a_handler_without_a_task_word_in_its_name_leads_to_the_file_it_calls(tmp_path, monkeypatch, budget):
     """`dispatch` has no task word in its name, its body matches the task and calls a resolved function in a

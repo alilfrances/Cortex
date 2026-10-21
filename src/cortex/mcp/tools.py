@@ -679,7 +679,14 @@ def _bundle_why(
 
     route = item.get("metadata", {}).get("call_expansion")
     if isinstance(route, dict) and (route.get("to") or node_id):
-        why.append({"type": "call", "from": route.get("from", ""), "to": route.get("to") or node_id, "hop": route.get("hop", 1)})
+        if route.get("type") == "override":
+            # The task's code calls the base method `via`; this symbol overrides it in a derived class.
+            why.append({
+                "type": "override", "from": route.get("from", ""), "via": route.get("via", ""),
+                "to": route.get("to") or node_id, "hop": route.get("hop", 1),
+            })
+        else:
+            why.append({"type": "call", "from": route.get("from", ""), "to": route.get("to") or node_id, "hop": route.get("hop", 1)})
 
     item_node = f"file:{item.get('path', '')}"
     if item.get("path") in seed_paths:
@@ -710,6 +717,13 @@ def _bundle_why(
 
 
 def _compact_why(why: list[dict[str, Any]]) -> str:
+    for entry in why:
+        if entry.get("type") == "override":
+            def where(node_id: str) -> str:
+                path, _, name = str(node_id).removeprefix("symbol:").partition(":")
+                return f"{path}:{name}" if name else path
+
+            return f"override: {where(entry.get('via', ''))} -> {where(entry.get('to', ''))}"
     for entry in why:
         if entry.get("type") == "call":
             def label(node_id: str) -> str:

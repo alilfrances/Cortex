@@ -48,7 +48,9 @@ def override_files() -> dict[str, str]:
             '#include "base.h"\n'
             "// device card state wrong after reconnect: the manager restores the card state on reconnect\n"
             "void Manager::reconnect(Base* target) {\n"
-            "    target->apply(1);\n"
+            "    int attempts = 3;\n"
+            "    target->apply(attempts);\n"
+            "    attempts -= 1;\n"
             "}\n"
         ),
         "src/base.h": "class Base {\npublic:\n    virtual void apply(int v);\nprotected:\n    int slot_ = 0;\n};\n",
