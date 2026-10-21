@@ -53,3 +53,38 @@ def test_files_linked_by_calls_and_inheritance_are_lifted_by_the_expansion(repo)
     assert scores["src/widget.cpp"] > scores.get("src/other.cpp", 0.0)
     # The expansion lifts files linked to the best match, not the whole repository.
     assert scores.get("src/other.cpp", 0.0) < CALL_EXPANSION_BONUS
+
+
+# --- 0.12.0 review: callees of the top match (docs/plan-0.12.1-review.md, Task B.0) ---
+
+
+@pytest.mark.xfail(strict=True, reason="0.12.0 lifts callees only to CALL_EXPANSION_BONUS; fixed by plan 0.12.1 Task B.1")
+@pytest.mark.parametrize("budget", [600, 900])
+def test_callees_of_the_top_match_are_packed(tmp_path, monkeypatch, budget):
+    from evals.run_evals import COMPANION_GOLD_TASKS, _build_companion_repo
+
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("CORTEX_SEMANTIC", "0")
+    task = COMPANION_GOLD_TASKS[0]
+    repo = _build_companion_repo(tmp_path)
+    ingest_repository(repo)
+
+    bundle = generate_bundle(repo, task=task.description, budget=budget, output_format="json")
+
+    paths = {item["path"] for item in bundle["items"]}
+    assert set(task.expected_files) <= paths, sorted(paths)
+
+
+def test_the_companion_fixture_has_the_resolved_call_chain(tmp_path, monkeypatch):
+    """Guards the fixture itself: if these edges stop resolving, the test above proves nothing."""
+    from cortex.store import CortexStore, default_db_path
+    from evals.run_evals import _build_companion_repo
+
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    repo = _build_companion_repo(tmp_path)
+    ingest_repository(repo)
+    _nodes, edges = CortexStore(default_db_path(repo)).fetch_graph(repo)
+    resolved = {(e.source, e.target) for e in edges if e.relation == "calls" and e.target.startswith("symbol:")}
+
+    assert ("symbol:src/device_manager.cpp:reportDevice", "symbol:src/peripheral_core.cpp:assignCompanion") in resolved
+    assert ("symbol:src/peripheral_core.cpp:releaseCompanion", "symbol:src/registry.cpp:drop") in resolved

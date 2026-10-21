@@ -203,3 +203,54 @@ def test_shortening_tests_to_run_switches_to_run_all_and_keeps_indices_valid() -
 def test_budget_zero_clamps_and_empties(budget: int) -> None:
     out = truncate_risk_result(_result(with_by_file=True), budget)
     assert out["budget"] == 0 and out["files"] == [] and out["directives"] == [] and out["tests_to_run"] == []
+
+
+# --- 0.12.0 review: the per-file test map on a large diff (docs/plan-0.12.1-review.md, Task A.1) ---
+
+
+def _large_diff_result() -> dict:
+    """Shaped like `HEAD~30..HEAD` on a real repository: many changed files, many tests,
+    long reasons. `tests_to_run` alone is far over the 2000-token default budget."""
+    tests = [
+        {
+            "test": f"tests/unit/module_{i % 40}/test_component_{i}.cpp",
+            "via": ["structural", "pair"] if i % 3 else ["cochange"],
+            "reason": f"structural: calls path (depth {1 + i % 3}) from src/module_{i % 40}/component_{i}.cpp:Component{i}::apply",
+            "score": round(1.0 - i / 400, 3),
+        }
+        for i in range(180)
+    ]
+    by_file = {
+        f"src/module_{n % 40}/component_{n}.cpp": [tests[(n + k) % 180]["test"] for k in range(3)]
+        for n in range(120)
+    }
+    result = _result(with_by_file=False)
+    result["files"] = [_file(path, 120 - index) for index, path in enumerate(by_file)]
+    result["directives"] = [f"missing_tests: {tests[i]['test']} for src/x{i}.cpp" for i in range(60)]
+    result["tests_to_run"] = tests
+    result["tests_by_changed_file"] = by_file
+    result["uncovered_changed_files"] = []
+    return result
+
+
+@pytest.mark.xfail(strict=True, reason="0.12.0 drops the map before shortening tests_to_run; fixed by plan 0.12.1 Task A.1")
+def test_large_diff_keeps_the_per_file_test_map_at_the_default_budget() -> None:
+    result = _large_diff_result()
+    assert count_text_tokens(json.dumps(result["tests_to_run"], sort_keys=True)) > 2000
+
+    out = truncate_risk_result(result, 2000)
+
+    assert out["truncated"] is True
+    assert "tests_by_changed_file" in out, out.get("omitted_fields")
+    assert out["tests_by_changed_file"]  # at least some changed files keep their tests
+    assert "tests_by_changed_file" not in out.get("omitted_fields", [])
+
+
+@pytest.mark.xfail(strict=True, reason="0.12.0 drops the map before shortening directives; fixed by plan 0.12.1 Task A.1")
+def test_the_map_outlives_directives_and_tests_to_run_reasons() -> None:
+    result = _large_diff_result()
+    full = count_text_tokens(json.dumps(result, sort_keys=True))
+    for budget in range(1000, full, 250):
+        out = truncate_risk_result(result, budget)
+        if out.get("directives"):
+            assert "tests_by_changed_file" in out, budget
