@@ -502,3 +502,65 @@ def test_cli_saved_command_rejects_malformed_price_flag(tmp_path, monkeypatch):
 
     with pytest.raises(SystemExit):
         main()
+
+
+# --- ledger prices the stashed detailed rendering instead of re-running the tool ---
+
+_STRUCTURE_CALLS = [
+    ("cortex_search_symbols", {"query": "login"}),
+    ("cortex_relations", {"symbol": "login"}),
+    ("cortex_path", {"symbol_a": "charge", "symbol_b": "login"}),
+    ("cortex_overview", {}),
+]
+
+
+@pytest.mark.parametrize("response_format", ["concise", "detailed"])
+@pytest.mark.parametrize("tool,extra", _STRUCTURE_CALLS)
+def test_ledger_baseline_matches_legacy_redispatch(tmp_path, monkeypatch, tool, extra, response_format):
+    repo = _repo_with_index(tmp_path, monkeypatch)
+    store = CortexStore(default_db_path(repo))
+    args = {"repo_path": str(repo), "response_format": response_format, **extra}
+
+    payload = _payload(call_tool(tool, args))
+    rows = [row for row in store.fetch_tool_usage(repo) if row["tool"] == tool]
+    assert len(rows) == 1
+
+    # Outside a tool call, _estimate_baseline still re-dispatches (the legacy path).
+    assert mcp_tools._ledger_detailed is None
+    legacy = mcp_tools._estimate_baseline(tool, args, payload, store, repo)
+    assert rows[0]["baseline_tokens"] == legacy
+
+
+def test_cortex_path_loads_the_graph_once(tmp_path, monkeypatch):
+    repo = _repo_with_index(tmp_path, monkeypatch)
+    calls = []
+    original = CortexStore.fetch_graph
+
+    def counting(self, repo_path):
+        calls.append(1)
+        return original(self, repo_path)
+
+    monkeypatch.setattr(CortexStore, "fetch_graph", counting)
+    payload = _payload(call_tool("cortex_path", {"repo_path": str(repo), "symbol_a": "charge", "symbol_b": "login"}))
+
+    assert payload["paths"]
+    assert len(calls) == 1
+
+
+def test_status_slowest_seconds_includes_the_ledger(tmp_path, monkeypatch):
+    import time
+
+    from cortex.mcp.status import REGISTRY
+
+    repo = _repo_with_index(tmp_path, monkeypatch)
+    original = mcp_tools._record_tool_usage
+
+    def slow_ledger(*args, **kwargs):
+        time.sleep(0.2)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(mcp_tools, "_record_tool_usage", slow_ledger)
+    call_tool("cortex_path", {"repo_path": str(repo), "symbol_a": "charge", "symbol_b": "login"})
+
+    per_tool = REGISTRY.snapshot()["per_tool"]["cortex_path"]
+    assert per_tool["slowest_seconds"] >= 0.2

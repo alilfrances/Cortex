@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import difflib
 import hashlib
 import json
@@ -840,6 +841,15 @@ _current_request: RequestStatus | None = None
 _progress_sink: Callable[[str, int, int], None] | None = None
 _in_tool_call = False
 _analysis_memo: tuple[tuple[str, str], dict[str, Any]] | None = None
+# The `detailed` rendering of the current call, stashed by the structure-only
+# handlers so the token-savings ledger can price it without re-running the tool.
+_ledger_detailed: dict[str, Any] | None = None
+
+
+def _stash_detailed_rendering(result: dict[str, Any]) -> None:
+    global _ledger_detailed
+    if _in_tool_call:
+        _ledger_detailed = result
 
 
 def _analysis_should_stop() -> Callable[[], bool]:
@@ -1061,6 +1071,15 @@ def _call_overview(arguments: dict[str, Any]) -> dict[str, Any]:
     if analysis.get("dead_code_partial", False):
         extra_fields = {**(extra_fields or {}), "dead_code_partial": True, "note": _PARTIAL_ANALYSIS_NOTE}
     payload = _fit_overview_report(repo_root, analysis, budget, extra_fields=extra_fields)
+    if _in_tool_call:
+        if response_format == "detailed":
+            detailed_payload = payload
+        else:
+            detailed_extra = _overview_detailed_capabilities(store, repo_root)
+            if analysis.get("dead_code_partial", False):
+                detailed_extra = {**detailed_extra, "dead_code_partial": True, "note": _PARTIAL_ANALYSIS_NOTE}
+            detailed_payload = _fit_overview_report(repo_root, analysis, budget, extra_fields=detailed_extra)
+        _stash_detailed_rendering(_content(_format_payload(detailed_payload, status, "detailed", cached=cache_hit)))
     return _content(_format_payload(payload, status, response_format, cached=cache_hit))
 
 
@@ -1908,9 +1927,15 @@ def _call_search(arguments: dict[str, Any]) -> dict[str, Any]:
         node["why"] = [{"type": "like_query", "query": str(arguments.get("query", ""))}]
     response_format = _response_format(arguments)
     if response_format == "concise":
+        _stash_detailed_rendering(_content(_format_payload(
+            {"repo_path": str(repo_root), "items": copy.deepcopy(nodes)}, status, "detailed"
+        )))
         for node in nodes:
             node.pop("why", None)
-    return _content(_format_payload({"repo_path": str(repo_root), "items": nodes}, status, response_format))
+    result = _content(_format_payload({"repo_path": str(repo_root), "items": nodes}, status, response_format))
+    if response_format == "detailed":
+        _stash_detailed_rendering(result)
+    return result
 
 
 def _symbol_match_payload(node: Any) -> dict[str, Any]:
@@ -2297,11 +2322,26 @@ def _call_relations(arguments: dict[str, Any]) -> dict[str, Any]:
     all_items: list[dict[str, Any]] = [_relation_item(edge, nodes, response_format) for edge in edges]
     budget = int(arguments.get("budget", 2000))
     items, truncated = _prefix_fit_items(all_items, budget)
-    return _content(_format_payload(
+    if response_format == "concise":
+        detailed_items, detailed_truncated = _prefix_fit_items(
+            [_relation_item(edge, nodes, "detailed") for edge in edges], budget
+        )
+        _stash_detailed_rendering(_content(_format_payload(
+            {
+                "repo_path": str(repo_root), "items": detailed_items,
+                "truncated": detailed_truncated, "returned_count": len(detailed_items),
+            },
+            status,
+            "detailed",
+        )))
+    result = _content(_format_payload(
         {"repo_path": str(repo_root), "items": items, "truncated": truncated, "returned_count": len(items)},
         status,
         response_format,
     ))
+    if response_format == "detailed":
+        _stash_detailed_rendering(result)
+    return result
 
 
 def _call_path(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -2322,16 +2362,14 @@ def _call_path(arguments: dict[str, Any]) -> dict[str, Any]:
         node, matches = _resolve_symbol(store, repo_root, symbol)
         if node is None:
             if matches:
-                return _content(_format_payload(
-                    {
-                        "repo_path": str(repo_root),
-                        "hint": "call again with node_id",
-                        "ambiguous": key,
-                        "matches": [_symbol_match_payload(match) for match in matches],
-                    },
-                    status,
-                    response_format,
-                ))
+                ambiguous = {
+                    "repo_path": str(repo_root),
+                    "hint": "call again with node_id",
+                    "ambiguous": key,
+                    "matches": [_symbol_match_payload(match) for match in matches],
+                }
+                _stash_detailed_rendering(_content(_format_payload(ambiguous, status, "detailed")))
+                return _content(_format_payload(ambiguous, status, response_format))
             return _content(
                 {
                     "error": "symbol_not_found",
@@ -2379,6 +2417,7 @@ def _call_path(arguments: dict[str, Any]) -> dict[str, Any]:
     }
     if not paths:
         payload["note"] = f"No path between the symbols within {max_depth} hops (COCHANGE edges and commit nodes excluded)."
+    _stash_detailed_rendering(_content(_format_payload(payload, status, "detailed")))
     return _content(_format_payload(payload, status, response_format))
 
 
@@ -2542,13 +2581,14 @@ def _referenced_file_tokens(store: CortexStore, repo_root: Path, paths: set[str]
 
 
 def _detailed_rendering_tokens(tool: str, arguments: dict[str, Any]) -> int:
-    """Re-run a structure-only tool with response_format=detailed and count it.
+    """Count the `detailed` rendering of a structure-only tool call.
 
     Used only as an input to _estimate_baseline's policy for search/relations/
-    path/overview (see its docstring). Re-dispatching is simple, deterministic, and
-    cheap (local SQLite reads); any failure here is caught by the caller's
-    non-fatal wrapper. This calls _call_* directly (not call_tool), so it
-    never goes through the P0-1 ledger itself -- only the outer call does.
+    path/overview (see its docstring). Inside a tool call the handler has
+    already stashed its detailed rendering (`_stash_detailed_rendering`), so it
+    is counted without running the tool a second time -- that second run used
+    to happen outside the deadline and the status registry. Outside a tool call
+    (direct callers, tests) the tool is re-dispatched, as before.
 
     P1-5: the detailed rendering always carries a `_meta` envelope, which is
     excluded here via `_without_meta` -- this baseline prices the *data*
@@ -2556,6 +2596,12 @@ def _detailed_rendering_tokens(tool: str, arguments: dict[str, Any]) -> int:
     and excluding it keeps the count independent of `_meta`'s own contents
     (e.g. whether saved_tokens ended up folded into a sibling call's meta).
     """
+    detailed_result = _ledger_detailed
+    if detailed_result is None and _in_tool_call:
+        return 0  # never re-dispatch a tool from inside a tool call
+    if detailed_result is not None:
+        detailed_payload = json.loads(detailed_result["content"][0]["text"])
+        return count_text_tokens(json.dumps(_without_meta(detailed_payload)))
     detailed_args = {**arguments, "response_format": "detailed"}
     if tool == "cortex_search_symbols":
         detailed_result = _call_search(detailed_args)
@@ -2776,11 +2822,11 @@ def call_tool(
     structured error payload rather than a crash -- the server must stay
     responsive for the rest of the batch.
 
-    `cancel` is the per-request cancellation event. The globals reset in the
-    `finally` cover `_record_tool_usage` too: the ledger's internal second
-    `_call_overview` call must reuse the memoised analysis.
+    `cancel` is the per-request cancellation event. The token-savings ledger runs
+    inside `track` but after the deadline scope, and prices the detailed rendering
+    the handler stashed rather than running the tool again.
     """
-    global _current_cancel, _current_request, _progress_sink, _in_tool_call, _analysis_memo
+    global _current_cancel, _current_request, _progress_sink, _in_tool_call, _analysis_memo, _ledger_detailed
     _current_cancel = cancel
     _progress_sink = progress
     _in_tool_call = True
@@ -2791,9 +2837,13 @@ def call_tool(
         budget_seconds = resolve_budget_seconds()
         tracked_id = "" if request_id is None else str(request_id)
         try:
-            with REGISTRY.track(name, tracked_id) as request_status, deadline_scope(budget_seconds, tool_name=name):
+            with REGISTRY.track(name, tracked_id) as request_status:
                 _current_request = request_status
-                result = _dispatch_tool(name, args)
+                with deadline_scope(budget_seconds, tool_name=name):
+                    result = _dispatch_tool(name, args)
+                # Inside `track` (so the status registry times it) but outside the
+                # deadline: the ledger only counts tokens and never raises.
+                _record_tool_usage(name, args, result)
         except DeadlineExceeded as exc:
             return _content(
                 {
@@ -2814,7 +2864,6 @@ def call_tool(
         except Exception as exc:
             return _content({"error": type(exc).__name__, "message": str(exc)}, is_error=True)
 
-        _record_tool_usage(name, args, result)
         return result
     finally:
         _current_cancel = None
@@ -2822,6 +2871,7 @@ def call_tool(
         _progress_sink = None
         _in_tool_call = False
         _analysis_memo = None
+        _ledger_detailed = None
 
 
 # Alternative names agents commonly use for a tool's identifier arguments. Each is

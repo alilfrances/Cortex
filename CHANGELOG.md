@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+Planned in `docs/plan-0.12-field-report.md` (verdict per claim of the 0.11.0 field report and task list).
+
+- Token-savings ledger no longer runs a tool a second time. `cortex_search_symbols`, `cortex_relations`, `cortex_path` and `cortex_overview` used to be re-dispatched in `detailed` format after the call, outside the deadline and the status registry (for `cortex_path` that was 2.85s of 6.3s on the 2.2k-file bench repo). The handlers now stash their detailed rendering and the ledger counts that; `saved_tokens` values are unchanged. The ledger also runs inside the status registry's timing, so `cortex_status.slowest_seconds` no longer under-reports.
+
 ## 0.11.0 — 2026-10-19
 
 Field-report fixes and speed (the "Cortex 0.10.0 field test report"; the investigation, verdict per claim and task list are in `docs/plan-0.11-field-report.md`). Benchmarks use `scripts/perf/synthetic_repo.py` (2.2k files, 17k nodes, 79k edges; and a 3x repo with 6.4k files, 50k nodes, 237k edges) driven by `scripts/perf/bench_tools.py`, cold, budget disabled, Linux x86_64, Python 3.13.
