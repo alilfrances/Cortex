@@ -172,6 +172,12 @@ _SMART_POINTERS = frozenset({
     "QWeakPointer", "scoped_ptr", "intrusive_ptr", "ComPtr", "optional", "Ref", "RefPtr",
 })
 _FACTORIES = frozenset({"create", "make", "instance", "newInstance", "make_shared", "make_unique"})
+# `qobject_cast<T*>(x)` and friends: the value has the type of the template argument.
+_CPP_CASTS = frozenset({
+    "qobject_cast", "dynamic_cast", "static_cast", "reinterpret_cast", "const_cast",
+    "dynamic_pointer_cast", "static_pointer_cast", "const_pointer_cast",
+    "qSharedPointerCast", "qSharedPointerDynamicCast", "qSharedPointerObjectCast", "qSharedPointerConstCast",
+})
 _CPP_TYPE_ID = {"type_identifier", "namespace_identifier"}
 _CPP_DECLARATOR_NAMES = {"identifier", "field_identifier"}
 _CPP_DEF_NODES = {"function_definition"}
@@ -257,6 +263,10 @@ class CppCalls(CallWalker):
             return self.text(fn)
         if fn.type == "template_function":
             name = self.text(fn.child_by_field_name("name")) if fn.child_by_field_name("name") is not None else ""
+            if name in _CPP_CASTS:
+                args = fn.child_by_field_name("arguments")
+                first = next(iter(args.named_children), None) if args is not None else None
+                return self.type_name(first)
             if name in {"make_shared", "make_unique", "make_optional"}:
                 args = fn.child_by_field_name("arguments")
                 first = next(iter(args.named_children), None) if args is not None else None
@@ -275,6 +285,13 @@ class CppCalls(CallWalker):
                         first = next(iter(args.named_children), None) if args is not None else None
                         return self.type_name(first)
         return None
+
+    def is_cast(self, value: Any) -> bool:
+        fn = value.child_by_field_name("function")
+        if fn is None or fn.type != "template_function":
+            return False
+        name = fn.child_by_field_name("name")
+        return name is not None and self.text(name) in _CPP_CASTS
 
     def add_declaration(self, node: Any, frame: Frame) -> None:
         type_node = node.child_by_field_name("type")
@@ -448,6 +465,12 @@ class CppCalls(CallWalker):
                 extra=None if known else {"receiver_member": receiver},
             )
             return
+        if akind == "call_expression":
+            # `qobject_cast<Widget*>(o)->refresh()`: typed by the cast, like a local initialised by it
+            cast = self.constructed_type(arg) if self.is_cast(arg) else None
+            if cast:
+                self.emit(node, frame, callee, receiver=receiver, kind="var", receiver_type=cast, extra=None)
+                return
         if akind == "field_expression":
             base = arg.child_by_field_name("argument")
             member = arg.child_by_field_name("field")
