@@ -82,15 +82,19 @@ def build_report_data(
     db_path: Path | None = None,
     include_test_pairs: bool = False,
     should_stop: Callable[[], bool] | None = None,
+    graph: tuple[list[GraphNode], list[GraphEdge]] | None = None,
 ) -> dict[str, Any]:
     """Collect the deterministic, JSON-serializable inputs to a report.
+
+    `graph` lets a caller that already holds the (read-only, shared) graph skip
+    a second `fetch_graph`.
 
     Community detection remains here (rather than in the renderer), so every
     report format has the same analysis and continues to persist communities.
     """
     repo_root = discover_repo_root(repo_path)
     store = CortexStore(db_path or default_db_path(repo_root))
-    nodes, edges = store.fetch_graph(repo_root)
+    nodes, edges = graph if graph is not None else store.fetch_graph(repo_root)
 
     detected_communities = detect_communities(nodes, edges)
     node_community = {

@@ -18,6 +18,7 @@ from ..deadline import DeadlineExceeded, current_deadline, deadline_scope, resol
 from ..gitutils import discover_repo_root
 from ..impact import IMPACT_CACHE_VERSION, UnknownPathError, rank_file_impact
 from ..ingest import compute_repo_fingerprint, ingest_repository
+from ..models import GraphEdge, GraphNode
 from ..pathfind import shortest_paths
 from ..references import find_references
 from ..report import build_report_data, render_report
@@ -787,7 +788,7 @@ def _call_query(arguments: dict[str, Any]) -> dict[str, Any]:
         # Load sources and the graph once: the bundle needs them, and so does the
         # `why` annotation below.
         all_sources = store.fetch_sources(repo_root)
-        graph = store.fetch_graph(repo_root)
+        graph = _cached_graph(store, repo_root)
         bundle = generate_bundle(
             repo_path=repo_root,
             task=task,
@@ -850,6 +851,49 @@ def _stash_detailed_rendering(result: dict[str, Any]) -> None:
     global _ledger_detailed
     if _in_tool_call:
         _ledger_detailed = result
+
+
+# Single-slot graph cache for the read-only tools. `fetch_graph` JSON-decodes every
+# node and edge row (2s at 79k edges) and most tools call it, so consecutive calls
+# on an unchanged index reuse one result. Keyed by database, repo, the indexed
+# fingerprint and `indexed_at`, so another process's ingest changes the key.
+# Callers share the returned lists and objects and must not mutate them; ingest and
+# enrichment, which do mutate what they load, keep calling `fetch_graph` directly.
+_graph_cache: tuple[tuple[str, str, str, int], tuple[list[GraphNode], list[GraphEdge]]] | None = None
+
+
+def _graph_cache_enabled() -> bool:
+    return os.environ.get("CORTEX_GRAPH_CACHE", "1") != "0"
+
+
+def _cached_graph(store: CortexStore, repo_root: Path) -> tuple[list[GraphNode], list[GraphEdge]]:
+    """`store.fetch_graph(repo_root)`, memoised for the current index. Read-only use."""
+    global _graph_cache
+    if not _graph_cache_enabled():
+        return store.fetch_graph(repo_root)
+    try:
+        indexed_at = int(store.get_repo_indexed_at(repo_root) or 0)
+    except Exception:
+        indexed_at = 0  # same degradation as _staleness: unknown, not fatal
+    key = (
+        str(store.db_path),
+        str(repo_root.resolve()),
+        store.get_repo_fingerprint(repo_root) or "",
+        indexed_at,
+    )
+    cached = _graph_cache
+    if cached is not None and cached[0] == key:
+        return cached[1]
+    graph = store.fetch_graph(repo_root)
+    _graph_cache = (key, graph)
+    return graph
+
+
+def graph_cache_info() -> dict[str, int] | None:
+    cached = _graph_cache
+    if cached is None:
+        return None
+    return {"nodes": len(cached[1][0]), "edges": len(cached[1][1])}
 
 
 def _analysis_should_stop() -> Callable[[], bool]:
@@ -1056,7 +1100,9 @@ def _call_overview(arguments: dict[str, Any]) -> dict[str, Any]:
         if _analysis_memo is not None and _analysis_memo[0] == memo_key:
             analysis = _analysis_memo[1]
         else:
-            analysis = build_report_data(repo_root, should_stop=_analysis_should_stop())
+            analysis = build_report_data(
+                repo_root, graph=_cached_graph(store, repo_root), should_stop=_analysis_should_stop()
+            )
             if _in_tool_call:
                 _analysis_memo = (memo_key, analysis)
             if not analysis.get("dead_code_partial", False):
@@ -1100,7 +1146,7 @@ def _call_impact(arguments: dict[str, Any]) -> dict[str, Any]:
     if cached_payload is not None:
         payload = cached_payload
         if any("hotspot" not in item for item in payload.get("items", [])):
-            graph_nodes, _graph_edges = store.fetch_graph(repo_root)
+            graph_nodes, _graph_edges = _cached_graph(store, repo_root)
             hotspot_by_id = {node.node_id: node.metadata.get("hotspot", {}) for node in graph_nodes}
             enriched_items = []
             for item in payload.get("items", []):
@@ -1121,7 +1167,7 @@ def _call_impact(arguments: dict[str, Any]) -> dict[str, Any]:
             payload = {**payload, "items": enriched_items}
             _cache_set(store, repo_root, cache_key, payload)
         return _content(_format_payload(payload, status, response_format, cached=True))
-    nodes, edges = store.fetch_graph(repo_root)
+    nodes, edges = _cached_graph(store, repo_root)
     try:
         items, truncated = rank_file_impact(
             str(arguments.get("path", "")),
@@ -1675,7 +1721,7 @@ def _call_context(arguments: dict[str, Any]) -> dict[str, Any]:
     # Exactly one freshness check covers the complete batch. The graph is
     # fetched once and target source records are loaded lazily/deduplicated.
     status = _ensure_fresh(store, repo_root)
-    nodes, edges = store.fetch_graph(repo_root)
+    nodes, edges = _cached_graph(store, repo_root)
     nodes_by_id = {node.node_id: node for node in nodes}
     file_nodes = {node.node_id: node for node in nodes if node.kind == "file" or node.node_id.startswith("file:")}
     files_by_path = {node.source_ref: node for node in file_nodes.values()}
@@ -1756,7 +1802,7 @@ def _call_risk(arguments: dict[str, Any]) -> dict[str, Any]:
         # Exactly one freshness check for the complete risk request.  The risk
         # engine receives this graph snapshot and never performs its own check.
         status = _ensure_fresh(store, repo_root)
-        nodes, edges = store.fetch_graph(repo_root)
+        nodes, edges = _cached_graph(store, repo_root)
         graph_args = {"nodes": nodes, "edges": edges}
     else:
         status = {
@@ -1866,7 +1912,7 @@ def _dead_code_analysis(
         cached = _cache_get(store, repo_root, key)
         if isinstance(cached, dict) and isinstance(cached.get("findings"), list):
             return {"repo_path": str(repo_root), "findings": cached["findings"], "partial": False}
-    nodes, edges = store.fetch_graph(repo_root)
+    nodes, edges = _cached_graph(store, repo_root)
     result = analyze_dead_code(
         repo_root,
         db_path=store.db_path,
@@ -2382,7 +2428,7 @@ def _call_path(arguments: dict[str, Any]) -> dict[str, Any]:
             )
         resolved[key] = node
 
-    graph_nodes, graph_edges = store.fetch_graph(repo_root)
+    graph_nodes, graph_edges = _cached_graph(store, repo_root)
     node_by_id = {node.node_id: node for node in graph_nodes}
     edge_by_id = {edge.edge_id: edge for edge in graph_edges}
     max_depth = int(arguments.get("max_depth", 6))
@@ -2486,6 +2532,8 @@ def _call_refresh(arguments: dict[str, Any]) -> dict[str, Any]:
     # Incremental needs an existing database to diff against.
     incremental = mode != "full" and default_db_path(repo_root).exists()
     _forget_fingerprint(repo_root)
+    global _graph_cache
+    _graph_cache = None
     request = _current_request
     sink = _progress_sink
 
@@ -2548,6 +2596,7 @@ def build_status_result(**extra_fields: Any) -> dict[str, Any]:
     snapshot = REGISTRY.snapshot()
     snapshot["deadline_budget_seconds"] = resolve_budget_seconds()
     snapshot["fingerprint_ttl_seconds"] = fingerprint_ttl_seconds()
+    snapshot["graph_cache"] = graph_cache_info()
     snapshot.update(extra_fields)
     return _content(snapshot)
 

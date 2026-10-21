@@ -9,6 +9,7 @@
   "keys": [
     "deadline_budget_seconds",
     "fingerprint_ttl_seconds",
+    "graph_cache",
     "in_flight",
     "in_flight_count",
     "per_tool",
