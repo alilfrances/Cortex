@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import PurePosixPath
 from typing import Any
 
@@ -353,6 +354,48 @@ def _extract_ruby_method_symbols(
         )
 
 
+_QT_BARE_MACROS = (
+    rb"\b(?:Q_OBJECT|Q_GADGET|Q_NAMESPACE|Q_INVOKABLE|Q_SIGNAL|Q_SLOT|QML_ELEMENT|QML_SINGLETON|QML_ANONYMOUS)\b"
+)
+_QT_CALL_MACROS = (
+    rb"\b(?:Q_PROPERTY|Q_CLASSINFO|Q_ENUMS?|Q_ENUM_NS|Q_FLAGS?|Q_FLAG_NS|Q_INTERFACES|Q_DECLARE_FLAGS|"
+    rb"Q_DISABLE_COPY|Q_DISABLE_COPY_MOVE|QML_NAMED_ELEMENT|QML_UNCREATABLE|QML_FOREIGN|QML_EXTENDED)"
+    rb"\s*\((?:[^()]|\([^()]*\))*\)"
+)
+_QT_MACRO_RE = re.compile(_QT_CALL_MACROS + rb"|" + _QT_BARE_MACROS)
+# `public slots:` -> blank only the section word (`public      :` is a valid access
+# specifier); a bare `signals:` -> blank the word and its colon.
+_QT_SECTION_AFTER_ACCESS_RE = re.compile(
+    rb"(?m)^([ \t]*(?:public|protected|private)[ \t]+)(signals|slots|Q_SIGNALS|Q_SLOTS)(?=[ \t]*:)"
+)
+_QT_SECTION_BARE_RE = re.compile(rb"(?m)^([ \t]*)(signals|slots|Q_SIGNALS|Q_SLOTS)([ \t]*:)")
+# `class MYLIB_EXPORT Name` -- an all-caps export macro between the keyword and the name.
+_EXPORT_MACRO_RE = re.compile(
+    rb"(?m)^([ \t]*(?:class|struct)[ \t]+)([A-Z][A-Z0-9_]*)([ \t]+)(?=[A-Za-z_]\w*[ \t]*(?:final[ \t]*)?[:{]|[A-Za-z_]\w*[ \t]*$)"
+)
+
+
+def _blank(match: "re.Match[bytes]") -> bytes:
+    return re.sub(rb"[^\n]", b" ", match.group(0))
+
+
+def _mask_qt_macros(source: bytes) -> bytes:
+    """Blank Qt and export macros so the C++ grammar parses the class instead of
+    error-recovering around them.
+
+    Every masked byte except a newline becomes a space, so offsets, lines and
+    columns are unchanged and the original `source` still reads correctly at any
+    node's byte range. Done on bytes: a `str` replacement would shift offsets
+    after any multi-byte character.
+    """
+    masked = _QT_MACRO_RE.sub(_blank, source)
+    masked = _QT_SECTION_AFTER_ACCESS_RE.sub(lambda m: m.group(1) + b" " * len(m.group(2)), masked)
+    masked = _QT_SECTION_BARE_RE.sub(lambda m: m.group(1) + b" " * (len(m.group(2)) + len(m.group(3))), masked)
+    masked = _EXPORT_MACRO_RE.sub(lambda m: m.group(1) + b" " * len(m.group(2)) + m.group(3), masked)
+    assert len(masked) == len(source)
+    return masked
+
+
 def extract_treesitter_edges(
     path: str,
     content: str,
@@ -365,7 +408,9 @@ def extract_treesitter_edges(
 
     source = content.encode("utf-8", errors="replace")
     parser = _parser_for_language(_language_for_suffix(suffix))
-    tree = parser.parse(source)
+    # Parse a copy with Qt/export macros blanked; every text helper keeps reading
+    # the original `source` (same offsets).
+    tree = parser.parse(_mask_qt_macros(source) if suffix in _CPP_SUFFIXES else source)
     root = tree.root_node
     # Tree-sitter ERROR nodes are recoverable for supported languages. Keep
     # unaffected declarations; the dedicated QML backend exposes diagnostics

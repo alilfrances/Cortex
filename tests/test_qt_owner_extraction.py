@@ -66,9 +66,7 @@ def _fabricated(nodes) -> list[str]:
 
 @pytest.mark.parametrize("extract", BACKENDS)
 @pytest.mark.parametrize("style", sorted(STYLES))
-def test_brace_on_next_line_owns_members_without_a_fake_qobject(extract, style, request):
-    if style == "export" and "treesitter" in request.node.callspec.id:
-        request.applymarker(pytest.mark.xfail(strict=True, reason="needs Qt macro masking (Task 2.2)"))
+def test_brace_on_next_line_owns_members_without_a_fake_qobject(extract, style):
     nodes, edges = extract(HEADER.format(export=STYLES[style]))
     by_id = {node.node_id: node for node in nodes}
 
@@ -103,3 +101,44 @@ def _treesitter_at(rel: str, header: Path):
     from cortex.structural.treesitter_backend import extract_treesitter_edges
 
     return extract_treesitter_edges(rel, header.read_text(encoding="utf-8"), set())
+
+
+@TREE_SITTER_ONLY
+def test_mask_preserves_length_newlines_and_multibyte_offsets():
+    from cortex.structural.treesitter_backend import _mask_qt_macros
+
+    source = HEADER.format(export="WIDGETS_EXPORT ").encode("utf-8")
+    masked = _mask_qt_macros(source)
+
+    assert len(masked) == len(source)
+    assert [i for i, b in enumerate(masked) if b == 10] == [i for i, b in enumerate(source) if b == 10]
+    assert b"Q_OBJECT" not in masked and b"Q_PROPERTY" not in masked and b"WIDGETS_EXPORT" not in masked
+    assert b"Widget : public QObject" in masked
+    assert b"signals" not in masked
+
+
+@TREE_SITTER_ONLY
+@pytest.mark.parametrize("style", sorted(STYLES))
+def test_masked_header_parses_without_errors(style):
+    from cortex.structural import treesitter_backend as tb
+
+    source = HEADER.format(export=STYLES[style]).encode("utf-8")
+    parser = tb._parser_for_language(tb._language_for_suffix(".h"))
+    root = parser.parse(tb._mask_qt_macros(source)).root_node
+
+    assert not [node for node in tb._iter_nodes(root) if node.type == "ERROR"]
+    classes = [node for node in tb._iter_nodes(root) if node.type in {"class_specifier", "struct_specifier"}]
+    assert [tb._name_for_node(node, source) for node in classes] == ["Widget", "Gadget"]
+
+
+@TREE_SITTER_ONLY
+def test_slots_sections_and_invokables_are_parsed():
+    content = (
+        "class Foo : public QObject\n{\n    Q_OBJECT\npublic slots:\n    void go();\nsignals:\n"
+        "    void done();\npublic:\n    Q_INVOKABLE void refresh();\n};\n"
+    )
+    nodes, _ = _treesitter(content)
+    labels = {node.label for node in nodes}
+
+    assert {"Foo", "go", "done", "refresh"} <= labels
+    assert _fabricated(nodes) == []
