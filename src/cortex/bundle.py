@@ -88,6 +88,12 @@ RELEVANCE_FLOOR = 0.25
 UTILITY_PERCENTILE = 0.99
 UTILITY_MIN_CALLERS = 20
 ACCESSOR_RE = re.compile(r'^(get|set|is|has)([A-Z_0-9]|$)|Changed$')
+# One keyword-dense file (every method name-matches) can fill the whole bundle with symbol spans while
+# other matching files wait: until nothing else is left to pack, at most FILE_SPAN_SHARE of the budget goes
+# to the spans of one file (its first SPANS_BEFORE_CAP spans are never held back). The held-back room is
+# released for a second pass, so a lone dense file still gets the whole budget.
+FILE_SPAN_SHARE = 0.25
+SPANS_BEFORE_CAP = 3
 LOCALE_PATH_RE = re.compile(r'(^|/)(i18n|l10n|locales?|translations?)(/|$)')
 LOCALE_SUFFIXES = frozenset({'.ts', '.po', '.pot', '.xlf', '.xliff', '.qm'})
 LOCALE_INTENT_TERMS = {
@@ -1298,6 +1304,7 @@ def generate_bundle(
             doc_tokens += item.token_count
 
     selected_spans: dict[str, list[tuple[int, int]]] = defaultdict(list)
+    span_tokens: defaultdict[str, int] = defaultdict(int)
 
     def inside_selected_span(item: BundleItem) -> bool:
         start, end = item.metadata.get('span_start'), item.metadata.get('span_end')
@@ -1305,13 +1312,23 @@ def generate_bundle(
             return False
         return any(lo <= start and end <= hi for lo, hi in selected_spans[item.path])
 
+    def over_file_cap(item: BundleItem, file_cap: int | None) -> bool:
+        """True when one more span of this file would pass its share of the budget (see FILE_SPAN_SHARE)."""
+        return (
+            file_cap is not None
+            and len(selected_spans[item.path]) >= SPANS_BEFORE_CAP
+            and span_tokens[item.path] + item.token_count > file_cap
+        )
+
     def select_span(item: BundleItem) -> None:
+        span_tokens[item.path] += item.token_count
         select(item)
         if item.metadata.get('span_start') is not None and item.metadata.get('span_end') is not None:
             selected_spans[item.path].append((item.metadata['span_start'], item.metadata['span_end']))
 
-    def pack() -> None:
-        """One pass over the candidates by score."""
+    def pack(file_cap: int | None = None) -> None:
+        """One pass over the candidates by score. With `file_cap`, a file's spans stop at that many tokens
+        (its first SPANS_BEFORE_CAP spans excepted); whole files and skeletons are not held back."""
         for item in candidates:
             if item.score <= 0 or item.item_id in selected_ids:
                 continue
@@ -1332,7 +1349,7 @@ def generate_bundle(
                     select(file_item)
                     files_fully_selected.add(file_item.path)
                     continue
-                if 0 < item.token_count <= allowed:
+                if 0 < item.token_count <= allowed and not over_file_cap(item, file_cap):
                     select_span(item)
                     paths_with_symbols.add(item.path)
                 continue
@@ -1353,6 +1370,8 @@ def generate_bundle(
                 picked_symbol = False
                 for symbol_item in symbol_items_by_path.get(item.path, []):
                     if symbol_item.item_id in selected_ids or inside_selected_span(symbol_item):
+                        continue
+                    if over_file_cap(symbol_item, file_cap):
                         continue
                     if 0 < symbol_item.token_count <= remaining:
                         select_span(symbol_item)
@@ -1386,6 +1405,9 @@ def generate_bundle(
                 )
             )
 
+    # First the capped pass, so a dense file leaves room for the other matches; then the same pass without
+    # the cap, which only adds what the cap held back and what is still left of the budget.
+    pack(max(1, int(budget * FILE_SPAN_SHARE)))
     pack()
 
     bundle = RetrievalBundle(
