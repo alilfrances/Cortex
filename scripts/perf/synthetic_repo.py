@@ -61,6 +61,7 @@ not the repository-wide ratio.
 from __future__ import annotations
 
 import argparse
+import os
 import random
 import subprocess
 from pathlib import Path
@@ -317,6 +318,16 @@ module.exports = { CoreDevice };
 """
 
 
+def _repo_files(root: Path) -> list[Path]:
+    """The working-tree files, never descending into `.git`: git may pack and delete
+    loose-object directories in the background while a walk is inside them."""
+    found = []
+    for directory, subdirs, names in os.walk(root):
+        subdirs[:] = [name for name in subdirs if name != ".git"]
+        found.extend(Path(directory) / name for name in names)
+    return found
+
+
 def write_field_shape(root: Path, modules: int, rng: random.Random) -> list[str]:
     """Write the ``--field-shape`` files; return the derived classes' ``.cpp`` paths."""
     for sub in ("src/field", "tests/field", "js", *(f"tests/mocks/mock_{x}" for x in "abc")):
@@ -459,7 +470,7 @@ def generate(
     _git(root, "add", "-A")
     _git(root, "commit", "-qm", "init")
 
-    files = sorted(p for p in root.rglob("*") if p.is_file() and ".git" not in p.parts)
+    files = sorted(_repo_files(root))
     if field_shape:
         # Own history, so the default one (and its rng stream) stays byte-identical.  Every
         # CMAKE_EVERY-th commit touches CMakeLists.txt, so a 100-commit range always does.
