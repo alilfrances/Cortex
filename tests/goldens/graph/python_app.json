@@ -1143,6 +1143,10 @@
           "score": 125
         },
         "kind": "code",
+        "path_aliases": [
+          "order",
+          "service"
+        ],
         "size_bytes": 577
       },
       "node_id": "file:app/orders.py",
@@ -1203,6 +1207,9 @@
           "score": 211
         },
         "kind": "code",
+        "path_aliases": [
+          "store"
+        ],
         "size_bytes": 597
       },
       "node_id": "file:app/session.py",

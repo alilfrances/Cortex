@@ -33,7 +33,8 @@ INGEST_LOCK_NAME = "ingest.lock"
 # 2 = tree-sitter-language-pack 1.22.1 grammars (an index must not mix files
 # parsed by two grammar versions).
 # 3 = Qt Linguist `.ts` translation catalogues are text, not TypeScript code.
-GRAPH_FORMAT_VERSION = 5
+# 6 = 0.12.2: resolved `inherits` targets (`metadata.unresolved_target`) and `path_aliases` on file nodes.
+GRAPH_FORMAT_VERSION = 6
 INGEST_LOCK_TIMEOUT_SECONDS = 120.0
 _LOCK_POLL_SECONDS = 0.05
 
@@ -1333,6 +1334,26 @@ class CortexStore:
             (str(repo_path.resolve()),),
         ).fetchall()
         return {str(row["backend"]): int(row["n"]) for row in sorted(rows, key=lambda r: str(r["backend"])) if row["backend"]}
+
+    def resolution_counts(self, repo_path: Path) -> dict[str, dict[str, int]]:
+        """How far call and inheritance targets are resolved, without loading the graph.
+
+        `calls` edges by target kind (`symbol` resolved, `name` unresolved, `external`), `inherits` edges
+        likewise (`symbol`, `name`, `module`); a kind outside those is listed under its own name.
+        """
+        counts: dict[str, dict[str, int]] = {
+            "calls": {"symbol": 0, "name": 0, "external": 0},
+            "inherits": {"symbol": 0, "name": 0, "module": 0},
+        }
+        rows = self.connection.execute(
+            "SELECT relation, CASE WHEN instr(target, ':') > 0 THEN substr(target, 1, instr(target, ':') - 1) "
+            "ELSE '' END AS kind, COUNT(*) AS n FROM graph_edges "
+            "WHERE repo_path = ? AND relation IN ('calls', 'inherits') GROUP BY relation, kind",
+            (str(repo_path.resolve()),),
+        ).fetchall()
+        for row in rows:
+            counts[str(row["relation"])][str(row["kind"])] = int(row["n"])
+        return counts
 
     def fetch_graph(self, repo_path: Path) -> tuple[list[GraphNode], list[GraphEdge]]:
         repo_key = str(repo_path.resolve())

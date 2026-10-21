@@ -4,7 +4,7 @@ Cortex is a graph-aware, local-first context engine for code agents. It ingests 
 
 The result is a repo-native context service: MCP tools for live agent queries, CLI commands for reports and exports, and local parser/runtime state. Parser setup downloads only locked artifacts; repository source is never sent during setup. Normal ingest/query is offline after setup.
 
-Current package and plugin metadata is `0.12.1` (`pyproject.toml` and plugin manifests).
+Current package and plugin metadata is `0.13.0` (`pyproject.toml` and plugin manifests).
 
 ## What Cortex Builds
 
@@ -166,7 +166,7 @@ The data dir also holds `meta.json` (which repo it belongs to), `ingest.lock`, a
 | `cortex_references` | Returns cross-file references from parsed graph edges plus repo grep, bucketed by file type; `mode: "writes"` keeps definitions and mutation sites only. | "Find where `_ensure_fresh` is mutated with Cortex." |
 | `cortex_search_text` | Full-text body search (FTS5 BM25) across indexed file contents, with line-anchored snippets — a grep replacement over string literals, error messages, comments, and prose that symbol search can't see. | "Search Cortex text for the 'device offline' error message." |
 | `cortex_refresh` | Re-ingests the repo and updates freshness metadata (in full once when the index predates the current graph format). | "Refresh Cortex, then query the checkout flow again." |
-| `cortex_status` | Reports the server's in-flight requests, how long each has been running, and lifetime per-tool counters. Also reports `queue_depth`, the active `deadline_budget_seconds`, and `fingerprint_ttl_seconds`. Answered immediately even while another call is mid-scan, so a slow call can be told apart from a wedged server without attaching a debugger. | "Ask Cortex for its server status." |
+| `cortex_status` | Reports the server's in-flight requests, how long each has been running, and lifetime per-tool counters. Also reports `queue_depth`, the active `deadline_budget_seconds`, and `fingerprint_ttl_seconds`; a `detailed` call that names `repo_path` adds `resolution`, how many `calls` edges resolve to a symbol, stay `name:` or are `external`, and the same for `inherits` (`symbol` / `name` / `module`), counted from the index without loading it. Answered immediately even while another call is mid-scan, so a slow call can be told apart from a wedged server without attaching a debugger. | "Ask Cortex for its server status." |
 
 Tool results include provenance where available. Read/query/analysis tools keep the index fresh automatically: when the repository fingerprint has changed since ingestion, they run an incremental re-ingest (changed, new, and deleted files only) before answering and report the delta under `auto_refreshed`. Set `CORTEX_AUTO_REFRESH=0` to disable and fall back to stale-state hints plus manual `cortex_refresh`. Computing the fingerprint means listing and stat-ing every indexed file, so each MCP server process remembers it per repository for `CORTEX_FINGERPRINT_TTL_SECONDS` (default `2`, `0` disables): a burst of calls pays for one scan. The tradeoff is that an edit made within that window is seen by the first call after it expires. The stored index fingerprint is still read on every call, and a refresh by this process (or a re-check after waiting for another process's ingest) never relies on the remembered value. If no index exists yet, indexed read/query tools still require an explicit `cortex_refresh` first; `cortex_risk` can run a clearly marked partial git-only analysis.
 

@@ -13,6 +13,7 @@
     "in_flight",
     "in_flight_count",
     "per_tool",
+    "resolution",
     "started_at",
     "total_completed",
     "total_deadline_exceeded",

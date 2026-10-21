@@ -625,7 +625,15 @@
     "inputSchema": {
       "properties": {
         "repo_path": {
-          "description": "Unused; accepted for call-shape consistency.",
+          "description": "Only read with response_format detailed: also report how far calls and inherits edges of this repository's index are resolved (`resolution`).",
+          "type": "string"
+        },
+        "response_format": {
+          "default": "concise",
+          "enum": [
+            "concise",
+            "detailed"
+          ],
           "type": "string"
         }
       },

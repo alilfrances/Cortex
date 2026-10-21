@@ -11,6 +11,7 @@ from .cochange import build_cochange_edges
 from .gitutils import canonical_commit_files
 from .hotspots import annotate_file_nodes, compute_hotspots
 from .models import CommitRecord, GraphEdge, GraphNode, SourceRecord
+from .pathalias import apply_path_aliases
 from .structural import extract_structural_edges, supports_path
 
 # How many files are parsed between two progress reports.
@@ -473,6 +474,7 @@ def build_graph(
     nodes.extend(cochange_nodes)
     edges.extend(cochange_edges)
     annotate_file_nodes(nodes, compute_hotspots(sources, commits))
+    apply_path_aliases(nodes)
     annotate_degree(nodes, edges)
 
     return nodes, edges

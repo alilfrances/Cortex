@@ -31,12 +31,19 @@ from pathlib import PurePosixPath
 import re
 from typing import Any, Iterable, Mapping, Sequence
 
-from .callresolve import _base_label
+from .callresolve import _base_label, _inherits_label
 from .deadline import check_deadline
 from .models import GraphEdge
 from .testpatterns import is_test_path, pairs_with_test, test_base_name
 
 STRUCTURAL_MAX_DEPTH = 3
+
+
+def _resolved_by_label(edge: Any) -> bool:
+    """An `inherits` edge the resolver rewrote from a base label (`name:Base`) to a class symbol id."""
+    return isinstance(edge.metadata, Mapping) and "unresolved_target" in edge.metadata
+
+
 # A base class label shared by more repo classes than this cannot be resolved by
 # name (typically a fabricated or ubiquitous `QObject`): attaching its `inherits`
 # edges to all of them would select every subclass's tests.
@@ -255,6 +262,8 @@ class _GraphIndex:
         for edge in edges:
             if edge.layer != "STRUCTURAL" or edge.relation not in STRUCTURAL_RELATIONS:
                 continue
+            if edge.relation == "inherits" and _resolved_by_label(edge):
+                continue  # attached below by label, as before the resolver wrote the base's symbol id
             self.reverse[edge.target].append(edge)
             if edge.relation in _HUB_FORWARD_RELATIONS:
                 self.forward_hub[edge.source].append(edge)
@@ -271,11 +280,16 @@ class _GraphIndex:
         # `module:Base`), so a reverse walk keyed by symbol id never crossed them.
         # Attach each to every repo class carrying the base's label: over-selecting
         # a same-named class's subclasses' tests is the safe side for test selection.
+        # The call resolver now rewrites such a base to its `symbol:` id when one class carries the label
+        # (`metadata.unresolved_target` keeps the label): those edges are attached exactly as before, to every
+        # same-label class, not only to the one the resolver picked, so test selection does not change.
         attached: set[str] = set()
         for edge in edges:
-            if edge.layer != "STRUCTURAL" or edge.relation != "inherits" or edge.target in self.nodes:
+            if edge.layer != "STRUCTURAL" or edge.relation != "inherits":
                 continue
-            candidates = self._classes_by_label.get(_base_label(edge.target), [])
+            if edge.target in self.nodes and not _resolved_by_label(edge):
+                continue
+            candidates = self._classes_by_label.get(_inherits_label(edge), [])
             if len(candidates) > LABEL_ATTACH_MAX:
                 continue
             for base in candidates:

@@ -13,7 +13,7 @@ from typing import Any, TextIO
 
 from .. import __version__
 from ..store import data_root
-from .tools import TOOL_DEFINITIONS, build_status_result, call_tool
+from .tools import TOOL_DEFINITIONS, build_status_result, call_tool, status_extras
 
 # Newest first. `initialize` answers with the client's requested version when
 # we support it, otherwise with our newest (MCP lifecycle negotiation); the
@@ -277,7 +277,10 @@ def _read_input(
                     and params.get("name") == "cortex_status"
                 ):
                     # Answered here, not queued: it must report on the call that is running.
-                    status = build_status_result(queue_depth=state.snapshot()["queue_depth"])
+                    status = build_status_result(
+                        queue_depth=state.snapshot()["queue_depth"],
+                        **status_extras(params.get("arguments") if isinstance(params.get("arguments"), dict) else None),
+                    )
                     if not writer.send(_response(frame["id"], status)):
                         break
                     continue

@@ -243,7 +243,12 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "repo_path": {"type": "string", "description": "Unused; accepted for call-shape consistency."}
+                "repo_path": {
+                    "type": "string",
+                    "description": "Only read with response_format detailed: also report how far calls and "
+                    "inherits edges of this repository's index are resolved (`resolution`).",
+                },
+                "response_format": {"type": "string", "enum": ["concise", "detailed"], "default": "concise"},
             },
         },
     },
@@ -674,7 +679,14 @@ def _bundle_why(
 
     route = item.get("metadata", {}).get("call_expansion")
     if isinstance(route, dict) and (route.get("to") or node_id):
-        why.append({"type": "call", "from": route.get("from", ""), "to": route.get("to") or node_id, "hop": route.get("hop", 1)})
+        if route.get("type") == "override":
+            # The task's code calls the base method `via`; this symbol overrides it in a derived class.
+            why.append({
+                "type": "override", "from": route.get("from", ""), "via": route.get("via", ""),
+                "to": route.get("to") or node_id, "hop": route.get("hop", 1),
+            })
+        else:
+            why.append({"type": "call", "from": route.get("from", ""), "to": route.get("to") or node_id, "hop": route.get("hop", 1)})
 
     item_node = f"file:{item.get('path', '')}"
     if item.get("path") in seed_paths:
@@ -705,6 +717,13 @@ def _bundle_why(
 
 
 def _compact_why(why: list[dict[str, Any]]) -> str:
+    for entry in why:
+        if entry.get("type") == "override":
+            def where(node_id: str) -> str:
+                path, _, name = str(node_id).removeprefix("symbol:").partition(":")
+                return f"{path}:{name}" if name else path
+
+            return f"override: {where(entry.get('via', ''))} -> {where(entry.get('to', ''))}"
     for entry in why:
         if entry.get("type") == "call":
             def label(node_id: str) -> str:
@@ -2712,7 +2731,10 @@ def _call_refresh(arguments: dict[str, Any]) -> dict[str, Any]:
         _remember_fingerprint(repo_root, CortexStore(default_db_path(repo_root)).get_repo_fingerprint(repo_root))
     except Exception:
         _forget_fingerprint(repo_root)
-    return _content({"summary": summary, "mode": "incremental" if incremental else "full", "stale": False})
+    # An incremental request against an older graph format is rebuilt in full by the ingest
+    # (and says so in `full_reindex_reason`); report what actually ran.
+    ran_incremental = incremental and not summary.get("full_reindex_reason")
+    return _content({"summary": summary, "mode": "incremental" if ran_incremental else "full", "stale": False})
 
 
 # Tools covered by the P0-1 token-savings ledger. cortex_refresh is excluded:
@@ -2761,6 +2783,26 @@ def build_status_result(**extra_fields: Any) -> dict[str, Any]:
     return _content(snapshot)
 
 
+def status_extras(arguments: dict[str, Any] | None) -> dict[str, Any]:
+    """Index facts `cortex_status` adds to a `detailed` call that names a repository: how far calls and
+    inheritance are resolved (`resolution`), counted in the database without loading the graph. Empty when
+    no index exists or anything goes wrong -- status must always answer."""
+    if not arguments or _response_format(arguments) != "detailed" or not arguments.get("repo_path"):
+        return {}
+    try:
+        repo_root = _repo_root(arguments)
+        db_path = default_db_path(repo_root)
+        if not db_path.exists():
+            return {}
+        store = CortexStore(db_path)
+        try:
+            return {"resolution": store.resolution_counts(repo_root)}
+        finally:
+            store.connection.close()
+    except Exception:  # noqa: BLE001 - a diagnostic call must not fail on a broken index
+        return {}
+
+
 def _call_status(arguments: dict[str, Any]) -> dict[str, Any]:
     """Report what this server process is doing right now.
 
@@ -2772,9 +2814,9 @@ def _call_status(arguments: dict[str, Any]) -> dict[str, Any]:
 
     Deliberately does not touch the index or the database -- it must stay
     answerable while another call is mid-scan, which is the exact moment it
-    is most useful.
+    is most useful. A `detailed` call that names `repo_path` also reports `resolution` (see `status_extras`).
     """
-    return build_status_result()
+    return build_status_result(**status_extras(arguments))
 
 
 def _referenced_file_tokens(store: CortexStore, repo_root: Path, paths: set[str]) -> int:

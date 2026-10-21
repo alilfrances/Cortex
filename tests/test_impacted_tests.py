@@ -590,3 +590,27 @@ def test_unresolved_inherits_attaches_only_to_unambiguous_labels(same_label: int
     index = _GraphIndex([*bases, child], [_inherits(child.node_id, "name:Item")])
 
     assert any(index.reverse.get(base.node_id) for base in bases) is attached
+
+
+@pytest.mark.parametrize(("same_label", "attached"), [(2, True), (5, False)])
+def test_a_resolver_rewritten_inherits_edge_selects_tests_exactly_as_the_label_edge_did(same_label: int, attached: bool) -> None:
+    """0.12.2: the call resolver rewrites `name:Item` to the one class it prefers and keeps the label in
+    `unresolved_target`. Test selection still attaches the edge to EVERY same-label class (a mock base
+    included, the safe over-selection) and still skips labels shared by more than LABEL_ATTACH_MAX classes."""
+    from cortex.impacted_tests import _GraphIndex
+
+    real = _class("symbol:src/item.h:Item", "src/item.h")
+    others = [_class(f"symbol:tests/mocks/m{i}/item.h:Item", f"tests/mocks/m{i}/item.h") for i in range(same_label - 1)]
+    child = _class("symbol:src/child.h:Child", "src/child.h")
+    edge = _inherits(child.node_id, real.node_id)
+    edge.metadata["unresolved_target"] = "name:Item"
+    label_edge = _inherits(child.node_id, "name:Item")
+
+    rewritten = _GraphIndex([real, *others, child], [edge])
+    original = _GraphIndex([real, *others, child], [label_edge])
+
+    for base in (real, *others):
+        assert bool(rewritten.reverse.get(base.node_id)) is attached
+        assert [e.source for e in rewritten.reverse.get(base.node_id, [])] == [
+            e.source for e in original.reverse.get(base.node_id, [])
+        ]
