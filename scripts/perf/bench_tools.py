@@ -20,6 +20,7 @@ import cProfile
 import json
 import os
 import pstats
+import subprocess
 import sys
 import time
 from collections import Counter
@@ -27,6 +28,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 os.environ["CORTEX_TOOL_TIMEOUT_SECONDS"] = "0"
+if "--no-cache" in sys.argv:
+    os.environ["CORTEX_QUERY_CACHE"] = "0"
+    os.environ["CORTEX_GRAPH_CACHE"] = "0"
 
 from cortex import community, deadcode, report  # noqa: E402
 from cortex.ingest import ingest_repository  # noqa: E402
@@ -36,6 +40,7 @@ TOOL_CALLS: list[tuple[str, dict]] = [
     ("cortex_overview", {}),
     ("cortex_overview", {}),
     ("cortex_dead_code", {}),
+    ("cortex_dead_code", {"path": "src/mod17.cpp"}),
     ("cortex_query", {"task": "device state is wrong after reconnect in Mod17 hook handler"}),
     ("cortex_risk", {"range": "HEAD~3..HEAD"}),
     ("cortex_impact", {"path": "src/mod17.cpp"}),
@@ -59,6 +64,8 @@ def main() -> None:
     parser.add_argument("repo", type=Path)
     parser.add_argument("--ingest", action="store_true", help="run a full ingest first")
     parser.add_argument("--profile", metavar="TOOL", help="cProfile one cold call of TOOL")
+    parser.add_argument("--no-cache", action="store_true", help="disable the query and graph caches")
+    parser.add_argument("--qt-edit", action="store_true", help="commit an edit to src/qt/widget4.h, then time cortex_risk on it")
     args = parser.parse_args()
     repo = args.repo.resolve()
 
@@ -77,6 +84,14 @@ def main() -> None:
         print(f"{args.profile} {time.perf_counter() - started:.2f}s")
         pstats.Stats(profiler).sort_stats("cumulative").print_stats(35)
         return
+
+    if args.qt_edit:
+        header = repo / "src" / "qt" / "widget4.h"
+        lines = header.read_text().splitlines()
+        lines[8] = lines[8] + "  // edited"
+        header.write_text("\n".join(lines) + "\n")
+        subprocess.run(["git", "commit", "-qam", "edit widget4"], cwd=repo, check=True, capture_output=True)
+        TOOL_CALLS.append(("cortex_risk", {"range": "HEAD~1..HEAD"}))
 
     store = CortexStore(default_db_path(repo))
     nodes, edges = _timed("fetch_graph", lambda: store.fetch_graph(repo))
