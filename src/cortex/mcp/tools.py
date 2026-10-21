@@ -243,7 +243,12 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "repo_path": {"type": "string", "description": "Unused; accepted for call-shape consistency."}
+                "repo_path": {
+                    "type": "string",
+                    "description": "Only read with response_format detailed: also report how far calls and "
+                    "inherits edges of this repository's index are resolved (`resolution`).",
+                },
+                "response_format": {"type": "string", "enum": ["concise", "detailed"], "default": "concise"},
             },
         },
     },
@@ -2764,6 +2769,21 @@ def build_status_result(**extra_fields: Any) -> dict[str, Any]:
     return _content(snapshot)
 
 
+def status_extras(arguments: dict[str, Any] | None) -> dict[str, Any]:
+    """Index facts `cortex_status` adds to a `detailed` call that names a repository: how far calls and
+    inheritance are resolved (`resolution`), counted in the database without loading the graph. Empty when
+    no index exists or anything goes wrong -- status must always answer."""
+    if not arguments or _response_format(arguments) != "detailed" or not arguments.get("repo_path"):
+        return {}
+    try:
+        db_path = default_db_path(_repo_root(arguments))
+        if not db_path.exists():
+            return {}
+        return {"resolution": CortexStore(db_path).resolution_counts(_repo_root(arguments))}
+    except Exception:  # noqa: BLE001 - a diagnostic call must not fail on a broken index
+        return {}
+
+
 def _call_status(arguments: dict[str, Any]) -> dict[str, Any]:
     """Report what this server process is doing right now.
 
@@ -2775,9 +2795,9 @@ def _call_status(arguments: dict[str, Any]) -> dict[str, Any]:
 
     Deliberately does not touch the index or the database -- it must stay
     answerable while another call is mid-scan, which is the exact moment it
-    is most useful.
+    is most useful. A `detailed` call that names `repo_path` also reports `resolution` (see `status_extras`).
     """
-    return build_status_result()
+    return build_status_result(**status_extras(arguments))
 
 
 def _referenced_file_tokens(store: CortexStore, repo_root: Path, paths: set[str]) -> int:

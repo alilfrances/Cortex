@@ -1335,6 +1335,26 @@ class CortexStore:
         ).fetchall()
         return {str(row["backend"]): int(row["n"]) for row in sorted(rows, key=lambda r: str(r["backend"])) if row["backend"]}
 
+    def resolution_counts(self, repo_path: Path) -> dict[str, dict[str, int]]:
+        """How far call and inheritance targets are resolved, without loading the graph.
+
+        `calls` edges by target kind (`symbol` resolved, `name` unresolved, `external`), `inherits` edges
+        likewise (`symbol`, `name`, `module`); a kind outside those is listed under its own name.
+        """
+        counts: dict[str, dict[str, int]] = {
+            "calls": {"symbol": 0, "name": 0, "external": 0},
+            "inherits": {"symbol": 0, "name": 0, "module": 0},
+        }
+        rows = self.connection.execute(
+            "SELECT relation, CASE WHEN instr(target, ':') > 0 THEN substr(target, 1, instr(target, ':') - 1) "
+            "ELSE '' END AS kind, COUNT(*) AS n FROM graph_edges "
+            "WHERE repo_path = ? AND relation IN ('calls', 'inherits') GROUP BY relation, kind",
+            (str(repo_path.resolve()),),
+        ).fetchall()
+        for row in rows:
+            counts[str(row["relation"])][str(row["kind"])] = int(row["n"])
+        return counts
+
     def fetch_graph(self, repo_path: Path) -> tuple[list[GraphNode], list[GraphEdge]]:
         repo_key = str(repo_path.resolve())
         node_rows = self.connection.execute(

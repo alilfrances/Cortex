@@ -51,6 +51,7 @@ from pathlib import PurePosixPath
 from typing import Iterable
 
 from .models import GraphEdge, GraphNode
+from .testpatterns import is_test_path
 
 MAX_CANDIDATES = 8
 MAX_INHERIT_DEPTH = 6
@@ -116,6 +117,25 @@ def _base_label(target: str) -> str:
     return _last_segment(rest)
 
 
+def _inherits_label(edge: GraphEdge) -> str:
+    """Class label an `inherits` edge names, also after its target was rewritten to a symbol id."""
+    original = edge.metadata.get("unresolved_target") if isinstance(edge.metadata, dict) else None
+    return _base_label(str(original or edge.target))
+
+
+# Directories whose classes are stand-ins for the real ones (the test rules in `testpatterns` cover
+# `tests/`, `test/`, `spec/`, ...).
+_AUXILIARY_DIRS = frozenset({
+    "mock", "mocks", "stub", "stubs", "fake", "fakes", "fixture", "fixtures", "testdata", "testing",
+    "example", "examples", "sample", "samples", "benchmark", "benchmarks",
+})
+
+
+def _is_auxiliary(path: str) -> bool:
+    """A test, mock, stub or fixture file: never the intended base of production code."""
+    return is_test_path(path) or any(part.lower() in _AUXILIARY_DIRS for part in PurePosixPath(path).parts[:-1])
+
+
 def _dotted_suffixes(path: str) -> list[str]:
     parts = list(PurePosixPath(path).with_suffix("").parts)
     if parts and parts[-1] == "__init__":
@@ -123,32 +143,20 @@ def _dotted_suffixes(path: str) -> list[str]:
     return [".".join(parts[i:]) for i in range(len(parts))]
 
 
-class _Index:
-    """All hash indexes the resolver needs, built in one pass over the graph."""
+class ClassIndex:
+    """Class structure of a set of symbol nodes: which class holds which member.
 
-    def __init__(self, nodes: Iterable[GraphNode], edges: list[GraphEdge]) -> None:
-        self.node_ids: set[str] = set()
+    Membership is span containment (innermost class), with a dotted-qualname fallback for Python
+    nodes that carry no span; out-of-line definitions (`Foo::bar` in a .cpp) are found through the
+    `qualifier` metadata.  The call resolver builds it for the whole graph (`_Index`); the query
+    side builds it for the few classes of a hierarchy (`overrides.find_overriders`).
+    """
+
+    def __init__(self, nodes: Iterable[GraphNode]) -> None:
         symbols: dict[str, GraphNode] = {}
-        py_files: list[str] = []
-        stems: defaultdict[str, list[str]] = defaultdict(list)
         for node in nodes:
-            self.node_ids.add(node.node_id)
             if node.granularity == "symbol":
                 symbols.setdefault(node.node_id, node)
-            elif node.kind == "file":
-                if node.source_ref.endswith(".py"):
-                    py_files.append(node.source_ref)
-                pure = PurePosixPath(node.source_ref)
-                stems[pure.stem].append(node.source_ref)
-        # A header's implementation files (same stem, any directory: `include/x.hpp` / `src/x.cpp`): an include
-        # of `util.hpp` makes definitions in `util.cpp` reachable.
-        self.impl_siblings: dict[str, list[str]] = {}
-        for paths in stems.values():
-            headers = [p for p in paths if PurePosixPath(p).suffix.lower() in _HEADER_SUFFIXES]
-            impls = sorted(p for p in paths if PurePosixPath(p).suffix.lower() in _IMPL_SUFFIXES)
-            if impls:
-                for header in headers:
-                    self.impl_siblings[header] = impls
         self.symbols = symbols
         self.by_path_qual: dict[tuple[str, str], GraphNode] = {}
         self.classes_by_label: defaultdict[str, list[str]] = defaultdict(list)
@@ -189,6 +197,56 @@ class _Index:
                         if owner is not None and owner.kind == "class":
                             self.container[node.node_id] = owner.node_id
 
+        self.declared_members: defaultdict[str, defaultdict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
+        self.qualified_defs: defaultdict[str, defaultdict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
+        for node_id in sorted(symbols):
+            node = symbols[node_id]
+            owner = self.container.get(node_id)
+            qualifier = node.metadata.get("qualifier") if isinstance(node.metadata, dict) else None
+            if owner is not None:
+                self.declared_members[owner][node.label].append(node_id)
+            if isinstance(qualifier, str) and qualifier:
+                self.qualified_defs[_last_segment(qualifier)][node.label].append(node_id)
+
+    def is_namespace(self, class_id: str) -> bool:
+        node = self.symbols.get(class_id)
+        return node is not None and node.signature.lstrip().startswith("namespace")
+
+    def class_members(self, class_id: str, name: str) -> list[str]:
+        declared = self.declared_members.get(class_id, {}).get(name)
+        if declared:
+            return declared
+        label = self.symbols[class_id].label
+        return self.qualified_defs.get(label, {}).get(name, [])
+
+
+class _Index(ClassIndex):
+    """All hash indexes the resolver needs, built in one pass over the graph."""
+
+    def __init__(self, nodes: Iterable[GraphNode], edges: list[GraphEdge]) -> None:
+        nodes = list(nodes)
+        self.node_ids: set[str] = set()
+        py_files: list[str] = []
+        stems: defaultdict[str, list[str]] = defaultdict(list)
+        for node in nodes:
+            self.node_ids.add(node.node_id)
+            if node.granularity != "symbol" and node.kind == "file":
+                if node.source_ref.endswith(".py"):
+                    py_files.append(node.source_ref)
+                pure = PurePosixPath(node.source_ref)
+                stems[pure.stem].append(node.source_ref)
+        # A header's implementation files (same stem, any directory: `include/x.hpp` / `src/x.cpp`): an include
+        # of `util.hpp` makes definitions in `util.cpp` reachable.
+        self.impl_siblings: dict[str, list[str]] = {}
+        for paths in stems.values():
+            headers = [p for p in paths if PurePosixPath(p).suffix.lower() in _HEADER_SUFFIXES]
+            impls = sorted(p for p in paths if PurePosixPath(p).suffix.lower() in _IMPL_SUFFIXES)
+            if impls:
+                for header in headers:
+                    self.impl_siblings[header] = impls
+        super().__init__(nodes)
+        symbols = self.symbols
+
         # Declared member variable types recorded on class nodes (`member_types`
         # metadata), so `m_model->f()` in an out-of-line `Foo::bar()` can be typed
         # from the header that declares `m_model`.
@@ -198,8 +256,6 @@ class _Index:
             if node.kind == "class" and isinstance(mt, dict) and mt:
                 self.member_types[node_id] = {str(k): str(v) for k, v in mt.items()}
 
-        self.declared_members: defaultdict[str, defaultdict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
-        self.qualified_defs: defaultdict[str, defaultdict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
         self.free_by_label: defaultdict[str, list[str]] = defaultdict(list)
         # `free_by_path_label` feeds same-file lookups (nested defs are visible
         # there, subject to lexical scope); `exported_by_path_label` and
@@ -211,10 +267,6 @@ class _Index:
             node = symbols[node_id]
             owner = self.container.get(node_id)
             qualifier = node.metadata.get("qualifier") if isinstance(node.metadata, dict) else None
-            if owner is not None:
-                self.declared_members[owner][node.label].append(node_id)
-            if isinstance(qualifier, str) and qualifier:
-                self.qualified_defs[_last_segment(qualifier)][node.label].append(node_id)
             namespaced = owner is not None and self.is_namespace(owner)
             if (owner is None or namespaced) and not (isinstance(qualifier, str) and qualifier):
                 self.free_by_path_label[(node.source_ref, node.label)].append(node_id)
@@ -245,16 +297,16 @@ class _Index:
                 self.module_suffix[dotted].append(path)
 
         bases: defaultdict[str, set[str]] = defaultdict(set)
+        # edge_id -> the class ids its base label names after `prefer` (per edge: the rewrite of
+        # `inherits` targets needs the answer for one edge, `bases` unions a class's edges).
+        self.edge_bases: dict[str, list[str]] = {}
         for edge in sorted(inherits, key=lambda e: e.edge_id):
             if edge.target in symbols and symbols[edge.target].kind == "class":
                 bases[edge.source].add(edge.target)
                 continue
-            candidates = self.classes_by_label.get(_base_label(edge.target), [])
-            if len(candidates) > 1:
-                path = symbols[edge.source].source_ref
-                preferred = self.prefer(candidates, path)
-                candidates = preferred
-            bases[edge.source].update(candidates)
+            found = self.base_candidates(edge.source, _inherits_label(edge))
+            self.edge_bases[edge.edge_id] = found
+            bases[edge.source].update(found)
         for cid, node in symbols.items():
             declared = node.metadata.get("bases") if isinstance(node.metadata, dict) else None
             if node.kind == "class" and isinstance(declared, list) and not bases.get(cid):
@@ -265,9 +317,12 @@ class _Index:
                     bases[cid].update(found)
         self.bases: dict[str, list[str]] = {cid: sorted(ids - {cid}) for cid, ids in bases.items()}
 
-    def is_namespace(self, class_id: str) -> bool:
-        node = self.symbols.get(class_id)
-        return node is not None and node.signature.lstrip().startswith("namespace")
+    def base_candidates(self, class_id: str, label: str) -> list[str]:
+        """The classes labelled `label` that `class_id` can derive from: not itself, narrowed by `prefer`."""
+        candidates = [c for c in self.classes_by_label.get(label, []) if c != class_id]
+        if len(candidates) > 1:
+            candidates = self.prefer(candidates, self.symbols[class_id].source_ref)
+        return candidates
 
     def narrow(self, candidate_ids: list[str], from_path: str) -> list[str]:
         """Same file, else same directory (package/module), else unchanged."""
@@ -290,7 +345,12 @@ class _Index:
     # -- candidate narrowing ------------------------------------------------
 
     def prefer(self, candidate_ids: list[str], from_path: str) -> list[str]:
-        """Same file first, then files the caller imports; else unchanged."""
+        """Same file first, then files the caller imports, then the likeliest real definition; else unchanged.
+
+        The last step is what separates the real class from the stand-ins that share its label in a
+        large repository (mocks and fixtures, a class nested in an unrelated .cpp, a class of another
+        language), see `locality`.
+        """
         if len(candidate_ids) < 2:
             return candidate_ids
         same = [c for c in candidate_ids if self.symbols[c].source_ref == from_path]
@@ -298,7 +358,35 @@ class _Index:
             return same
         imported = set(self.reachable(from_path))
         near = [c for c in candidate_ids if self.symbols[c].source_ref in imported]
-        return near or candidate_ids
+        return self.locality(near or candidate_ids, from_path)
+
+    def locality(self, candidate_ids: list[str], from_path: str) -> list[str]:
+        """Narrow same-label classes that no include relation separates; each step applies only if it leaves one.
+
+        1. the caller's language family (a JS helper is not the base of a C++ class);
+        2. outside test/mock/fixture trees when the caller itself is production code;
+        3. declared in a header, not nested in an implementation file (a .cpp-local class is not
+           visible to any other file);
+        4. the caller's own directory.
+        """
+        pool = list(candidate_ids)
+        if len(pool) < 2:
+            return pool
+        steps = [
+            lambda c: language_family(self.symbols[c].source_ref) == language_family(from_path),
+            (lambda c: not _is_auxiliary(self.symbols[c].source_ref)) if not _is_auxiliary(from_path) else None,
+            lambda c: PurePosixPath(self.symbols[c].source_ref).suffix.lower() in _HEADER_SUFFIXES,
+            lambda c: PurePosixPath(self.symbols[c].source_ref).parent == PurePosixPath(from_path).parent,
+        ]
+        for keep in steps:
+            if keep is None:
+                continue
+            narrowed = [c for c in pool if keep(c)]
+            if narrowed:
+                pool = narrowed
+            if len(pool) == 1:
+                break
+        return pool
 
     def module_paths(self, dotted: str) -> list[str]:
         exact = self.module_exact.get(dotted)
@@ -327,13 +415,6 @@ class _Index:
         return kept
 
     # -- member lookup ------------------------------------------------------
-
-    def class_members(self, class_id: str, name: str) -> list[str]:
-        declared = self.declared_members.get(class_id, {}).get(name)
-        if declared:
-            return declared
-        label = self.symbols[class_id].label
-        return self.qualified_defs.get(label, {}).get(name, [])
 
     def lookup(self, class_ids: list[str], name: str, *, skip_direct: bool = False) -> tuple[str, list[str]] | None:
         """Members named `name` of `class_ids`; then of their bases level by
@@ -642,6 +723,58 @@ def _is_affected(
     return False
 
 
+def _is_resolvable_inherits(edge: GraphEdge) -> bool:
+    """An `inherits` edge from a class symbol whose base is named by label (`name:`/`module:`), or was
+    (a rewritten edge keeps the label in `metadata.unresolved_target`)."""
+    if edge.relation != "inherits" or not edge.source.startswith("symbol:"):
+        return False
+    if edge.target.startswith(("name:", "module:")):
+        return True
+    return edge.target.startswith("symbol:") and isinstance(edge.metadata, dict) and "unresolved_target" in edge.metadata
+
+
+def _reset_inherits(edge: GraphEdge) -> None:
+    """Back to the base as the extractor wrote it, ahead of a fresh resolution."""
+    md = edge.metadata
+    original = md.pop("unresolved_target", None)
+    if original:
+        edge.target = str(original)
+    for key in _RESOLUTION_KEYS:
+        md.pop(key, None)
+    previous = md.pop("extracted_confidence", None)
+    if previous is not None:
+        edge.confidence = previous
+
+
+def _inherits_affected(edge: GraphEdge, node_ids: set[str], affected_files: set[str], changed_labels: set[str]) -> bool:
+    """Re-resolve an `inherits` edge when its class is in the batch, its resolved base vanished, or a class
+    carrying the base's label was added or removed (the answer of `prefer` can move with either)."""
+    if _edge_path(edge) in affected_files:
+        return True
+    if edge.target.startswith("symbol:") and edge.target not in node_ids:
+        return True
+    return _inherits_label(edge) in changed_labels
+
+
+def _resolve_inherits_into(edge: GraphEdge, index: _Index) -> None:
+    """Rewrite one `inherits` edge: a unique base class becomes its `symbol:` id (the label stays in
+    `metadata.unresolved_target`); several candidates keep `name:` and record them, like an ambiguous call."""
+    candidates = index.edge_bases.get(edge.edge_id)
+    if candidates is None:
+        candidates = index.base_candidates(edge.source, _inherits_label(edge))
+    candidates = sorted(set(candidates))
+    if len(candidates) == 1:
+        edge.metadata["unresolved_target"] = edge.target
+        edge.target = candidates[0]
+        edge.metadata["resolution"] = "label" if len(index.classes_by_label.get(_inherits_label(edge), ())) == 1 else "preferred"
+    elif len(candidates) > 1:
+        if edge.confidence != "LOW":
+            edge.metadata["extracted_confidence"] = edge.confidence
+            edge.confidence = "LOW"
+        edge.metadata["candidates"] = candidates[:MAX_CANDIDATES]
+        edge.metadata["ambiguous"] = True
+
+
 def resolve_call_endpoints(
     nodes: list[GraphNode],
     edges: list[GraphEdge],
@@ -650,32 +783,41 @@ def resolve_call_endpoints(
     changed_labels: set[str] | None = None,
     widen_typed: bool = False,
 ) -> list[GraphEdge]:
-    """Rewrite contract `calls` edges' `name:<callee>` targets to symbol ids.
+    """Rewrite contract `calls` edges' `name:<callee>` targets to symbol ids, and `inherits` edges'
+    `name:<Base>` targets to the base class's symbol id.
 
-    With no scope arguments every contract call edge is (re)resolved -- the
-    full-ingest case.  The incremental pass supplies the batch's files,
-    the labels of symbols added or removed by the batch, and `widen_typed`
-    when classes or inheritance changed (member/base lookups can then move
-    without the callee label changing); only matching edges, plus edges whose
-    previously resolved target vanished, are re-resolved.  Edges are mutated
-    in place and returned (never added or removed).
+    With no scope arguments every contract call edge and every `inherits` edge is (re)resolved -- the
+    full-ingest case.  The incremental pass supplies the batch's files, the labels of symbols added or
+    removed by the batch, and `widen_typed` when classes or inheritance changed (member/base lookups can
+    then move without the callee label changing); only matching call edges, plus edges whose previously
+    resolved target vanished, are re-resolved.  An `inherits` edge is re-resolved when its class is in the
+    batch, its resolved base vanished, or a class labelled like its base was added or removed
+    (`metadata.unresolved_target` keeps the label of a rewritten edge).  Inheritance is its own pass:
+    it runs even when the graph has no call to resolve.  Edges are mutated in place and returned (never
+    added or removed).
     """
     scoped = affected_files is not None or changed_labels is not None or widen_typed
     files = affected_files or set()
     labels = changed_labels or set()
     calls = [edge for edge in edges if is_contract_call(edge)]
-    if not calls:
-        return edges
+    inherits = [edge for edge in edges if _is_resolvable_inherits(edge)]
+    node_ids = {node.node_id for node in nodes} if scoped else set()
     if scoped:
-        node_ids = {node.node_id for node in nodes}
         calls = [edge for edge in calls if _is_affected(edge, node_ids, files, labels, widen_typed)]
-        if not calls:
-            return edges
+        inherits = [edge for edge in inherits if _inherits_affected(edge, node_ids, files, labels)]
+    if not calls and not inherits:
+        return edges
+    for edge in inherits:
+        _reset_inherits(edge)
     by_family: dict[str, list[GraphEdge]] = defaultdict(list)
     for edge in calls:
         by_family[language_family(_call_path(edge))].append(edge)
-    if len(by_family) == 1 and len({language_family(n.source_ref) for n in nodes if n.source_ref}) == 1:
-        partitions = {next(iter(by_family)): (nodes, edges)}
+    inherits_by_family: dict[str, list[GraphEdge]] = defaultdict(list)
+    for edge in inherits:
+        inherits_by_family[language_family(_edge_path(edge))].append(edge)
+    families = sorted(set(by_family) | set(inherits_by_family))
+    if len(families) == 1 and len({language_family(n.source_ref) for n in nodes if n.source_ref}) == 1:
+        partitions = {families[0]: (nodes, edges)}
     else:
         node_buckets: dict[str, list[GraphNode]] = defaultdict(list)
         for node in nodes:
@@ -684,11 +826,13 @@ def resolve_call_endpoints(
         for edge in edges:
             if edge.relation in ("imports", "inherits"):
                 edge_buckets[language_family(_edge_path(edge))].append(edge)
-        partitions = {fam: (node_buckets.get(fam, []), edge_buckets.get(fam, [])) for fam in by_family}
-    for family, family_calls in by_family.items():
+        partitions = {fam: (node_buckets.get(fam, []), edge_buckets.get(fam, [])) for fam in families}
+    for family in families:
         fam_nodes, fam_edges = partitions[family]
         index = _Index(fam_nodes, fam_edges)
-        for edge in family_calls:
+        for edge in inherits_by_family.get(family, ()):
+            _resolve_inherits_into(edge, index)
+        for edge in by_family.get(family, ()):
             _resolve_into(edge, index)
     return edges
 
