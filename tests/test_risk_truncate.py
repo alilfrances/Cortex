@@ -1,6 +1,7 @@
 """truncate_risk_result: equivalence with the pre-0.12 loop, compact form and omitted_fields."""
 from __future__ import annotations
 
+import gzip
 import json
 from collections.abc import Mapping
 from pathlib import Path
@@ -11,74 +12,14 @@ import pytest
 from cortex.risk import (
     _RISK_REDUCIBLE_KEYS,
     _RISK_SCALAR_KEYS,
+    FILES_FLOOR,
+    MAP_TESTS_PER_FILE_CAPS,
+    TESTS_TO_RUN_FLOOR,
     UNCOVERED_FLOOR,
     analyze_risk,
     truncate_risk_result,
 )
 from cortex.tokenizer import count_text_tokens
-
-
-# --- oracle: the one-pop-at-a-time implementation shipped through 0.11 ---------------
-def old_truncate_risk_result(result: Mapping[str, Any], budget: int) -> dict[str, Any]:
-    """Deterministically keep high-risk files and directives within a budget."""
-    output = json.loads(json.dumps(result, sort_keys=True))
-    limit = max(0, int(budget))
-    output["budget"] = limit
-    output["truncated"] = False
-    # Always preserve error/status and the concise directive list.  Remove
-    # lower-ranked file detail first, then detailed formula/aliases if needed.
-    while count_text_tokens(json.dumps(output, sort_keys=True)) > limit and output.get("files"):
-        output["files"].pop()
-        output["truncated"] = True
-    if count_text_tokens(json.dumps(output, sort_keys=True)) > limit:
-        for key in ("score_formula", "missing_cochanges", "analysis_errors", "unindexed_files"):
-            if key in output and key not in {"analysis_errors", "unindexed_files"}:
-                output.pop(key, None)
-                output["truncated"] = True
-                if count_text_tokens(json.dumps(output, sort_keys=True)) <= limit:
-                    break
-    if count_text_tokens(json.dumps(output, sort_keys=True)) > limit:
-        # Remove redundant detailed directive buckets before shortening the
-        # human-facing strings.  The unbudgeted result retains every bucket;
-        # this order makes a small budget stable across Python versions.
-        for key in (
-            "tests_by_changed_file",
-            "missing_cochange",
-            "missing_cochanges",
-            "missing_tests",
-            "missing_qt_pairs",
-            "missing_qt_instantiations",
-            "missing_qt_sites",
-            "build_system_misses",
-            "score_formula",
-            "analysis_errors",
-            "unindexed_files",
-        ):
-            if key in output:
-                output.pop(key, None)
-                output["truncated"] = True
-                if count_text_tokens(json.dumps(output, sort_keys=True)) <= limit:
-                    break
-    if count_text_tokens(json.dumps(output, sort_keys=True)) > limit:
-        # Keep directives in stable order but drop from the end; the full
-        # directive arrays remain available in an unbudgeted CLI analysis.
-        while output.get("directives") and count_text_tokens(json.dumps(output, sort_keys=True)) > limit:
-            output["directives"].pop()
-            output["truncated"] = True
-    if count_text_tokens(json.dumps(output, sort_keys=True)) > limit and output.get("tests_to_run"):
-        # The impacted-test list goes last, lowest score first.  A shortened
-        # list can no longer be vouched for, so it switches to run-all;
-        # ``tests_run_all``/``tests_run_all_reason`` themselves are never dropped.
-        while output.get("tests_to_run") and count_text_tokens(json.dumps(output, sort_keys=True)) > limit:
-            output["tests_to_run"].pop()
-            output["truncated"] = True
-            if not output.get("tests_run_all"):
-                output["tests_run_all"] = True
-                output["tests_run_all_reason"] = "tests_to_run was truncated to fit the response budget"
-    output["returned_count"] = len(output.get("files", []))
-    output["budget_feasible"] = count_text_tokens(json.dumps(output, sort_keys=True)) <= limit
-    return output
-
 
 
 def _file(path: str, weight: int) -> dict:
@@ -134,28 +75,40 @@ def _without_reasons(result: dict) -> dict:
     return {**result, "tests_to_run": [{k: v for k, v in t.items() if k != "reason"} for t in result["tests_to_run"]]}
 
 
-def test_matches_the_old_loop_for_every_budget_without_tests_by_changed_file() -> None:
-    # The old loop never touched `reason`; with none present the new order's extra step is a no-op,
-    # and with no map the remaining order (files, buckets, directives, tests_to_run) is unchanged.
+def _compact(item: Mapping[str, Any]) -> dict:
+    return {k: v for k, v in item.items() if k in ("path", "previous_path", "status", "risk_score")}
+
+
+def test_files_are_a_ranked_prefix_and_given_up_last() -> None:
+    # Through 0.12 `files` was cut first, so a large range returned no ranked file at all
+    # at the default budget.  Now it is cut only to FILES_FLOOR early and below it last.
     result = _without_reasons(_result(with_by_file=False))
     full = count_text_tokens(json.dumps(result, sort_keys=True))
     for budget in range(0, full + 40):
-        new = truncate_risk_result(result, budget)
-        old = old_truncate_risk_result(result, budget)
-        if new.get("minimal_payload"):
-            continue  # tiny budgets: the minimal fallback replaces the ordinary result
-        # `returned_count` is now part of the fit, so a payload fitted to the limit keeps one
-        # file fewer than the old loop where that count tipped it over.
-        if "omitted_fields" not in new and len(new["files"]) == len(old["files"]):
-            assert {k: v for k, v in new.items() if k != "budget_feasible"} == {
-                k: v for k, v in old.items() if k != "budget_feasible"
-            }, budget
-            continue
-        # `omitted_fields` counts toward the budget, so the new result can keep a little
-        # less than the old one (which named nothing it removed), never more.
-        assert set(_strip(new)) <= set(old), budget
-        for key in ("files", "directives", "tests_to_run"):
-            assert new[key] == old[key][: len(new[key])], (budget, key)
+        out = truncate_risk_result(result, budget)
+        files = out.get("files", [])
+        assert out["returned_count"] == len(files), budget
+        expected = result["files"]
+        if "files.detail" in out.get("omitted_fields", []):
+            expected = [_compact(item) for item in expected]
+        assert files == expected[: len(files)], budget
+        if out["budget_feasible"] and not out.get("minimal_payload"):
+            assert count_text_tokens(json.dumps({k: v for k, v in out.items() if k != "budget_feasible"}, sort_keys=True)) <= budget
+        if len(files) < len(result["files"]) and not out.get("minimal_payload"):
+            # below the floor only once directives and tests_to_run are gone
+            assert not out.get("directives") and not out.get("tests_to_run"), budget
+
+
+def test_file_detail_goes_before_directives() -> None:
+    result = _without_reasons(_result(with_by_file=False))
+    full = count_text_tokens(json.dumps(result, sort_keys=True))
+    for budget in range(full, 0, -1):
+        out = truncate_risk_result(result, budget)
+        if len(out.get("directives", [])) < len(result["directives"]):
+            assert "files.detail" in out["omitted_fields"], budget
+            break
+    else:
+        pytest.fail("directives were never shortened")
 
 
 def _decode(out: dict) -> dict[str, set[str]]:
@@ -206,7 +159,7 @@ def test_omitted_fields_names_exactly_the_removed_keys() -> None:
     for budget in range(count_text_tokens(json.dumps(result, sort_keys=True)) + 10, -1, -1):
         out = truncate_risk_result(result, budget)
         missing = [key for key in result if key not in out and key not in {"files"}]
-        named = [name for name in out.get("omitted_fields", []) if name != "tests_to_run.reason"]
+        named = [name for name in out.get("omitted_fields", []) if name not in {"tests_to_run.reason", "files.detail"}]
         assert sorted(named) == sorted(missing), budget
         stripped = "tests_to_run.reason" in out.get("omitted_fields", [])
         if any("reason" in t for t in out["tests_to_run"]):
@@ -313,8 +266,9 @@ def test_below_the_floor_the_map_wins_over_tests_to_run() -> None:
             # tests_to_run was cut below its floor, so the map must still be there.
             assert out.get("tests_by_changed_file"), budget
         if "tests_by_changed_file" in out.get("omitted_fields", []):
-            # The floor protects TESTS_TO_RUN_FLOOR tests ahead of the map (plan steps 6-7).
-            assert len(out["tests_to_run"]) >= 10, budget
+            # The map is dropped only once tests_to_run is gone, and only the ranked files remain.
+            assert not out["tests_to_run"], budget
+            assert out["files"], budget
 
 
 def test_the_map_outlives_directives_and_tests_to_run_reasons() -> None:
@@ -366,7 +320,7 @@ def test_an_unknown_oversized_key_gets_the_minimal_payload() -> None:
     for key in ("status", "range", "tests_run_all", "tests_run_all_reason"):
         assert key in out
     missing = [key for key in result if key not in out and key != "files"]
-    assert sorted(missing) == sorted(name for name in out["omitted_fields"] if name != "tests_to_run.reason")
+    assert sorted(missing) == sorted(name for name in out["omitted_fields"] if name not in {"tests_to_run.reason", "files.detail"})
     assert out["tests_by_changed_file"]  # as much of the map as fits
     assert out["uncovered_changed_files_total"] == 250
 
@@ -438,3 +392,66 @@ def test_uncovered_changed_files_follow_the_files_risk_ranking(tmp_path: Path) -
     assert uncovered == sorted(uncovered, key=lambda path: (rank[path], path))
     assert uncovered != sorted(uncovered)  # ranked, not alphabetical
     assert not set(uncovered) & set(result["tests_by_changed_file"])
+
+
+# --- a real large range: `analyze_risk HEAD~30..HEAD` on the synthetic perf repository -------
+# (scripts/perf/synthetic_repo.py): 172 ranked files, 117 changed files in the per-file test
+# map, 185 tests to run and 55 uncovered changed files; 46k tokens unbudgeted.
+_BENCH_FIXTURE = Path(__file__).parent / "fixtures" / "risk" / "synthetic_head30.json.gz"
+
+
+def _bench_result() -> dict:
+    with gzip.open(_BENCH_FIXTURE, "rt", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def test_bench_range_keeps_ranked_files_tests_and_most_of_the_map_at_the_default_budget() -> None:
+    # Measured targets (0.13.0).  Through 0.12.1 this range returned no ranked file and 15 of
+    # the 117 map entries at 2000; 117 entries at 2000 is not reachable while FILES_FLOOR files
+    # and TESTS_TO_RUN_FLOOR tests are kept (their compact forms alone take ~750 tokens).
+    result = _bench_result()
+    assert len(result["tests_by_changed_file"]) == 117
+
+    out = truncate_risk_result(result, 2000)
+
+    assert out["budget_feasible"] is True and not out.get("minimal_payload")
+    assert out["returned_count"] == len(out["files"]) >= FILES_FLOOR
+    assert len(out["tests_to_run"]) >= TESTS_TO_RUN_FLOOR
+    assert len(out["tests_by_changed_file"]) >= 45
+    assert len(out["tests_by_changed_file"]) + out["tests_by_changed_file_omitted"] == 117
+
+
+@pytest.mark.parametrize("budget", [3000, 4000])
+def test_bench_range_keeps_every_changed_file_in_the_map(budget: int) -> None:
+    result = _bench_result()
+    out = truncate_risk_result(result, budget)
+
+    assert out["budget_feasible"] is True
+    assert len(out["tests_by_changed_file"]) == 117
+    assert "tests_by_changed_file_omitted" not in out
+    assert len(out["files"]) >= FILES_FLOOR
+
+
+def test_capped_map_entries_keep_the_highest_scoring_tests_and_count_the_rest() -> None:
+    result = _bench_result()
+    score = {item["test"]: (-item["score"], position) for position, item in enumerate(result["tests_to_run"])}
+    full = result["tests_by_changed_file"]
+    for budget in (2000, 3000, 4000):
+        out = truncate_risk_result(result, budget)
+        decoded = _decode(out)
+        caps = {len(tests) for path, tests in decoded.items() if len(tests) < len(full[path])}
+        assert len(caps) <= 1 and caps <= set(MAP_TESTS_PER_FILE_CAPS), (budget, caps)
+        more = out.get("tests_by_changed_file_more", {})
+        for path, tests in decoded.items():
+            best = sorted(full[path], key=lambda test: score.get(test, (0.0, len(score))))[: len(tests)]
+            assert tests == set(best), (budget, path)
+            assert more.get(path, 0) == len(full[path]) - len(tests), (budget, path)
+
+
+def test_the_map_is_capped_before_any_changed_file_is_dropped() -> None:
+    result = _bench_result()
+    for budget in range(1500, 4001, 250):
+        out = truncate_risk_result(result, budget)
+        if out.get("tests_by_changed_file_omitted"):
+            # files are dropped only at the smallest cap
+            assert max(len(v) for v in out["tests_by_changed_file"].values()) <= MAP_TESTS_PER_FILE_CAPS[-1], budget
