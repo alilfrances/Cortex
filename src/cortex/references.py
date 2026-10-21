@@ -7,7 +7,7 @@ import re
 import string
 from array import array
 from bisect import bisect_right
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from itertools import accumulate, islice
 from pathlib import Path
 from typing import Any, Collection, Sequence
@@ -304,19 +304,40 @@ class _CorpusFile:
         return self._starts  # type: ignore[return-value]
 
 
+class AnalysisStopped(Exception):
+    """Raised while building a corpus when the caller's soft stop predicate fires.
+
+    Reading every file of a large repository takes seconds and has no natural loop
+    boundary for the analysis to stop at, so the corpus polls the predicate itself.
+    """
+
+
+_STOP_CHECK_EVERY = 200
+
+
 class ReferenceCorpus:
     """Repo text read once, so repeated grep passes skip the file listing and disk reads.
 
     `symbols` optionally lists the identifiers that will be queried; per-file token
     sets then keep only those, and any other identifier falls back to a substring test.
+    `should_stop` is polled while reading and tokenizing; when it returns true the
+    work is abandoned with `AnalysisStopped`.
     """
 
-    def __init__(self, repo_root: Path, symbols: Collection[str] | None = None) -> None:
+    def __init__(
+        self,
+        repo_root: Path,
+        symbols: Collection[str] | None = None,
+        should_stop: Callable[[], bool] | None = None,
+    ) -> None:
         self.repo_root = repo_root
         self._wanted = None if symbols is None else frozenset(symbols)
         self._by_symbol: dict[str, list[_CorpusFile]] | None = None
+        self._should_stop = should_stop
         self._files: list[_CorpusFile] = []
-        for path in _iter_candidate_files(repo_root):
+        for position, path in enumerate(_iter_candidate_files(repo_root)):
+            if should_stop is not None and position % _STOP_CHECK_EVERY == 0 and should_stop():
+                raise AnalysisStopped
             try:
                 oversized = path.stat().st_size > MAX_SOURCE_BYTES
                 text = None if oversized else path.read_text(encoding="utf-8")
@@ -346,7 +367,9 @@ class ReferenceCorpus:
     def _symbol_files(self) -> dict[str, list[_CorpusFile]]:
         if self._by_symbol is None:
             index: dict[str, list[_CorpusFile]] = {}
-            for item in self._files:
+            for position, item in enumerate(self._files):
+                if self._should_stop is not None and position % _STOP_CHECK_EVERY == 0 and self._should_stop():
+                    raise AnalysisStopped
                 for token in item.tokens(self._wanted):
                     index.setdefault(token, []).append(item)
             self._by_symbol = index

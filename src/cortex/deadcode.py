@@ -5,11 +5,11 @@ import json
 import re
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any, Callable, Collection, Mapping, Sequence
 
 from .gitutils import discover_repo_root
 from .models import GraphEdge, GraphNode
-from .references import GraphReferenceIndex, ReferenceCorpus, find_references
+from .references import AnalysisStopped, GraphReferenceIndex, ReferenceCorpus, find_references
 from .store import CortexStore, default_db_path
 from .testpatterns import is_test_path
 from .tokenizer import count_text_tokens
@@ -195,7 +195,11 @@ class _AnalysisContext:
         reference_budget: int,
         graph_nodes: Sequence[GraphNode] | None = None,
         graph_edges: Sequence[GraphEdge] | None = None,
+        should_stop: Callable[[], bool] | None = None,
+        corpus_symbols: Collection[str] | None = None,
     ) -> None:
+        self.should_stop = should_stop
+        self.corpus_symbols = corpus_symbols
         self.repo_root = repo_root
         self.store = store
         self.reference_budget = reference_budget
@@ -230,12 +234,10 @@ class _AnalysisContext:
         result = self._references.get(label)
         if result is None:
             if self._corpus is None:
-                symbols = (
-                    None
-                    if self._graph_nodes is None
-                    else {node.label for node in self._graph_nodes if node.granularity == "symbol"}
-                )
-                self._corpus = ReferenceCorpus(self.repo_root, symbols)
+                symbols = self.corpus_symbols
+                if symbols is None and self._graph_nodes is not None:
+                    symbols = {node.label for node in self._graph_nodes if node.granularity == "symbol"}
+                self._corpus = ReferenceCorpus(self.repo_root, symbols, self.should_stop)
             if self._graph_index is None and self._graph_nodes is not None and self._graph_edges is not None:
                 self._graph_index = GraphReferenceIndex(self._graph_nodes, self._graph_edges)
             result = self._references[label] = find_references(
@@ -432,14 +434,25 @@ def analyze_dead_code(
                 credited_labels.add(str(value))
 
     reexports = _reexported_symbols(all_sources)
-    context = _AnalysisContext(repo_root, active_store, all_sources, max(2000, int(budget)), graph_nodes, graph_edges)
+    def in_scope(node: GraphNode) -> bool:
+        return not path_prefix or node.source_ref == path_prefix or node.source_ref.startswith(path_prefix.rstrip("/") + "/")
+
+    # Only the candidates' own names are ever looked up, so a scoped run indexes just those
+    # (any other name would fall back to a slower substring test, but is never asked for).
+    corpus_symbols = (
+        {item.label for item in graph_nodes if item.granularity == "symbol" and in_scope(item)} if path_prefix else None
+    )
+    context = _AnalysisContext(
+        repo_root, active_store, all_sources, max(2000, int(budget)), graph_nodes, graph_edges,
+        should_stop=should_stop, corpus_symbols=corpus_symbols,
+    )
     findings: list[dict[str, Any]] = []
     partial = False
     for node in sorted(
         (item for item in graph_nodes if item.granularity == "symbol"),
         key=lambda item: (item.source_ref, item.label, item.node_id),
     ):
-        if path_prefix and not (node.source_ref == path_prefix or node.source_ref.startswith(path_prefix.rstrip("/") + "/")):
+        if not in_scope(node):
             continue
         if should_stop is not None and should_stop():
             partial = True
@@ -457,9 +470,13 @@ def analyze_dead_code(
             continue
         if node.node_id in credited_nodes or node.label in credited_labels:
             continue
-        tier, reason = _candidate_reason(
-            repo_root, active_store, node, all_sources, context.reference_budget, context
-        )
+        try:
+            tier, reason = _candidate_reason(
+                repo_root, active_store, node, all_sources, context.reference_budget, context
+            )
+        except AnalysisStopped:
+            partial = True  # stopped while building the reference corpus: this candidate is unfinished
+            break
         findings.append(
             {
                 "symbol": node.label,

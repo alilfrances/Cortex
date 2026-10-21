@@ -227,3 +227,51 @@ def test_python_function_called_only_from_another_module_is_not_a_candidate(tmp_
     by_symbol = {item["symbol"]: item for item in analyze_dead_code(repo, store=store, nodes=nodes, edges=edges)["findings"]}
     assert "shared_helper" not in by_symbol  # credited by the graph, not merely softened by a grep hit
     assert by_symbol["orphan_helper"]["confidence"] == "high"
+
+
+def _repo_with_two_dirs(tmp_path: Path) -> Path:
+    repo = tmp_path / "repo"
+    (repo / "a").mkdir(parents=True)
+    (repo / "b").mkdir()
+    (repo / "a" / "one.py").write_text("def only_in_a():\n    return 1\n\n\ndef shared_name():\n    return 2\n")
+    (repo / "b" / "two.py").write_text("def only_in_b():\n    return 3\n\n\ndef shared_name():\n    return 4\n")
+    (repo / "b" / "use.py").write_text("from a.one import only_in_a\n\n\ndef go():\n    return only_in_a()\n")
+    for i in range(30):  # enough files that the corpus polls its stop predicate more than once
+        (repo / "b" / f"filler{i}.py").write_text(f"def filler_{i}():\n    return {i}\n")
+    _init_git(repo)
+    return repo
+
+
+def test_stop_while_building_the_reference_corpus_gives_a_partial_result_without_it(tmp_path: Path, monkeypatch) -> None:
+    from cortex import references
+
+    repo = _repo_with_two_dirs(tmp_path)
+    store = _ingest(repo, tmp_path / "data", monkeypatch)
+    nodes, edges = store.fetch_graph(repo)
+    monkeypatch.setattr(references, "_STOP_CHECK_EVERY", 5)
+    full = analyze_dead_code(repo, store=store, nodes=nodes, edges=edges)
+    assert full["partial"] is False and full["findings"]
+
+    polls: list[int] = []
+
+    def stop_inside_the_corpus() -> bool:
+        polls.append(1)
+        return len(polls) > 2  # the first candidate's corpus is still being read
+
+    stopped = analyze_dead_code(repo, store=store, nodes=nodes, edges=edges, should_stop=stop_inside_the_corpus)
+
+    assert stopped["partial"] is True
+    assert stopped["findings"] == []  # the unfinished candidate is not reported
+    assert {item["symbol"] for item in stopped["findings"]} <= {item["symbol"] for item in full["findings"]}
+
+
+def test_scoped_run_equals_the_full_run_filtered_to_the_scope(tmp_path: Path, monkeypatch) -> None:
+    repo = _repo_with_two_dirs(tmp_path)
+    store = _ingest(repo, tmp_path / "data", monkeypatch)
+    nodes, edges = store.fetch_graph(repo)
+
+    full = analyze_dead_code(repo, store=store, nodes=nodes, edges=edges)["findings"]
+    scoped = analyze_dead_code(repo, store=store, nodes=nodes, edges=edges, path_prefix="b")["findings"]
+
+    assert scoped == [item for item in full if item["file"].startswith("b/")]
+    assert any(item["symbol"] == "only_in_b" for item in scoped)
