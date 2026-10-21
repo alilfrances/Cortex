@@ -200,3 +200,75 @@ def test_focused_gold_tasks_reach_full_recall_in_every_mode(tmp_path, monkeypatc
     row = _score_task(task, mode, repo, db_path)
 
     assert row["file_recall"] == 1.0, row["files"]
+
+
+# --- 0.12.2 field review, Issue B (docs: field-shape fixtures in tests/bundle_shapes.py) ---
+
+
+def _items_by_path(bundle: dict) -> dict[str, dict]:
+    return {item["path"]: item for item in bundle["items"] if item["kind"] in ("code", "symbol")}
+
+
+@pytest.mark.xfail(strict=True, reason="B.1 + B.2: bases are unresolved and no override is walked")
+@pytest.mark.parametrize("budget", [600, 900])
+def test_derived_override_is_packed(tmp_path, monkeypatch, budget):
+    """The manager calls `Base::apply` through a `Base*`; the behaviour is in `Derived::apply`, in a
+    file that shares no word with the task. `Base` is also a mock class and a JS helper, and
+    `Derived`'s base is the unresolved `name:Base` the C++ extractor writes."""
+    from tests.bundle_shapes import OVERRIDE_TASK, build_override_repo
+
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("CORTEX_SEMANTIC", "0")
+    repo = build_override_repo(tmp_path / "repo")
+
+    bundle = generate_bundle(repo, task=OVERRIDE_TASK, budget=budget, output_format="json")
+
+    from cortex.mcp.tools import _bundle_why, _compact_why
+
+    packed = _items_by_path(bundle)
+    assert "src/manager.cpp" in packed
+    assert "src/derived.cpp" in packed, sorted(packed)
+    why = _bundle_why(packed["src/derived.cpp"], set(), set(), [])
+    overrides = [entry for entry in why if entry["type"] == "override"]
+    assert overrides, why
+    assert overrides[0]["via"] == "symbol:src/base.cpp:apply"
+    assert overrides[0]["to"] == "symbol:src/derived.cpp:apply"
+    assert _compact_why(why).startswith("override: ")
+
+
+@pytest.mark.xfail(strict=True, reason="B.3: callees are taken in call-site order and accessors are not skipped")
+def test_callees_are_not_accessors(tmp_path, monkeypatch):
+    """Ten accessors are called before the callee that matters: that callee is selected, no accessor is."""
+    from tests.bundle_shapes import ACCESSOR_TASK, build_accessor_repo
+
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("CORTEX_SEMANTIC", "0")
+    repo = build_accessor_repo(tmp_path / "repo")
+
+    bundle = generate_bundle(repo, task=ACCESSOR_TASK, budget=900, output_format="json")
+
+    routed = {
+        item["path"]: item["metadata"]["call_expansion"]
+        for item in bundle["items"]
+        if item["metadata"].get("call_expansion")
+    }
+    assert "src/engine.cpp" in routed, routed
+    assert not [path for path in routed if path.startswith("src/props_")], routed
+
+
+@pytest.mark.xfail(strict=True, reason="B.3: seeds are class nodes and trivial spans; the handler is never a seed")
+@pytest.mark.parametrize("budget", [600, 900])
+def test_a_handler_without_a_task_word_in_its_name_leads_to_the_file_it_calls(tmp_path, monkeypatch, budget):
+    """`dispatch` has no task word in its name, its body matches the task and calls a resolved function in a
+    second file. Class nodes and one-line factories score higher; they must not take every seed slot."""
+    from tests.bundle_shapes import HANDLER_TASK, build_handler_repo
+
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("CORTEX_SEMANTIC", "0")
+    repo = build_handler_repo(tmp_path / "repo")
+
+    bundle = generate_bundle(repo, task=HANDLER_TASK, budget=budget, output_format="json")
+
+    packed = _items_by_path(bundle)
+    route = (packed.get("src/registry_store.cpp") or {}).get("metadata", {}).get("call_expansion")
+    assert route and route["from"] == "symbol:src/hub.cpp:dispatch", (sorted(packed), route)
