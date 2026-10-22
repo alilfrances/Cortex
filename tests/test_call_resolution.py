@@ -771,3 +771,18 @@ def test_locality_still_narrows_classes_to_the_header():
     ]
     index = _Index(nodes, [])
     assert index.locality(["symbol:lib/a.cpp:Foo", "symbol:lib/a.h:Foo"], "app/c.cpp") == ["symbol:lib/a.h:Foo"]
+
+
+def test_locality_prefers_the_callers_own_directory_over_a_subdirectory():
+    """Nearest directory: from `src/a.cpp`, `src/b.h` (same directory) beats `src/x/b.h`, which shares
+    the same prefix but lies one level below it."""
+    from cortex.callresolve import _Index
+
+    nodes = [sym("src/b.h", "Base", "class", (1, 3)), sym("src/x/b.h", "Base", "class", (1, 3))]
+    index = _Index(nodes, [])
+    assert index.locality(["symbol:src/b.h:Base", "symbol:src/x/b.h:Base"], "src/a.cpp") == ["symbol:src/b.h:Base"]
+    # two subdirectories one level below the caller stay a tie
+    nodes = [sym("src/x/b.h", "Base", "class", (1, 3)), sym("src/y/b.h", "Base", "class", (1, 3))]
+    index = _Index(nodes, [])
+    ids = ["symbol:src/x/b.h:Base", "symbol:src/y/b.h:Base"]
+    assert index.locality(ids, "src/a.cpp") == ids

@@ -20,7 +20,7 @@ without the flag.  Use ``--commits 120`` or more so a 100-commit range exists.
 
     python scripts/perf/synthetic_repo.py /tmp/field-repo --modules 40 --commits 120 --field-shape
 
-What it writes (all under ``src/field``, ``tests/field``, ``tests/mocks``, ``js``):
+What it writes (all under ``src/field``, ``tests/field``, ``tests/mocks``, ``tests/header-mocks``, ``js``):
 
 * a base class ``CoreDevice`` (``src/field/coredevice.{h,cpp}``) with virtual
   ``isReady``/``reset``/``waitForReady`` and plain accessors (``name``, ``setName``,
@@ -41,6 +41,10 @@ What it writes (all under ``src/field``, ``tests/field``, ``tests/mocks``, ``js`
   ``name:ChannelDevice`` for every in-repo base (never ``symbol:``), ``name:QObject`` for the
   Qt base, and QML views (``qml/*view.qml``, one ``module:Item`` edge each) so that about 36%
   of all ``inherits`` targets are ``module:``;
+* a mock base one directory above the mocks that use it (review 0.13.0 section D): ``StepBase`` in
+  ``src/field/stepbase.h`` and in ``tests/header-mocks/stepbase.h``, and ``StepA``/``StepB``/``StepC`` in
+  ``tests/header-mocks/steps/step{a,b,c}.h``, each deriving from it with ``#include <stepbase.h>`` (an
+  angle include, so the base stays ambiguous by name until the nearest directory decides);
 * classes whose only base is outside the repository, so that ``FIELD_EXTERNAL_SHARE`` (25%) of all
   C++ classes derive from an external base alone: header-only ``QObject`` (70%) and ``QThread``
   (10%) subclasses in ``src/field``, and gtest fixtures (20%) in ``tests/field``, half written
@@ -94,6 +98,9 @@ FIELD_SHAPE = {
     # the first derived class; ``derived_impls`` in the return value of ``write_field_shape`` lists all
     "first_derived_class": "WidgetWaitReadyStep",
     "first_derived_impl": "src/field/widgetwaitready.cpp",
+    "step_base": "src/field/stepbase.h",
+    "step_base_mock": "tests/header-mocks/stepbase.h",
+    "step_mocks": [f"tests/header-mocks/steps/step{x}.h" for x in "abc"],
     "build_file": "CMakeLists.txt",
 }
 CMAKE_EVERY = 7  # every n-th history commit touches CMakeLists.txt in --field-shape repos
@@ -102,7 +109,8 @@ FIELD_TESTED_ONE_IN = 4  # one derived class in this many has a test
 FIELD_ANON_NAMESPACE_ONE_IN = 3  # one derived .cpp in this many opens with an anonymous namespace
 FIELD_EXTERNAL_SHARE = 0.25  # share of the C++ classes that derive only from an external base (QObject, QThread, testing::Test)
 FIELD_EXTERNAL_BASES = 2  # CoreDevice and DeviceManager already derive from QObject
-FIELD_CPP_FIXED_CLASSES = 10  # CoreDevice x5 (real, 3 mocks, nested), UnrelatedHolder, ChannelDevice, SessionManager, DeviceManager
+FIELD_CPP_FIXED_CLASSES = 15  # CoreDevice x5 (real, 3 mocks, nested), UnrelatedHolder, ChannelDevice, SessionManager, DeviceManager, StepBase x2, StepA/B/C
+FIELD_STEP_MOCKS = 3  # mock classes under tests/header-mocks/steps deriving from the mock StepBase
 _PART_A = ("widget", "socket", "device", "channel", "stream", "session", "driver", "bridge", "buffer", "router", "sensor", "filter")
 _PART_B = ("wait", "reset", "install", "attach", "detach", "connect", "probe", "flush", "bind", "poll", "sync", "drain")
 _PART_C = ("ready", "state", "link", "mode", "queue", "check", "frame", "point", "event", "claim", "scope", "phase")
@@ -336,6 +344,24 @@ NESTED_IMPL = """struct UnrelatedHolder
 int unrelatedPing() { UnrelatedHolder::CoreDevice d; return d.ping(); }
 """
 
+STEP_BASE_HEADER = """#pragma once
+class StepBase
+{
+public:
+    virtual ~StepBase() = default;
+    virtual int run() = 0;
+};
+"""
+
+STEP_MOCK_HEADER = """#pragma once
+#include <stepbase.h>
+class Step{x} : public StepBase
+{{
+public:
+    int run() override {{ return {value}; }}
+}};
+"""
+
 MOCK_HEADER = """#pragma once
 class CoreDevice
 {{
@@ -366,18 +392,18 @@ def _repo_files(root: Path) -> list[Path]:
 
 def write_field_shape(root: Path, modules: int, rng: random.Random) -> list[str]:
     """Write the ``--field-shape`` files; return the derived classes' ``.cpp`` paths."""
-    for sub in ("src/field", "tests/field", "js", *(f"tests/mocks/mock_{x}" for x in "abc")):
+    for sub in ("src/field", "tests/field", "js", "tests/header-mocks/steps", *(f"tests/mocks/mock_{x}" for x in "abc")):
         (root / sub).mkdir(parents=True, exist_ok=True)
     existing = sum(1 for p in root.rglob("*") if p.is_file() and ".git" not in p.parts)
     # n derived classes -> 2n+fixed new files, all with concatenated stems except the fixed ones;
     # pick n so that the concatenated share of the whole repository reaches FIELD_CONCAT_SHARE.
     # QML views add `inherits -> module:Item` edges (the extractor's target for QML roots) so that
     # about 36% of all `inherits` targets are `module:`: roughly 0.5625 per in-repo C++ `name:` edge.
-    fixed = 17
+    fixed = 22  # 17 + the StepBase pair and the three step mocks
     need = (FIELD_CONCAT_SHARE * (existing + fixed)) / (1 - FIELD_CONCAT_SHARE)
     derived_count = max(12, int((need - 0.5625 * modules) / 2.5625) + 1)
     names = _field_names(derived_count)
-    qml_count = int(0.5625 * (modules + derived_count)) + 1
+    qml_count = int(0.5625 * (modules + derived_count + FIELD_STEP_MOCKS)) + 1
     field = root / "src" / "field"
 
     (field / "coredevice.h").write_text(CORE_HEADER.format())
@@ -390,6 +416,10 @@ def write_field_shape(root: Path, modules: int, rng: random.Random) -> list[str]
     (root / "js" / "coredevice.js").write_text(JS_HELPER)
     (field / "sessionmanager.h").write_text(SECOND_HEADER)
     (field / "sessionmanager.cpp").write_text(SECOND_IMPL)
+    (field / "stepbase.h").write_text(STEP_BASE_HEADER)
+    (root / "tests" / "header-mocks" / "stepbase.h").write_text(STEP_BASE_HEADER)
+    for x, value in zip("abc", (1, 2, 3)):
+        (root / "tests" / "header-mocks" / "steps" / f"step{x}.h").write_text(STEP_MOCK_HEADER.format(x=x.upper(), value=value))
 
     derived_cpps = []
     for index, (cls, stem) in enumerate(names):

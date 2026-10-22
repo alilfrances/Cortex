@@ -108,3 +108,23 @@ def test_about_a_quarter_of_the_cpp_classes_derive_only_from_an_external_base(tm
     assert views and {e.metadata["external"] for e in views} == {"qml_builtin"}
     # in-repo bases are untouched
     assert not any(e.metadata.get("external") for e in edges if e.relation == "inherits" and e.target.startswith("symbol:"))
+
+
+def test_the_step_mocks_resolve_to_the_mock_base_one_directory_above_them(tmp_path: Path) -> None:
+    """0.14.0 (review 0.13.0 section D): the mock base is `tests/header-mocks/stepbase.h`, a production `StepBase`
+    exists too, and the mocks in `tests/header-mocks/steps/` include it by angle brackets."""
+    repo = build_field_shape_repo(tmp_path / "field", modules=12, commits=30)
+    names = load_synthetic_repo().FIELD_SHAPE
+    store = CortexStore(default_db_path(repo))
+    try:
+        nodes, edges = store.fetch_graph(repo)
+    finally:
+        store.connection.close()
+    assert {n.source_ref for n in nodes if n.kind == "class" and n.label == "StepBase"} == {names["step_base"], names["step_base_mock"]}
+    mock_base = f"symbol:{names['step_base_mock']}:StepBase"
+    edges_by_source = {e.source: e for e in edges if e.relation == "inherits"}
+    mocks = [edges_by_source[f"symbol:{path}:Step{path[-3].upper()}"] for path in names["step_mocks"]]
+
+    assert len(mocks) == 3
+    assert [e.target for e in mocks] == [mock_base] * 3  # 100%
+    assert all(e.metadata["unresolved_target"] == "name:StepBase" and not e.metadata.get("ambiguous") for e in mocks)

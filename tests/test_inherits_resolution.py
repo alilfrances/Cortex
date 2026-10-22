@@ -108,12 +108,13 @@ def test_mocks_fixtures_other_languages_and_file_local_classes_lose_to_the_real_
 
 def test_a_test_class_may_derive_from_a_mock():
     nodes = [
-        cls("tests/unit/t.cpp", "Probe"), cls("src/b.h", "Base"), cls("tests/mocks/base.h", "Base"),
+        cls("tests/unit/t.cpp", "Probe"), cls("src/b.h", "Base"), cls("mocks/base.h", "Base"),
     ]
     edge = inherits("tests/unit/t.cpp", "Probe", "Base")
 
     out = resolved(nodes, [edge])[edge.edge_id]
 
+    # neither shares a directory with the caller (a mock under tests/ would win, see the nearest-directory tests)
     assert out.target.startswith("name:")  # both stay candidates: a test may mean either
     assert out.metadata["ambiguous"] is True and len(out.metadata["candidates"]) == 2
 
@@ -547,3 +548,51 @@ def _fresh_inherit_edges(repo, tmp_path, monkeypatch, name):
     monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / name))
     ingest_repository(repo, incremental=False)
     return _inherit_edges(repo)
+
+
+# --- locality step 4: the nearest directory, not only the same one (plan 0.14, Task 4.2) ----------------
+
+def test_a_mock_base_one_directory_above_its_user_beats_the_production_base():
+    """Review 0.13.0 section D: the caller is a test header, so the production-only step does not apply, and the
+    mock base sits in the parent directory of the caller."""
+    nodes = [
+        cls("tests/header-mocks/steps/stepa.h", "StepA"),
+        cls("tests/header-mocks/stepbase.h", "StepBase"),
+        cls("src/stepbase.h", "StepBase"),
+    ]
+    edge = inherits("tests/header-mocks/steps/stepa.h", "StepA", "StepBase")
+
+    out = resolved(nodes, [edge])[edge.edge_id]
+
+    assert out.target == "symbol:tests/header-mocks/stepbase.h:StepBase"
+    assert out.metadata["resolution"] == "preferred"
+    assert "ambiguous" not in out.metadata
+
+
+def test_the_nearest_directory_is_the_longest_common_prefix_and_a_tie_changes_nothing():
+    from cortex.callresolve import _Index
+
+    def pick(paths, caller):
+        index = _Index([cls(p, "B") for p in paths], [])
+        return [index.symbols[c].source_ref for c in index.locality([f"symbol:{p}:B" for p in paths], caller)]
+
+    assert pick(["a/b/x.h", "a/y.h", "c/z.h"], "a/b/c/d.h") == ["a/b/x.h"]  # prefix 2 beats 1 and 0
+    assert pick(["a/b/x.h", "a/c/x.h"], "a/d/e.h") == ["a/b/x.h", "a/c/x.h"]  # same prefix length: unchanged
+    assert pick(["a/x.h", "b/x.h"], "c/d.h") == ["a/x.h", "b/x.h"]  # no common prefix at all
+    assert pick(["a/b/x.h", "a/x.h"], "a/b/d.h") == ["a/b/x.h"]  # the caller's own directory is still the closest
+
+
+def test_a_mock_base_above_its_user_resolves_through_the_real_extractor_with_an_angle_include(tmp_path):
+    base = "class StepBase {\npublic:\n    virtual void run();\n};\n"
+    files = {
+        "src/stepbase.h": base,
+        "tests/header-mocks/stepbase.h": base,
+        "tests/header-mocks/steps/stepa.h": "#include <stepbase.h>\nclass StepA : public StepBase {\npublic:\n    void run() override;\n};\n",
+        "tests/header-mocks/steps/stepb.h": "class StepB : public StepBase {\npublic:\n    void run() override;\n};\n",
+    }
+    repo = make_repo(tmp_path / "repo", files)
+
+    targets = _inherit_targets(repo)
+
+    assert targets["symbol:tests/header-mocks/steps/stepa.h:StepA"][0] == "symbol:tests/header-mocks/stepbase.h:StepBase"
+    assert targets["symbol:tests/header-mocks/steps/stepb.h:StepB"][0] == "symbol:tests/header-mocks/stepbase.h:StepBase"

@@ -225,6 +225,16 @@ class ClassIndex:
         return self.qualified_defs.get(label, {}).get(name, [])
 
 
+def _common_prefix(a: tuple[str, ...], b: tuple[str, ...]) -> int:
+    """Number of leading path segments two directories share."""
+    count = 0
+    for left, right in zip(a, b):
+        if left != right:
+            break
+        count += 1
+    return count
+
+
 class _Index(ClassIndex):
     """All hash indexes the resolver needs, built in one pass over the graph."""
 
@@ -420,7 +430,8 @@ class _Index(ClassIndex):
         2. outside test/mock/fixture trees when the caller itself is production code;
         3. declared in a header, not nested in an implementation file (a .cpp-local class is not
            visible to any other file);
-        4. the caller's own directory.
+        4. the nearest directory: the longest common directory prefix (in path segments) with the
+           caller's, so a mock base one directory above its users beats a production header far away.
 
         Steps 3 and 4 are skipped when every candidate is a namespace: a namespace is split over
         its header and the .cpp files that define its members, so no one node is "the" declaration
@@ -436,11 +447,9 @@ class _Index(ClassIndex):
             lambda c: language_family(self.symbols[c].source_ref) == language_family(from_path),
             production_only,
             lambda c: PurePosixPath(self.symbols[c].source_ref).suffix.lower() in _HEADER_SUFFIXES,
-            lambda c: PurePosixPath(self.symbols[c].source_ref).parent == PurePosixPath(from_path).parent,
         ]
-        if all(self.is_namespace(c) for c in pool):
-            steps = steps[:2]
-        for keep in steps:
+        namespaces = all(self.is_namespace(c) for c in pool)
+        for keep in steps[:2] if namespaces else steps:
             if keep is None:
                 continue
             narrowed = [c for c in pool if keep(c)]
@@ -449,8 +458,19 @@ class _Index(ClassIndex):
                     self.trace.add("production")
                 pool = narrowed
             if len(pool) == 1:
-                break
-        return pool
+                return pool
+        if namespaces:
+            return pool
+        # Nearest = longest shared prefix, then fewest directories below it: from `src/a.cpp`,
+        # `src/b.h` beats `src/x/b.h` as the old same-directory step did.
+        caller = PurePosixPath(from_path).parent.parts
+        nearness = {}
+        for c in pool:
+            parts = PurePosixPath(self.symbols[c].source_ref).parent.parts
+            shared = _common_prefix(parts, caller)
+            nearness[c] = (shared, shared - len(parts))
+        nearest = max(nearness.values())
+        return [c for c in pool if nearness[c] == nearest]
 
     def namespace_members(self, label: str, callee: str, source_file: str) -> list[str]:
         """Members `callee` of every namespace node labelled `label`, narrowed like `prefer`.
