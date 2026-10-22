@@ -46,6 +46,7 @@ Nothing is ever resolved by scanning the corpus per candidate.
 from __future__ import annotations
 
 import builtins
+import functools
 from collections import defaultdict
 from pathlib import PurePosixPath
 from typing import Iterable
@@ -85,6 +86,7 @@ _FAMILIES = {
 }
 
 
+@functools.lru_cache(maxsize=65536)
 def language_family(path: str) -> str:
     """Resolution never crosses language families: a Java call is never matched against a
     Swift or Rust symbol that happens to share a name (each family gets its own index)."""
