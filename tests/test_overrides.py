@@ -99,10 +99,26 @@ def test_a_reached_callee_offers_its_overriders_at_its_own_score_and_hop_best_fo
     got = _walk([("symbol:a.cpp:top", 100.0)], calls, overriders=lambda sid: ranked, routes=routes)
 
     expected = (100.0 * CALLEE_HOP_SHARE[0], "symbol:a.cpp:top", 1)
-    assert got["symbol:base.cpp:run"] == expected
+    assert got["symbol:base.cpp:run"][:3] == expected
     assert sorted(k for k in got if k != "symbol:base.cpp:run") == sorted(ranked[:OVERRIDES_PER_METHOD])
-    assert all(got[o] == expected for o in ranked[:OVERRIDES_PER_METHOD])
+    assert all(got[o][:3] == expected for o in ranked[:OVERRIDES_PER_METHOD])
     assert routes == {o: "symbol:base.cpp:run" for o in ranked[:OVERRIDES_PER_METHOD]}
+
+
+def test_each_callee_and_overrider_carries_its_own_relevance_for_tie_breaks():
+    calls = {"symbol:a.cpp:top": ["symbol:base.cpp:run", "symbol:c.cpp:work"]}
+    weights = {"symbol:base.cpp:run": 0.25, "symbol:d0.cpp:run": 1.0, "symbol:c.cpp:work": 0.5}
+
+    got = _walk(
+        [("symbol:a.cpp:top", 100.0)], calls,
+        relevance=lambda sid: weights.get(sid, 0.0), overriders=lambda sid: ["symbol:d0.cpp:run", "symbol:d1.cpp:run"]
+        if sid == "symbol:base.cpp:run" else [],
+    )
+
+    assert {sid: entry[3] for sid, entry in got.items()} == {
+        "symbol:base.cpp:run": 0.25, "symbol:d0.cpp:run": 1.0, "symbol:d1.cpp:run": 0.0, "symbol:c.cpp:work": 0.5,
+    }
+    assert _walk([("symbol:a.cpp:top", 100.0)], calls)["symbol:c.cpp:work"][3] == 0.0  # no relevance function
 
 
 def test_the_most_relevant_callees_are_followed_not_the_first_in_call_order():

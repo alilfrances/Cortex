@@ -242,28 +242,29 @@ def _callee_scores(
     relevance: Callable[[str], float] | None = None,
     overriders: Callable[[str], Sequence[str]] | None = None,
     routes: dict[str, str] | None = None,
-) -> dict[str, tuple[float, str, int]]:
-    """callee symbol id -> (score, seed symbol id, hop) for the best route from any seed.
+) -> dict[str, tuple[float, str, int, float]]:
+    """callee symbol id -> (score, seed symbol id, hop, relevance) for the best route from any seed.
 
     A hop is a call into another file. From each seed the walk follows resolved calls: callees
     in another file at hop 1 score CALLEE_HOP_SHARE[0] of the seed, at hop 2 CALLEE_HOP_SHARE[1];
     a callee in the same file as its caller is walked through at the same hop (a function that
     delegates to a sibling still leads on). At most CALLEES_PER_SEED other-file callees are taken
     per function: the most relevant ones (`relevance(callee)`; 0 = not worth following), call-site order
-    breaking ties; without `relevance` call-site order decides. The score does not depend on relevance.
+    breaking ties; without `relevance` call-site order decides. The score does not depend on relevance;
+    the fourth element is `relevance(callee)` (0.0 without it) and only orders callees whose scores tie.
     The bases of the seed's class score BASE_CLASS_SHARE.
 
     `overriders(method)` lists the methods of derived classes that override a reached callee; each is
     offered at the callee's own score and hop, and `routes` (when given) receives overrider -> the base
     method it was reached through.
     """
-    best: dict[str, tuple[float, str, int]] = {}
+    best: dict[str, tuple[float, str, int, float]] = {}
 
     def offer(symbol_id: str, score: float, seed_id: str, hop: int, via: str | None = None) -> None:
         if symbol_id == seed_id:
             return
         if symbol_id not in best or score > best[symbol_id][0]:
-            best[symbol_id] = (score, seed_id, hop)
+            best[symbol_id] = (score, seed_id, hop, relevance(symbol_id) if relevance is not None else 0.0)
             if routes is not None:
                 if via is None:
                     routes.pop(symbol_id, None)
@@ -1228,14 +1229,15 @@ def generate_bundle(
             routes=override_routes,
         )
         file_candidate = {item.path: item for item in candidates if item.item_id.startswith('source:')}
-        for callee_id, (callee_score, seed_id, hop) in sorted(callees.items()):
+        for callee_id, (callee_score, seed_id, hop, callee_relevance) in sorted(callees.items()):
             symbol = symbol_by_id.get(callee_id)
             source = source_by_path.get(symbol.source_ref) if symbol is not None else None
             if symbol is None or source is None or source.kind != 'code':
                 continue
             if symbol.span_start is None or symbol.span_end is None:
                 continue
-            route = {'from': seed_id, 'hop': hop}
+            # `relevance` only orders tied candidates below; the `why` renderer reads the other keys only.
+            route = {'from': seed_id, 'hop': hop, 'relevance': callee_relevance}
             if callee_id in override_routes:
                 route = {**route, 'type': 'override', 'via': override_routes[callee_id]}
             existing = next((i for i in symbol_items_by_path.get(symbol.source_ref, ()) if i.metadata.get('node_id') == callee_id), None)
@@ -1277,7 +1279,12 @@ def generate_bundle(
     for items in symbol_items_by_path.values():
         items.sort(key=lambda item: (-item.score, item.item_id))
 
-    candidates.sort(key=lambda item: (-item.score, item.path, item.item_id))
+    def tie_order(item: BundleItem) -> tuple[float, float, int]:
+        """(-score, -relevance, hop): callees that tie on score are ordered by relevance, then hop."""
+        route = item.metadata.get('call_expansion') or {}
+        return (-item.score, -route.get('relevance', 0.0), route.get('hop', 0))
+
+    candidates.sort(key=lambda item: (*tie_order(item), item.path, item.item_id))
 
     has_code_matches = any(item.kind == 'code' and item.score > 0 for item in candidates)
     doc_cap = int(budget * DOC_BUDGET_SHARE) if has_code_matches else budget

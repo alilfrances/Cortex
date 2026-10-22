@@ -96,7 +96,6 @@ def test_hub_flood_leaves_the_small_gold_file_in_the_bundle(field, mode, budget)
 # --- tie-break: cause 4 (callee scores are flat, ties break on path)
 
 
-@pytest.mark.xfail(strict=True, reason="tie-break: fixed by Task 5.1 (ties break on relevance, then hop, then path)")
 @pytest.mark.parametrize("mode", MODES)
 def test_tied_callees_do_not_hide_the_relevant_one(field, mode):
     bundle, files = _run(field, "field_tiebreak_repo", mode)

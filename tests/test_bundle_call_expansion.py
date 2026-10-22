@@ -110,9 +110,9 @@ def test_walk_scores_callees_from_the_seed_and_passes_through_same_file_calls() 
     }
     got = _walk([("symbol:a.cpp:top", 100.0)], calls)
 
-    assert got["symbol:b.cpp:direct"] == (100.0 * CALLEE_HOP_SHARE[0], "symbol:a.cpp:top", 1)
+    assert got["symbol:b.cpp:direct"][:3] == (100.0 * CALLEE_HOP_SHARE[0], "symbol:a.cpp:top", 1)
     assert got["symbol:b.cpp:sibling"][2] == 1
-    assert got["symbol:c.cpp:far"] == (100.0 * CALLEE_HOP_SHARE[1], "symbol:a.cpp:top", 2)
+    assert got["symbol:c.cpp:far"][:3] == (100.0 * CALLEE_HOP_SHARE[1], "symbol:a.cpp:top", 2)
     assert "symbol:d.cpp:too_far" not in got
     assert "symbol:a.cpp:top" not in got
 
@@ -121,7 +121,7 @@ def test_walk_keeps_the_best_route_over_several_seeds_and_never_expands_callers(
     calls = {"symbol:a.cpp:s1": ["symbol:x.cpp:shared"], "symbol:b.cpp:s2": ["symbol:x.cpp:shared"]}
     got = _walk([("symbol:a.cpp:s1", 80.0), ("symbol:b.cpp:s2", 120.0)], calls)
 
-    assert got["symbol:x.cpp:shared"][1:] == ("symbol:b.cpp:s2", 1)
+    assert got["symbol:x.cpp:shared"][1:3] == ("symbol:b.cpp:s2", 1)
     # A caller of a seed is not a callee of anything: nothing lifts it.
     got = _walk([("symbol:x.cpp:shared", 100.0)], calls)
     assert got == {}
@@ -144,7 +144,7 @@ def test_walk_scores_the_bases_of_the_seeds_class() -> None:
         bases={"symbol:a.h:Derived": ["symbol:base.h:Base"]},
     )
 
-    assert got == {"symbol:base.h:Base": (100.0 * BASE_CLASS_SHARE, "symbol:a.cpp:method", 1)}
+    assert got == {"symbol:base.h:Base": (100.0 * BASE_CLASS_SHARE, "symbol:a.cpp:method", 1, 0.0)}
 
 
 def test_expanded_items_say_why_they_were_selected(tmp_path, monkeypatch) -> None:
@@ -176,7 +176,7 @@ def test_walk_keeps_the_shortest_route_when_a_longer_one_is_met_first() -> None:
     }
     got = _walk([("symbol:a.cpp:top", 100.0)], calls)
 
-    assert got["symbol:x.cpp:deep"] == (100.0 * CALLEE_HOP_SHARE[0], "symbol:a.cpp:top", 1)
+    assert got["symbol:x.cpp:deep"][:3] == (100.0 * CALLEE_HOP_SHARE[0], "symbol:a.cpp:top", 1)
 
 
 @pytest.mark.parametrize("mode", ["pagerank", "bfs", "skeleton_on", "skeleton_off"])
