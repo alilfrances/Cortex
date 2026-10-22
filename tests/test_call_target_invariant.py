@@ -28,15 +28,10 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures" / "calls_invariant"
 FROZEN = json.loads((GOLDEN_ROOT / "calls" / "invariant_0121.json").read_text(encoding="utf-8"))
 
-# Fixtures whose `Ns::f()` / `A::B::f()` calls regressed to `name:` in 0.13.0 (Task 1.1) or whose
-# `namespace A::B {` label is not parsed (Task 1.2).  Strict xfail: the task that fixes one must
-# remove its entry here, or the unexpected pass fails the suite.
+# Fixtures whose `namespace A::B {` label is not parsed (Task 1.2).  Strict xfail: the task that
+# fixes one must remove its entry here, or the unexpected pass fails the suite.
 KNOWN_FAILING = {
-    "split_namespace": "Task 1.1",
-    "split_namespace_dup_basename": "Task 1.1",
-    "split_namespace_indirect": "Task 1.1",
     "nested_namespace": "Task 1.2",
-    "nested_namespace_blocks": "Task 1.1",
 }
 
 # Sites that are `name:` in 0.12.1 as well but must resolve to a `symbol:` once their task lands.

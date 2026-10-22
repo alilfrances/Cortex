@@ -368,6 +368,10 @@ class _Index(ClassIndex):
         3. declared in a header, not nested in an implementation file (a .cpp-local class is not
            visible to any other file);
         4. the caller's own directory.
+
+        Steps 3 and 4 are skipped when every candidate is a namespace: a namespace is split over
+        its header and the .cpp files that define its members, so no one node is "the" declaration
+        (see `namespace_members`).
         """
         pool = list(candidate_ids)
         if len(pool) < 2:
@@ -378,6 +382,8 @@ class _Index(ClassIndex):
             lambda c: PurePosixPath(self.symbols[c].source_ref).suffix.lower() in _HEADER_SUFFIXES,
             lambda c: PurePosixPath(self.symbols[c].source_ref).parent == PurePosixPath(from_path).parent,
         ]
+        if all(self.is_namespace(c) for c in pool):
+            steps = steps[:2]
         for keep in steps:
             if keep is None:
                 continue
@@ -387,6 +393,21 @@ class _Index(ClassIndex):
             if len(pool) == 1:
                 break
         return pool
+
+    def namespace_members(self, label: str, callee: str, source_file: str) -> list[str]:
+        """Members `callee` of every namespace node labelled `label`, narrowed like `prefer`.
+
+        A namespace is one entity spread over several nodes (the header's `namespace Ns {}` and one
+        per .cpp that defines members), so the candidate classes cannot be narrowed first: the
+        header-only node would hide the members that live in the .cpp ones.
+        """
+        pool = [c for c in self.classes_by_label.get(label, []) if self.is_namespace(c)]
+        if not _is_auxiliary(source_file):
+            pool = [c for c in pool if not _is_auxiliary(self.symbols[c].source_ref)] or pool
+        members = sorted({m for ns in pool for m in self.class_members(ns, callee)})
+        if len(members) > 1:
+            members = self.prefer(members, source_file)
+        return members
 
     def module_paths(self, dotted: str) -> list[str]:
         exact = self.module_exact.get(dotted)
@@ -573,6 +594,10 @@ def _resolve_scoped(edge: GraphEdge, index: _Index, source_file: str) -> _Outcom
             return _tier_from_lookup(index.lookup(sorted(set(class_ids)), callee), "scoped")
         return None  # module/class outside the repo (stdlib, third party)
     label = _last_segment(scope)
+    labelled = index.classes_by_label.get(label, []) if label else []
+    if labelled and all(index.is_namespace(c) for c in labelled):
+        found = index.namespace_members(label, callee, source_file)
+        return ("scoped", found) if found else None
     if label:
         class_ids = index.prefer(index.classes_by_label.get(label, []), source_file)
         return _members(index, class_ids, label, callee, source_file, "scoped")

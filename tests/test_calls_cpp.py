@@ -248,3 +248,114 @@ def test_incremental_reresolution_matches_a_full_ingest(tmp_path, monkeypatch) -
     assert inc == full
     assert ("symbol:util.cpp:extra", "symbol:util.hpp:clamp") in full
     assert ("symbol:gateway.cpp:send", "symbol:app.cpp:warm") in full
+
+
+# -- namespace-scoped calls (plan 0.14, Task 1.1) ------------------------------------------------
+
+
+def _namespace_sites(tmp_path, files: dict[str, str]):
+    """Write `files`, extract and resolve them like a repo-wide ingest, return the `by_site` map."""
+    from cortex.structural import extract_structural_edges
+
+    for rel, text in files.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(text, encoding="utf-8")
+    known = set(files)
+    nodes = [GraphNode(f"file:{p}", "file", p, p, "file", "", None, None, {}) for p in sorted(files)]
+    edges: list[GraphEdge] = []
+    for path in sorted(files):
+        result = extract_structural_edges(path, files[path], known)
+        nodes.extend(result.nodes)
+        edges.extend(result.edges)
+    resolve_call_endpoints(nodes, edges)
+    return by_site(edges)
+
+
+_NS_H = "namespace Ns {\nint f();\nint g();\n}\n"
+_NS_CPP = '#include "ns.h"\nnamespace Ns {\nint f() { return 1; }\nint g() { return f(); }\n}\n'
+_CALLER = '#include "ns.h"\nint main() { return Ns::f() + Ns::g(); }\n'
+
+
+@TREE_SITTER_ONLY
+def test_split_namespace_call_resolves_to_the_out_of_line_definition(tmp_path) -> None:
+    sites = _namespace_sites(tmp_path, {"lib/ns.h": _NS_H, "lib/ns.cpp": _NS_CPP, "app/caller.cpp": _CALLER})
+    assert_resolved(sites, "app/caller.cpp", 2, "f", "symbol:lib/ns.cpp:f", "scoped")
+    assert_resolved(sites, "app/caller.cpp", 2, "g", "symbol:lib/ns.cpp:g", "scoped")
+
+
+@TREE_SITTER_ONLY
+def test_split_namespace_call_through_an_indirect_include(tmp_path) -> None:
+    sites = _namespace_sites(
+        tmp_path,
+        {
+            "lib/ns.h": _NS_H,
+            "lib/ns.cpp": _NS_CPP,
+            "app/facade.h": '#include "ns.h"\n',
+            "app/caller.cpp": '#include "facade.h"\nint main() { return Ns::f(); }\n',
+        },
+    )
+    assert_resolved(sites, "app/caller.cpp", 2, "f", "symbol:lib/ns.cpp:f", "scoped")
+
+
+@TREE_SITTER_ONLY
+def test_split_namespace_call_with_a_duplicated_header_basename(tmp_path) -> None:
+    sites = _namespace_sites(
+        tmp_path,
+        {"lib/ns.h": _NS_H, "lib/ns.cpp": _NS_CPP, "other/ns.h": "namespace Other {}\n", "app/caller.cpp": _CALLER},
+    )
+    assert_resolved(sites, "app/caller.cpp", 2, "f", "symbol:lib/ns.cpp:f", "scoped")
+
+
+@TREE_SITTER_ONLY
+def test_namespace_call_prefers_production_over_a_mock_copy(tmp_path) -> None:
+    mock = _NS_CPP.replace('"ns.h"', '"../../lib/ns.h"')
+    sites = _namespace_sites(
+        tmp_path,
+        {"lib/ns.h": _NS_H, "lib/ns.cpp": _NS_CPP, "tests/mocks/ns.cpp": mock, "app/caller.cpp": _CALLER},
+    )
+    assert_resolved(sites, "app/caller.cpp", 2, "f", "symbol:lib/ns.cpp:f", "scoped")
+
+
+@TREE_SITTER_ONLY
+def test_same_label_namespaces_resolve_to_the_included_one_else_stay_ambiguous(tmp_path) -> None:
+    files = {
+        "one/ns_one.h": "namespace Ns {\nint f();\n}\n",
+        "one/ns_one.cpp": '#include "ns_one.h"\nnamespace Ns {\nint f() { return 1; }\n}\n',
+        "two/ns_two.h": "namespace Ns {\nint f();\n}\n",
+        "two/ns_two.cpp": '#include "ns_two.h"\nnamespace Ns {\nint f() { return 2; }\n}\n',
+        "app/uses_one.cpp": '#include "ns_one.h"\nint a() { return Ns::f(); }\n',
+        "app/uses_none.cpp": "int b() { return Ns::f(); }\n",
+    }
+    sites = _namespace_sites(tmp_path, files)
+    assert_resolved(sites, "app/uses_one.cpp", 2, "f", "symbol:one/ns_one.cpp:f", "scoped")
+    assert_ambiguous(sites, "app/uses_none.cpp", 1, "f", ["symbol:one/ns_one.cpp:f", "symbol:two/ns_two.cpp:f"])
+
+
+@TREE_SITTER_ONLY
+def test_class_sharing_a_label_with_a_namespace_keeps_class_member_resolution(tmp_path) -> None:
+    sites = _namespace_sites(
+        tmp_path,
+        {
+            "lib/foo.h": "class Foo {\npublic:\nstatic int m();\n};\n",
+            "lib/foo.cpp": '#include "foo.h"\nint Foo::m() { return 1; }\n',
+            "lib/ns.h": "namespace Foo {\nint free_fn();\nint m();\n}\n",
+            "lib/ns.cpp": '#include "ns.h"\nnamespace Foo {\nint free_fn() { return 2; }\nint m() { return 3; }\n}\n',
+            "app/caller.cpp": '#include "../lib/foo.h"\nint main() { return Foo::m(); }\n',
+        },
+    )
+    edge = sites[("app/caller.cpp", 2, "m")]
+    assert edge.target in {"symbol:lib/foo.h:m", "symbol:lib/foo.cpp:m"}, edge.target
+    assert edge.metadata["resolution"] == "scoped"
+
+
+@TREE_SITTER_ONLY
+def test_block_nested_namespaces_split_over_header_and_source(tmp_path) -> None:
+    sites = _namespace_sites(
+        tmp_path,
+        {
+            "lib/ab.h": "namespace A { namespace B { int f(); } }\n",
+            "lib/ab.cpp": '#include "ab.h"\nnamespace A {\nnamespace B {\nint f() { return 1; }\n}\n}\n',
+            "app/c.cpp": '#include "../lib/ab.h"\nint main() { return A::B::f(); }\n',
+        },
+    )
+    assert_resolved(sites, "app/c.cpp", 2, "f", "symbol:lib/ab.cpp:f", "scoped")
