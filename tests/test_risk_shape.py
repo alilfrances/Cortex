@@ -317,7 +317,8 @@ DROP_ORDER = [
     "directive:missing_qt_pair: a.hpp for a.cpp",
     "directive:missing_cochange: b.py (0.90) for a.py",
     "directive:build_system_miss: x.qml",
-    # `files` goes last since 0.13.0 (it went first, so a large range kept no ranked file)
+    # `files` goes last since 0.13.0 (it went first, so a large range kept no ranked file); since
+    # 0.14 it is cut after the directives and the detail, down to FILES_FLOOR, and then last.
     "file:c.py", "file:b.py", "file:a.py",
 ]
 

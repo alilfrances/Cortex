@@ -81,7 +81,7 @@ def _compact(item: Mapping[str, Any]) -> dict:
 
 def test_files_are_a_ranked_prefix_and_given_up_last() -> None:
     # Through 0.12 `files` was cut first, so a large range returned no ranked file at all
-    # at the default budget.  Now it is cut only to FILES_FLOOR early and below it last.
+    # at the default budget.  Now it is cut to FILES_FLOOR after `directives` and below it last.
     result = _without_reasons(_result(with_by_file=False))
     full = count_text_tokens(json.dumps(result, sort_keys=True))
     for budget in range(0, full + 40):
@@ -221,6 +221,37 @@ def _large_diff_result() -> dict:
         f"src/subsystem_{n % 17}/platform/implementation/component_{n}_with_a_long_name.cpp" for n in range(250)
     ]
     return result
+
+
+def _small_range_result() -> dict:
+    """Shaped like `HEAD~3..HEAD` on a real repository: few changed files, each with heavy
+    per-file detail, fat secondary buckets and a small map.  Compacting every entry is worth
+    more than the detail it removes (a detailed row costs several compact ones)."""
+    result = _result(with_by_file=True)
+    result["files"] = []
+    for i in range(17):
+        item = _file(f"src/steps/very/long/path/step_{i}_implementation.cpp", 20 - i)
+        item["missing_cochange"] = [
+            {"path": f"src/partner_{i}_{k}.cpp", "weight": 0.8, "for": item["path"]} for k in range(4)
+        ]
+        item["components"] = {
+            key: 0.1 for key in ("diff", "churn", "hotspot", "fan_in", "cochange", "tests", "directives")
+        }
+        result["files"].append(item)
+    result["missing_cochange"] = [record for item in result["files"] for record in item["missing_cochange"]]
+    result["missing_cochanges"] = result["missing_cochange"]
+    result["missing_qt_pairs"] = [
+        {"changed": f"a{i}.cpp", "partner": f"a{i}.hpp", "reason": "r" * 30} for i in range(20)
+    ]
+    result["directives"] = [f"missing_cochange: src/partner_{i}.cpp (0.80) for src/x{i}.cpp" for i in range(30)]
+    return result
+
+
+def test_small_range_detail_costs_more_than_compacting_every_file() -> None:
+    files = _small_range_result()["files"]
+    detailed = count_text_tokens(json.dumps(files, sort_keys=True))
+    compact = count_text_tokens(json.dumps([_compact(item) for item in files], sort_keys=True))
+    assert compact < 0.5 * detailed, (compact, detailed)
 
 
 def test_large_diff_keeps_the_per_file_test_map_at_the_default_budget() -> None:
@@ -474,3 +505,70 @@ def test_the_map_is_capped_before_any_changed_file_is_dropped() -> None:
         if out.get("tests_by_changed_file_omitted"):
             # files are dropped only at the smallest cap
             assert max(len(v) for v in out["tests_by_changed_file"].values()) <= MAP_TESTS_PER_FILE_CAPS[-1], budget
+
+
+# --- 0.13.0 field review, section B: a larger budget never returns less of a higher-priority key ---
+
+
+def _shape(out: Mapping[str, Any]) -> dict[str, Any]:
+    kept = out.get("tests_by_changed_file") or {}
+    if not kept:
+        cap: float = 0
+    elif "tests_by_changed_file_more" not in out:
+        cap = float("inf")  # no per-file cap was applied
+    else:
+        cap = max(len(indices) for indices in kept.values())
+    return {
+        "files": len(out.get("files") or []),
+        "mapped": len(kept),
+        "cap": cap,
+        "tests": len(out.get("tests_to_run") or []),
+        "compact": "files.detail" in out.get("omitted_fields", []),
+    }
+
+
+@pytest.mark.parametrize(
+    ("make", "step"),
+    # The bench fixture is 46k tokens: one truncation costs ~0.4 s, so it sweeps at step 500.
+    [(_small_range_result, 250), (_large_diff_result, 250), (_bench_result, 500)],
+    ids=["small_range", "large_diff", "bench_head30"],
+)
+def test_truncation_is_monotone_in_budget(make: Any, step: int) -> None:
+    # 0.13.0 returned fewer ranked files at 4000 than at 2000 on the 3-, 10- and 100-commit
+    # ranges: `files` was cut to its floor while still detailed, and what the buckets left was
+    # handed back at the end, so the count shrank as a higher-priority key grew.
+    result = make()
+    previous_budget = previous = None
+    for budget in range(500, 20001, step):
+        out = truncate_risk_result(result, budget)
+        assert out["returned_count"] == len(out.get("files", [])), budget
+        if out.get("minimal_payload"):
+            previous_budget = previous = None
+            continue
+        shape = _shape(out)
+        if previous is not None:
+            where = (previous_budget, budget, previous, shape)
+            for key in ("files", "cap", "tests"):
+                assert shape[key] >= previous[key], (key, where)
+            assert not shape["compact"] or previous["compact"], where
+            if shape["mapped"] < previous["mapped"]:
+                # Below TESTS_TO_RUN_FLOOR the map is deliberately fitted before `tests_to_run`
+                # (e.g. 750 -> 1000 on `_large_diff_result`: 10 -> 9 entries).
+                assert previous["tests"] < TESTS_TO_RUN_FLOOR <= shape["tests"], where
+                assert shape["mapped"] >= 1, where
+        previous_budget, previous = budget, shape
+
+
+def test_small_range_gets_every_file_compact_before_detail() -> None:
+    # The 3-commit case: with detail the 17 files did not fit at 3000 and 4000 gave 11; compact,
+    # all 17 fit at both, and detail only returns once all 17 fit in full.
+    result = _small_range_result()
+    counts = {}
+    for budget in (3000, 4000):
+        out = truncate_risk_result(result, budget)
+        counts[budget] = len(out["files"])
+        if "files.detail" in out.get("omitted_fields", []):
+            assert out["files"] == [_compact(item) for item in result["files"][: len(out["files"])]]
+        else:
+            assert out["files"] == result["files"][: len(out["files"])]
+    assert counts[4000] >= counts[3000] == 17, counts
