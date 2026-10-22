@@ -1,15 +1,22 @@
 #!/usr/bin/env python3
 """Why do `calls` edges stay `name:`?  Sample unresolved targets and bucket the reason.
 
-    python scripts/perf/audit_unresolved_calls.py REPO [--ingest] [--sample 200] [--file src/x.cpp] [--json]
+    python scripts/perf/audit_unresolved_calls.py REPO [--ingest] [--sample 200 | --all] [--file src/x.cpp] [--json]
 
 Reads the index of REPO (``--ingest`` builds one first, into ``CORTEX_DATA_DIR`` or a temporary
 directory).  Prints the resolution ratios of every `calls` and `inherits` edge (repository wide, and
 for ``--file`` alone), then a deterministic sample of ``--sample`` unresolved call edges bucketed by
-cause, so a resolver change can be judged by its before/after numbers rather than by example.
+cause (``--all`` buckets every unresolved edge instead: exact counts), so a resolver change can be
+judged by its before/after numbers rather than by example.
 
-Buckets (first matching rule wins):
+Buckets (first matching rule wins, in this order):
 
+* ``external``            the edge carries ``metadata.external`` (set by the resolver for calls into code
+                          outside the repository; always empty before that lands)
+* ``scoped_namespace``    ``Ns::f()`` whose ``Ns`` labels only namespace nodes of the repository: a
+                          namespace lookup that should have resolved and did not
+* ``not_cpp_<family>``    the caller is outside the C/C++ family (``not_cpp_js``, ``not_cpp_java``,
+                          ``not_cpp_py``, ...): the C++ causes below do not apply, so they are counted apart
 * ``cast_local``          receiver typed by a cast function name (``qobject_cast``) -- extractor gap
 * ``ambiguous``           the resolver kept ``name:`` on purpose: several candidates
 * ``chain``               receiver is a call/field chain (``a->b()->c()``)
@@ -62,9 +69,25 @@ def resolution_ratios(edges, only_file: str | None = None) -> dict[str, object]:
     return result
 
 
+def _scope_label(md) -> str | None:
+    scope = md.get("scope")
+    return str(scope).replace("::", ".").rsplit(".", 1)[-1] if scope else None
+
+
 def classify(edge, index) -> str:
+    from cortex.callresolve import language_family
+
     md = edge.metadata
     callee = str(md.get("callee", ""))
+    if md.get("external"):
+        return "external"
+    scope_label = _scope_label(md)
+    labelled = index.classes_by_label.get(scope_label, []) if scope_label else []
+    if labelled and all(index.is_namespace(class_id) for class_id in labelled):
+        return "scoped_namespace"
+    family = language_family(str(md.get("source_file", "")))
+    if family != "c":
+        return f"not_cpp_{family.lstrip('.') if family != '?' else 'unknown'}"
     if md.get("ambiguous"):
         return "ambiguous"
     receiver_type = md.get("receiver_type")
@@ -74,8 +97,8 @@ def classify(edge, index) -> str:
     if kind == "chain":
         return "chain"
     label = None
-    if md.get("scope"):
-        label = str(md["scope"]).replace("::", ".").rsplit(".", 1)[-1]
+    if scope_label:
+        label = scope_label
     elif receiver_type:
         label = str(receiver_type).replace("::", ".").rsplit(".", 1)[-1]
     if label is not None:
@@ -91,7 +114,7 @@ def classify(edge, index) -> str:
     return "other"
 
 
-def audit(repo: Path, sample: int, only_file: str | None) -> dict[str, object]:
+def audit(repo: Path, sample: int, only_file: str | None, all_edges: bool = False) -> dict[str, object]:
     from cortex.callresolve import _Index, is_contract_call, language_family
     from cortex.store import CortexStore, default_db_path
 
@@ -106,8 +129,11 @@ def audit(repo: Path, sample: int, only_file: str | None) -> dict[str, object]:
          and (only_file is None or e.metadata.get("source_file") == only_file)),
         key=lambda e: e.edge_id,
     )
-    step = max(1, len(unresolved) // sample) if sample else 1
-    picked = unresolved[::step][:sample]
+    if all_edges:
+        picked = unresolved
+    else:
+        step = max(1, len(unresolved) // sample) if sample else 1
+        picked = unresolved[::step][:sample]
     indexes: dict[str, _Index] = {}
     buckets: Counter[str] = Counter()
     for edge in picked:
@@ -128,6 +154,7 @@ def main() -> int:
     parser.add_argument("repo", type=Path)
     parser.add_argument("--ingest", action="store_true", help="index REPO first (full refresh)")
     parser.add_argument("--sample", type=int, default=200)
+    parser.add_argument("--all", action="store_true", help="bucket every unresolved call edge instead of a sample")
     parser.add_argument("--file", help="also report the resolution ratios of one file's calls, and sample only it")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
@@ -138,7 +165,7 @@ def main() -> int:
         from cortex.ingest import ingest_repository
 
         ingest_repository(repo, incremental=False)
-    report = audit(repo, args.sample, args.file)
+    report = audit(repo, args.sample, args.file, all_edges=args.all)
     if args.json:
         print(json.dumps(report, indent=2, sort_keys=True))
         return 0
