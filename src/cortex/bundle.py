@@ -73,7 +73,7 @@ OVERRIDES_PER_METHOD = 4
 # Seeds are real functions: no class nodes, nothing of at most TRIVIAL_SPAN_LINES lines (a factory or an
 # accessor says nothing about what the task is about), and the best span of each of the SEED_FILES best
 # files is always a seed so one file's methods cannot take every slot.
-SEED_FILES = 3
+SEED_FILES = 5
 TRIVIAL_SPAN_LINES = 3
 # Of the other-file callees of a function the CALLEES_PER_SEED most relevant are followed, not the first
 # ones in call-site order: relevance is 1 when the callee's name shares a task term; beyond
@@ -276,13 +276,20 @@ def _callee_scores(
     unscaled.
 
     `overriders(method)` lists the methods of derived classes that override a reached callee; each is
-    offered at the callee's own score and hop, and `routes` (when given) receives overrider -> the base
-    method it was reached through.
+    offered at the callee's own score and hop and walked from there (their callees follow the normal hop
+    budget), and `routes` (when given) receives overrider -> the base method it was reached through.
     """
     best: dict[str, tuple[float, str, int, float]] = {}
 
     def offer(
-        symbol_id: str, score: float, seed_id: str, hop: int, via: str | None = None, *, scaled: bool = True
+        symbol_id: str,
+        score: float,
+        seed_id: str,
+        hop: int,
+        via: str | None = None,
+        *,
+        scaled: bool = True,
+        origin: str | None = None,
     ) -> None:
         if symbol_id == seed_id:
             return
@@ -290,7 +297,7 @@ def _callee_scores(
         if scaled and relevance is not None:
             score *= CALLEE_RELEVANCE_MIN + (1 - CALLEE_RELEVANCE_MIN) * level
         if symbol_id not in best or score > best[symbol_id][0]:
-            best[symbol_id] = (score, seed_id, hop, level)
+            best[symbol_id] = (score, origin or seed_id, hop, level)
             if routes is not None:
                 if via is None:
                     routes.pop(symbol_id, None)
@@ -301,32 +308,37 @@ def _callee_scores(
         # 0-1 BFS: a same-file call costs no hop and goes to the front of the queue, so every
         # function is settled (expanded) at its smallest hop count, whatever order calls are met in.
         settled: set[str] = set()
-        queue: deque[tuple[str, int]] = deque([(seed_id, 0)])
+        queue: deque[tuple[str, int, str]] = deque([(seed_id, 0, seed_id)])
         while queue:
-            current, hop = queue.popleft()
+            current, hop, origin = queue.popleft()
             if current in settled:
                 continue
             settled.add(current)
             if hop >= 1:
                 score = seed_score * CALLEE_HOP_SHARE[hop - 1]
-                offer(current, score, seed_id, hop)
+                offer(current, score, seed_id, hop, origin=origin)
                 if overriders is not None:
                     for overrider in list(overriders(current))[:OVERRIDES_PER_METHOD]:
-                        offer(overrider, score, seed_id, hop, via=current)
+                        offer(overrider, score, seed_id, hop, via=current, origin=origin)
+                        if overrider not in settled:
+                            # The virtual call is one call: the overrider's own callees follow at the
+                            # same hop (front of the queue, like a same-file call) and name the
+                            # overrider as the function they were reached from.
+                            queue.appendleft((overrider, hop, overrider))
             current_file = file_of(current)
             crossing: list[tuple[float, int, str]] = []
             for order, callee in enumerate(calls_from.get(current, ())):
                 if callee in settled:
                     continue
                 if file_of(callee) == current_file:
-                    queue.appendleft((callee, hop))
+                    queue.appendleft((callee, hop, origin))
                 elif hop + 1 <= len(CALLEE_HOP_SHARE):
                     factor = relevance(callee) if relevance is not None else 1.0
                     if factor > 0:
                         crossing.append((-factor, order, callee))
             crossing.sort()
             for _negative, _order, callee in crossing[:CALLEES_PER_SEED]:
-                queue.append((callee, hop + 1))
+                queue.append((callee, hop + 1, origin))
         owner = class_of(seed_id)
         for base in bases_of.get(owner, ()) if owner else ():
             offer(base, seed_score * BASE_CLASS_SHARE, seed_id, 1, scaled=False)

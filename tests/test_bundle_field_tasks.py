@@ -28,6 +28,7 @@ from evals.run_evals import (
     _selected_file_list,
 )
 from tests.baseline_helpers import fixed_git_env
+from tests.golden_utils import TREE_SITTER_ONLY
 
 MODES = ["pagerank", "bfs", "skeleton_on", "skeleton_off"]
 BUILDERS = {
@@ -96,6 +97,7 @@ def test_hub_flood_leaves_the_small_gold_file_in_the_bundle(field, mode, budget)
 # --- tie-break: cause 4 (callee scores are flat, ties break on path)
 
 
+@TREE_SITTER_ONLY  # resolved calls: the regex fallback emits name-only call edges
 @pytest.mark.parametrize("mode", MODES)
 def test_tied_callees_do_not_hide_the_relevant_one(field, mode):
     bundle, files = _run(field, "field_tiebreak_repo", mode)
@@ -105,10 +107,10 @@ def test_tied_callees_do_not_hide_the_relevant_one(field, mode):
     assert "z/ops/resetop.cpp" in files, f"{len(tied)} paths under a/ won the tie on path"
 
 
-# --- override chain: cause 6 (overriders are offered but never walked)
+# --- override chain: cause 6 (overriders were offered but never walked)
 
 
-@pytest.mark.xfail(strict=True, reason="override chain: fixed by Task 5.3 (overriders are walked)")
+@TREE_SITTER_ONLY  # resolved calls: the regex fallback emits name-only call edges
 @pytest.mark.parametrize("mode", MODES)
 def test_the_override_chain_reaches_the_accessory(field, mode):
     bundle, files = _run(field, "field_override_repo", mode)
@@ -131,6 +133,7 @@ def test_the_override_chain_reaches_the_accessory(field, mode):
 # --- constructor flood: cause 5 (constructors seed)
 
 
+@TREE_SITTER_ONLY  # resolved calls: the regex fallback emits name-only call edges
 @pytest.mark.xfail(strict=True, reason="constructor flood: fixed by Task 5.4 (no constructor seeds)")
 @pytest.mark.parametrize("mode", MODES)
 def test_a_hub_constructor_does_not_flood_the_bundle_with_its_helpers(field, mode):
@@ -162,6 +165,7 @@ def test_the_vocabulary_of_the_task_reaches_the_gizmo_file(field, mode):
 # --- the fixtures themselves
 
 
+@TREE_SITTER_ONLY  # resolved calls: the regex fallback emits name-only call edges
 def test_the_fixtures_resolve_the_call_chains_the_tasks_depend_on(_field_built):
     built, _data_dir = _field_built
 

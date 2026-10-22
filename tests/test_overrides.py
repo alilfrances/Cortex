@@ -105,6 +105,42 @@ def test_a_reached_callee_offers_its_overriders_at_its_own_score_and_hop_best_fo
     assert routes == {o: "symbol:base.cpp:run" for o in ranked[:OVERRIDES_PER_METHOD]}
 
 
+def test_an_overrider_is_walked_at_its_base_methods_hop_and_its_callees_name_it_as_their_origin():
+    from cortex.bundle import CALLEE_HOP_SHARE
+
+    calls = {
+        "symbol:a.cpp:top": ["symbol:base.cpp:run"],
+        "symbol:d0.cpp:run": ["symbol:e.cpp:assign", "symbol:d0.cpp:helper"],
+        "symbol:d0.cpp:helper": ["symbol:f.cpp:deep"],
+        "symbol:e.cpp:assign": ["symbol:g.cpp:tail"],
+    }
+    routes: dict[str, str] = {}
+
+    got = _walk(
+        [("symbol:a.cpp:top", 100.0)], calls, routes=routes,
+        overriders=lambda sid: ["symbol:d0.cpp:run"] if sid == "symbol:base.cpp:run" else [],
+    )
+
+    # The virtual call is one call: the overrider stays at hop 1 with the route through its base.
+    assert got["symbol:d0.cpp:run"][:3] == (100.0 * CALLEE_HOP_SHARE[0], "symbol:a.cpp:top", 1)
+    assert routes == {"symbol:d0.cpp:run": "symbol:base.cpp:run"}
+    # Its callees follow the normal budget: hop 2 into another file, the same-file helper walked through.
+    assert got["symbol:e.cpp:assign"][:3] == (100.0 * CALLEE_HOP_SHARE[1], "symbol:d0.cpp:run", 2)
+    assert got["symbol:f.cpp:deep"][:3] == (100.0 * CALLEE_HOP_SHARE[1], "symbol:d0.cpp:run", 2)
+    assert "symbol:g.cpp:tail" not in got  # a third hop is still out of reach
+
+
+def test_an_overrider_reached_through_a_same_file_call_is_walked_once():
+    calls = {"symbol:a.cpp:top": ["symbol:base.cpp:run"], "symbol:base.cpp:run": ["symbol:d0.cpp:run"]}
+
+    got = _walk(
+        [("symbol:a.cpp:top", 100.0)], calls,
+        overriders=lambda sid: ["symbol:d0.cpp:run"] if sid == "symbol:base.cpp:run" else [],
+    )
+
+    assert got["symbol:d0.cpp:run"][1:3] == ("symbol:a.cpp:top", 1)  # kept the route of the first offer
+
+
 def test_each_callee_and_overrider_carries_its_own_relevance_for_tie_breaks():
     calls = {"symbol:a.cpp:top": ["symbol:base.cpp:run", "symbol:c.cpp:work"]}
     weights = {"symbol:base.cpp:run": 0.25, "symbol:d0.cpp:run": 1.0, "symbol:c.cpp:work": 0.5}
@@ -175,3 +211,23 @@ def test_seeds_are_functions_of_more_than_three_lines_with_one_from_each_of_the_
     assert len(names) == 6
     assert "dispatch" in names and "other" in names  # the best span of the 2nd and 3rd best files
     assert names[:3] == ["work1", "work2", "work3"]  # then by score
+
+
+def test_the_best_span_of_each_of_the_five_best_files_is_a_seed():
+    paths = [f"f{i}.cpp" for i in range(7)]
+    nodes = {
+        n.node_id: n for n in [
+            *[method(path, "big", span=(1, 8)) for path in paths[:2]],
+            *[method(path, "run", span=(1, 8)) for path in paths[2:]],
+            *[method("f0.cpp", f"work{i}", span=(10 * i, 10 * i + 6)) for i in range(1, 9)],
+        ]
+    }
+    items = [_span_item("f0.cpp", f"work{i}", 500.0 - i) for i in range(1, 9)]
+    items += [_span_item(path, "big" if i < 2 else "run", 100.0 - i) for i, path in enumerate(paths)]
+    files = {path: 1000.0 - 10 * i for i, path in enumerate(paths)}
+
+    names = {item.item_id for item in _select_seeds(items, nodes, files)}
+
+    for path in paths[:5]:
+        assert any(f":{path}:" in name for name in names), (path, names)
+    assert not any(":f5.cpp:" in name or ":f6.cpp:" in name for name in names)
