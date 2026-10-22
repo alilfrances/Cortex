@@ -13,6 +13,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
+from .callresolve import language_family
 from .graph import QtSymbolIndex
 from .hotspots import estimate_complexity, hotspot_stats
 from .models import BundleItem, CommitRecord, Community, GraphEdge, GraphNode, RetrievalBundle, SourceRecord
@@ -1337,24 +1338,46 @@ class CortexStore:
         ).fetchall()
         return {str(row["backend"]): int(row["n"]) for row in sorted(rows, key=lambda r: str(r["backend"])) if row["backend"]}
 
-    def resolution_counts(self, repo_path: Path) -> dict[str, dict[str, int]]:
+    def resolution_counts(self, repo_path: Path) -> dict[str, dict[str, Any]]:
         """How far call and inheritance targets are resolved, without loading the graph.
 
         `calls` edges by target kind (`symbol` resolved, `name` unresolved, `external`), `inherits` edges
         likewise (`symbol`, `name`, `module`); a kind outside those is listed under its own name.
+        `name_external` counts the `name:`/`module:` edges the resolver classified as out-of-repo
+        (`metadata.external`; they stay inside `name`/`module`), and `in_repo_symbol_share` is
+        `symbol / (symbol + name + module - name_external)` to 4 places, `None` when that is 0. `calls` also
+        carries `name_by_family`: its unresolved edges by the language family of `metadata.source_file`.
         """
-        counts: dict[str, dict[str, int]] = {
-            "calls": {"symbol": 0, "name": 0, "external": 0},
-            "inherits": {"symbol": 0, "name": 0, "module": 0},
+        repo_key = str(repo_path.resolve())
+        counts: dict[str, dict[str, Any]] = {
+            "calls": {"symbol": 0, "name": 0, "external": 0, "name_external": 0},
+            "inherits": {"symbol": 0, "name": 0, "module": 0, "name_external": 0},
         }
         rows = self.connection.execute(
             "SELECT relation, CASE WHEN instr(target, ':') > 0 THEN substr(target, 1, instr(target, ':') - 1) "
-            "ELSE '' END AS kind, COUNT(*) AS n FROM graph_edges "
-            "WHERE repo_path = ? AND relation IN ('calls', 'inherits') GROUP BY relation, kind",
-            (str(repo_path.resolve()),),
+            "ELSE '' END AS kind, json_extract(metadata_json, '$.external') IS NOT NULL AS ext, COUNT(*) AS n "
+            "FROM graph_edges WHERE repo_path = ? AND relation IN ('calls', 'inherits') GROUP BY relation, kind, ext",
+            (repo_key,),
         ).fetchall()
         for row in rows:
-            counts[str(row["relation"])][str(row["kind"])] = int(row["n"])
+            bucket = counts[str(row["relation"])]
+            kind, n = str(row["kind"]), int(row["n"])
+            bucket[kind] = bucket.get(kind, 0) + n
+            if row["ext"] and kind in ("name", "module"):
+                bucket["name_external"] += n
+        for bucket in counts.values():
+            denominator = bucket["symbol"] + bucket["name"] + bucket.get("module", 0) - bucket["name_external"]
+            bucket["in_repo_symbol_share"] = round(bucket["symbol"] / denominator, 4) if denominator > 0 else None
+        families: dict[str, int] = {"c": 0, "js": 0, "java": 0, "py": 0}
+        for row in self.connection.execute(
+            "SELECT json_extract(metadata_json, '$.source_file') AS path, COUNT(*) AS n FROM graph_edges "
+            "WHERE repo_path = ? AND relation = 'calls' AND target LIKE 'name:%' GROUP BY path",
+            (repo_key,),
+        ):
+            if row["path"]:
+                family = language_family(str(row["path"]))
+                families[family] = families.get(family, 0) + int(row["n"])
+        counts["calls"]["name_by_family"] = families
         return counts
 
     def fetch_graph(self, repo_path: Path) -> tuple[list[GraphNode], list[GraphEdge]]:

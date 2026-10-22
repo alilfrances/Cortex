@@ -625,7 +625,7 @@
     "inputSchema": {
       "properties": {
         "repo_path": {
-          "description": "Only read with response_format detailed: also report how far calls and inherits edges of this repository's index are resolved (`resolution`).",
+          "description": "Only read with response_format detailed: also report how far calls and inherits edges of this repository's index are resolved (`resolution`: edge counts by target kind, `name_external` for unresolved targets classified as out-of-repo, and `in_repo_symbol_share`, the share of in-repo targets that resolved to a symbol).",
           "type": "string"
         },
         "response_format": {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import threading
 import time
 
@@ -311,3 +312,79 @@ def test_status_and_server_info_report_the_package_version() -> None:
     payload = json.loads(call_tool("cortex_status", {})["content"][0]["text"])
 
     assert payload["version"] == cortex.__version__ == SERVER_INFO["version"]
+
+
+def _count_edge(index: int, relation: str, target: str, source_file: str = "a.cpp", **metadata):
+    from cortex.models import GraphEdge
+
+    return GraphEdge(
+        edge_id=f"e{index}", source="file:a.cpp", target=target, relation=relation, layer="STRUCTURAL",
+        confidence="EXTRACTED", metadata={"lineno": 1, "source_file": source_file, **metadata},
+    )
+
+
+def _resolution_of(tmp_path, monkeypatch, edges):
+    from cortex.mcp.tools import call_tool
+    from cortex.models import GraphNode
+    from cortex.store import CortexStore, default_db_path
+
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    repo = repo.resolve()
+    store = CortexStore(default_db_path(repo))
+    node = GraphNode(node_id="file:a.cpp", kind="file", label="a.cpp", source_ref="a.cpp", granularity="file")
+    store.replace_graph(repo, [node], edges)
+    store.connection.close()
+    result = call_tool("cortex_status", {"repo_path": str(repo), "response_format": "detailed"})
+    return json.loads(result["content"][0]["text"])["resolution"]
+
+
+def test_resolution_counts_split_external_names_and_report_the_in_repo_share(tmp_path, monkeypatch) -> None:
+    edges = [_count_edge(0, "inherits", "symbol:a.cpp:Base"), _count_edge(1, "inherits", "symbol:a.cpp:Base2")]
+    edges += [_count_edge(2, "inherits", "name:Missing"), _count_edge(3, "inherits", "module:Mod")]
+    edges += [_count_edge(4, "inherits", "name:QObject", external="qt"), _count_edge(5, "inherits", "module:Q", external="qml_import")]
+    edges += [_count_edge(6, "calls", "symbol:a.cpp:f"), _count_edge(7, "calls", "name:g"), _count_edge(8, "calls", "name:h")]
+    edges += [_count_edge(9, "calls", "name:qWarning", external="qt_macro"), _count_edge(10, "calls", "external:qml:X")]
+
+    resolution = _resolution_of(tmp_path, monkeypatch, edges)
+
+    assert resolution["inherits"] == {
+        "symbol": 2, "name": 2, "module": 2, "name_external": 2, "in_repo_symbol_share": 0.5,
+    }
+    calls = resolution["calls"]
+    assert {key: calls[key] for key in ("symbol", "name", "external", "name_external")} == {
+        "symbol": 1, "name": 3, "external": 1, "name_external": 1,
+    }
+    assert calls["in_repo_symbol_share"] == round(1 / 3, 4)
+
+
+def test_resolution_share_is_null_when_nothing_is_in_repo(tmp_path, monkeypatch) -> None:
+    edges = [_count_edge(0, "inherits", "name:QObject", external="qt"), _count_edge(1, "calls", "name:qWarning", external="qt_macro")]
+
+    resolution = _resolution_of(tmp_path, monkeypatch, edges)
+
+    assert resolution["inherits"]["in_repo_symbol_share"] is None
+    assert resolution["calls"]["in_repo_symbol_share"] is None
+    assert resolution["inherits"]["name_external"] == resolution["calls"]["name_external"] == 1
+
+
+def test_resolution_share_is_null_and_counts_are_zero_without_edges(tmp_path, monkeypatch) -> None:
+    resolution = _resolution_of(tmp_path, monkeypatch, [])
+
+    assert resolution["calls"]["in_repo_symbol_share"] is None and resolution["inherits"]["in_repo_symbol_share"] is None
+    assert resolution["calls"]["name_external"] == resolution["inherits"]["name_external"] == 0
+
+
+def test_resolution_counts_unresolved_calls_per_language_family(tmp_path, monkeypatch) -> None:
+    edges = [
+        _count_edge(0, "calls", "name:a", "x.cpp"), _count_edge(1, "calls", "name:b", "x.h"),
+        _count_edge(2, "calls", "name:c", "y.ts"), _count_edge(3, "calls", "name:d", "z.py"),
+        _count_edge(4, "calls", "name:e", "Z.java"), _count_edge(5, "calls", "name:f", "q.rs"),
+        _count_edge(6, "calls", "symbol:x.cpp:g", "x.cpp"),
+    ]
+
+    by_family = _resolution_of(tmp_path, monkeypatch, edges)["calls"]["name_by_family"]
+
+    assert by_family == {"c": 2, "js": 1, "java": 1, "py": 1, "rs": 1}

@@ -38,6 +38,10 @@ def test_status_reports_the_resolution_block(field_shape_repo):
     assert {"symbol", "name", "external"} <= set(resolution["calls"])
     assert {"symbol", "name", "module"} <= set(resolution["inherits"])
     assert resolution["inherits"]["symbol"] > 0 and resolution["calls"]["symbol"] > 0
+    assert {"name_external", "in_repo_symbol_share", "name_by_family"} <= set(resolution["calls"])
+    assert {"name_external", "in_repo_symbol_share"} <= set(resolution["inherits"])
+    assert resolution["inherits"]["in_repo_symbol_share"] >= 0.95, resolution["inherits"]
+    assert resolution["calls"]["in_repo_symbol_share"] >= 0.6, resolution["calls"]
 
 
 # --- the resolver on hand-built graphs --------------------------------------------------------------
