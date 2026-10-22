@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- New golden `tests/goldens/calls/invariant_0121.json`: the call targets 0.12.1 resolves on the `tests/fixtures/calls_invariant` repositories (generated with `scripts/perf/freeze_call_targets.py` against the 0.12.1 sources; never regenerated). `tests/test_call_target_invariant.py` fails when a later release turns one of those `symbol:` targets into `name:` (the 0.13.0 `Ns::f()` regression, §A of `docs/review-0.13.0-field.md`), other than a mock -> production change. The four namespace fixtures that regressed in 0.13.0 and the `namespace A::B {` fixture are strict `xfail` until their fixes land.
+
 ## 0.13.0 — 2026-10-21
 
 Third pass on the field report's `cortex_risk` map loss and `cortex_query` misses. A minor release, not 0.12.2: the graph format, query ranking and the shape of a truncated `cortex_risk` result all change. **Graph format 6** (part 2): an index from an older format is rebuilt in full by its next refresh. Acceptance numbers below were measured on the synthetic `--field-shape` profile; **none of them has been verified on the reviewer's repository** (see "Not met / not verified").
