@@ -39,6 +39,12 @@ STOPWORDS = {
 }
 # Exact task-term hit on a file stem or symbol name must beat keyword-dense docs.
 NAME_MATCH_BONUS = 100.0
+# The bonus is proportional to the IDF weight of the task terms the name carries: a name that holds one common
+# word of a long task earns `NAME_BONUS_BASE` of it, a name that holds every weighted term earns all of it.
+# The base keeps a single exact stem hit above keyword-dense text (the reason for the bonus).
+NAME_BONUS_BASE = 0.5
+# A symbol name inside the file earns the file at most this share of the stem formula (the span keeps its own).
+SYMBOL_NAME_FILE_SHARE = 0.5
 # Task-term hit on a directory segment of the path ("ui", "backend", "mcp")
 # is a weaker locality signal than a stem/symbol hit but must still beat
 # body-text keyword density.
@@ -924,6 +930,20 @@ def _term_weights(
     return weights
 
 
+def _name_bonus(
+    matched: set[str],
+    term_weights: dict[str, float],
+    total_weight: float,
+) -> float:
+    """`NAME_MATCH_BONUS` scaled by the IDF-weighted share of the task a name carries; 0 for no hit."""
+    if not matched:
+        return 0.0
+    if total_weight <= 0:
+        return NAME_MATCH_BONUS
+    share = min(1.0, sum(term_weights.get(term, 1.0) for term in matched) / total_weight)
+    return NAME_MATCH_BONUS * (NAME_BONUS_BASE + (1.0 - NAME_BONUS_BASE) * share)
+
+
 def _build_adjacency(edges: list[GraphEdge]) -> dict[str, list[tuple[str, float]]]:
     """Build undirected adjacency list: node_id -> [(neighbor_id, weight), ...]"""
     adj: defaultdict[str, list[tuple[str, float]]] = defaultdict(list)
@@ -1077,6 +1097,9 @@ def generate_bundle(
     term_weights = _term_weights(
         task_terms, sources, [file_tokens[source.path] for source in sources] if task_terms else None, concatenations
     )
+    # The weight of the whole task; a concatenation (`gizmopod`) repeats the weight of its parts, so it is not
+    # counted again.
+    total_term_weight = sum(weight for term, weight in term_weights.items() if term not in concatenations)
     check_deadline()
     # Stemmed like `task_terms`, which they are compared with; a platform the task names is not demoted.
     platform_names = {key: {_stem(word) for word in words | {key}} for key, words in PLATFORM_SUFFIXES.items()}
@@ -1122,11 +1145,12 @@ def generate_bundle(
         recency_weight = 0.0
         if newest_commit:
             recency_weight = max(0.0, 5.0 - math.log2(max(1, newest_commit - int(source.modified_at) + 1)))
-        name_candidates = (
-            _tokenize_match(f'{Path(source.path).stem} {path_aliases.get(source.path, "")}')
-            | symbol_names_by_path.get(source.path, set())
+        stem_terms = _tokenize_match(f'{Path(source.path).stem} {path_aliases.get(source.path, "")}')
+        name_bonus = max(
+            _name_bonus(task_terms & stem_terms, term_weights, total_term_weight),
+            SYMBOL_NAME_FILE_SHARE
+            * _name_bonus(task_terms & symbol_names_by_path.get(source.path, set()), term_weights, total_term_weight),
         )
-        name_bonus = NAME_MATCH_BONUS if task_terms & name_candidates else 0.0
         dir_tokens = _tokenize_match("/".join(Path(source.path).parts[:-1]))
         path_bonus = PATH_MATCH_BONUS if task_terms & dir_tokens else 0.0
         haystack = _strip_boilerplate(source.content) if source.kind == 'code' else source.content
@@ -1339,13 +1363,17 @@ def generate_bundle(
             if not span_lines:
                 continue
             span_text = '\n'.join(span_lines)
-            name_bonus = NAME_MATCH_BONUS if task_terms & _tokenize_match(symbol.label) else 0.0
+            name_bonus = _name_bonus(task_terms & _tokenize_match(symbol.label), term_weights, total_term_weight)
             span_score = _score_text(task_terms, _strip_boilerplate(span_text), 0.0, term_weights, noise_terms)
             # The file share is a tiebreaker for spans that match the task
             # themselves, not a qualifier for spans that match nothing.
             if name_bonus + span_score <= 0:
                 continue
             score = name_bonus + span_score + file_share
+            # Test/fixture files are demoted whole (above); their spans must not escape that policy, which the
+            # proportional name bonus exposed (a test named after four task terms outranking the production span).
+            if demote_aux and _is_aux_path(path):
+                score *= AUX_PATH_DEMOTION
             item = BundleItem(
                 item_id=f'symbol-span:{symbol.node_id}',
                 kind='symbol',
@@ -1544,7 +1572,9 @@ def generate_bundle(
         start, end = item.metadata.get('span_start'), item.metadata.get('span_end')
         if start is None or end is None:
             return False
-        return any(lo <= start and end <= hi for lo, hi in selected_spans[item.path])
+        # Either way round: a span inside a selected one, or one enclosing a selected one, repeats its lines
+        # (the method can outscore its class and be selected first).
+        return any((lo <= start and end <= hi) or (start <= lo and hi <= end) for lo, hi in selected_spans[item.path])
 
     def over_file_cap(item: BundleItem, file_cap: int | None) -> bool:
         """True when one more span of this file would pass its share of the budget (see FILE_SPAN_SHARE)."""

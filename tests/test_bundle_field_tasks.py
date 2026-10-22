@@ -82,9 +82,20 @@ def _items(bundle: dict, path: str) -> list[dict]:
 # --- hub flood: causes 1-3 (saturated name bonus, no length normalisation, spans spill at the file's score)
 
 
-@pytest.mark.xfail(strict=True, reason="hub flood: fixed by Tasks 5.7-5.9 (IDF-weighted name bonus, length normalisation, span share)")
-@pytest.mark.parametrize("mode", MODES)
-@pytest.mark.parametrize("budget", [900, 4000])
+# Task 5.8 (proportional name bonus) ranks the gold file first and packs it in every mode but skeleton_off,
+# where it stays out at both budgets
+_HUB_CASES = [
+    pytest.param(
+        mode, budget,
+        marks=pytest.mark.xfail(strict=True, reason="skeleton_off: fixed by Task 5.9 (span share) or not met"),
+    )
+    if mode == "skeleton_off" else pytest.param(mode, budget)
+    for mode in MODES
+    for budget in (900, 4000)
+]
+
+
+@pytest.mark.parametrize(("mode", "budget"), _HUB_CASES)
 def test_hub_flood_leaves_the_small_gold_file_in_the_bundle(field, mode, budget):
     task = TASKS["field_hub_repo"]
     bundle, files = _run(field, "field_hub_repo", mode, budget)
