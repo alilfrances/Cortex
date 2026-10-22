@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from cortex.bundle import _tokenize_query, _tokenize_text
+from cortex.bundle import _match_terms, _tokenize_query, _tokenize_text
 from cortex.ingest import ingest_repository
 from cortex.mcp.tools import _bundle_why
 from cortex.store import CortexStore
@@ -159,11 +159,10 @@ def test_a_hub_constructor_does_not_flood_the_bundle_with_its_helpers(field, mod
 # --- vocabulary: cause 8 (tokeniser noise, no stemming)
 
 
-@pytest.mark.xfail(strict=True, reason="vocabulary: fixed by Task 5.5 (tokeniser: iOS kept whole, stop words, stemming)")
 @pytest.mark.parametrize("mode", MODES)
 def test_the_vocabulary_of_the_task_reaches_the_gizmo_file(field, mode):
     task = TASKS["field_vocab_repo"]
-    terms = _tokenize_query(task.description)
+    terms, _concatenations = _match_terms(task.description)  # the stemmed terms that meet the stemmed file text
     bundle, files = _run(field, "field_vocab_repo", mode)
 
     assert not {"os", "re"} & terms, sorted(terms)  # `iOS` and `re-enumerates` must not split into these

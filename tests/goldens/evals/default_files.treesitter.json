@@ -3,8 +3,8 @@
     "files": [
       "app/auth.py",
       "app/session.py",
-      "app/audit.py",
       "app/cleanup.py",
+      "app/audit.py",
       "app/orders.py",
       "app/payments.py",
       "README.md",
@@ -20,8 +20,8 @@
     "files": [
       "app/auth.py",
       "app/session.py",
-      "app/audit.py",
       "app/cleanup.py",
+      "app/audit.py",
       "app/orders.py",
       "app/payments.py",
       "README.md",
@@ -37,8 +37,8 @@
     "files": [
       "app/auth.py",
       "app/session.py",
-      "app/audit.py",
-      "app/session.py"
+      "app/cleanup.py",
+      "app/audit.py"
     ],
     "mode": "skeleton_on",
     "repo": "python_app",
@@ -48,8 +48,8 @@
     "files": [
       "app/auth.py",
       "app/session.py",
-      "app/audit.py",
-      "app/session.py"
+      "app/cleanup.py",
+      "app/audit.py"
     ],
     "mode": "skeleton_off",
     "repo": "python_app",
@@ -94,8 +94,7 @@
       "app/cleanup.py",
       "app/session.py",
       "app/session.py",
-      "app/session.py",
-      "README.md"
+      "app/session.py"
     ],
     "mode": "skeleton_on",
     "repo": "python_app",
@@ -106,8 +105,7 @@
       "app/cleanup.py",
       "app/session.py",
       "app/session.py",
-      "app/session.py",
-      "README.md"
+      "app/session.py"
     ],
     "mode": "skeleton_off",
     "repo": "python_app",
@@ -173,8 +171,8 @@
     "files": [
       "app/payments.py",
       "app/retry.py",
-      "app/auth.py",
       "app/orders.py",
+      "app/auth.py",
       "app/audit.py",
       "app/session.py",
       "app/emailer.py",
@@ -190,8 +188,8 @@
     "files": [
       "app/payments.py",
       "app/retry.py",
-      "app/auth.py",
       "app/orders.py",
+      "app/auth.py",
       "app/audit.py",
       "app/session.py",
       "README.md",
@@ -207,7 +205,8 @@
     "files": [
       "app/payments.py",
       "app/retry.py",
-      "app/auth.py"
+      "app/orders.py",
+      "README.md"
     ],
     "mode": "skeleton_on",
     "repo": "python_app",
@@ -336,8 +335,8 @@
   },
   {
     "files": [
-      "app/network.py",
       "app/messages.py",
+      "app/network.py",
       "README.md"
     ],
     "mode": "pagerank",
@@ -346,8 +345,8 @@
   },
   {
     "files": [
-      "app/network.py",
       "app/messages.py",
+      "app/network.py",
       "README.md"
     ],
     "mode": "bfs",
@@ -356,8 +355,8 @@
   },
   {
     "files": [
-      "app/network.py",
       "app/messages.py",
+      "app/network.py",
       "README.md"
     ],
     "mode": "skeleton_on",
@@ -366,8 +365,8 @@
   },
   {
     "files": [
-      "app/network.py",
       "app/messages.py",
+      "app/network.py",
       "README.md"
     ],
     "mode": "skeleton_off",
@@ -378,8 +377,8 @@
     "files": [
       "server.py",
       "handlers/incidents.py",
-      "integrations/slack.py",
       "tests/test_incidents.py",
+      "integrations/slack.py",
       "storage/repository.py",
       "config.py"
     ],
@@ -391,8 +390,8 @@
     "files": [
       "server.py",
       "handlers/incidents.py",
-      "integrations/slack.py",
       "tests/test_incidents.py",
+      "integrations/slack.py",
       "storage/repository.py",
       "config.py"
     ],
@@ -422,10 +421,10 @@
   },
   {
     "files": [
-      "storage/repository.py",
       "handlers/incidents.py",
-      "tests/test_incidents.py",
+      "storage/repository.py",
       "integrations/slack.py",
+      "tests/test_incidents.py",
       "config.py",
       "server.py"
     ],
@@ -435,10 +434,10 @@
   },
   {
     "files": [
-      "storage/repository.py",
       "handlers/incidents.py",
-      "tests/test_incidents.py",
+      "storage/repository.py",
       "integrations/slack.py",
+      "tests/test_incidents.py",
       "config.py",
       "server.py"
     ],
@@ -448,10 +447,9 @@
   },
   {
     "files": [
-      "storage/repository.py",
       "handlers/incidents.py",
-      "tests/test_incidents.py",
-      "config.py"
+      "storage/repository.py",
+      "integrations/slack.py"
     ],
     "mode": "skeleton_on",
     "repo": "web_service",
@@ -459,8 +457,8 @@
   },
   {
     "files": [
-      "storage/repository.py",
       "handlers/incidents.py",
+      "storage/repository.py",
       "integrations/slack.py"
     ],
     "mode": "skeleton_off",
@@ -470,10 +468,10 @@
   {
     "files": [
       "server.py",
+      "config.py",
       "handlers/incidents.py",
       "integrations/slack.py",
       "storage/repository.py",
-      "config.py",
       "tests/test_incidents.py"
     ],
     "mode": "pagerank",
@@ -483,10 +481,10 @@
   {
     "files": [
       "server.py",
+      "config.py",
       "handlers/incidents.py",
       "integrations/slack.py",
       "storage/repository.py",
-      "config.py",
       "tests/test_incidents.py"
     ],
     "mode": "bfs",
@@ -496,9 +494,9 @@
   {
     "files": [
       "server.py",
+      "config.py",
       "server.py",
-      "handlers/incidents.py",
-      "config.py"
+      "handlers/incidents.py"
     ],
     "mode": "skeleton_on",
     "repo": "web_service",
@@ -507,9 +505,9 @@
   {
     "files": [
       "server.py",
+      "config.py",
       "server.py",
-      "handlers/incidents.py",
-      "config.py"
+      "handlers/incidents.py"
     ],
     "mode": "skeleton_off",
     "repo": "web_service",
@@ -545,7 +543,7 @@
     "files": [
       "tests/test_incidents.py",
       "handlers/incidents.py",
-      "storage/repository.py"
+      "integrations/slack.py"
     ],
     "mode": "skeleton_on",
     "repo": "web_service",
@@ -555,7 +553,7 @@
     "files": [
       "tests/test_incidents.py",
       "handlers/incidents.py",
-      "storage/repository.py"
+      "integrations/slack.py"
     ],
     "mode": "skeleton_off",
     "repo": "web_service",
@@ -699,10 +697,10 @@
   },
   {
     "files": [
-      "qml/DeviceDelegate.qml",
-      "qml/Main.qml",
       "include/DeviceManager.hpp",
       "include/DeviceModel.hpp",
+      "qml/DeviceDelegate.qml",
+      "qml/Main.qml",
       "src/DeviceModel.cpp",
       "src/DeviceManager.cpp",
       "CMakeLists.txt",
@@ -714,10 +712,10 @@
   },
   {
     "files": [
-      "qml/DeviceDelegate.qml",
-      "qml/Main.qml",
       "include/DeviceManager.hpp",
       "include/DeviceModel.hpp",
+      "qml/DeviceDelegate.qml",
+      "qml/Main.qml",
       "src/DeviceModel.cpp",
       "src/DeviceManager.cpp",
       "CMakeLists.txt",
@@ -729,10 +727,10 @@
   },
   {
     "files": [
-      "qml/DeviceDelegate.qml",
-      "qml/Main.qml",
       "include/DeviceManager.hpp",
       "include/DeviceModel.hpp",
+      "qml/DeviceDelegate.qml",
+      "qml/Main.qml",
       "src/DeviceModel.cpp"
     ],
     "mode": "skeleton_on",
@@ -741,10 +739,10 @@
   },
   {
     "files": [
-      "qml/DeviceDelegate.qml",
-      "qml/Main.qml",
       "include/DeviceManager.hpp",
       "include/DeviceModel.hpp",
+      "qml/DeviceDelegate.qml",
+      "qml/Main.qml",
       "src/DeviceModel.cpp"
     ],
     "mode": "skeleton_off",
@@ -757,9 +755,9 @@
       "qml/DeviceDelegate.qml",
       "CMakeLists.txt",
       "resources.qrc",
-      "src/DeviceManager.cpp",
       "include/DeviceManager.hpp",
       "include/DeviceModel.hpp",
+      "src/DeviceManager.cpp",
       "src/DeviceModel.cpp"
     ],
     "mode": "pagerank",

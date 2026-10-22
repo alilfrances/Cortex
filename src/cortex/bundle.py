@@ -31,6 +31,11 @@ STOPWORDS = {
     'a', 'an', 'the', 'in', 'on', 'of', 'for', 'to', 'is', 'are', 'and', 'or',
     'with', 'from', 'by', 'at', 'it', 'this', 'that', 'be', 'as', 'do', 'does',
     'how', 'what', 'where', 'when', 'why', 'i', 'we', 'you',
+    # Instruction words of a task description; they carry no code vocabulary. `re` is the `re-` of
+    # `re-enumerates`. Leaving `path` out of the query changes no eval row (the one task that says `path` still
+    # finds its file by the other words).
+    'find', 'then', 'very', 'all', 'after', 'because', 'every', 'too', 'shows', 'show', 'come', 'back',
+    'during', 'handles', 'handle', 'path', 're',
 }
 # Exact task-term hit on a file stem or symbol name must beat keyword-dense docs.
 NAME_MATCH_BONUS = 100.0
@@ -719,12 +724,21 @@ def _skeleton_item(
 _CAMEL_SPLIT_RE = re.compile(r'([a-z0-9])([A-Z])')
 _ALNUM_RUN_RE = re.compile(r'[A-Za-z0-9]+')
 _IDENTIFIER_RUN_RE = re.compile(r'[A-Za-z0-9_]+')
+# `iOS`, `macOS`, `tvOS`: a lower-case prefix and an `OS` run are one word, not `os`. Other acronym runs
+# (`getURL`, `isUSB`) stay split: they are real word boundaries and the parts occur on their own.
+_OS_NAME_RE = re.compile(r'[a-z]+OS')
 
 
 @functools.lru_cache(maxsize=65536)
 def _split_identifier(token: str) -> tuple[str, ...]:
-    normalized = _CAMEL_SPLIT_RE.sub(r'\1 \2', token.replace('_', ' '))
-    return tuple(part.lower() for part in _ALNUM_RUN_RE.findall(normalized) if part)
+    parts: list[str] = []
+    for segment in token.split('_'):
+        if _OS_NAME_RE.fullmatch(segment):
+            parts.append(segment.lower())
+            continue
+        normalized = _CAMEL_SPLIT_RE.sub(r'\1 \2', segment)
+        parts.extend(part.lower() for part in _ALNUM_RUN_RE.findall(normalized) if part)
+    return tuple(parts)
 
 
 def _tokenize_text(text: str, *, drop_stopwords: bool = False, labels: Iterable[str] = ()) -> set[str]:
@@ -744,6 +758,39 @@ def _tokenize_text(text: str, *, drop_stopwords: bool = False, labels: Iterable[
         if labels:
             terms.update(parts_from_labels(token, labels))
     return terms
+
+
+_STEM_ES_AFTER = ('s', 'x', 'z', 'ch', 'sh')
+
+
+@functools.lru_cache(maxsize=65536)
+def _stem(term: str) -> str:
+    """Light suffix stemming for matching only (`removed`/`removes`/`remove` -> `remov`, `entries` -> `entry`).
+
+    A plural step (`ies` -> `y`; `es` after s, x, z, ch, sh; `s` not after s, u, i), then `ed` or `ing` when 4 or
+    more letters are left. A final `e` of a long word goes last so `cache`/`caches` and `remove`/`removed` meet. Terms with a
+    digit or other non-letter, and short ones, are left alone. Never used on the text that is indexed.
+    """
+    if not term.isalpha():
+        return term
+    if term.endswith('ies') and len(term) >= 6:
+        term = term[:-3] + 'y'
+    elif term.endswith('es') and len(term) >= 5 and term[:-2].endswith(_STEM_ES_AFTER):
+        term = term[:-2]
+    elif term.endswith('s') and len(term) >= 4 and term[-2] not in 'sui':
+        term = term[:-1]
+    if term.endswith('ed') and len(term) >= 6:
+        term = term[:-2]
+    elif term.endswith('ing') and len(term) >= 7:
+        term = term[:-3]
+    if len(term) >= 5 and term.endswith('e'):
+        term = term[:-1]
+    return term
+
+
+def _tokenize_match(text: str) -> set[str]:
+    """`_tokenize_text` with every term stemmed: the form term sets are intersected in."""
+    return {_stem(term) for term in _tokenize_text(text)}
 
 
 def _expand_synonyms(terms: set[str], synonyms: dict[str, list[str]]) -> set[str]:
@@ -766,6 +813,24 @@ def _tokenize_query(task: str, synonyms: dict[str, list[str]] | None = None) -> 
     if synonyms:
         terms = _expand_synonyms(terms, synonyms)
     return terms
+
+
+def _match_terms(task: str, synonyms: dict[str, list[str]] | None = None) -> tuple[set[str], dict[str, tuple[str, str]]]:
+    """The stemmed query terms the ranking intersects with stemmed text, and the concatenations among them.
+
+    Adjacent query parts also yield their stemmed concatenation (`GizmoPods` -> `gizmopod`), which matches a
+    code name that is one token (`Gizmopod`); `_term_weights` weights it like its rarer part.
+    """
+    terms = {_stem(term) for term in _tokenize_query(task, synonyms)}
+    parts = [part for token in _IDENTIFIER_RUN_RE.findall(task) for part in _split_identifier(token)]
+    concatenations: dict[str, tuple[str, str]] = {}
+    for left, right in zip(parts, parts[1:]):
+        if left in STOPWORDS or right in STOPWORDS:
+            continue
+        joined = _stem(left + right)
+        if joined not in terms:
+            concatenations.setdefault(joined, (_stem(left), _stem(right)))
+    return terms | set(concatenations), concatenations
 
 
 _IDENTIFIER_TOKEN_RE = re.compile(r'[A-Za-z_][A-Za-z0-9_:]*')
@@ -801,7 +866,7 @@ def _score_text(
     term_weights: dict[str, float] | None = None,
     noise_terms: frozenset[str] = frozenset(),
 ) -> float:
-    haystack_terms = _tokenize_text(text) - noise_terms
+    haystack_terms = _tokenize_match(text) - noise_terms
     overlap = task_terms & haystack_terms
     if term_weights is None:
         return len(overlap) * 10.0 + recency_weight
@@ -809,12 +874,15 @@ def _score_text(
 
 
 def _term_weights(
-    task_terms: set[str], sources: list, docs: list[set[str]] | None = None
+    task_terms: set[str],
+    sources: list,
+    docs: list[set[str]] | None = None,
+    concatenations: dict[str, tuple[str, str]] | None = None,
 ) -> dict[str, float]:
     if not task_terms:
         return {}
     if docs is None:
-        docs = [_tokenize_text(f'{source.path}\n{source.content}') for source in sources]
+        docs = [_tokenize_match(f'{source.path}\n{source.content}') for source in sources]
     total = len(docs)
     if total == 0:
         return {term: 1.0 for term in task_terms}
@@ -822,6 +890,9 @@ def _term_weights(
     for term in task_terms:
         df = sum(1 for doc in docs if term in doc)
         weights[term] = math.log((total + 1) / df) if df else math.log(total + 1)
+    for joined, parts in (concatenations or {}).items():
+        if joined in weights:
+            weights[joined] = max(weights.get(part, 0.0) for part in parts)
     return weights
 
 
@@ -951,9 +1022,12 @@ def generate_bundle(
     nodes, edges = graph if graph is not None else store.fetch_graph(repo_root)
 
     config = load_config(repo_root)
-    task_terms = _tokenize_query(task, config.synonyms)
+    # `intent_terms` (raw words: test/translation/language intent) and `task_terms` (stemmed, plus the
+    # concatenations of adjacent parts) are different sets; everything compared with file text uses the latter.
+    intent_terms = _tokenize_query(task, config.synonyms)
+    task_terms, concatenations = _match_terms(task, config.synonyms)
     noise_terms = frozenset(
-        term for identifier in config.noise_identifiers for term in _tokenize_text(identifier)
+        term for identifier in config.noise_identifiers for term in _tokenize_match(identifier)
     )
     check_deadline()
     # Words of concatenated lowercase stems (`widgetwaitready.cpp` -> widget wait ready), set at ingest.
@@ -966,18 +1040,18 @@ def generate_bundle(
     # Tokenized once: term weights, the symbol-span prefilter and the semantic gate all use it.
     file_tokens: dict[str, set[str]] = (
         {
-            source.path: _tokenize_text(f'{source.path} {path_aliases.get(source.path, "")}\n{source.content}')
+            source.path: _tokenize_match(f'{source.path} {path_aliases.get(source.path, "")}\n{source.content}')
             for source in sources
         }
         if task_terms
         else {}
     )
     term_weights = _term_weights(
-        task_terms, sources, [file_tokens[source.path] for source in sources] if task_terms else None
+        task_terms, sources, [file_tokens[source.path] for source in sources] if task_terms else None, concatenations
     )
     check_deadline()
-    demote_aux = not (task_terms & AUX_INTENT_TERMS)
-    demote_locale = not (task_terms & LOCALE_INTENT_TERMS)
+    demote_aux = not (intent_terms & AUX_INTENT_TERMS)
+    demote_locale = not (intent_terms & LOCALE_INTENT_TERMS)
     hotspot_by_path: dict[str, dict] = {}
     for node in nodes:
         if node.kind != 'file' or not isinstance(node.metadata.get('hotspot'), dict):
@@ -990,7 +1064,7 @@ def generate_bundle(
         ),
         default=0.0,
     )
-    lang_suffixes = _language_hint_suffixes(task, task_terms)
+    lang_suffixes = _language_hint_suffixes(task, intent_terms)
     adj = _build_adjacency(edges)
 
     symbols_by_path: defaultdict[str, list[GraphNode]] = defaultdict(list)
@@ -999,7 +1073,7 @@ def generate_bundle(
         if node.granularity == 'symbol':
             symbols_by_path[node.source_ref].append(node)
             symbol_names_by_path[node.source_ref].update(
-                _tokenize_text(_symbol_qualname(node).rsplit('.', 1)[-1])
+                _tokenize_match(_symbol_qualname(node).rsplit('.', 1)[-1])
             )
 
     newest_commit = max((c.authored_at for c in commits), default=0)
@@ -1011,11 +1085,11 @@ def generate_bundle(
         if newest_commit:
             recency_weight = max(0.0, 5.0 - math.log2(max(1, newest_commit - int(source.modified_at) + 1)))
         name_candidates = (
-            _tokenize_text(f'{Path(source.path).stem} {path_aliases.get(source.path, "")}')
+            _tokenize_match(f'{Path(source.path).stem} {path_aliases.get(source.path, "")}')
             | symbol_names_by_path.get(source.path, set())
         )
         name_bonus = NAME_MATCH_BONUS if task_terms & name_candidates else 0.0
-        dir_tokens = _tokenize_text("/".join(Path(source.path).parts[:-1]))
+        dir_tokens = _tokenize_match("/".join(Path(source.path).parts[:-1]))
         path_bonus = PATH_MATCH_BONUS if task_terms & dir_tokens else 0.0
         haystack = _strip_boilerplate(source.content) if source.kind == 'code' else source.content
         score = name_bonus + path_bonus + _score_text(
@@ -1055,7 +1129,7 @@ def generate_bundle(
         content_by_path = {source.path: source.content for source in sources}
         fts_rank_list = [
             path for path in fts_rank_list
-            if task_terms & (_tokenize_text(content_by_path.get(path, '')) - noise_terms)
+            if task_terms & (_tokenize_match(content_by_path.get(path, '')) - noise_terms)
         ]
     # Definition boost (semble-style, P0-2 step 5): a file that *defines* a
     # queried identifier (its own symbol names overlap the task terms) gets
@@ -1213,7 +1287,7 @@ def generate_bundle(
         # yield spans whose symbol name matches: skip everything else without cutting the text.
         file_matches = bool(task_terms & (file_tokens.get(path, set()) - noise_terms))
         if not file_matches:
-            path_symbols = [s for s in path_symbols if task_terms & _tokenize_text(s.label)]
+            path_symbols = [s for s in path_symbols if task_terms & _tokenize_match(s.label)]
             if not path_symbols:
                 continue
         lines = source.content.splitlines()
@@ -1225,7 +1299,7 @@ def generate_bundle(
             if not span_lines:
                 continue
             span_text = '\n'.join(span_lines)
-            name_bonus = NAME_MATCH_BONUS if task_terms & _tokenize_text(symbol.label) else 0.0
+            name_bonus = NAME_MATCH_BONUS if task_terms & _tokenize_match(symbol.label) else 0.0
             span_score = _score_text(task_terms, _strip_boilerplate(span_text), 0.0, term_weights, noise_terms)
             # The file share is a tiebreaker for spans that match the task
             # themselves, not a qualifier for spans that match nothing.
@@ -1291,7 +1365,7 @@ def generate_bundle(
                 if lines is None and source is not None:
                     lines = source_lines[symbol.source_ref] = source.content.splitlines()
                 span = '\n'.join((lines or [])[(symbol.span_start or 1) - 1:symbol.span_end or 0])
-                cached = (live_terms & _tokenize_text(symbol.label), live_terms & _tokenize_text(span))
+                cached = (live_terms & _tokenize_match(symbol.label), live_terms & _tokenize_match(span))
                 term_cache[symbol.node_id] = cached
             return cached
 
