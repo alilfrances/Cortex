@@ -416,6 +416,15 @@ def _label(node_id: str, index: _GraphIndex) -> str:
     return f"{node.source_ref}:{node.label}"
 
 
+def _preferred_production(edge: Any) -> bool:
+    """A `calls` edge the resolver pointed at the real class only because the alternatives were mocks/tests.
+
+    A test target may put the mock directory ahead of the sources, so the call can reach the mock instead;
+    such an edge is not walked (in 0.12.1 it was an unresolved `name:` edge). The call graph keeps the target.
+    """
+    return isinstance(edge.metadata, Mapping) and edge.metadata.get("preferred") == "production"
+
+
 def _structural(
     seeds: list[tuple[str, int, str]],
     changed_path: str,
@@ -468,6 +477,8 @@ def _structural(
         next_items: list[tuple[int, str, str, str]] = []
         for edge in index.reverse.get(node_id, []):
             if edge.relation not in allowed[mode]:
+                continue
+            if edge.relation == "calls" and _preferred_production(edge):
                 continue
             if mode == "owner" and edge.relation == "calls":
                 node = index.nodes.get(node_id)

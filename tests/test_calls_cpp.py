@@ -313,7 +313,26 @@ def test_namespace_call_prefers_production_over_a_mock_copy(tmp_path) -> None:
         tmp_path,
         {"lib/ns.h": _NS_H, "lib/ns.cpp": _NS_CPP, "tests/mocks/ns.cpp": mock, "app/caller.cpp": _CALLER},
     )
-    assert_resolved(sites, "app/caller.cpp", 2, "f", "symbol:lib/ns.cpp:f", "scoped")
+    edge = assert_resolved(sites, "app/caller.cpp", 2, "f", "symbol:lib/ns.cpp:f", "scoped")
+    assert edge.metadata["preferred"] == "production"  # impacted_tests does not walk this edge
+
+
+@TREE_SITTER_ONLY
+def test_preferred_marks_only_edges_that_locality_step_two_decided(tmp_path) -> None:
+    step = "class Step {\npublic:\n    int run() { return 1; }\n};\n"
+    caller = 'int use() {\n    Step *s = new Step();\n    return s->run();\n}\n'
+    mocked = _namespace_sites(
+        tmp_path / "mocked",
+        {"src/steps/step.h": step, "tests/header-mocks/steps/step.h": step, "src/ops.cpp": caller},
+    )
+    plain = _namespace_sites(tmp_path / "plain", {"src/steps/step.h": step, "src/ops.cpp": caller})
+    for sites, preferred in ((mocked, True), (plain, False)):
+        for line, callee, target, tier in (
+            (2, "Step", "symbol:src/steps/step.h:Step", "repo_unique"),
+            (3, "run", "symbol:src/steps/step.h:run", "declared_type"),
+        ):
+            edge = assert_resolved(sites, "src/ops.cpp", line, callee, target, tier)
+            assert edge.metadata.get("preferred") == ("production" if preferred else None)
 
 
 @TREE_SITTER_ONLY

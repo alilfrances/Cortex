@@ -58,7 +58,9 @@ MAX_INHERIT_DEPTH = 6
 _HEADER_SUFFIXES = {".h", ".hpp", ".hh", ".hxx"}
 _IMPL_SUFFIXES = {".c", ".cc", ".cpp", ".cxx"}
 _PY_BUILTINS = frozenset(dir(builtins))
-_RESOLUTION_KEYS = ("resolution", "candidates", "ambiguous")
+# `preferred` is written when locality step 2 ("production over mock") decided the edge: the call graph keeps
+# that answer, `impacted_tests` does not walk it (a test target may compile the mock instead).
+_RESOLUTION_KEYS = ("resolution", "candidates", "ambiguous", "preferred")
 
 
 def is_contract_call(edge: GraphEdge) -> bool:
@@ -225,6 +227,8 @@ class _Index(ClassIndex):
 
     def __init__(self, nodes: Iterable[GraphNode], edges: list[GraphEdge]) -> None:
         nodes = list(nodes)
+        # Reasons the edge being resolved was narrowed ("production": locality step 2); set only by `_resolve_into`.
+        self.trace: set[str] | None = None
         self.node_ids: set[str] = set()
         py_files: list[str] = []
         stems: defaultdict[str, list[str]] = defaultdict(list)
@@ -376,9 +380,12 @@ class _Index(ClassIndex):
         pool = list(candidate_ids)
         if len(pool) < 2:
             return pool
+        production_only = (
+            (lambda c: not _is_auxiliary(self.symbols[c].source_ref)) if not _is_auxiliary(from_path) else None
+        )
         steps = [
             lambda c: language_family(self.symbols[c].source_ref) == language_family(from_path),
-            (lambda c: not _is_auxiliary(self.symbols[c].source_ref)) if not _is_auxiliary(from_path) else None,
+            production_only,
             lambda c: PurePosixPath(self.symbols[c].source_ref).suffix.lower() in _HEADER_SUFFIXES,
             lambda c: PurePosixPath(self.symbols[c].source_ref).parent == PurePosixPath(from_path).parent,
         ]
@@ -389,6 +396,8 @@ class _Index(ClassIndex):
                 continue
             narrowed = [c for c in pool if keep(c)]
             if narrowed:
+                if keep is production_only and len(narrowed) < len(pool) and self.trace is not None:
+                    self.trace.add("production")
                 pool = narrowed
             if len(pool) == 1:
                 break
@@ -403,7 +412,10 @@ class _Index(ClassIndex):
         """
         pool = [c for c in self.classes_by_label.get(label, []) if self.is_namespace(c)]
         if not _is_auxiliary(source_file):
-            pool = [c for c in pool if not _is_auxiliary(self.symbols[c].source_ref)] or pool
+            production = [c for c in pool if not _is_auxiliary(self.symbols[c].source_ref)]
+            if production and len(production) < len(pool) and self.trace is not None:
+                self.trace.add("production")  # the same rule as `locality` step 2
+            pool = production or pool
         members = sorted({m for ns in pool for m in self.class_members(ns, callee)})
         if len(members) > 1:
             members = self.prefer(members, source_file)
@@ -869,7 +881,11 @@ def _call_path(edge: GraphEdge) -> str:
 
 def _resolve_into(edge: GraphEdge, index: _Index) -> None:
     _reset(edge)
-    outcome = _resolve_one(edge, index)
+    trace = index.trace = set()
+    try:
+        outcome = _resolve_one(edge, index)
+    finally:
+        index.trace = None
     if outcome is None:
         return
     tier, candidate_ids = outcome
@@ -877,6 +893,8 @@ def _resolve_into(edge: GraphEdge, index: _Index) -> None:
     if len(candidate_ids) == 1:
         edge.target = candidate_ids[0]
         edge.metadata["resolution"] = tier
+        if "production" in trace:
+            edge.metadata["preferred"] = "production"
     elif len(candidate_ids) > 1:
         if edge.confidence != "LOW":
             edge.metadata["extracted_confidence"] = edge.confidence
