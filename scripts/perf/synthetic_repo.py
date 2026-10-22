@@ -41,6 +41,10 @@ What it writes (all under ``src/field``, ``tests/field``, ``tests/mocks``, ``js`
   ``name:ChannelDevice`` for every in-repo base (never ``symbol:``), ``name:QObject`` for the
   Qt base, and QML views (``qml/*view.qml``, one ``module:Item`` edge each) so that about 36%
   of all ``inherits`` targets are ``module:``;
+* classes whose only base is outside the repository, so that ``FIELD_EXTERNAL_SHARE`` (25%) of all
+  C++ classes derive from an external base alone: header-only ``QObject`` (70%) and ``QThread``
+  (10%) subclasses in ``src/field``, and gtest fixtures (20%) in ``tests/field``, half written
+  ``::testing::Test`` and half a bare ``Test`` under ``using namespace testing``.  Nothing calls them;
 * a ``CMakeLists.txt`` that every ``CMAKE_EVERY``-th history commit touches, so a 100-commit
   range always includes a build file (``tests_run_all_reason`` is then "build/config file
   changed"); history churn never touches ``tests/`` (on a small repository a single shared
@@ -96,6 +100,9 @@ CMAKE_EVERY = 7  # every n-th history commit touches CMakeLists.txt in --field-s
 FIELD_CONCAT_SHARE = 0.55  # share of all files with a concatenated lowercase stem >= 10 chars
 FIELD_TESTED_ONE_IN = 4  # one derived class in this many has a test
 FIELD_ANON_NAMESPACE_ONE_IN = 3  # one derived .cpp in this many opens with an anonymous namespace
+FIELD_EXTERNAL_SHARE = 0.25  # share of the C++ classes that derive only from an external base (QObject, QThread, testing::Test)
+FIELD_EXTERNAL_BASES = 2  # CoreDevice and DeviceManager already derive from QObject
+FIELD_CPP_FIXED_CLASSES = 10  # CoreDevice x5 (real, 3 mocks, nested), UnrelatedHolder, ChannelDevice, SessionManager, DeviceManager
 _PART_A = ("widget", "socket", "device", "channel", "stream", "session", "driver", "bridge", "buffer", "router", "sensor", "filter")
 _PART_B = ("wait", "reset", "install", "attach", "detach", "connect", "probe", "flush", "bind", "poll", "sync", "drain")
 _PART_C = ("ready", "state", "link", "mode", "queue", "check", "frame", "point", "event", "claim", "scope", "phase")
@@ -262,6 +269,27 @@ QString describe_{stem}(int) {{ return {{}}; }}
 }}
 """
 
+# Classes whose only base is outside the repository (about FIELD_EXTERNAL_SHARE of the C++ classes): the Qt
+# classes of the field report's `name:` bucket (QObject 406, QThread 36) and its gtest fixtures (57, written
+# `testing::Test` or, under `using namespace testing`, a bare `Test`).
+EXTERNAL_HEADER = """#pragma once
+#include <{include}>
+class {cls} : public {base}
+{{
+    Q_OBJECT
+public:
+    explicit {cls}({base} *parent = nullptr);
+}};
+"""
+
+EXTERNAL_FIXTURE = """#include <gtest/gtest.h>
+{using}class {cls} : public {base}
+{{
+protected:
+    void SetUp() override {{}}
+}};
+"""
+
 MANAGER_HEADER = """#pragma once
 #include "coredevice.h"
 #include <QList>
@@ -375,6 +403,24 @@ def write_field_shape(root: Path, modules: int, rng: random.Random) -> list[str]
             (root / "tests" / "field" / f"tst_{stem}.cpp").write_text(
                 f'#include "../../src/field/{stem}.h"\nint run_{stem}() {{ {cls} d; d.reset(); return d.waitForReady(1); }}\n'
             )
+
+    # Classes with an external base only.  Names come from the tail of the name pool, so none of them
+    # collides with a derived class; nothing calls them, so the manager and the CMake list are untouched.
+    cpp_classes = BASES + modules + FIELD_CPP_FIXED_CLASSES + derived_count
+    external_count = max(1, round((FIELD_EXTERNAL_SHARE * cpp_classes - FIELD_EXTERNAL_BASES) / (1 - FIELD_EXTERNAL_SHARE)))
+    for index, (pool_cls, stem) in enumerate(_field_names(derived_count + external_count)[derived_count:]):
+        stem_cls = pool_cls[: -len("Step")]
+        kind = index % 10
+        if kind < 7:  # QObject
+            (field / f"{stem}.h").write_text(EXTERNAL_HEADER.format(include="QObject", cls=f"{stem_cls}Worker", base="QObject"))
+        elif kind == 7:  # QThread
+            (field / f"{stem}.h").write_text(EXTERNAL_HEADER.format(include="QThread", cls=f"{stem_cls}Thread", base="QThread"))
+        else:  # gtest fixtures: `testing::Test` as written, or a bare `Test` under `using namespace testing`
+            qualified = kind == 8
+            (root / "tests" / "field" / f"{stem}.cpp").write_text(EXTERNAL_FIXTURE.format(
+                using="" if qualified else "using namespace testing;\n", cls=f"{stem_cls}Fixture",
+                base="::testing::Test" if qualified else "Test",
+            ))
 
     (root / "qml").mkdir(exist_ok=True)
     for q in range(qml_count):

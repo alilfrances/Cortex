@@ -75,3 +75,36 @@ def test_an_anonymous_namespace_in_one_in_three_derived_files_creates_no_qt_clas
     # the helpers inside the anonymous namespaces are ordinary file-level functions
     helpers = [n for n in nodes if n.kind == "func" and n.label.startswith("describe_")]
     assert len(helpers) == len(with_namespace)
+
+
+def test_about_a_quarter_of_the_cpp_classes_derive_only_from_an_external_base(tmp_path: Path) -> None:
+    """0.14.0: the field repository's `name:` bases are mostly Qt classes and gtest fixtures (543 of 587)."""
+    repo = build_field_shape_repo(tmp_path / "field", modules=12, commits=30)
+    store = CortexStore(default_db_path(repo))
+    try:
+        nodes, edges = store.fetch_graph(repo)
+    finally:
+        store.connection.close()
+    cpp_suffixes = {".h", ".hpp", ".cpp"}
+    classes = [
+        n for n in nodes
+        if n.kind == "class" and n.granularity == "symbol" and Path(n.source_ref).suffix in cpp_suffixes
+        and not n.signature.lstrip().startswith("namespace")
+    ]
+    bases: dict[str, list] = {}
+    for edge in edges:
+        if edge.relation == "inherits":
+            bases.setdefault(edge.source, []).append(edge)
+    external_only = [n for n in classes if bases.get(n.node_id) and all(e.metadata.get("external") for e in bases[n.node_id])]
+
+    assert 0.22 <= len(external_only) / len(classes) <= 0.28, (len(external_only), len(classes))
+    marked = [e for e in edges if e.relation == "inherits" and e.metadata.get("external")]
+    assert {e.metadata["external"] for e in marked if e.source.rsplit(":", 1)[0].endswith((".h", ".cpp"))} == {"qt", "prefix", "gtest"}
+    assert {e.target for e in marked if e.metadata["external"] == "qt"} >= {"name:QObject", "name:QThread"}
+    assert {e.target for e in marked if e.metadata["external"] == "prefix"} == {"name:::testing::Test"}
+    assert all(e.target.startswith(("name:", "module:")) for e in marked)  # classified, never rewritten
+    # the QML views derive from `Item`, which no repository component is named after
+    views = [e for e in marked if e.source.split(":")[1].endswith(".qml")]
+    assert views and {e.metadata["external"] for e in views} == {"qml_builtin"}
+    # in-repo bases are untouched
+    assert not any(e.metadata.get("external") for e in edges if e.relation == "inherits" and e.target.startswith("symbol:"))

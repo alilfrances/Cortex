@@ -653,6 +653,7 @@
       "edge_id": "regex:include/DeviceManager.hpp:inherits:DeviceManager:QObject",
       "layer": "STRUCTURAL",
       "metadata": {
+        "external": "qt",
         "lineno": 3,
         "source_file": "include/DeviceManager.hpp"
       },
@@ -718,6 +719,7 @@
       "edge_id": "regex:include/DeviceModel.hpp:inherits:DeviceModel:QObject",
       "layer": "STRUCTURAL",
       "metadata": {
+        "external": "qt",
         "lineno": 3,
         "source_file": "include/DeviceModel.hpp"
       },

@@ -50,6 +50,7 @@ from collections import defaultdict
 from pathlib import PurePosixPath
 from typing import Iterable
 
+from .externals import QML_FAMILY, classify_base
 from .models import GraphEdge, GraphNode
 from .testpatterns import is_test_path
 
@@ -60,7 +61,8 @@ _IMPL_SUFFIXES = {".c", ".cc", ".cpp", ".cxx"}
 _PY_BUILTINS = frozenset(dir(builtins))
 # `preferred` is written when locality step 2 ("production over mock") decided the edge: the call graph keeps
 # that answer, `impacted_tests` does not walk it (a test target may compile the mock instead).
-_RESOLUTION_KEYS = ("resolution", "candidates", "ambiguous", "preferred")
+# `external` (see `externals`) marks an `inherits` base that is outside the repository; the target is unchanged.
+_RESOLUTION_KEYS = ("resolution", "candidates", "ambiguous", "preferred", "external")
 
 
 def is_contract_call(edge: GraphEdge) -> bool:
@@ -283,13 +285,22 @@ class _Index(ClassIndex):
             self.free_by_dir_label[(str(PurePosixPath(path).parent), label)].extend(ids)
 
         imports: defaultdict[str, set[str]] = defaultdict(set)
+        module_imports: defaultdict[str, set[str]] = defaultdict(set)
         inherits: list[GraphEdge] = []
         for edge in edges:
-            if edge.relation == "imports" and edge.source.startswith("file:") and edge.target.startswith("file:"):
-                imports[edge.source.removeprefix("file:")].add(edge.target.removeprefix("file:"))
+            if edge.relation == "imports" and edge.source.startswith("file:"):
+                if edge.target.startswith("file:"):
+                    imports[edge.source.removeprefix("file:")].add(edge.target.removeprefix("file:"))
+                elif edge.target.startswith("module:"):
+                    module_imports[edge.source.removeprefix("file:")].add(edge.target.removeprefix("module:"))
             elif edge.relation == "inherits" and edge.source in symbols:
                 inherits.append(edge)
         self.imports: dict[str, list[str]] = {path: sorted(targets) for path, targets in imports.items()}
+        # What a file imports that did not resolve to a file of the repository (`#include <gtest/gtest.h>`,
+        # `import QtQuick 2.15`), as the extractor wrote it; `classify_base` reads it.
+        self.module_imports: dict[str, list[str]] = {path: sorted(targets) for path, targets in module_imports.items()}
+        self._file_dirs = {str(PurePosixPath(n.source_ref).parent) for n in nodes if n.kind == "file" and n.source_ref}
+        self._dir_suffixes: set[str] | None = None
 
         self.module_exact: dict[str, list[str]] = {}
         self.module_suffix: defaultdict[str, list[str]] = defaultdict(list)
@@ -320,6 +331,26 @@ class _Index(ClassIndex):
                         found = self.prefer(found, node.source_ref)
                     bases[cid].update(found)
         self.bases: dict[str, list[str]] = {cid: sorted(ids - {cid}) for cid, ids in bases.items()}
+
+    def is_repo_module(self, module: str) -> bool:
+        """A QML import that names a directory of the repository (``import "components"``, ``import App.Ui``)."""
+        if self._dir_suffixes is None:
+            suffixes: set[str] = set()
+            for directory in self._file_dirs:
+                parts = PurePosixPath(directory).parts
+                suffixes.update("/".join(parts[i:]) for i in range(len(parts)))
+            self._dir_suffixes = suffixes
+        text = module.strip("\"'")
+        parts = [p for p in (text.split("/") if "/" in text or text.startswith(".") else text.split(".")) if p not in ("", ".", "..")]
+        return "/".join(parts) in self._dir_suffixes
+
+    def external_imports(self, path: str, family: str) -> list[str]:
+        """The imports of `path` that can make one of its bases external: the headers it includes and the
+        modules it imports, minus (for QML) the modules that are directories of the repository."""
+        modules = self.module_imports.get(path, [])
+        if family == QML_FAMILY:
+            return [m for m in modules if not self.is_repo_module(m)]
+        return [*self.imports.get(path, ()), *modules]
 
     def base_candidates(self, class_id: str, label: str) -> list[str]:
         """The classes labelled `label` that `class_id` can derive from: not itself, narrowed by `prefer`."""
@@ -810,6 +841,14 @@ def _resolve_inherits_into(edge: GraphEdge, index: _Index) -> None:
             edge.confidence = "LOW"
         edge.metadata["candidates"] = candidates[:MAX_CANDIDATES]
         edge.metadata["ambiguous"] = True
+    else:
+        # No class carries the label in the file's language family: the base is outside the repository or
+        # unknown.  Name the reason in metadata, leave the target as written.
+        path = _edge_path(edge)
+        family = language_family(path)
+        rule = classify_base(_inherits_label(edge), edge.target, index.external_imports(path, family), family)
+        if rule:
+            edge.metadata["external"] = rule
 
 
 def resolve_call_endpoints(
