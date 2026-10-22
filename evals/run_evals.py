@@ -73,6 +73,50 @@ COMPANION_GOLD_TASKS: tuple[GoldTask, ...] = (
 )
 
 
+# 0.13.0 field review, section F "Synthetic fixtures": the five shapes behind the T1-T4 recall
+# misses, built without field code. Kept out of GOLD_TASKS (the historical rows stay comparable);
+# run in all four eval modes by tests/test_bundle_field_tasks.py, one strict xfail per task naming
+# the Phase 5 task that fixes it (docs/plan-0.14-field-review.md, Task 5.0). Every task uses one
+# budget in all modes.
+FIELD_GOLD_TASKS: tuple[GoldTask, ...] = (
+    GoldTask(
+        repo="field_hub_repo",
+        description="slow when the charge max wait setting is on",
+        expected_files=("src/gadgetwaitchargemax.cpp",),
+        budget=900,
+        tight_budget=900,
+    ),
+    GoldTask(
+        repo="field_tiebreak_repo",
+        description="firmware reset sequence aborts after the sync completes",
+        expected_files=("z/ops/resetop.cpp",),
+        budget=900,
+        tight_budget=900,
+    ),
+    GoldTask(
+        repo="field_override_repo",
+        description="peripheral reattach demotes the entry and removes it",
+        expected_files=("src/secondmanager.cpp", "src/accessory.cpp"),
+        budget=900,
+        tight_budget=900,
+    ),
+    GoldTask(
+        repo="field_ctor_repo",
+        description="controller startup hangs while the session handshake retries",
+        expected_files=("src/hub_controller.cpp",),
+        budget=900,
+        tight_budget=900,
+    ),
+    GoldTask(
+        repo="field_vocab_repo",
+        description="Gizmos replug removed on iOS re-enumerates",
+        expected_files=("src/gizmo_registry.cpp",),
+        budget=900,
+        tight_budget=900,
+    ),
+)
+
+
 GOLD_TASKS: tuple[GoldTask, ...] = (
     GoldTask(
         repo="python_app",
@@ -617,6 +661,192 @@ def _build_spread_repo(base: Path) -> Path:
     return repo
 
 
+# Fixed vocabulary for the hub fixture: the most common English words plus the task's own words,
+# so a hub's comments contain nearly every task term (review section F, causes 1-2).
+_HUB_WORDS = tuple(dict.fromkeys(
+    "the be to of and a in that have it for not on with as you do at this but by from they we say her she or an "
+    "will my one all would there their what so up out if about who get which go me when make can like time no "
+    "just him know take people into year your good some could them see other than then now look only come its "
+    "over think also back after use two how our work first well way even new want because any these give day "
+    "most us find very every too shows during handles path device info state event update value slow charge "
+    "max wait setting on off level mode queue buffer timeout count flag reset sync read write open close start "
+    "stop load save check apply report status power battery cable port link signal rate limit step cycle".split()
+))
+
+
+def _build_field_hub_repo(base: Path) -> Path:
+    """Hub flood: four ~3k-line files whose comments use every common word and whose hundreds of
+    `deviceX()` methods collect a name hit through `device`, next to a small file that is the answer."""
+    import random
+
+    repo = base / "field_hub_repo"
+    _init_repo(repo)
+    rng = random.Random(5023)
+    words = _HUB_WORDS
+
+    def sentence(count: int) -> str:
+        return " ".join(rng.choice(words) for _ in range(count))
+
+    def generate(stem: str, methods: int, statements: int) -> None:
+        cls = "".join(part.capitalize() for part in stem.split("_"))
+        seen: set[str] = set()
+        parts = [f"// {sentence(14)}\n"]
+        while len(seen) < methods:
+            lead = rng.choice(("wait", "charge", "max", "setting", "slow") if rng.random() < 0.6 else words)
+            name = "device" + lead.capitalize() + rng.choice(words).capitalize()
+            if name in seen:
+                continue
+            seen.add(name)
+            body = "".join(f"    int v{k} = state_ + {k};  // {sentence(6)}\n" for k in range(rng.randint(2, statements)))
+            parts.append(f"void {cls}::{name}() {{\n    // {sentence(12)}\n{body}}}\n\n")
+        _write(repo / f"src/{stem}.cpp", "".join(parts))
+
+    for hub in ("core_device", "core_session", "core_events", "core_state"):
+        generate(hub, 300, 14)
+    # The smaller items that ride along with the hubs in the field: a header, a workflow item, an operation.
+    for satellite in ("device_info", "workflow_item", "android_operation", "shared_defs", "device_header", "info_step"):
+        generate(satellite, 6, 14)
+    _write(repo / "src/gadgetwaitchargemax.cpp", (
+        "class GadgetWaitChargeMax {\npublic:\n    int level_ = 0;\n    int polls_ = 0;\n    int total_ = 0;\n"
+        "    int limit_ = 1000;\n    int step_ = 3;\n    int last_ = 0;\n    bool armed_ = false;\n"
+        "    void apply(int level) {\n        while (polls_ < level) {\n            total_ += polls_ * step_;\n"
+        "            polls_ += 1;\n        }\n        level_ = total_ > limit_ ? limit_ : total_;\n    }\n};\n"
+    ))
+    _commit_all(repo, "add hub flood fixture")
+    return repo
+
+
+def _build_field_tiebreak_repo(base: Path) -> Path:
+    """Tie-break: a sequencer reaches 30 cross-file one-line virtuals under `a/` (each with an
+    overrider) and one relevant callee in `z/ops/resetop.cpp`; every callee scores seed x 0.9."""
+    repo = base / "field_tiebreak_repo"
+    _init_repo(repo)
+    stages = []
+    for stage in range(10):
+        calls = "".join(f"    V{3 * stage + k:02d}::probe{3 * stage + k:02d}();\n" for k in range(3))
+        if stage == 9:
+            calls += "    ResetOp::execute(code);\n"
+        stages.append(f"void Sequencer::stage{stage}(int code) {{\n{calls}    code += 1;\n    code *= 2;\n}}\n\n")
+    run = "".join(f"    stage{stage}(code);\n" for stage in range(10))
+    _write(repo / "src/sequencer.cpp", (
+        "// firmware reset sequence: runs every stage, aborts after the sync completes\n"
+        f"void Sequencer::runResetSequence(int code) {{\n    // reset sequence aborts after the sync completes\n{run}}}\n\n" + "".join(stages)
+    ))
+    for index in range(30):
+        _write(repo / f"a/v{index:02d}.h", f"class V{index:02d} {{\npublic:\n    virtual int probe{index:02d}() {{ return 0; }}\n}};\n")
+        _write(repo / f"a/w{index:02d}.h", (
+            f'#include "v{index:02d}.h"\nclass W{index:02d} : public V{index:02d} {{\npublic:\n'
+            f"    int probe{index:02d}() override {{ return 1; }}\n}};\n"
+        ))
+    _write(repo / "z/ops/resetop.h", "class ResetOp {\npublic:\n    static void execute(int code);\n};\n")
+    _write(repo / "z/ops/resetop.cpp", (
+        '#include "resetop.h"\n\nvoid ResetOp::execute(int code) {\n'
+        "    // reset the sequence: abort pending work, then sync again\n"
+        "    int pending = code;\n    pending -= 1;\n    pending *= 3;\n}\n"
+    ))
+    _commit_all(repo, "add tie-break fixture")
+    return repo
+
+
+def _build_field_override_repo(base: Path) -> Path:
+    """Override chain (T1 shape): the manager calls a pure virtual on a base manager; the behaviour is
+    in the second manager's override, which calls into an accessory class that shares no task word."""
+    repo = base / "field_override_repo"
+    _init_repo(repo)
+    pad = "\n".join(f"    int pad{i} = value + {i};" for i in range(40))
+    _write(repo / "src/manager.h", "class BaseManager;\nclass Manager {\npublic:\n    void onReattach(BaseManager* base);\n};\n")
+    _write(repo / "src/manager.cpp", (
+        '#include "manager.h"\n#include "basemanager.h"\n\n'
+        "void Manager::onReattach(BaseManager* base) {\n"
+        "    // peripheral reattach: demotes the entry, then removes it\n"
+        "    int attempts = 3;\n    base->createForCompanion();\n    attempts -= 1;\n}\n"
+    ))
+    _write(repo / "src/basemanager.h", "class BaseManager {\npublic:\n    virtual void createForCompanion() {}\n};\n")
+    _write(repo / "src/secondmanager.h", (
+        '#include "basemanager.h"\nclass SecondManager : public BaseManager {\npublic:\n    void createForCompanion() override;\n};\n'
+    ))
+    _write(repo / "src/secondmanager.cpp", (
+        '#include "secondmanager.h"\n#include "accessory.h"\n\n'
+        "void SecondManager::createForCompanion() {\n    // routes the entry\n    int slot = 0;\n"
+        "    Accessory::assignCompanion(slot);\n    slot += 1;\n}\n"
+    ))
+    _write(repo / "src/accessory.h", "class Accessory {\npublic:\n    static void assignCompanion(int slot);\n};\n")
+    _write(repo / "src/accessory.cpp", (
+        '#include "accessory.h"\n\nvoid Accessory::assignCompanion(int slot) {\n'
+        "    int bound = slot;\n    bound += 2;\n    bound *= 3;\n    bound -= 1;\n}\n"
+    ))
+    # Spans that score above the routing function: other files about the same words.
+    for k in range(12):
+        _write(repo / f"src/noise_{k}.cpp", (
+            f"// peripheral entry: demotes and removes ({k})\n"
+            f"void step{k}(int value) {{\n    // demotes the entry, removes it after the peripheral reattach\n{pad}\n}}\n"
+        ))
+    _commit_all(repo, "add override chain fixture")
+    return repo
+
+
+def _build_field_ctor_repo(base: Path) -> Path:
+    """Constructor flood: a 300-line hub constructor calls 100 resolved helpers, none of which shares
+    a word with the task except the one named `session_handshake`."""
+    repo = base / "field_ctor_repo"
+    _init_repo(repo)
+    calls = []
+    for index in range(100):
+        name = "SessionHandshake" if index == 60 else f"Helper{index:03d}"
+        calls.append((index, name))
+        stem = "session_handshake" if index == 60 else f"helper{index:03d}"
+        method = "run" if index == 60 else f"init{index:03d}"
+        _write(repo / f"src/helpers/{stem}.h", f"class {name} {{\npublic:\n    static void {method}(int v);\n}};\n")
+        _write(repo / f"src/helpers/{stem}.cpp", (
+            f'#include "{stem}.h"\n\nvoid {name}::{method}(int v) {{\n    int cell = v;\n    cell += {index};\n'
+            "    cell *= 2;\n    cell -= 1;\n}\n"
+        ))
+    body = []
+    for index, name in calls:
+        method = "run" if name == "SessionHandshake" else f"init{index:03d}"
+        body.append(f"    // controller startup hangs while the session handshake retries ({index})\n")
+        body.append(f"    {name}::{method}(index_);\n")
+        body.append("    index_ += 1;\n")
+    _write(repo / "src/hub_controller.h", "class HubController {\npublic:\n    HubController();\n    void retryHandshake(int tries);\n    int index_ = 0;\n};\n")
+    _write(repo / "src/hub_controller.cpp", (
+        '#include "hub_controller.h"\n\nHubController::HubController() {\n' + "".join(body) + "}\n\n"
+        "void HubController::retryHandshake(int tries) {\n    // handshake retries\n    index_ = tries;\n    index_ += 1;\n    index_ *= 2;\n}\n"
+    ))
+    # Files that merely share words with the task and outscore a file that is only linked by a call, so
+    # the bundle is full before the callees of the constructor's file are reached.
+    for k in range(12):
+        steps = "".join(f"    cell += {k + step};\n    cell *= 2;\n" for step in range(5))
+        _write(repo / f"src/startup/aux_{k}.cpp", (
+            f"// controller startup hangs while the session handshake retries ({k})\n"
+            f"int auxRun{k}(int cell) {{\n{steps}    return cell;\n}}\n"
+        ))
+    _commit_all(repo, "add constructor flood fixture")
+    return repo
+
+
+def _build_field_vocab_repo(base: Path) -> Path:
+    """Vocabulary: the task says `Gizmos`, `iOS` and `re-enumerates`; the code says `Gizmo`, `reconnect`
+    and `remove`, and the other files talk about `os` and `re` so those split parts would match."""
+    repo = base / "field_vocab_repo"
+    _init_repo(repo)
+    _write(repo / "src/gizmo_registry.cpp", (
+        "class Gizmo {\npublic:\n    void reconnect(int id);\n    void remove(int id);\n};\n\n"
+        "void Gizmo::reconnect(int id) {\n    int slot = id;\n    slot += 1;\n    slot *= 2;\n}\n\n"
+        "void Gizmo::remove(int id) {\n    int slot = id;\n    slot -= 1;\n    slot *= 3;\n}\n"
+    ))
+    for k in range(30):
+        _write(repo / f"src/os_probe_{k}.cpp", (
+            f"// os version probe {k}: os name, os build, re-init of the os layer\n"
+            f"int osProbe{k}(int os) {{\n    int re = os;\n    re += {k};\n    re *= 2;\n    re -= 1;\n    re += os;\n    return re;\n}}\n"
+        ))
+        _write(repo / f"src/re_init_{k}.cpp", (
+            f"// re init {k}: re-read the os settings, re-open, re-try\n"
+            f"int reInit{k}(int re) {{\n    int os = re;\n    os += {k};\n    os *= 3;\n    os -= 2;\n    os += re;\n    return os;\n}}\n"
+        ))
+    _commit_all(repo, "add vocabulary fixture")
+    return repo
+
+
 def _build_qt_app(base: Path) -> Path:
     """Small Qt/C++/QML fixture: two QObject classes wired via connect(), plus a QML
     scene that instantiates a local component and a real C++ ``DeviceManager``
@@ -890,6 +1120,11 @@ def build_fixture_repos(base: Path) -> dict[str, Path]:
         "refresh_distractors": _build_refresh_distractors(base),
         "spread_repo": _build_spread_repo(base),
         "companion_repo": _build_companion_repo(base),
+        "field_hub_repo": _build_field_hub_repo(base),
+        "field_tiebreak_repo": _build_field_tiebreak_repo(base),
+        "field_override_repo": _build_field_override_repo(base),
+        "field_ctor_repo": _build_field_ctor_repo(base),
+        "field_vocab_repo": _build_field_vocab_repo(base),
         "qt_app": _build_qt_app(base),
         "body_text_repo": _build_body_text_repo(base),
     }
