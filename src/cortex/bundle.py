@@ -11,7 +11,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import NamedTuple
 
-from .config import load_config
+from .config import PLATFORM_SUFFIXES, load_config
 from .deadline import DeadlineExceeded, check_deadline, current_deadline, deadline_scope
 from .fusion import rrf_fuse
 from .gitutils import discover_repo_root
@@ -117,6 +117,12 @@ AUX_INTENT_TERMS = {
     'test', 'tests', 'testing', 'eval', 'evals', 'evaluation', 'fixture', 'fixtures',
     'benchmark', 'benchmarks', 'example', 'examples', 'sample', 'samples',
 }
+# Platform variants (`wm_devicechange_win.cpp`, `mac/`) are what a Windows/macOS/... task is about and noise to
+# every other one: the file is multiplied by PLATFORM_DEMOTION, and its overriders are ranked after the other
+# overriders of a method, unless a task term names the platform (`PLATFORM_SUFFIXES`, plus the products of the
+# `platform_terms` config map).
+PLATFORM_DEMOTION = 0.5
+_PLATFORM_OF_WORD = {word: key for key, words in PLATFORM_SUFFIXES.items() for word in words | {key}}
 # When the task names a language/extension, boost same-language files and demote
 # other code languages so e.g. a QML task does not resolve to C++. Only tokens
 # that unambiguously denote a language are used, to avoid false hints from
@@ -459,6 +465,28 @@ def _call_graph_file_neighbors(nodes: list[GraphNode], edges: list[GraphEdge]) -
 def _is_aux_path(path: str) -> bool:
     stem = Path(path).stem
     return bool(AUX_PATH_RE.search(path)) or stem.startswith('test_') or stem.endswith('_test')
+
+
+_UI_WORDS = frozenset({'windows'})
+
+
+@functools.lru_cache(maxsize=65536)
+def _platform_of(path: str) -> str | None:
+    """The PLATFORM_SUFFIXES key of the platform a path is a variant for: a stem ending in `_<word>` or a
+    directory segment equal to a word other than `windows` (`wm_devicechange_win.cpp`, `src/mac/x.mm`), else None."""
+    lowered = path.lower()
+    *directories, name = lowered.split('/')
+    stem = name.rsplit('.', 1)[0] if '.' in name else name
+    if '_' in stem:
+        key = _PLATFORM_OF_WORD.get(stem.rsplit('_', 1)[1])
+        if key is not None:
+            return key
+    # A `windows/` directory is usually window management in UI code, not the OS: directories count only
+    # for the unambiguous words.
+    return next(
+        (_PLATFORM_OF_WORD[segment] for segment in directories if segment in _PLATFORM_OF_WORD and segment not in _UI_WORDS),
+        None,
+    )
 
 
 def _symbol_qualname(node: GraphNode) -> str:
@@ -1050,6 +1078,16 @@ def generate_bundle(
         task_terms, sources, [file_tokens[source.path] for source in sources] if task_terms else None, concatenations
     )
     check_deadline()
+    # Stemmed like `task_terms`, which they are compared with; a platform the task names is not demoted.
+    platform_names = {key: {_stem(word) for word in words | {key}} for key, words in PLATFORM_SUFFIXES.items()}
+    for product, platform in config.platform_terms.items():
+        platform_names[platform] |= _tokenize_match(product)
+    named_platforms = frozenset(key for key, names in platform_names.items() if task_terms & names)
+
+    def platform_demoted(path: str) -> bool:
+        key = _platform_of(path)
+        return key is not None and key not in named_platforms
+
     demote_aux = not (intent_terms & AUX_INTENT_TERMS)
     demote_locale = not (intent_terms & LOCALE_INTENT_TERMS)
     hotspot_by_path: dict[str, dict] = {}
@@ -1182,6 +1220,8 @@ def generate_bundle(
             score *= AUX_PATH_DEMOTION
         if demote_locale and _is_locale_source(source.path, source.kind):
             score *= LOCALE_PATH_DEMOTION
+        if platform_demoted(source.path):
+            score *= PLATFORM_DEMOTION
         if lang_suffixes and score > 0:
             # Multiplicative so unrelated files (score 0) are never seeded by
             # language alone; only reorders files the task already matches.
@@ -1400,8 +1440,8 @@ def generate_bundle(
                 if demote_aux and _is_aux_path(overrider.source_ref):
                     continue
                 in_name, in_body = terms_of(overrider)
-                ranked.append((-len(in_name | in_body), overrider.source_ref, overrider_id))
-            return [overrider_id for _overlap, _path, overrider_id in sorted(ranked)]
+                ranked.append((platform_demoted(overrider.source_ref), -len(in_name | in_body), overrider.source_ref, overrider_id))
+            return [overrider_id for _demoted, _overlap, _path, overrider_id in sorted(ranked)]
 
         override_routes: dict[str, str] = {}
         callees = _callee_scores(

@@ -93,3 +93,21 @@ def test_incremental_ingest_agrees_with_a_full_one(tmp_path, monkeypatch):
 
     assert incremental == full
     assert incremental["src/drainqueue.cpp"] == ["drain", "queue"]
+
+
+def test_a_stem_with_underscores_is_split_on_them_and_each_part_is_aliased(tmp_path):
+    """Task 5.6: `wm_devicechange_win.cpp` has no splittable stem as a whole; its part `devicechange` is
+    segmented over the repository's words, and `poolqueue` is resolved by the class the file declares."""
+    repo = make_repo(tmp_path / "repo", {
+        "src/wm_devicechange_win.cpp": "void onEvent() { int a = 1; }\n",
+        "src/wm_poolqueue_mac.cpp": "class PoolQueueStep {};\nvoid PoolQueueStep::run() { int a = 1; }\n",
+        "src/other.h": "class DeviceGuard {};\nclass ChangeGuard {};\nclass DeviceWorker {};\nclass ChangeWorker {};\n",
+        "src/plain_name.cpp": "void f() { int a = 1; }\n",
+    })
+
+    aliases = _aliases(repo)
+
+    assert aliases["src/wm_devicechange_win.cpp"] == ["change", "device"]  # the unsplit parts stay path tokens
+    assert aliases["src/wm_poolqueue_mac.cpp"] == ["pool", "queue", "step"]
+    assert aliases["src/plain_name.cpp"] is None  # no part is a concatenation
+    assert "devicechange" in _tokenize_text("src/wm_devicechange_win.cpp")  # the unsplit part stays a token

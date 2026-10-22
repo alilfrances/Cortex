@@ -217,6 +217,20 @@ Every tool definition carries a human-readable `title` and MCP `annotations` (`r
 
 `cortex risk` uses fixed normalized components: `min(1, churn/100)`, stored hotspot score `/1000`, structural fan-in `/10`, strongest missing COCHANGE weight, and actionable-directive count `/3`. Their weights are respectively `0.30`, `0.20`, `0.15`, `0.15`, and `0.20`; the deterministic score is `round(10 * sum(weight * component), 2)`. Missing COCHANGE advice uses a documented threshold of `0.50`. Ties sort by descending score, then repository-relative path. Risk never runs network commands.
 
+### Query configuration (`.cortex/config.toml`)
+
+The `[query]` table of the repository's `.cortex/config.toml` tunes how a task is matched:
+
+```toml
+[query]
+# Two-way vocabulary bridge: a task that says "USB" also matches code named after the OS device-event API.
+synonyms = { usb = ["devicechange"] }
+# Files named `*_win.*`, `*_mac.*`, `*_linux.*`, `*_android.*`, `*_ios.*` (or under a directory of that name) are
+# demoted, and their overriders ranked last, unless the task names the platform. A product name listed here counts
+# as naming it: a task that says "explorer" is a Windows task. Platforms: win, mac, linux, android, ios.
+platform_terms = { explorer = "win", finder = "mac", udev = "linux" }
+```
+
 ### Impacted tests
 
 `tests_to_run` maps the diff to test files. Changed lines (new side of the `--unified=0` diff, blank lines ignored) are mapped to the innermost indexed symbol whose span contains them; a change outside every symbol, or in a file without symbols, seeds the whole file. From there a bounded reverse walk (depth ≤ 3, edge target → source) over STRUCTURAL `calls`, `imports`, `references`, `inherits`, `instantiates`, `connects`, `handles`, `emits`, `binds`/`reads`/`writes`/`aliases`, `builds` and `registers` edges stops at test files (`structural`, score `1/depth`). The file of a changed symbol is also followed through its build/registration/instantiation edges, the type that owns a changed member through its instantiations (depth +1), and a C/C++ member declared in a header is treated as the same node as its out-of-line definition. A `connect()` written in a test selects that test, and a CMake target or `.qrc` that builds/registers the changed file selects the tests it also builds. Further tiers: a COCHANGE partner test with weight ≥ `0.50` (`cochange`, score = weight), a file-name pair such as `a.py`/`test_a.py` (`pair`, 0.6), and a changed test file (`changed`, 1.0); an entry merges its tiers and keeps the best score. `tests_run_all` is set when the index is unavailable, a build/config file changed (`CMakeLists.txt`, `*.cmake`, `*.qrc`, `*.toml`, `*.yaml`/`*.yml`, `package.json`, `conftest.py`, `setup.cfg`, ...), a changed file is deleted or unindexed, no test is indexed, a changed non-documentation file was reached by no tier (including fixtures and goldens that tests read by path), or a tight budget had to cut the list (it is truncated last, after every other optional field).

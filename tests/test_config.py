@@ -123,3 +123,18 @@ def test_noise_identifiers_excluded_from_keyword_matching(tmp_path):
     bundle = generate_bundle(repo_path=repo, task="zorble trace bug", budget=4000, output_format="json")
     assert isinstance(bundle, dict)
     assert not any(item["path"] == "noisy.py" for item in bundle["items"])
+
+
+def test_platform_terms_map_products_to_platform_keys(tmp_path):
+    _write_config(tmp_path, '[query]\nplatform_terms = { explorer = "win", Finder = "macOS", udev = "linux" }\n')
+
+    assert load_config(tmp_path).platform_terms == {"explorer": "win", "Finder": "mac", "udev": "linux"}
+    assert load_config(tmp_path / "missing").platform_terms == {}
+
+
+@pytest.mark.parametrize("body", ['platform_terms = { explorer = "beos" }', "platform_terms = { explorer = 3 }", 'platform_terms = "win"'])
+def test_platform_terms_with_an_unknown_platform_or_wrong_type_raise(tmp_path, body):
+    _write_config(tmp_path, f"[query]\n{body}\n")
+
+    with pytest.raises(ValueError, match="platform_terms"):
+        load_config(tmp_path)
