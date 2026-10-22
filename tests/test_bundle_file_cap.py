@@ -50,3 +50,30 @@ def test_the_cap_is_released_when_nothing_else_is_waiting(tmp_path):
     spans = _span_tokens(bundle).get("src/dense.cpp", 0)
     assert spans > FILE_SPAN_SHARE * 1200  # a lone file still fills the bundle
     assert bundle["total_tokens"] <= 1200
+
+
+def test_the_span_share_shrinks_with_the_number_of_matching_files():
+    from cortex.bundle import file_span_share
+
+    assert file_span_share(1) == 1.0  # a lone match keeps the whole budget
+    assert file_span_share(2) == 0.5
+    assert file_span_share(3) == 1 / 3
+    assert file_span_share(4) == FILE_SPAN_SHARE  # today's quarter from four files on ...
+    assert file_span_share(8) == 1 / 8  # ... and a smaller share as more files match
+    assert file_span_share(500) == 0.1  # floor
+
+
+def test_many_matching_files_shrink_what_a_dense_file_may_take_first(tmp_path):
+    files = _files()
+    for k in range(5, 17):
+        pad = "\n".join(f"    int pad{i} = value_ + {i};" for i in range(40))
+        files[f"src/helper_{k}.cpp"] = (
+            f"int helper{k}(int value_) {{\n    // reconnect\n    value_ += {k};\n{pad}\n    return value_;\n}}\n"
+        )
+    repo = make_repo(tmp_path / "repo", files)
+
+    bundle = generate_bundle(repo, task=TASK, budget=3000, output_format="json")
+
+    helpers = {item["path"] for item in bundle["items"] if item["path"].startswith("src/helper_")}
+    assert len(helpers) == 17, sorted(helpers)  # a quarter of the budget for the dense file left 5 of them out
+    assert bundle["total_tokens"] <= 3000

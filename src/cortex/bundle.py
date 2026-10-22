@@ -107,10 +107,14 @@ UTILITY_PERCENTILE = 0.99
 UTILITY_MIN_CALLERS = 20
 ACCESSOR_RE = re.compile(r'^(get|set|is|has)([A-Z_0-9]|$)|Changed$')
 # One keyword-dense file (every method name-matches) can fill the whole bundle with symbol spans while
-# other matching files wait: until nothing else is left to pack, at most FILE_SPAN_SHARE of the budget goes
-# to the spans of one file (its first SPANS_BEFORE_CAP spans are never held back). The held-back room is
-# released for a second pass, so a lone dense file still gets the whole budget.
+# other matching files wait: until nothing else is left to pack, at most a share of the budget goes to the
+# spans of one file (its first SPANS_BEFORE_CAP spans are never held back). The share is 1 / the number of
+# matching code files, between FILE_SPAN_SHARE_MIN and 1, and never below FILE_SPAN_SHARE while fewer than
+# FILE_SPAN_SHARE_FILES files match (a handful of matches keeps today's quarter of the budget). The
+# held-back room is released for a second pass, so a lone dense file still gets the whole budget.
 FILE_SPAN_SHARE = 0.25
+FILE_SPAN_SHARE_MIN = 0.1
+FILE_SPAN_SHARE_FILES = 4
 SPANS_BEFORE_CAP = 3
 LOCALE_PATH_RE = re.compile(r'(^|/)(i18n|l10n|locales?|translations?)(/|$)')
 LOCALE_SUFFIXES = frozenset({'.ts', '.po', '.pot', '.xlf', '.xliff', '.qm'})
@@ -710,6 +714,12 @@ def _render_symbol_skeleton(content: str, all_symbols: list[GraphNode], target: 
     out.append('')
     out.extend(_render_symbol_entry(lines, target, children, set(), children_of))
     return '\n'.join(out)
+
+
+def file_span_share(matching_files: int) -> float:
+    """The share of the budget that the spans of one file may take while other matching files wait."""
+    share = max(FILE_SPAN_SHARE_MIN, 1.0 / max(1, matching_files))
+    return max(share, FILE_SPAN_SHARE) if matching_files < FILE_SPAN_SHARE_FILES else share
 
 
 def _skeleton_item(
@@ -1671,7 +1681,8 @@ def generate_bundle(
 
     # First the capped pass, so a dense file leaves room for the other matches; then the same pass without
     # the cap, which only adds what the cap held back and what is still left of the budget.
-    pack(max(1, int(budget * FILE_SPAN_SHARE)))
+    matching_code_files = sum(1 for item in candidates if item.kind == 'code' and item.score > 0)
+    pack(max(1, int(budget * file_span_share(matching_code_files))))
     pack()
 
     bundle = RetrievalBundle(

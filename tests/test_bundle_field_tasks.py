@@ -83,13 +83,15 @@ def _items(bundle: dict, path: str) -> list[dict]:
 
 
 # Task 5.8 (proportional name bonus) ranks the gold file first and packs it in every mode but skeleton_off,
-# where it stays out at both budgets
+# where it stays out at both budgets; Task 5.9 (the per-file span share scales with the matching files) packs it at 4000 there too.
+# At 900 the six hub spans that outscore the 81-token gold file leave 22 tokens, which only a skeleton (the
+# mode without them) could use: not met.
 _HUB_CASES = [
     pytest.param(
         mode, budget,
-        marks=pytest.mark.xfail(strict=True, reason="skeleton_off: fixed by Task 5.9 (span share) or not met"),
+        marks=pytest.mark.xfail(strict=True, reason="skeleton_off at 900: the hub spans leave 22 tokens, only a skeleton fits the gold file (Task 5.9: not met)"),
     )
-    if mode == "skeleton_off" else pytest.param(mode, budget)
+    if (mode, budget) == ("skeleton_off", 900) else pytest.param(mode, budget)
     for mode in MODES
     for budget in (900, 4000)
 ]
