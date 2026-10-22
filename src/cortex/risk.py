@@ -18,9 +18,9 @@ import subprocess
 from collections.abc import Callable
 from typing import Any, Iterable, Mapping, Sequence
 
-from .deadline import check_deadline
+from .deadline import DeadlineExceeded, check_deadline
 from .gitutils import discover_repo_root
-from .impacted_tests import select_tests_with_coverage
+from .impacted_tests import is_documentation, is_runnable_test, select_tests_with_coverage
 from .store import CortexStore, default_db_path
 from .testpatterns import is_test_path, pairs_with_test, test_name_info
 from .tokenizer import count_text_tokens
@@ -820,16 +820,28 @@ def analyze_risk(
 
     file_payloads.sort(key=lambda value: (-float(value["risk_score"]), str(value["path"]), str(value.get("previous_path", ""))))
     missing_cochange.sort(key=lambda value: (value["for"], -float(value["weight"]), value["path"]))
-    tests_to_run, tests_run_all, tests_run_all_reason, tests_by_changed_file, uncovered_changed_files = select_tests_with_coverage(
-        diff.files,
-        diff.raw_zero_context,
-        graph_nodes,
-        graph_edges,
-        all_paths=all_paths,
-        indexed_paths=indexed_paths,
-        cochange=cochange,
-        index_status=index_status,
-    )
+    partial = False
+    try:
+        tests_to_run, tests_run_all, tests_run_all_reason, tests_by_changed_file, uncovered_changed_files = select_tests_with_coverage(
+            diff.files,
+            diff.raw_zero_context,
+            graph_nodes,
+            graph_edges,
+            all_paths=all_paths,
+            indexed_paths=indexed_paths,
+            cochange=cochange,
+            index_status=index_status,
+        )
+    except DeadlineExceeded:
+        # Test selection is the unbounded part.  `file_payloads` (the ranking) is already complete,
+        # so return it instead of an error.  No test was traced, so run everything, and every
+        # reviewable changed file is reported as not yet shown to be covered.
+        partial = True
+        tests_to_run, tests_run_all, tests_run_all_reason, tests_by_changed_file = [], True, _TESTS_DEADLINE_REASON, {}
+        uncovered_changed_files = [
+            item.path for item in diff.files
+            if item.status != "D" and not is_runnable_test(item.path) and not is_documentation(item.path)
+        ]
     # Highest-risk changed file first (the `files` ranking), then path, so any prefix of the
     # list is the riskiest subset and the truncator can cut it from the end.
     uncovered_rank = {str(value["path"]): position for position, value in enumerate(file_payloads)}
@@ -878,6 +890,8 @@ def analyze_risk(
         "tests_by_changed_file": tests_by_changed_file,
         "uncovered_changed_files": uncovered_changed_files,
     }
+    if partial:
+        result["partial"] = True
     return result
 
 
@@ -896,6 +910,8 @@ _RISK_DROP_ORDER = (
     "analysis_errors",
     "unindexed_files",
 )
+# `analyze_risk` sets this reason (and `partial: true`) when the deadline expires inside test selection.
+_TESTS_DEADLINE_REASON = "time budget exceeded during test selection"
 _TESTS_TRUNCATED_REASON = "tests_to_run was truncated to fit the response budget"
 # `tests_to_run` is cut down to this many entries before the per-file test map is touched.
 TESTS_TO_RUN_FLOOR = 10
@@ -942,13 +958,14 @@ _RISK_SCALAR_KEYS = frozenset(
         "unindexed",
         "tests_run_all",
         "tests_run_all_reason",
+        "partial",
     }
 )
 # What survives the minimal fallback payload (see `truncate_risk_result`).
 _RISK_MINIMAL_KEYS = frozenset(
     {
         "status", "range", "staged", "index_status", "unindexed", "tests_run_all", "tests_run_all_reason",
-        "files", "directives", "tests_to_run", "uncovered_changed_files", "uncovered_changed_files_total",
+        "partial", "files", "directives", "tests_to_run", "uncovered_changed_files", "uncovered_changed_files_total",
         "budget", "truncated", "returned_count", "budget_feasible", "omitted_fields", "minimal_payload",
     }
 ) | frozenset(_MAP_KEYS)

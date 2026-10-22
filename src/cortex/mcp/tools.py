@@ -1971,7 +1971,8 @@ def _call_risk(arguments: dict[str, Any]) -> dict[str, Any]:
         **graph_args,
     )
     result = truncate_risk_result(result, int(arguments.get("budget", 2000)))
-    if store is not None and cache_key and result.get("status") != "error":
+    # A partial payload (deadline inside test selection) is not cached: a later call may have the time to finish.
+    if store is not None and cache_key and result.get("status") != "error" and not result.get("partial"):
         _cache_set(store, repo_root, cache_key, result)
     return _content(_format_payload(result, status, response_format), is_error=result.get("status") == "error")
 

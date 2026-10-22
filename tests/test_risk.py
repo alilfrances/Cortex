@@ -247,3 +247,62 @@ def test_tests_to_run_block_survives_tight_mcp_budgets(tmp_path: Path) -> None:
         # A stripped `reason` (named in omitted_fields) leaves the list itself intact.
         if [item["test"] for item in tight.get("tests_to_run") or []] != [item["test"] for item in roomy["tests_to_run"]]:
             assert tight["tests_run_all"] is True
+
+
+def _expire_inside_test_selection(monkeypatch) -> None:
+    """Let every deadline check before test selection pass and expire the first one inside it."""
+    from cortex import impacted_tests
+    from cortex.deadline import DeadlineExceeded
+
+    def expired() -> None:
+        raise DeadlineExceeded(budget_seconds=30.0, elapsed_seconds=31.0, tool_name="cortex_risk")
+
+    monkeypatch.setattr(impacted_tests, "check_deadline", expired)
+
+
+def test_deadline_inside_test_selection_returns_a_partial_payload(tmp_path: Path, monkeypatch) -> None:
+    from cortex.risk import truncate_risk_result
+
+    repo = _repo(tmp_path)
+    full = analyze_risk(repo, "HEAD~2..HEAD")
+    assert "partial" not in full and full["tests_to_run"]
+
+    _expire_inside_test_selection(monkeypatch)
+    result = analyze_risk(repo, "HEAD~2..HEAD")
+
+    assert result["partial"] is True
+    assert result["tests_run_all"] is True
+    assert result["tests_run_all_reason"] == "time budget exceeded during test selection"
+    assert result["tests_to_run"] == [] and result["tests_by_changed_file"] == {}
+    # The ranking computed before test selection is the one a complete run returns.
+    assert [item["path"] for item in result["files"]] == [item["path"] for item in full["files"]]
+    assert result["files"]
+    # Test selection never finished, so every reviewable changed file is reported as unverified.
+    assert result["uncovered_changed_files"] == [item["path"] for item in result["files"]]
+
+    truncated = truncate_risk_result(result, 2000)
+    assert truncated["partial"] is True
+    assert truncated["tests_run_all"] is True
+    assert truncated["tests_run_all_reason"] == "time budget exceeded during test selection"
+    assert [item["path"] for item in truncated["files"]] == [item["path"] for item in full["files"]]
+
+    # Even the minimal fallback payload (a budget too small for the ordinary one) keeps the flag.
+    tiny = truncate_risk_result(result, 150)
+    assert tiny["partial"] is True and tiny["tests_run_all"] is True
+
+
+def test_mcp_risk_partial_payload_is_not_a_deadline_error_or_cached(tmp_path: Path, monkeypatch) -> None:
+    from cortex import impacted_tests
+
+    repo = _repo(tmp_path)
+    monkeypatch.setenv("CORTEX_AUTO_REFRESH", "0")
+    monkeypatch.setenv("CORTEX_QUERY_CACHE", "1")
+    real_check_deadline = impacted_tests.check_deadline
+    _expire_inside_test_selection(monkeypatch)
+    result = call_tool("cortex_risk", {"repo_path": str(repo), "range": "HEAD~2..HEAD", "budget": 20000})
+    assert result.get("isError") is not True
+    payload = _payload(result)
+    assert payload["partial"] is True and payload["files"]
+    monkeypatch.setattr(impacted_tests, "check_deadline", real_check_deadline)
+    again = _payload(call_tool("cortex_risk", {"repo_path": str(repo), "range": "HEAD~2..HEAD", "budget": 20000}))
+    assert "partial" not in again and again["tests_to_run"], "a partial payload must not be served from the cache"
