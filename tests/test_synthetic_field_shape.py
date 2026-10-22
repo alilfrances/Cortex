@@ -54,3 +54,24 @@ def test_the_profile_has_the_field_report_shape(tmp_path: Path) -> None:
     assert len(manager_calls) > 100
     # mostly calls through a variable (a `CoreDevice *` or a cast local), the receivers that stayed `name:` in 0.12.1
     assert sum(e.metadata.get("receiver_kind") == "var" for e in manager_calls) > len(manager_calls) / 2
+
+
+def test_an_anonymous_namespace_in_one_in_three_derived_files_creates_no_qt_class_nodes(tmp_path: Path) -> None:
+    repo = build_field_shape_repo(tmp_path / "field", modules=12, commits=30)
+    synth = load_synthetic_repo()
+    fixed = {"coredevice", "channeldevice", "unrelated", "devicemanager", "sessionmanager"}
+    derived = [p for p in sorted((repo / "src" / "field").glob("*.cpp")) if p.stem not in fixed]
+    with_namespace = [p for p in derived if p.read_text().startswith(f'#include "{p.stem}.h"\nnamespace {{\nQString ')]
+    assert synth.FIELD_ANON_NAMESPACE_ONE_IN == 3
+    assert 0 < len(with_namespace) and abs(len(with_namespace) * 3 - len(derived)) <= 3
+    assert "namespace" not in (repo / synth.FIELD_SHAPE["first_derived_impl"]).read_text()
+
+    store = CortexStore(default_db_path(repo))
+    try:
+        nodes, _edges = store.fetch_graph(repo)
+    finally:
+        store.connection.close()
+    assert [n.node_id for n in nodes if n.kind == "class" and n.label in {"QString", "QStringList", "QMap"}] == []
+    # the helpers inside the anonymous namespaces are ordinary file-level functions
+    helpers = [n for n in nodes if n.kind == "func" and n.label.startswith("describe_")]
+    assert len(helpers) == len(with_namespace)

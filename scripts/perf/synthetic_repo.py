@@ -95,6 +95,7 @@ FIELD_SHAPE = {
 CMAKE_EVERY = 7  # every n-th history commit touches CMakeLists.txt in --field-shape repos
 FIELD_CONCAT_SHARE = 0.55  # share of all files with a concatenated lowercase stem >= 10 chars
 FIELD_TESTED_ONE_IN = 4  # one derived class in this many has a test
+FIELD_ANON_NAMESPACE_ONE_IN = 3  # one derived .cpp in this many opens with an anonymous namespace
 _PART_A = ("widget", "socket", "device", "channel", "stream", "session", "driver", "bridge", "buffer", "router", "sensor", "filter")
 _PART_B = ("wait", "reset", "install", "attach", "detach", "connect", "probe", "flush", "bind", "poll", "sync", "drain")
 _PART_C = ("ready", "state", "link", "mode", "queue", "check", "frame", "point", "event", "claim", "scope", "phase")
@@ -248,10 +249,17 @@ private:
 """
 
 DERIVED_IMPL = """#include "{stem}.h"
-{cls}::{cls}(QObject *parent) : {base}(parent) {{}}
+{anon}{cls}::{cls}(QObject *parent) : {base}(parent) {{}}
 bool {cls}::isReady() const {{ return m_step > 0 && {base}::isReady(); }}
 void {cls}::reset() {{ m_step = 0; {base}::reset(); }}
 int {cls}::waitForReady(int ms) {{ m_step += 1; return ms - m_step; }}
+"""
+
+# An anonymous namespace opening with a Qt-typed helper: the tree-sitter extractor of 0.13.0
+# labelled such a namespace after its first identifier (`class QString`).
+ANON_NAMESPACE = """namespace {{
+QString describe_{stem}(int) {{ return {{}}; }}
+}}
 """
 
 MANAGER_HEADER = """#pragma once
@@ -359,7 +367,9 @@ def write_field_shape(root: Path, modules: int, rng: random.Random) -> list[str]
     for index, (cls, stem) in enumerate(names):
         base, base_header = ("ChannelDevice", "channeldevice.h") if index % 4 == 3 else ("CoreDevice", "coredevice.h")
         (field / f"{stem}.h").write_text(DERIVED_HEADER.format(cls=cls, base=base, base_header=base_header))
-        (field / f"{stem}.cpp").write_text(DERIVED_IMPL.format(cls=cls, base=base, stem=stem))
+        # index % 3 == 1: the first derived file (the one the query tests target) stays plain
+        anon = ANON_NAMESPACE.format(stem=stem) if index % FIELD_ANON_NAMESPACE_ONE_IN == 1 else ""
+        (field / f"{stem}.cpp").write_text(DERIVED_IMPL.format(cls=cls, base=base, stem=stem, anon=anon))
         derived_cpps.append(f"src/field/{stem}.cpp")
         if index % FIELD_TESTED_ONE_IN == 0:
             (root / "tests" / "field" / f"tst_{stem}.cpp").write_text(

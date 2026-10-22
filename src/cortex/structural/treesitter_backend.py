@@ -98,6 +98,28 @@ def _name_for_node(node: Any, source: bytes) -> str:
     return ""
 
 
+def _cpp_namespace_name(node: Any, source: bytes) -> str:
+    """Label of a C++ `namespace_definition`: its last segment, "" for an anonymous namespace.
+
+    `_name_for_node` would fall back to the first identifier in the body for an unnamed
+    `namespace { QString f(); }` and label the node `QString`; `namespace A::B` is a
+    `nested_namespace_specifier`, which it would label `A`.  The regex backend labels the
+    latter `B` and sees no node for the former.
+    """
+    name = node.child_by_field_name("name")
+    if name is None:
+        return ""
+    last = ""
+    stack = [name]
+    while stack:
+        current = stack.pop()
+        if current.type == "namespace_identifier":
+            last = _node_text(current, source)
+            break
+        stack.extend(current.children)  # the rightmost child is popped first
+    return last
+
+
 def _cpp_member_for_definition(node: Any, source: bytes) -> tuple[str | None, str]:
     """Return the class qualifier and bare member name for a C++ definition."""
     declarator = node.child_by_field_name("declarator")
@@ -462,7 +484,11 @@ def extract_treesitter_edges(
             qualifier, member_name = _cpp_member_for_definition(node, source)
         if qualifier is None and suffix in {".go", ".rs", ".swift"}:
             qualifier = call_sites.method_qualifier(suffix, node, source)
-        name = member_name or _name_for_node(node, source)
+        if node.type == "namespace_definition" and suffix in _CPP_SUFFIXES:
+            # An anonymous namespace emits no node; its members become file-level symbols.
+            name = _cpp_namespace_name(node, source)
+        else:
+            name = member_name or _name_for_node(node, source)
         if name and name in seen_symbols:
             # Same-named definitions share one node (documented non-goal); calls
             # inside the duplicate are attributed to that node.

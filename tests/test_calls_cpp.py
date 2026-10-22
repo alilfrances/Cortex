@@ -359,3 +359,89 @@ def test_block_nested_namespaces_split_over_header_and_source(tmp_path) -> None:
         },
     )
     assert_resolved(sites, "app/c.cpp", 2, "f", "symbol:lib/ab.cpp:f", "scoped")
+
+
+# -- anonymous and nested namespaces (plan 0.14, Task 1.2) ----------------------------------------
+
+
+def _extract_cpp(path: str, text: str):
+    from cortex.structural import extract_structural_edges
+
+    return extract_structural_edges(path, text, {path})
+
+
+def _labels(result, kind: str) -> list[str]:
+    return sorted(n.label for n in result.nodes if n.kind == kind)
+
+
+@TREE_SITTER_ONLY
+@pytest.mark.parametrize(
+    "text",
+    [
+        "namespace {\nQString f();\n}\n",
+        "namespace {\nQString f() { return {}; }\n}\n",
+        "namespace A {\nnamespace {\nQStringList g() { return {}; }\n}\n}\n",
+    ],
+)
+def test_anonymous_namespace_is_not_labelled_after_its_first_type(text: str) -> None:
+    result = _extract_cpp("a.cpp", text)
+    assert not [n for n in result.nodes if n.label in {"QString", "QStringList", "QMap"}], [n.node_id for n in result.nodes]
+
+
+@TREE_SITTER_ONLY
+def test_function_inside_an_anonymous_namespace_is_a_file_level_func() -> None:
+    result = _extract_cpp("a.cpp", "namespace {\nQString f() { return {}; }\n}\n")
+    assert [(n.kind, n.label) for n in result.nodes] == [("func", "f")]
+    assert [e.target for e in result.edges if e.relation == "contains"] == ["symbol:a.cpp:f"]
+
+
+@TREE_SITTER_ONLY
+def test_call_to_a_function_in_an_anonymous_namespace_resolves_to_the_func() -> None:
+    text = "namespace {\nint helper() { return 1; }\n}\nint top() { return helper(); }\n"
+    result = _extract_cpp("a.cpp", text)
+    assert [(n.node_id, n.kind) for n in result.nodes] == [("symbol:a.cpp:helper", "func"), ("symbol:a.cpp:top", "func")]
+    nodes = [GraphNode("file:a.cpp", "file", "a.cpp", "a.cpp", "file", "", None, None, {}), *result.nodes]
+    edges = list(result.edges)
+    resolve_call_endpoints(nodes, edges)
+    edge = by_site(edges)[("a.cpp", 4, "helper")]
+    assert edge.target == "symbol:a.cpp:helper"
+    assert {n.node_id: n.kind for n in nodes}[edge.target] == "func"
+
+
+@TREE_SITTER_ONLY
+def test_nested_namespace_is_labelled_by_its_last_segment() -> None:
+    result = _extract_cpp("a.cpp", "namespace A::B {\nint f() { return 1; }\n}\n")
+    assert [(n.node_id, n.kind, n.label) for n in result.nodes] == [
+        ("symbol:a.cpp:B", "class", "B"),
+        ("symbol:a.cpp:f", "func", "f"),
+    ]
+    deeper = _extract_cpp("a.cpp", "namespace A::B::C {\nint f() { return 1; }\n}\n")
+    assert _labels(deeper, "class") == ["C"]
+
+
+_PARITY_SOURCE = """\
+namespace {
+QString helper() { return QString(); }
+}
+namespace Named {
+int one() { return 1; }
+}
+namespace A::B {
+int two() { return 2; }
+}
+namespace Outer {
+namespace {
+int three() { return 3; }
+}
+}
+"""
+
+
+@TREE_SITTER_ONLY
+def test_namespace_class_nodes_agree_between_tree_sitter_and_regex(monkeypatch: pytest.MonkeyPatch) -> None:
+    def class_nodes() -> list[tuple[str, str]]:
+        return sorted((n.kind, n.label) for n in _extract_cpp("a.cpp", _PARITY_SOURCE).nodes if n.kind == "class")
+
+    tree_sitter = class_nodes()
+    monkeypatch.setenv("CORTEX_FORCE_REGEX", "1")
+    assert class_nodes() == tree_sitter == [("class", "B"), ("class", "Named"), ("class", "Outer")]
