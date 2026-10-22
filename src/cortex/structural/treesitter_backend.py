@@ -230,6 +230,14 @@ def _import_target(node: Any, source: bytes) -> str:
     return text.split(maxsplit=1)[-1].strip("\"'`") if text else "unknown"
 
 
+def _is_quoted_include(node: Any) -> bool:
+    """True for `#include "x.h"` (string_literal), false for `<x.h>` (system_lib_string)."""
+    if node.type != "preproc_include":
+        return False
+    path_node = node.child_by_field_name("path")
+    return path_node is not None and path_node.type == "string_literal"
+
+
 def _signature(node: Any, source: bytes) -> str:
     text = _node_text(node, source)
     return text.splitlines()[0].strip()
@@ -460,7 +468,13 @@ def extract_treesitter_edges(
             if node.type == "call" and not _signature(node, source).startswith(("require", "require_relative", "load")):
                 continue
             target = _import_target(node, source)
-            resolved = regex_backend.resolve_local_import(target, known_paths)
+            # Only a quoted C/C++ include searches the including file's directory first.
+            resolved, rule = regex_backend.resolve_local_import_rule(
+                target, known_paths, path if _is_quoted_include(node) else None
+            )
+            import_metadata: dict[str, Any] = {"lineno": node.start_point[0] + 1, "source_file": path}
+            if rule == "relative":
+                import_metadata["include_rule"] = "relative"
             line = node.start_point[0] + 1
             edges.append(
                 GraphEdge(
@@ -471,7 +485,7 @@ def extract_treesitter_edges(
                     layer="STRUCTURAL",
                     confidence="EXTRACTED",
                     weight=1.0,
-                    metadata={"lineno": line, "source_file": path},
+                    metadata=import_metadata,
                 )
             )
         if node.type not in _DEF_TYPES:

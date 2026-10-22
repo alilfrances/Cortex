@@ -336,6 +336,29 @@ def test_preferred_marks_only_edges_that_locality_step_two_decided(tmp_path) -> 
 
 
 @TREE_SITTER_ONLY
+def test_include_step_marks_production_when_a_same_named_mock_header_was_discarded(tmp_path) -> None:
+    step = "class Step {\npublic:\n    int run() { return 1; }\n};\n"
+    caller = '#include "steps/step.h"\nint use() {\n    Step *s = new Step();\n    return s->run();\n}\n'
+    layouts = {
+        # same file name in a mock tree: the include step picks the real header, the edge is marked
+        "twin": ({"src/steps/step.h": step, "tests/header-mocks/steps/step.h": step, "src/ops.cpp": caller}, "src/ops.cpp", "production"),
+        # the mock header has a different file name: nothing can replace the included one
+        "other_name": ({"src/steps/step.h": step, "tests/mocks/fakestep.h": step, "src/ops.cpp": caller}, "src/ops.cpp", None),
+        # the caller is itself a test: it is not production code preferring production code
+        "test_caller": (
+            {"src/steps/step.h": step, "tests/header-mocks/steps/step.h": step, "tests/ops_test.cpp": caller.replace("steps/step.h", "../src/steps/step.h")},
+            "tests/ops_test.cpp",
+            None,
+        ),
+    }
+    for name, (files, caller_path, preferred) in layouts.items():
+        sites = _namespace_sites(tmp_path / name, files)
+        edge = sites[(caller_path, 3, "Step")]
+        assert edge.target == "symbol:src/steps/step.h:Step", (name, edge.target)
+        assert edge.metadata.get("preferred") == preferred, name
+
+
+@TREE_SITTER_ONLY
 def test_same_label_namespaces_resolve_to_the_included_one_else_stay_ambiguous(tmp_path) -> None:
     files = {
         "one/ns_one.h": "namespace Ns {\nint f();\n}\n",

@@ -374,3 +374,44 @@ def test_incremental_preserves_rowids_for_unchanged_file_when_degree_changes(tmp
     assert degree_after < degree_before
     assert nodes_after == nodes_before
     assert edges_after == edges_before
+
+
+def test_quoted_include_resolution_incremental_vs_full(tmp_path):
+    """Quoted includes resolve relative to the includer first. Adding a second
+    `stepbase.h` makes the basename ambiguous: an unchanged includer keeps its
+    old (basename) resolution until it is re-extracted -- the same limitation
+    as basename uniqueness today -- while a full ingest gives the includer-relative one."""
+    repo = tmp_path / "repo"
+    (repo / "tests/header-mocks/steps").mkdir(parents=True)
+    (repo / "src/app").mkdir(parents=True)
+    _init_git_repo(repo)
+    (repo / "tests/header-mocks/stepbase.h").write_text("class StepBase {};\n")
+    (repo / "tests/header-mocks/steps/stepa.h").write_text('#include "stepbase.h"\nclass StepA : public StepBase {};\n')
+    _commit_all(repo, "init")
+
+    def imports_of(path):
+        store = CortexStore(default_db_path(repo))
+        _, edges = store.fetch_graph(repo)
+        return sorted(e.target for e in edges if e.relation == "imports" and e.source == f"file:{path}")
+
+    mock = "tests/header-mocks/steps/stepa.h"
+    ingest_repository(repo, commit_limit=0)
+    assert imports_of(mock) == ["file:tests/header-mocks/stepbase.h"]
+
+    # A second `stepbase.h` appears; the includer is unchanged.
+    (repo / "src/app/stepbase.h").write_text("class StepBase {};\n")
+    _commit_all(repo, "add duplicate")
+    ingest_repository(repo, commit_limit=0, incremental=True)
+    assert imports_of(mock) == ["file:tests/header-mocks/stepbase.h"]  # unchanged includer keeps its resolution
+
+    # Re-extracting the includer resolves relative to it, not by unique basename.
+    (repo / mock).write_text('#include "stepbase.h"\nclass StepA : public StepBase {};\n// touched\n')
+    ingest_repository(repo, commit_limit=0, incremental=True)
+    assert imports_of(mock) == ["file:tests/header-mocks/stepbase.h"]
+
+    # A full ingest agrees, and a new includer next to src/app/stepbase.h gets that one.
+    (repo / "src/app/main.cpp").write_text('#include "stepbase.h"\nint main() { return 0; }\n')
+    _commit_all(repo, "add includer")
+    ingest_repository(repo, commit_limit=0)
+    assert imports_of(mock) == ["file:tests/header-mocks/stepbase.h"]
+    assert imports_of("src/app/main.cpp") == ["file:src/app/stepbase.h"]

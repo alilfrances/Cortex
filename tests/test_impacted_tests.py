@@ -661,6 +661,20 @@ def test_a_header_whose_calls_were_resolved_only_by_preferring_production_maps_t
     assert new_step[0].metadata["preferred"] == "production"  # the call graph keeps the production answer
 
 
+@pytest.mark.skipif(not treesitter_available(), reason="managed tree-sitter runtime is not ready")
+def test_an_include_that_resolved_by_exact_path_stays_walked_despite_a_mock_twin(tmp_path: Path) -> None:
+    """Only an include newly resolved by the includer-relative rule is shadowable: `#include "src/steps/step.h"`
+    resolved by its exact path in 0.12.1 too, so the header still selects the test that builds the includer."""
+    repo = _mock_step_repo(tmp_path)
+    _write(repo, "src/ops.cpp", OPS_CPP.replace('"steps/step.h"', '"src/steps/step.h"'))
+    commit_all(repo, "exact path include")
+
+    result = _change(repo, "src/steps/step.h", STEP_H.replace("int run();", "int run();\n    int extra();"))
+
+    assert result["tests_by_changed_file"]["src/steps/step.h"] == ["tests/opstest.cpp"]
+    assert result["tests_run_all"] is False
+
+
 @QT_BACKENDS
 def test_a_change_to_the_caller_of_a_preferred_edge_still_maps_to_its_test(
     backend: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

@@ -400,6 +400,17 @@ class _Index(ClassIndex):
             return same
         imported = set(self.reachable(from_path))
         near = [c for c in candidate_ids if self.symbols[c].source_ref in imported]
+        if near and len(near) < len(candidate_ids) and self.trace is not None and not _is_auxiliary(from_path):
+            # A same-named mock header can replace the included one on a test target's include path
+            # (review 0.13.0 section C), so impacted_tests must not walk this edge; the call graph keeps the answer.
+            kept = {PurePosixPath(self.symbols[c].source_ref).name for c in near}
+            if any(
+                c not in near
+                and _is_auxiliary(self.symbols[c].source_ref)
+                and PurePosixPath(self.symbols[c].source_ref).name in kept
+                for c in candidate_ids
+            ):
+                self.trace.add("production")
         return self.locality(near or candidate_ids, from_path)
 
     def locality(self, candidate_ids: list[str], from_path: str) -> list[str]:
