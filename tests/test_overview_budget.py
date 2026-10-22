@@ -198,3 +198,30 @@ def test_malformed_same_version_analysis_cache_is_replaced_and_ledger_uses_detai
     rows = [row for row in store.fetch_tool_usage(repo) if row["tool"] == "cortex_overview"]
     assert len(rows) == 1
     assert rows[0]["baseline_tokens"] == mcp_tools._detailed_rendering_tokens("cortex_overview", concise_args)
+
+
+def test_partial_dead_code_scan_reports_progress_in_the_overview_text():
+    analysis = {**_analysis(), "dead_code_partial": True, "dead_code_progress": {"processed": 7000, "total": 156000}}
+    payload = mcp_tools._fit_overview_report(Path("/repo"), analysis, budget=200_000)
+    assert "dead_code: scanned 7000 of 156000 candidates; call again to resume" in payload["report"].splitlines()
+    assert _json_tokens(payload) <= payload["budget"]
+
+    # A scan that finished (or an analysis from before progress was kept) says nothing.
+    finished = mcp_tools._fit_overview_report(Path("/repo"), _analysis(), budget=200_000)
+    assert "scanned" not in finished["report"]
+    no_progress = mcp_tools._fit_overview_report(Path("/repo"), {**_analysis(), "dead_code_partial": True}, budget=200_000)
+    assert "call again to resume" not in no_progress["report"]
+
+
+def test_overview_tool_reports_progress_while_the_dead_code_scan_is_partial(tmp_path, monkeypatch):
+    repo = _indexed_repo(tmp_path, monkeypatch)
+    real = mcp_tools.build_report_data
+
+    def partial(*args, **kwargs):
+        return {**real(*args, **kwargs), "dead_code_partial": True, "dead_code_cursor": "x",
+                "dead_code_progress": {"processed": 3, "total": 11}}
+
+    monkeypatch.setattr(mcp_tools, "build_report_data", partial)
+    monkeypatch.setattr(mcp_tools, "_resume_overview_dead_code", lambda store, root, analysis: analysis)
+    payload = json.loads(call_tool("cortex_overview", {"repo_path": str(repo)})["content"][0]["text"])
+    assert "dead_code: scanned 3 of 11 candidates; call again to resume" in payload["report"]

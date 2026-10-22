@@ -3,10 +3,33 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 
+from .callresolve import _Index
 from .deadline import check_deadline
 from .models import GraphEdge, GraphNode
 
 DEFAULT_EXCLUDE_LAYERS = frozenset({"COCHANGE"})
+# Most ranked runners-up `cortex_path` lists when a bare label names several symbols.
+MAX_ALTERNATIVES = 8
+
+
+def rank_candidates(candidates: list[GraphNode], near_path: str = "") -> list[GraphNode]:
+    """Same-label symbols, likeliest intended one first.
+
+    Uses the call resolver's `locality` rules (production over test/mock trees, a header over a class
+    nested in a .cpp, then the directory nearest to ``near_path``, the other end of the path); symbols
+    that rule ties are ordered by path, then id.
+    """
+    symbols = [node for node in candidates if node.granularity == "symbol"]
+    if len(symbols) < 2:
+        return list(candidates)
+    index = _Index(symbols, [])
+    pool = sorted(index.symbols)
+    ranked: list[str] = []
+    while pool:
+        best = index.locality(pool, near_path)
+        ranked.extend(sorted(best, key=lambda c: (index.symbols[c].source_ref, c)))
+        pool = [c for c in pool if c not in best]
+    return [index.symbols[c] for c in ranked]
 
 
 def shortest_paths(
