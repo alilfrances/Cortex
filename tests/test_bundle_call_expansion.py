@@ -269,3 +269,47 @@ def test_a_handler_without_a_task_word_in_its_name_leads_to_the_file_it_calls(tm
     packed = _items_by_path(bundle)
     route = (packed.get("src/registry_store.cpp") or {}).get("metadata", {}).get("call_expansion")
     assert route and route["from"] == "symbol:src/hub.cpp:dispatch", (sorted(packed), route)
+
+
+# --- relevance is a small score factor and IDF-weighted (docs/plan-0.14-field-review.md, Task 5.2) ---
+
+
+def test_walk_scales_a_callee_score_by_a_small_relevance_factor() -> None:
+    from cortex.bundle import CALLEE_HOP_SHARE, CALLEE_RELEVANCE_MIN, RELEVANCE_FLOOR, _callee_scores
+
+    calls = {"symbol:a.cpp:top": ["symbol:b.cpp:hit", "symbol:c.cpp:miss"]}
+    levels = {"symbol:b.cpp:hit": 1.0, "symbol:c.cpp:miss": RELEVANCE_FLOOR}
+    got = _callee_scores(
+        [("symbol:a.cpp:top", 100.0)], calls, lambda sid: sid.split(":")[1], lambda sid: None, {},
+        relevance=lambda sid: levels[sid],
+    )
+
+    share = 100.0 * CALLEE_HOP_SHARE[0]
+    assert got["symbol:b.cpp:hit"][0] == pytest.approx(share)
+    assert got["symbol:c.cpp:miss"][0] == pytest.approx(share * (CALLEE_RELEVANCE_MIN + (1 - CALLEE_RELEVANCE_MIN) * RELEVANCE_FLOOR))
+    # A callee that shares no word keeps most of its share: the 0.13.0 range 0.25-1 lost the companion fixture.
+    assert 0.75 <= CALLEE_RELEVANCE_MIN <= 0.95
+    assert got["symbol:c.cpp:miss"][0] >= 0.85 * share
+
+
+def test_walk_does_not_scale_the_bases_of_the_seeds_class() -> None:
+    from cortex.bundle import BASE_CLASS_SHARE, _callee_scores
+
+    got = _callee_scores(
+        [("symbol:a.cpp:method", 100.0)], {}, lambda sid: sid.split(":")[1],
+        lambda sid: "symbol:a.h:Derived" if sid == "symbol:a.cpp:method" else None,
+        {"symbol:a.h:Derived": ["symbol:base.h:Base"]}, relevance=lambda sid: 0.25,
+    )
+
+    assert got["symbol:base.h:Base"][0] == 100.0 * BASE_CLASS_SHARE
+
+
+def test_body_relevance_weighs_the_rare_term_above_the_common_one() -> None:
+    from cortex.bundle import RELEVANCE_FILE_HIT, _body_relevance
+
+    weights = {"rare": 8.0, "common": 1.0, "mid": 4.0}
+    assert _body_relevance({"rare"}, weights) == 1.0                          # the heaviest term alone
+    assert _body_relevance({"common"}, weights) == RELEVANCE_FILE_HIT         # 1/8 floors at the file hit
+    assert _body_relevance({"mid"}, weights) == pytest.approx(0.5)
+    assert _body_relevance({"mid", "common"}, weights) == pytest.approx(5 / 8)
+    assert _body_relevance({"rare", "mid", "common"}, weights) == 1.0         # capped

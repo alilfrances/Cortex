@@ -379,8 +379,8 @@
       "server.py",
       "handlers/incidents.py",
       "integrations/slack.py",
-      "storage/repository.py",
       "tests/test_incidents.py",
+      "storage/repository.py",
       "config.py"
     ],
     "mode": "pagerank",
@@ -392,8 +392,8 @@
       "server.py",
       "handlers/incidents.py",
       "integrations/slack.py",
-      "storage/repository.py",
       "tests/test_incidents.py",
+      "storage/repository.py",
       "config.py"
     ],
     "mode": "bfs",
@@ -545,7 +545,7 @@
     "files": [
       "tests/test_incidents.py",
       "handlers/incidents.py",
-      "integrations/slack.py"
+      "storage/repository.py"
     ],
     "mode": "skeleton_on",
     "repo": "web_service",
@@ -555,7 +555,7 @@
     "files": [
       "tests/test_incidents.py",
       "handlers/incidents.py",
-      "integrations/slack.py"
+      "storage/repository.py"
     ],
     "mode": "skeleton_off",
     "repo": "web_service",

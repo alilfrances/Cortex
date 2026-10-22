@@ -76,15 +76,20 @@ OVERRIDES_PER_METHOD = 4
 SEED_FILES = 3
 TRIVIAL_SPAN_LINES = 3
 # Of the other-file callees of a function the CALLEES_PER_SEED most relevant are followed, not the first
-# ones in call-site order: relevance is 1 when the callee's name (or, beyond TRIVIAL_SPAN_LINES lines, its
-# body) shares a task term, RELEVANCE_FILE_HIT when only its file does, else RELEVANCE_FLOOR. Trivial
-# callees (accessor-shaped names, spans of at most TRIVIAL_SPAN_LINES lines, functions called from more
-# places than UTILITY_PERCENTILE of the called functions and at least UTILITY_MIN_CALLERS times) are not
-# followed at all unless their name carries a task term. Relevance orders and filters; it does not scale
-# the score: a callee that shares no word with the task is often the cause (the 0.12.0 review), and
-# scaling it down below keyword-only files lost it (companion fixture recall 1.0 -> 0.67).
+# ones in call-site order: relevance is 1 when the callee's name shares a task term; beyond
+# TRIVIAL_SPAN_LINES lines its body counts too, weighted by how rare the shared terms are (the summed
+# term weights over the largest task-term weight, at most 1, at least RELEVANCE_FILE_HIT); RELEVANCE_FILE_HIT
+# when only its file shares one, else RELEVANCE_FLOOR. Trivial callees (accessor-shaped names, spans of at
+# most TRIVIAL_SPAN_LINES lines, functions called from more places than UTILITY_PERCENTILE of the called
+# functions and at least UTILITY_MIN_CALLERS times) are not followed at all unless their name carries a
+# task term. Relevance orders, filters, and scales the score only slightly: a callee that shares no word
+# with the task is often the cause (the 0.12.0 review), so it keeps CALLEE_RELEVANCE_MIN of its share.
+# 0.13.0 scaled by 0.25-1 and lost it (companion fixture recall 1.0 -> 0.67); a floor of 0.85 puts a
+# relevant callee ahead of an irrelevant one at the same hop without ever dropping the latter below the
+# keyword-only files. Tuning range 0.75-0.95.
 RELEVANCE_FILE_HIT = 0.5
 RELEVANCE_FLOOR = 0.25
+CALLEE_RELEVANCE_MIN = 0.85
 UTILITY_PERCENTILE = 0.99
 UTILITY_MIN_CALLERS = 20
 ACCESSOR_RE = re.compile(r'^(get|set|is|has)([A-Z_0-9]|$)|Changed$')
@@ -232,6 +237,20 @@ def _call_graph_links(nodes: list[GraphNode], edges: list[GraphEdge], *, with_ov
     )
 
 
+def _body_relevance(
+    body_terms: set[str] | frozenset[str], term_weights: dict[str, float], max_weight: float | None = None
+) -> float:
+    """Relevance of a callee whose body shares `body_terms` with the task: the summed term weights over
+    the largest task-term weight (so one rare term counts as much as several common ones), capped at 1
+    and floored at RELEVANCE_FILE_HIT."""
+    if max_weight is None:
+        max_weight = max(term_weights.values(), default=0.0)
+    if max_weight <= 0:
+        return 1.0 if body_terms else RELEVANCE_FILE_HIT
+    total = sum(term_weights.get(term, 1.0) for term in body_terms)
+    return max(RELEVANCE_FILE_HIT, min(1.0, total / max_weight))
+
+
 def _callee_scores(
     seeds: list[tuple[str, float]],
     calls_from: dict[str, list[str]],
@@ -250,9 +269,11 @@ def _callee_scores(
     a callee in the same file as its caller is walked through at the same hop (a function that
     delegates to a sibling still leads on). At most CALLEES_PER_SEED other-file callees are taken
     per function: the most relevant ones (`relevance(callee)`; 0 = not worth following), call-site order
-    breaking ties; without `relevance` call-site order decides. The score does not depend on relevance;
-    the fourth element is `relevance(callee)` (0.0 without it) and only orders callees whose scores tie.
-    The bases of the seed's class score BASE_CLASS_SHARE.
+    breaking ties; without `relevance` call-site order decides. A callee's score is scaled by
+    CALLEE_RELEVANCE_MIN + (1 - CALLEE_RELEVANCE_MIN) * relevance(callee), so an irrelevant callee keeps
+    CALLEE_RELEVANCE_MIN of its share; the fourth element is `relevance(callee)` (0.0 without it, and then
+    no scaling) and orders callees whose scores tie. The bases of the seed's class score BASE_CLASS_SHARE,
+    unscaled.
 
     `overriders(method)` lists the methods of derived classes that override a reached callee; each is
     offered at the callee's own score and hop, and `routes` (when given) receives overrider -> the base
@@ -260,11 +281,16 @@ def _callee_scores(
     """
     best: dict[str, tuple[float, str, int, float]] = {}
 
-    def offer(symbol_id: str, score: float, seed_id: str, hop: int, via: str | None = None) -> None:
+    def offer(
+        symbol_id: str, score: float, seed_id: str, hop: int, via: str | None = None, *, scaled: bool = True
+    ) -> None:
         if symbol_id == seed_id:
             return
+        level = relevance(symbol_id) if relevance is not None else 0.0
+        if scaled and relevance is not None:
+            score *= CALLEE_RELEVANCE_MIN + (1 - CALLEE_RELEVANCE_MIN) * level
         if symbol_id not in best or score > best[symbol_id][0]:
-            best[symbol_id] = (score, seed_id, hop, relevance(symbol_id) if relevance is not None else 0.0)
+            best[symbol_id] = (score, seed_id, hop, level)
             if routes is not None:
                 if via is None:
                     routes.pop(symbol_id, None)
@@ -303,7 +329,7 @@ def _callee_scores(
                 queue.append((callee, hop + 1))
         owner = class_of(seed_id)
         for base in bases_of.get(owner, ()) if owner else ():
-            offer(base, seed_score * BASE_CLASS_SHARE, seed_id, 1)
+            offer(base, seed_score * BASE_CLASS_SHARE, seed_id, 1, scaled=False)
     return best
 
 
@@ -1185,6 +1211,8 @@ def generate_bundle(
                 term_cache[symbol.node_id] = cached
             return cached
 
+        max_term_weight = max((term_weights.get(term, 1.0) for term in live_terms), default=0.0)
+
         def relevance(callee_id: str) -> float:
             symbol = symbol_by_id.get(callee_id)
             if symbol is None or symbol.span_start is None or symbol.span_end is None:
@@ -1201,7 +1229,7 @@ def generate_bundle(
                 # A one-line virtual is still the way to its overrides.
                 return RELEVANCE_FLOOR if callee_id in links.overridden_by and callee_id not in links.utilities else 0.0
             if in_body:
-                return 1.0
+                return _body_relevance(in_body, term_weights, max_term_weight)
             return RELEVANCE_FLOOR if not (live_terms & file_tokens.get(symbol.source_ref, set())) else RELEVANCE_FILE_HIT
 
         def overriders(method_id: str) -> list[str]:
@@ -1236,7 +1264,7 @@ def generate_bundle(
                 continue
             if symbol.span_start is None or symbol.span_end is None:
                 continue
-            # `relevance` only orders tied candidates below; the `why` renderer reads the other keys only.
+            # `relevance` orders tied candidates below; the `why` renderer reads the other keys only.
             route = {'from': seed_id, 'hop': hop, 'relevance': callee_relevance}
             if callee_id in override_routes:
                 route = {**route, 'type': 'override', 'via': override_routes[callee_id]}
