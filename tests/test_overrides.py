@@ -231,3 +231,85 @@ def test_the_best_span_of_each_of_the_five_best_files_is_a_seed():
     for path in paths[:5]:
         assert any(f":{path}:" in name for name in names), (path, names)
     assert not any(":f5.cpp:" in name or ":f6.cpp:" in name for name in names)
+
+
+# --- Task 5.4: constructors do not seed, and `new X` (an edge to the class node) reaches the constructors
+
+
+def test_call_links_map_each_class_to_its_constructors_inline_and_out_of_line():
+    inline = GraphNode(  # an inline constructor that kept its own id (the extractor merges most into the class node)
+        node_id="symbol:src/foo.h:Foo.Foo", kind="func", label="Foo", source_ref="src/foo.h", granularity="symbol",
+        span_start=3, span_end=5,
+    )
+    nodes = [
+        cls("src/foo.h", "Foo", span=(1, 12)), inline, method("src/foo.h", "tick", span=(7, 9)),
+        method("src/foo.cpp", "Foo", qualifier="Foo", span=(4, 20)),  # out of line, by qualifier
+        method("src/foo.cpp", "~Foo", qualifier="Foo", span=(22, 30)),  # a destructor is not one
+        method("src/foo.cpp", "tick", qualifier="Foo", span=(32, 40)),
+        cls("src/bar.h", "Bar"), cls("src/bar.cpp", "Bar"),  # ambiguous label: the qualifier names no class
+        method("src/baz.cpp", "Bar", qualifier="Bar"),
+        method("src/util.cpp", "Foo", span=(1, 9)),  # a free function that happens to share the label
+        cls("src/lone.h", "Lone"),  # no constructor symbol
+    ]
+
+    links = _call_graph_links(nodes, [])
+
+    assert links.constructors_of == {"symbol:src/foo.h:Foo": ["symbol:src/foo.cpp:Foo", "symbol:src/foo.h:Foo.Foo"]}
+    assert _call_graph_links(nodes, [], with_overrides=False).constructors_of == {}  # file links only
+
+
+def test_constructors_are_never_seeds_but_the_other_methods_of_their_class_are():
+    nodes = {
+        n.node_id: n for n in [
+            cls("src/hub.h", "Hub", span=(1, 6)),
+            method("src/hub.cpp", "Hub", qualifier="Hub", span=(3, 300)),
+            method("src/hub.cpp", "retry", qualifier="Hub", span=(302, 310)),
+        ]
+    }
+    items = [_span_item("src/hub.cpp", "Hub", 300.0), _span_item("src/hub.cpp", "retry", 120.0)]
+    files = {"src/hub.cpp": 300.0}
+
+    seeds = _select_seeds(items, nodes, files, frozenset({"symbol:src/hub.cpp:Hub"}))
+
+    assert [item.metadata["node_id"] for item in seeds] == ["symbol:src/hub.cpp:retry"]
+    assert len(_select_seeds(items, nodes, files)) == 2  # without the set nothing changes
+
+
+def test_a_callee_that_is_a_class_is_replaced_by_its_constructors_at_the_same_hop():
+    from cortex.bundle import CALLEE_HOP_SHARE
+
+    calls = {
+        "symbol:a.cpp:top": ["symbol:w.h:Widget", "symbol:plain.h:Plain"],
+        "symbol:w.cpp:Widget": ["symbol:z.cpp:build"],
+    }
+    ctors = {"symbol:w.h:Widget": ["symbol:w.cpp:Widget", "symbol:w.cpp:Widget2"]}
+
+    got = _walk([("symbol:a.cpp:top", 100.0)], calls, constructors_of=ctors)
+
+    first = 100.0 * CALLEE_HOP_SHARE[0]
+    assert "symbol:w.h:Widget" not in got  # the class node itself is not offered
+    assert got["symbol:w.cpp:Widget"][:3] == (first, "symbol:a.cpp:top", 1)
+    assert got["symbol:w.cpp:Widget2"][:3] == (first, "symbol:a.cpp:top", 1)
+    assert got["symbol:plain.h:Plain"][:3] == (first, "symbol:a.cpp:top", 1)  # no constructor symbol: as today
+    assert got["symbol:z.cpp:build"][:3] == (100.0 * CALLEE_HOP_SHARE[1], "symbol:a.cpp:top", 2)
+
+
+def test_a_class_node_that_carries_calls_stays_a_candidate_next_to_its_out_of_line_constructors():
+    calls = {"symbol:a.cpp:top": ["symbol:w.h:Widget"], "symbol:w.h:Widget": ["symbol:z.cpp:inline_init"]}
+
+    got = _walk([("symbol:a.cpp:top", 100.0)], calls, constructors_of={"symbol:w.h:Widget": ["symbol:w.cpp:Widget"]})
+
+    assert {"symbol:w.cpp:Widget", "symbol:w.h:Widget", "symbol:z.cpp:inline_init"} <= set(got)  # its inline constructor
+
+
+def test_a_constructor_in_the_callers_file_is_walked_through_without_a_hop():
+    from cortex.bundle import CALLEE_HOP_SHARE
+
+    calls = {
+        "symbol:a.cpp:top": ["symbol:a.cpp:Widget"],
+        "symbol:a.cpp:Widget": ["symbol:z.cpp:build"],
+    }
+
+    got = _walk([("symbol:a.cpp:top", 100.0)], calls, constructors_of={"symbol:a.cpp:Widget": ["symbol:a.cpp:Widget"]})
+
+    assert got["symbol:z.cpp:build"][:3] == (100.0 * CALLEE_HOP_SHARE[0], "symbol:a.cpp:top", 1)

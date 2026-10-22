@@ -6,14 +6,16 @@ import math
 import re
 import time
 from collections import Counter, defaultdict, deque
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
+from types import MappingProxyType
 from typing import NamedTuple
 
 from .config import load_config
 from .deadline import DeadlineExceeded, check_deadline, current_deadline, deadline_scope
 from .fusion import rrf_fuse
 from .gitutils import discover_repo_root
+from .callresolve import _last_segment
 from .models import BundleItem, GraphEdge, GraphNode, RetrievalBundle
 from .overrides import find_overriders
 from .pathalias import parts_from_labels
@@ -185,6 +187,52 @@ class CallLinks(NamedTuple):
     bases_of: dict[str, list[str]]  # class symbol -> base class symbols
     overridden_by: dict[str, list[str]]  # base method symbol -> same-named methods of derived classes
     utilities: frozenset[str]  # symbols called from so many places that calling one says nothing
+    # class symbol -> its constructor symbols (functions labelled like the class); only when overrides are derived
+    constructors_of: Mapping[str, Sequence[str]] = MappingProxyType({})
+
+
+def _constructors_by_class(nodes: Iterable[GraphNode]) -> dict[str, list[str]]:
+    """class symbol id -> sorted ids of its constructors, for the classes that have a constructor symbol.
+
+    A constructor is a function or method whose label is the label of its class: the smallest class
+    (other than itself) whose span holds it, else the class its `Cls::` qualifier names when that label
+    is unique (an out-of-line `Foo::Foo`). Destructors (`~Foo`) have another label and are not constructors.
+    An inline constructor usually shares the class's own node id; its calls then hang on the class node
+    and no separate constructor symbol exists.
+    """
+    symbols = [node for node in nodes if node.granularity == 'symbol']
+    classes: defaultdict[str, list[GraphNode]] = defaultdict(list)
+    for node in symbols:
+        if node.kind == 'class':
+            classes[node.label].append(node)
+    if not classes:
+        return {}
+    classes_by_file: defaultdict[str, list[GraphNode]] = defaultdict(list)
+    class_label: dict[str, str] = {}
+    for group in classes.values():
+        for cls in group:
+            classes_by_file[cls.source_ref].append(cls)
+            class_label[cls.node_id] = cls.label
+    found: defaultdict[str, set[str]] = defaultdict(set)
+    for node in symbols:
+        if node.kind not in ('func', 'method') or node.label not in classes:
+            continue
+        owner: str | None = None
+        if node.span_start is not None:
+            holders = [
+                cls for cls in classes_by_file.get(node.source_ref, ())
+                if cls.node_id != node.node_id and cls.span_start is not None and cls.span_end is not None
+                and cls.span_start <= node.span_start <= cls.span_end
+            ]
+            if holders:
+                owner = min(holders, key=lambda cls: (cls.span_end - cls.span_start, cls.node_id)).node_id
+        if owner is None:
+            qualifier = node.metadata.get('qualifier') if isinstance(node.metadata, dict) else None
+            matches = classes.get(_last_segment(qualifier), []) if isinstance(qualifier, str) and qualifier else []
+            owner = matches[0].node_id if len(matches) == 1 else None
+        if owner is not None and class_label[owner] == node.label:
+            found[owner].add(node.node_id)
+    return {class_id: sorted(ids) for class_id, ids in found.items()}
 
 
 def _call_graph_links(nodes: list[GraphNode], edges: list[GraphEdge], *, with_overrides: bool = True) -> CallLinks:
@@ -192,7 +240,9 @@ def _call_graph_links(nodes: list[GraphNode], edges: list[GraphEdge], *, with_ov
 
     Returns the file links, the call lists in call-site order (same-file callees included), the base
     classes of each class and, derived from those, the overriding methods (`overrides.find_overriders`;
-    the graph holds no `overrides` relation) and the utility functions (see `UTILITY_PERCENTILE`).
+    the graph holds no `overrides` relation), the utility functions (see `UTILITY_PERCENTILE`) and the
+    constructors of each class (`_constructors_by_class`). The overriders and constructors, which the
+    file links do not need, are skipped with `with_overrides=False`.
     Only edges whose endpoints are both known symbols count; `name:`/`module:` targets are unresolved
     and same-file pairs add nothing to the file links.
     """
@@ -234,6 +284,7 @@ def _call_graph_links(nodes: list[GraphNode], edges: list[GraphEdge], *, with_ov
     return CallLinks(
         dict(neighbors), dict(symbols), calls_from, dict(bases),
         find_overriders(nodes, bases) if with_overrides else {}, utilities,
+        _constructors_by_class(nodes) if with_overrides else MappingProxyType({}),
     )
 
 
@@ -261,6 +312,7 @@ def _callee_scores(
     relevance: Callable[[str], float] | None = None,
     overriders: Callable[[str], Sequence[str]] | None = None,
     routes: dict[str, str] | None = None,
+    constructors_of: Mapping[str, Sequence[str]] | None = None,
 ) -> dict[str, tuple[float, str, int, float]]:
     """callee symbol id -> (score, seed symbol id, hop, relevance) for the best route from any seed.
 
@@ -278,6 +330,11 @@ def _callee_scores(
     `overriders(method)` lists the methods of derived classes that override a reached callee; each is
     offered at the callee's own score and hop and walked from there (their callees follow the normal hop
     budget), and `routes` (when given) receives overrider -> the base method it was reached through.
+
+    A `new X` resolves to the class node, whose body is only a declaration: a callee that is a class with
+    entries in `constructors_of` (class id -> constructor ids) is replaced by those constructors, at the same
+    hop and under the same relevance rules. The class node stays a candidate when it carries calls itself
+    (an inline constructor shares its id); a class without a constructor symbol is offered as before.
     """
     best: dict[str, tuple[float, str, int, float]] = {}
 
@@ -327,7 +384,16 @@ def _callee_scores(
                             queue.appendleft((overrider, hop, overrider))
             current_file = file_of(current)
             crossing: list[tuple[float, int, str]] = []
-            for order, callee in enumerate(calls_from.get(current, ())):
+            targets: list[str] = []
+            for callee in calls_from.get(current, ()):
+                built = constructors_of.get(callee) if constructors_of else None
+                if built:
+                    targets.extend(built)
+                    if callee in calls_from:
+                        targets.append(callee)
+                else:
+                    targets.append(callee)
+            for order, callee in enumerate(targets):
                 if callee in settled:
                     continue
                 if file_of(callee) == current_file:
@@ -346,18 +412,23 @@ def _callee_scores(
 
 
 def _select_seeds(
-    items: list[BundleItem], symbol_by_id: dict[str, GraphNode], file_scores: dict[str, float]
+    items: list[BundleItem],
+    symbol_by_id: dict[str, GraphNode],
+    file_scores: dict[str, float],
+    constructors: Iterable[str] = (),
 ) -> list[BundleItem]:
     """The spans whose callees are followed: the best CALLEE_SEEDS functions that are not trivial.
 
-    Class nodes and spans of at most TRIVIAL_SPAN_LINES lines never seed (they outscore the function the
+    Class nodes, the `constructors` (a hub constructor calls everything the object needs, and outscores
+    the method the task is about) and spans of at most TRIVIAL_SPAN_LINES lines never seed (they outscore the function the
     task is about but call nothing worth following); the best span of each of the SEED_FILES best-scoring
     files is taken first, then the rest by score.
     """
     eligible = []
+    constructor_ids = frozenset(constructors)
     for item in items:
         symbol = symbol_by_id.get(item.metadata['node_id'])
-        if symbol is None or symbol.kind == 'class' or symbol.span_start is None or symbol.span_end is None:
+        if symbol is None or symbol.kind == 'class' or symbol.node_id in constructor_ids or symbol.span_start is None or symbol.span_end is None:
             continue
         if symbol.span_end - symbol.span_start + 1 <= TRIVIAL_SPAN_LINES:
             continue
@@ -1204,7 +1275,8 @@ def generate_bundle(
             return matches[0].node_id if len(matches) == 1 else None
 
         seed_items = _select_seeds(
-            [item for item in candidates if item.kind == 'symbol' and item.score > 0], symbol_by_id, source_scores
+            [item for item in candidates if item.kind == 'symbol' and item.score > 0], symbol_by_id, source_scores,
+            [constructor for built in links.constructors_of.values() for constructor in built],
         )
         live_terms = task_terms - noise_terms
         source_lines: dict[str, list[str]] = {}
@@ -1267,6 +1339,7 @@ def generate_bundle(
             relevance=relevance,
             overriders=overriders,
             routes=override_routes,
+            constructors_of=links.constructors_of,
         )
         file_candidate = {item.path: item for item in candidates if item.item_id.startswith('source:')}
         for callee_id, (callee_score, seed_id, hop, callee_relevance) in sorted(callees.items()):

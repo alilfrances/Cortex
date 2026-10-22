@@ -133,9 +133,18 @@ def test_the_override_chain_reaches_the_accessory(field, mode):
 # --- constructor flood: cause 5 (constructors seed)
 
 
+# skeleton_off keeps the room that skeletons take in the other modes, and one file of the hub file's 100 call
+# neighbours fits into it: helper000.cpp, the first by path, at the file-level CALL_EXPANSION_BONUS (the
+# constructor no longer seeds the walk; this is the flat file-level bonus, whose ties break on path)
+_CTOR_MODES = [
+    pytest.param(mode, marks=pytest.mark.xfail(strict=True, reason="skeleton_off: the file-level call-expansion bonus (flat, ties on path) packs helper000.cpp into the leftover budget"))
+    if mode == "skeleton_off" else mode
+    for mode in MODES
+]
+
+
 @TREE_SITTER_ONLY  # resolved calls: the regex fallback emits name-only call edges
-@pytest.mark.xfail(strict=True, reason="constructor flood: fixed by Task 5.4 (no constructor seeds)")
-@pytest.mark.parametrize("mode", MODES)
+@pytest.mark.parametrize("mode", _CTOR_MODES)
 def test_a_hub_constructor_does_not_flood_the_bundle_with_its_helpers(field, mode):
     task = TASKS["field_ctor_repo"]
     bundle, files = _run(field, "field_ctor_repo", mode)
