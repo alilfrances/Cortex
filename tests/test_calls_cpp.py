@@ -464,3 +464,175 @@ def test_namespace_class_nodes_agree_between_tree_sitter_and_regex(monkeypatch: 
     tree_sitter = class_nodes()
     monkeypatch.setenv("CORTEX_FORCE_REGEX", "1")
     assert class_nodes() == tree_sitter == [("class", "B"), ("class", "Named"), ("class", "Outer")]
+
+
+# -- out-of-repo calls (plan 0.14, Task 3.2) -------------------------------------------------------
+
+
+def _site_line(text: str, needle: str) -> int:
+    return next(i for i, line in enumerate(text.splitlines(), 1) if needle in line)
+
+
+_EXT_HEADER = "class W {\npublic:\n  void run();\n  QList<int> m_list;\n};\n"
+_EXT_SOURCE = """\
+#include "w.h"
+void W::run() {
+  QString s;
+  QString::number(3);
+  std::sort(a, b);
+  boost::asio::post(c);
+  QVariantMap();
+  new QPoint();
+  qWarning("x");
+  printf("x");
+  s.size();
+  m_list.append(1);
+  myHelper();
+}
+"""
+
+
+@TREE_SITTER_ONLY
+@pytest.mark.parametrize(
+    "needle,callee,rule",
+    [
+        ("QString::number", "number", "qt"),          # scope is a Qt class
+        ("std::sort", "sort", "std"),                 # scope under std::
+        ("boost::asio::post", "post", "prefix"),      # another library prefix (the full receiver is checked)
+        ("QVariantMap()", "QVariantMap", "qt"),       # constructor-like free call
+        ("new QPoint", "QPoint", "qt"),               # `new` of a Qt class
+        ("qWarning", "qWarning", "qt_macro"),
+        ("printf", "printf", "libc"),
+        ("s.size()", "size", "qt"),                   # local typed `QString`
+        ("m_list.append", "append", "qt"),            # member typed `QList<int>` in the header
+    ],
+)
+def test_out_of_repo_call_is_marked_external_by_rule(tmp_path, needle: str, callee: str, rule: str) -> None:
+    sites = _namespace_sites(tmp_path, {"w.h": _EXT_HEADER, "w.cpp": _EXT_SOURCE})
+    edge = sites[("w.cpp", _site_line(_EXT_SOURCE, needle), callee)]
+    assert edge.target == f"name:{callee}"  # never rewritten
+    assert edge.metadata["external"] == rule
+    assert "resolution" not in edge.metadata and "ambiguous" not in edge.metadata
+
+
+@TREE_SITTER_ONLY
+def test_undefined_free_call_is_not_marked_external(tmp_path) -> None:
+    sites = _namespace_sites(tmp_path, {"w.h": _EXT_HEADER, "w.cpp": _EXT_SOURCE})
+    edge = sites[("w.cpp", _site_line(_EXT_SOURCE, "myHelper"), "myHelper")]
+    assert edge.target == "name:myHelper" and "external" not in edge.metadata
+
+
+@TREE_SITTER_ONLY
+def test_repository_function_named_like_a_libc_name_keeps_its_resolution(tmp_path) -> None:
+    sites = _namespace_sites(
+        tmp_path,
+        {
+            "io.cpp": "int close(int fd) { return fd; }\nint min(int a, int b) { return a; }\n",
+            "use.cpp": "int f() { close(1); return min(1, 2); }\n",
+        },
+    )
+    closed = assert_resolved(sites, "use.cpp", 1, "close", "symbol:io.cpp:close", "repo_unique")
+    smallest = assert_resolved(sites, "use.cpp", 1, "min", "symbol:io.cpp:min", "repo_unique")
+    assert "external" not in closed.metadata and "external" not in smallest.metadata
+
+
+@TREE_SITTER_ONLY
+def test_libc_name_defined_only_as_a_qualified_member_is_not_external(tmp_path) -> None:
+    """`Box::min` is out of line, so no free tier matches `min(...)` elsewhere, but the repository does
+    define a function of that name: the call is not marked."""
+    sites = _namespace_sites(
+        tmp_path,
+        {
+            "box.h": "class Box {\npublic:\n  int min();\n};\n",
+            "box.cpp": '#include "box.h"\nint Box::min() { return 1; }\n',
+            "use.cpp": "int f() { return min(1, 2); }\n",
+        },
+    )
+    edge = sites[("use.cpp", 1, "min")]
+    assert edge.target == "name:min" and "external" not in edge.metadata
+
+
+@TREE_SITTER_ONLY
+def test_ambiguous_libc_named_call_is_never_marked_external(tmp_path) -> None:
+    sites = _namespace_sites(
+        tmp_path,
+        {
+            "a.cpp": "int printf(int x) { return x; }\n",
+            "b.cpp": "int printf(int x) { return x + 1; }\n",
+            "use.cpp": "int f() { return printf(1); }\n",
+        },
+    )
+    edge = assert_ambiguous(sites, "use.cpp", 1, "printf", ["symbol:a.cpp:printf", "symbol:b.cpp:printf"])
+    assert "external" not in edge.metadata
+
+
+@TREE_SITTER_ONLY
+def test_call_on_a_repository_class_with_a_qt_name_is_not_external(tmp_path) -> None:
+    """`QWidgetBase` matches the Qt class pattern but is a repository class: a member it lacks is not Qt's."""
+    sites = _namespace_sites(
+        tmp_path,
+        {
+            "q.h": "class QWidgetBase {\npublic:\n  void known();\n};\n",
+            "use.cpp": '#include "q.h"\nvoid f() {\n  QWidgetBase::missing();\n  QWidgetBase b;\n  b.absent();\n}\n',
+        },
+    )
+    for line, callee in ((3, "missing"), (5, "absent")):
+        edge = sites[("use.cpp", line, callee)]
+        assert edge.target == f"name:{callee}" and "external" not in edge.metadata, edge.metadata
+
+
+def _free_md(callee: str, **extra) -> dict:
+    return {
+        "callee": callee, "receiver": None, "receiver_kind": "none", "scope": None, "receiver_type": None,
+        **extra,
+    }
+
+
+@pytest.mark.parametrize(
+    "md,rule",
+    [
+        (_free_md("Q_ASSERT"), "qt_macro"),
+        (_free_md("qobject_cast"), "qt_macro"),
+        (_free_md("QStringLiteral"), "qt"),             # matches the Qt class pattern first
+        (_free_md("memcpy"), "libc"),
+        (_free_md("move"), "libc"),
+        (_free_md("number", receiver_kind="scoped", scope="QString", receiver="QString"), "qt"),
+        (_free_md("red", receiver_kind="scoped", scope="Qt", receiver="Qt"), "qt"),
+        (_free_md("sort", receiver_kind="scoped", scope="std", receiver="std"), "std"),
+        (_free_md("run", receiver_kind="scoped", scope="asio", receiver="boost::asio"), "prefix"),
+        (_free_md("append", receiver_kind="var", receiver="m", receiver_type="QList<int>"), "qt"),
+        (_free_md("size", receiver_kind="var", receiver="m", receiver_type="std::vector<int>"), "std"),
+        (_free_md("QPoint", receiver_kind="new"), "qt"),
+        # no rule
+        (_free_md("Widget", receiver_kind="new"), None),
+        (_free_md("myHelper"), None),
+        (_free_md("close", receiver_kind="var", receiver="f"), None),          # a method of an untyped receiver
+        (_free_md("min", receiver_kind="scoped", scope="Box", receiver="Box"), None),
+        (_free_md("size", receiver_kind="var", receiver="m", receiver_type="Widget"), None),
+        (_free_md("qwarn"), None),
+    ],
+    ids=lambda v: v["callee"] if isinstance(v, dict) else str(v),
+)
+def test_classify_call_rules(md: dict, rule: str | None) -> None:
+    from cortex.externals import classify_call
+
+    assert classify_call(md, "c") == rule
+    assert classify_call(md, "js") is None and classify_call(md, "py") is None
+
+
+def test_external_mark_follows_the_definitions_of_an_incremental_batch() -> None:
+    def graph(with_definition: bool):
+        nodes = [GraphNode("symbol:a.cpp:main", "func", "main", "a.cpp", "symbol", "", 1, 5, {})]
+        if with_definition:
+            nodes.append(GraphNode("symbol:b.cpp:printf", "func", "printf", "b.cpp", "symbol", "", 1, 2, {}))
+        return nodes
+
+    edge = _call(False)
+    edge.metadata["callee"] = "printf"
+    edge.target = "name:printf"
+    resolve_call_endpoints(graph(False), [edge])
+    assert edge.target == "name:printf" and edge.metadata["external"] == "libc"
+    resolve_call_endpoints(graph(True), [edge], changed_labels={"printf"})
+    assert edge.target == "symbol:b.cpp:printf" and "external" not in edge.metadata
+    resolve_call_endpoints(graph(False), [edge], changed_labels={"printf"})
+    assert edge.target == "name:printf" and edge.metadata["external"] == "libc"

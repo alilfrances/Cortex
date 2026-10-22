@@ -50,7 +50,7 @@ from collections import defaultdict
 from pathlib import PurePosixPath
 from typing import Iterable
 
-from .externals import QML_FAMILY, classify_base
+from .externals import CPP_FAMILY, QML_FAMILY, classify_base, classify_call
 from .models import GraphEdge, GraphNode
 from .testpatterns import is_test_path
 
@@ -61,7 +61,8 @@ _IMPL_SUFFIXES = {".c", ".cc", ".cpp", ".cxx"}
 _PY_BUILTINS = frozenset(dir(builtins))
 # `preferred` is written when locality step 2 ("production over mock") decided the edge: the call graph keeps
 # that answer, `impacted_tests` does not walk it (a test target may compile the mock instead).
-# `external` (see `externals`) marks an `inherits` base that is outside the repository; the target is unchanged.
+# `external` (see `externals`) marks an `inherits` base or a `calls` callee that is outside the repository;
+# the target is unchanged.
 _RESOLUTION_KEYS = ("resolution", "candidates", "ambiguous", "preferred", "external")
 
 
@@ -279,6 +280,12 @@ class _Index(ClassIndex):
                 if not (node.source_ref.endswith(".py") and "." in _symbol_path(node_id)[1]):
                     self.free_by_label[node.label].append(node_id)
                     self.exported_by_path_label[(node.source_ref, node.label)].append(node_id)
+
+        # Every name the family defines as a free function, a class or an out-of-line member: a free call to
+        # one of them is never classified as external (`min`, `close`).
+        self.defined_names: set[str] = set(self.free_by_label) | set(self.classes_by_label)
+        for members in self.qualified_defs.values():
+            self.defined_names.update(members)
 
         self.free_by_dir_label: defaultdict[tuple[str, str], list[str]] = defaultdict(list)
         for (path, label), ids in self.exported_by_path_label.items():
@@ -918,6 +925,37 @@ def _call_path(edge: GraphEdge) -> str:
     return str(source_file) if source_file else _edge_path(edge)
 
 
+def _mark_external_call(edge: GraphEdge, index: _Index) -> None:
+    """Record in `metadata.external` why a call nothing resolved stays `name:` (target unchanged).
+
+    Called only when no candidate exists at all (never for an ambiguous edge).  A free name that the
+    repository defines anywhere in the family is never external, and neither is a call whose scope or
+    receiver type is a repository class: the repository, not a library, owns that member.
+    """
+    md = edge.metadata
+    family = language_family(_call_path(edge))
+    if family != CPP_FAMILY:
+        return
+    callee = str(md["callee"])
+    receiver_type = md.get("receiver_type")
+    if not receiver_type and md.get("receiver_kind") == "var" and md.get("receiver_member"):
+        receiver_type = _member_type(edge, index, _call_source_file(edge, index), str(md["receiver_member"]))
+        if receiver_type:
+            md = {**md, "receiver_type": receiver_type}
+    typed = False
+    for text in (md.get("scope"), receiver_type):
+        if text:
+            typed = True
+            label = _last_segment(str(text))
+            if index.classes_by_label.get(label) or index.qualified_defs.get(label):
+                return
+    if not typed and callee in index.defined_names:
+        return
+    rule = classify_call(md, family)
+    if rule:
+        edge.metadata["external"] = rule
+
+
 def _resolve_into(edge: GraphEdge, index: _Index) -> None:
     _reset(edge)
     trace = index.trace = set()
@@ -926,6 +964,7 @@ def _resolve_into(edge: GraphEdge, index: _Index) -> None:
     finally:
         index.trace = None
     if outcome is None:
+        _mark_external_call(edge, index)
         return
     tier, candidate_ids = outcome
     candidate_ids = sorted(set(candidate_ids))
