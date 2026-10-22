@@ -9,7 +9,7 @@
     "protocolVersion": "2024-11-05",
     "serverInfo": {
       "name": "cortex",
-      "version": "0.13.0"
+      "version": "0.14.0"
     }
   },
   "client_2025-06-18": {
@@ -22,7 +22,7 @@
     "protocolVersion": "2025-06-18",
     "serverInfo": {
       "name": "cortex",
-      "version": "0.13.0"
+      "version": "0.14.0"
     }
   },
   "client_sends_no_version": {
@@ -35,7 +35,7 @@
     "protocolVersion": "2025-06-18",
     "serverInfo": {
       "name": "cortex",
-      "version": "0.13.0"
+      "version": "0.14.0"
     }
   },
   "client_unsupported_2023-01-01": {
@@ -48,7 +48,7 @@
     "protocolVersion": "2025-06-18",
     "serverInfo": {
       "name": "cortex",
-      "version": "0.13.0"
+      "version": "0.14.0"
     }
   }
 }

@@ -1,6 +1,17 @@
 # Plan: Cortex 0.14.0 — 0.13.0 field review (fourth pass)
 
-Status: proposed (not started)
+Status: **implemented in 0.14.0**, except where noted. Outcomes and deviations (details in `CHANGELOG.md`):
+- Phases 0–4 and 6: as planned. Task 4.1 also marks includes only the new relative rule resolves
+  (`include_rule: relative`) and keeps Task 1.3's protection for them; Task 4.2's nearest-directory step
+  breaks ties by the fewest levels below the shared prefix; Task 6.2 also keeps partial payloads out of the
+  query cache. Task 3.1 needed a narrow exemption in `tests/test_additive_baseline.py` (`metadata.external` on
+  frozen `inherits` edges).
+- Phase 5: 5.0–5.6 as planned (5.3 without the one-line-virtual change; 5.4's constructor task still fails in
+  `skeleton_off`). **5.7 not applied** (stop rule). **5.8** landed with one deviation: spans in test/fixture
+  paths take the file's aux demotion (without it every base in 0.3–0.7 fails the gate); also fixed a span
+  enclosing a selected span being packed twice. **5.9**: only the scaled span share (item 2); item 1 failed the gate.
+- Phase 5 acceptance (hub fixture <= 25% of tokens to files with no stem hit) not met (~97%). Field acceptance
+  of every phase: not verified until the reviewer's run.
 Input: `docs/review-0.13.0-field.md` ("Cortex 0.13.0: field review and fix plan (fourth pass)",
 C++/Qt/QML repository, 3.7k files, 161k nodes, 622k edges). Section letters (§A–§H) below refer
 to that document.
