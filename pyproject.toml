@@ -34,7 +34,7 @@ languages = []
 qml = []
 # Optional offline static semantic retrieval. Model2Vec itself depends on numpy;
 # keeping both names here makes the opt-in dependency boundary explicit.
-semantic = ["model2vec>=0.8,<0.9", "numpy>=1.26"]
+semantic = ["model2vec>=0.8,<0.11", "numpy>=1.26"]
 
 [project.scripts]
 cortex = "cortex.cli:main"
