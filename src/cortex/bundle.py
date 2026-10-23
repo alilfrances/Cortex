@@ -4,6 +4,7 @@ import functools
 import hashlib
 import math
 import re
+import statistics
 import time
 from collections import Counter, defaultdict, deque
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -59,6 +60,18 @@ ITEM_BUDGET_SHARE = 0.4
 # Symbol spans inherit a small share of their file's keyword score so file
 # context still counts without letting spans outrank the file wholesale.
 SYMBOL_FILE_SCORE_SHARE = 0.25
+# A span inherits its share from the file's UN-normalised score, at most this much of it: a hub file scores
+# several hundred on text alone, and uncapped every span inside it would carry the same bonus whether or not
+# it matches the task. (Which whole file to pack is the normalisation's question; a span's own text is
+# already length-local.)
+SPAN_FILE_SHARE_CAP = 2 * NAME_MATCH_BONUS
+# The text score of a code file far above the median size is divided by 1 + LENGTH_NORM * log2(ratio /
+# LENGTH_NORM_FROM), ratio = tokens / median tokens of the code files that share a task term: the overlap sum is
+# over the set of words in the whole file, so a file that is 10x as long contains nearly every task word. Files
+# up to LENGTH_NORM_FROM times the median are untouched (a small fixture's modest file lost a 0.7 point margin
+# when 0.14.0 divided from the median). The name/path bonuses are not divided. Tuning range 0.25-1.0 / 3-8.
+LENGTH_NORM = 0.5
+LENGTH_NORM_FROM = 4.0
 # Test/eval/fixture files are demoted unless the task itself is about them.
 AUX_PATH_DEMOTION = 0.5
 # Translation catalogues and other locale data match almost any task word (they
@@ -1147,8 +1160,22 @@ def generate_bundle(
                 _tokenize_match(_symbol_qualname(node).rsplit('.', 1)[-1])
             )
 
+    # Counted once here: the length normalisation below and the candidates use the same numbers.
+    token_counts: dict[str, int] = {}
+    for position, source in enumerate(sources):
+        if position % 500 == 0:
+            check_deadline()
+        token_counts[source.path] = count_text_tokens(source.content, kind=source.kind)
+    matching_sizes = [
+        token_counts[source.path]
+        for source in sources
+        if task_terms and source.kind == 'code' and task_terms & (file_tokens[source.path] - noise_terms)
+    ]
+    median_tokens = max(1.0, statistics.median(matching_sizes)) if matching_sizes else None
+
     newest_commit = max((c.authored_at for c in commits), default=0)
     base_scores: dict[str, float] = {}
+    raw_base_scores: dict[str, float] = {}
     for position, source in enumerate(sources):
         if position % 500 == 0:
             check_deadline()
@@ -1164,18 +1191,26 @@ def generate_bundle(
         dir_tokens = _tokenize_match("/".join(Path(source.path).parts[:-1]))
         path_bonus = PATH_MATCH_BONUS if task_terms & dir_tokens else 0.0
         haystack = _strip_boilerplate(source.content) if source.kind == 'code' else source.content
-        score = name_bonus + path_bonus + _score_text(
+        text_score = _score_text(
             task_terms,
             f'{source.path} {path_aliases.get(source.path, "")}\n{haystack}',
             recency_weight,
             term_weights,
             noise_terms,
         )
+        score = raw_score = name_bonus + path_bonus + text_score
+        if source.kind == 'code' and median_tokens is not None and text_score > 0:
+            ratio = token_counts[source.path] / median_tokens
+            if ratio > LENGTH_NORM_FROM:
+                score = name_bonus + path_bonus + text_score / (1.0 + LENGTH_NORM * math.log2(ratio / LENGTH_NORM_FROM))
         if hotspot_boost and score > 0 and max_hotspot_score > 0:
             values = hotspot_by_path.get(source.path, {})
             hotspot_score = float(values.get('score', values.get('churn', 0) * values.get('complexity', 0)))
-            score *= 1.0 + HOTSPOT_BOOST_MAX * (hotspot_score / max_hotspot_score)
+            factor = 1.0 + HOTSPOT_BOOST_MAX * (hotspot_score / max_hotspot_score)
+            score *= factor
+            raw_score *= factor
         base_scores[source.path] = score
+        raw_base_scores[source.path] = raw_score
 
     # P0-2: fuse the existing name/keyword ranking with an FTS5 body-text
     # ranked list (plus a definition-boost list) via reciprocal rank fusion,
@@ -1248,23 +1283,28 @@ def generate_bundle(
     fusion_scores = rrf_fuse(fusion_lists) if any(fusion_lists) else {}
 
     source_scores: dict[str, float] = {}
+    # The same scores without the length normalisation: what the spans of a file inherit.
+    raw_source_scores: dict[str, float] = {}
     for source in sources:
-        score = base_scores[source.path] + fusion_scores.get(source.path, 0.0) * FUSION_SCORE_MULTIPLIER
-        if demote_aux and _is_aux_path(source.path):
-            score *= AUX_PATH_DEMOTION
-        if demote_locale and _is_locale_source(source.path, source.kind):
-            score *= LOCALE_PATH_DEMOTION
-        if platform_demoted(source.path):
-            score *= PLATFORM_DEMOTION
-        if lang_suffixes and score > 0:
-            # Multiplicative so unrelated files (score 0) are never seeded by
-            # language alone; only reorders files the task already matches.
-            suffix = Path(source.path).suffix.lower()
-            if suffix in lang_suffixes:
-                score *= LANG_MATCH_BOOST
-            elif source.kind == 'code' and suffix:
-                score *= LANG_MISMATCH_DEMOTION
-        source_scores[source.path] = score
+        fusion_part = fusion_scores.get(source.path, 0.0) * FUSION_SCORE_MULTIPLIER
+        final = []
+        for score in (base_scores[source.path] + fusion_part, raw_base_scores[source.path] + fusion_part):
+            if demote_aux and _is_aux_path(source.path):
+                score *= AUX_PATH_DEMOTION
+            if demote_locale and _is_locale_source(source.path, source.kind):
+                score *= LOCALE_PATH_DEMOTION
+            if platform_demoted(source.path):
+                score *= PLATFORM_DEMOTION
+            if lang_suffixes and score > 0:
+                # Multiplicative so unrelated files (score 0) are never seeded by
+                # language alone; only reorders files the task already matches.
+                suffix = Path(source.path).suffix.lower()
+                if suffix in lang_suffixes:
+                    score *= LANG_MATCH_BOOST
+                elif source.kind == 'code' and suffix:
+                    score *= LANG_MISMATCH_DEMOTION
+            final.append(score)
+        source_scores[source.path], raw_source_scores[source.path] = final
 
     check_deadline()
     top_score = max(source_scores.values(), default=0.0)
@@ -1287,6 +1327,7 @@ def generate_bundle(
                 if demote_locale and _is_locale_source(neighbor, kind_by_path.get(neighbor, 'code')):
                     continue
                 source_scores[neighbor] = bonus
+                raw_source_scores[neighbor] = max(raw_source_scores[neighbor], bonus)
     seed_scores = {f'file:{path}': score for path, score in source_scores.items() if score > 0}
     degraded = False
     if rank == 'bfs':
@@ -1315,7 +1356,7 @@ def generate_bundle(
             graph_bonus = pagerank_scores.get(file_node_id, 0.0) * PAGERANK_SCORE_MULTIPLIER
         final_score = keyword_score + graph_bonus
 
-        token_count = count_text_tokens(source.content, kind=source.kind)
+        token_count = token_counts[source.path]
         candidates.append(
             BundleItem(
                 item_id=f'source:{source.path}',
@@ -1365,7 +1406,7 @@ def generate_bundle(
             if not path_symbols:
                 continue
         lines = source.content.splitlines()
-        file_share = SYMBOL_FILE_SCORE_SHARE * source_scores.get(path, 0.0)
+        file_share = SYMBOL_FILE_SCORE_SHARE * min(raw_source_scores.get(path, 0.0), SPAN_FILE_SHARE_CAP)
         for symbol in path_symbols:
             if symbol.span_start is None or symbol.span_end is None:
                 continue
