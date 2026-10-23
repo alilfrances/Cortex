@@ -10,8 +10,16 @@ Status: **implemented in 0.14.0**, except where noted. Outcomes and deviations (
   `skeleton_off`). **5.7 not applied** (stop rule). **5.8** landed with one deviation: spans in test/fixture
   paths take the file's aux demotion (without it every base in 0.3–0.7 fails the gate); also fixed a span
   enclosing a selected span being packed twice. **5.9**: only the scaled span share (item 2); item 1 failed the gate.
-- Phase 5 acceptance (hub fixture <= 25% of tokens to files with no stem hit) not met (~97%). Field acceptance
-  of every phase: not verified until the reviewer's run.
+- Round 2 (alternatives for what the first pass did not meet; see `CHANGELOG.md`, "round 2"):
+  R1 pure virtual declarations get symbols (the T1 route through `= 0` now walks); R2 length normalisation only
+  for files > 4x the median, spans inherit the raw file score (Task 5.7's intent, eval-neutral); R3 per-file span
+  decay, relevance-scaled lifts for high-fanout seeds and no-evidence files skipped (hub gold packed in 8/8 cases,
+  constructor task in 4/4 modes); R5 one-line virtual bases traversed but not packed (Task 5.3's bullet); R6 docs
+  capped below code named after the task (Task 5.8's claim holds, original test restored); R7 hub fixture holds for
+  seeds 5020-5027. R4 (Task 5.9 item 1) still fails the gate in its plan form and was dropped.
+- Still not met: Task 5.9 item 1; the hub-fixture token share (<= 25% of tokens to files with no stem hit:
+  90.9% / 97.0%; the rest of the budget is the best span of each of ten files whose method names genuinely match
+  the task). Field acceptance of every phase: not verified until the reviewer's run.
 Input: `docs/review-0.13.0-field.md` ("Cortex 0.13.0: field review and fix plan (fourth pass)",
 C++/Qt/QML repository, 3.7k files, 161k nodes, 622k edges). Section letters (§A–§H) below refer
 to that document.
