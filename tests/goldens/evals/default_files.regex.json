@@ -6,11 +6,7 @@
       "app/audit.py",
       "app/cleanup.py",
       "app/orders.py",
-      "app/payments.py",
-      "README.md",
-      "app/emailer.py",
-      "app/retry.py",
-      "docs/setup.md"
+      "app/payments.py"
     ],
     "mode": "pagerank",
     "repo": "python_app",
@@ -23,11 +19,7 @@
       "app/audit.py",
       "app/cleanup.py",
       "app/orders.py",
-      "app/payments.py",
-      "README.md",
-      "app/emailer.py",
-      "app/retry.py",
-      "docs/setup.md"
+      "app/payments.py"
     ],
     "mode": "bfs",
     "repo": "python_app",
@@ -38,7 +30,7 @@
       "app/auth.py",
       "app/session.py",
       "app/audit.py",
-      "app/session.py"
+      "app/cleanup.py"
     ],
     "mode": "skeleton_on",
     "repo": "python_app",
@@ -49,7 +41,7 @@
       "app/auth.py",
       "app/session.py",
       "app/audit.py",
-      "app/session.py"
+      "app/cleanup.py"
     ],
     "mode": "skeleton_off",
     "repo": "python_app",
@@ -57,16 +49,12 @@
   },
   {
     "files": [
-      "app/cleanup.py",
       "app/session.py",
+      "app/cleanup.py",
       "app/audit.py",
       "app/auth.py",
       "app/orders.py",
-      "app/payments.py",
-      "README.md",
-      "app/emailer.py",
-      "docs/setup.md",
-      "app/retry.py"
+      "app/payments.py"
     ],
     "mode": "pagerank",
     "repo": "python_app",
@@ -74,168 +62,141 @@
   },
   {
     "files": [
-      "app/cleanup.py",
       "app/session.py",
+      "app/cleanup.py",
       "app/audit.py",
-      "app/auth.py",
-      "app/orders.py",
-      "app/payments.py",
-      "README.md",
-      "app/emailer.py",
-      "app/retry.py",
-      "docs/setup.md"
-    ],
-    "mode": "bfs",
-    "repo": "python_app",
-    "task": "Find where expired sessions are pruned from storage"
-  },
-  {
-    "files": [
-      "app/cleanup.py",
-      "app/session.py",
-      "app/session.py",
-      "app/session.py",
-      "README.md"
-    ],
-    "mode": "skeleton_on",
-    "repo": "python_app",
-    "task": "Find where expired sessions are pruned from storage"
-  },
-  {
-    "files": [
-      "app/cleanup.py",
-      "app/session.py",
-      "app/session.py",
-      "app/session.py",
-      "README.md"
-    ],
-    "mode": "skeleton_off",
-    "repo": "python_app",
-    "task": "Find where expired sessions are pruned from storage"
-  },
-  {
-    "files": [
-      "app/orders.py",
-      "app/payments.py",
-      "app/emailer.py",
-      "app/audit.py",
-      "app/retry.py",
-      "app/session.py",
-      "app/auth.py",
-      "app/cleanup.py",
-      "README.md",
-      "docs/setup.md"
-    ],
-    "mode": "pagerank",
-    "repo": "python_app",
-    "task": "Explain order checkout payment capture and receipt email"
-  },
-  {
-    "files": [
-      "app/orders.py",
-      "app/payments.py",
-      "app/emailer.py",
-      "app/audit.py",
-      "app/retry.py",
-      "README.md",
-      "app/auth.py",
-      "app/cleanup.py",
-      "app/session.py",
-      "docs/setup.md"
-    ],
-    "mode": "bfs",
-    "repo": "python_app",
-    "task": "Explain order checkout payment capture and receipt email"
-  },
-  {
-    "files": [
-      "app/orders.py",
-      "app/payments.py",
-      "app/emailer.py",
-      "app/orders.py"
-    ],
-    "mode": "skeleton_on",
-    "repo": "python_app",
-    "task": "Explain order checkout payment capture and receipt email"
-  },
-  {
-    "files": [
-      "app/orders.py",
-      "app/payments.py",
-      "app/emailer.py",
-      "app/orders.py"
-    ],
-    "mode": "skeleton_off",
-    "repo": "python_app",
-    "task": "Explain order checkout payment capture and receipt email"
-  },
-  {
-    "files": [
-      "app/payments.py",
-      "app/retry.py",
-      "app/auth.py",
-      "app/orders.py",
-      "app/audit.py",
-      "app/session.py",
-      "app/emailer.py",
-      "app/cleanup.py",
-      "README.md",
-      "docs/setup.md"
-    ],
-    "mode": "pagerank",
-    "repo": "python_app",
-    "task": "Locate retry behavior for failed payment captures"
-  },
-  {
-    "files": [
-      "app/payments.py",
-      "app/retry.py",
-      "app/auth.py",
-      "app/orders.py",
-      "app/audit.py",
-      "app/session.py",
-      "README.md",
-      "app/cleanup.py",
-      "app/emailer.py",
-      "docs/setup.md"
-    ],
-    "mode": "bfs",
-    "repo": "python_app",
-    "task": "Locate retry behavior for failed payment captures"
-  },
-  {
-    "files": [
-      "app/payments.py",
-      "app/retry.py",
       "app/auth.py"
     ],
-    "mode": "skeleton_on",
+    "mode": "bfs",
     "repo": "python_app",
-    "task": "Locate retry behavior for failed payment captures"
+    "task": "Find where expired sessions are pruned from storage"
   },
   {
     "files": [
-      "app/payments.py",
-      "app/retry.py",
-      "app/orders.py",
-      "README.md"
+      "app/session.py",
+      "app/cleanup.py",
+      "app/session.py",
+      "app/session.py"
+    ],
+    "mode": "skeleton_on",
+    "repo": "python_app",
+    "task": "Find where expired sessions are pruned from storage"
+  },
+  {
+    "files": [
+      "app/session.py",
+      "app/cleanup.py",
+      "app/session.py",
+      "app/session.py"
     ],
     "mode": "skeleton_off",
     "repo": "python_app",
-    "task": "Locate retry behavior for failed payment captures"
+    "task": "Find where expired sessions are pruned from storage"
   },
   {
     "files": [
-      "docs/setup.md",
-      "README.md",
-      "app/session.py",
-      "app/cleanup.py",
+      "app/orders.py",
+      "app/payments.py",
+      "app/emailer.py",
       "app/audit.py",
-      "app/auth.py",
       "app/retry.py",
+      "app/session.py",
+      "app/auth.py"
+    ],
+    "mode": "pagerank",
+    "repo": "python_app",
+    "task": "Explain order checkout payment capture and receipt email"
+  },
+  {
+    "files": [
+      "app/orders.py",
+      "app/payments.py",
+      "app/emailer.py",
+      "app/audit.py",
+      "app/retry.py"
+    ],
+    "mode": "bfs",
+    "repo": "python_app",
+    "task": "Explain order checkout payment capture and receipt email"
+  },
+  {
+    "files": [
+      "app/orders.py",
+      "app/payments.py",
+      "app/emailer.py",
+      "app/retry.py"
+    ],
+    "mode": "skeleton_on",
+    "repo": "python_app",
+    "task": "Explain order checkout payment capture and receipt email"
+  },
+  {
+    "files": [
       "app/orders.py",
       "app/payments.py",
       "app/emailer.py"
+    ],
+    "mode": "skeleton_off",
+    "repo": "python_app",
+    "task": "Explain order checkout payment capture and receipt email"
+  },
+  {
+    "files": [
+      "app/payments.py",
+      "app/retry.py",
+      "app/orders.py",
+      "app/auth.py",
+      "app/audit.py",
+      "app/emailer.py",
+      "app/session.py"
+    ],
+    "mode": "pagerank",
+    "repo": "python_app",
+    "task": "Locate retry behavior for failed payment captures"
+  },
+  {
+    "files": [
+      "app/payments.py",
+      "app/retry.py",
+      "app/orders.py",
+      "app/auth.py",
+      "app/audit.py",
+      "app/emailer.py"
+    ],
+    "mode": "bfs",
+    "repo": "python_app",
+    "task": "Locate retry behavior for failed payment captures"
+  },
+  {
+    "files": [
+      "app/payments.py",
+      "app/retry.py",
+      "app/orders.py"
+    ],
+    "mode": "skeleton_on",
+    "repo": "python_app",
+    "task": "Locate retry behavior for failed payment captures"
+  },
+  {
+    "files": [
+      "app/payments.py",
+      "app/retry.py",
+      "app/orders.py"
+    ],
+    "mode": "skeleton_off",
+    "repo": "python_app",
+    "task": "Locate retry behavior for failed payment captures"
+  },
+  {
+    "files": [
+      "docs/setup.md",
+      "README.md",
+      "app/session.py",
+      "app/cleanup.py",
+      "app/audit.py",
+      "app/auth.py",
+      "app/orders.py",
+      "app/payments.py"
     ],
     "mode": "pagerank",
     "repo": "python_app",
@@ -244,15 +205,7 @@
   {
     "files": [
       "docs/setup.md",
-      "README.md",
-      "app/retry.py",
-      "app/session.py",
-      "app/audit.py",
-      "app/auth.py",
-      "app/cleanup.py",
-      "app/emailer.py",
-      "app/orders.py",
-      "app/payments.py"
+      "README.md"
     ],
     "mode": "bfs",
     "repo": "python_app",
@@ -288,10 +241,7 @@
       "app/payments.py",
       "app/session.py",
       "app/emailer.py",
-      "app/retry.py",
-      "app/cleanup.py",
-      "README.md",
-      "docs/setup.md"
+      "app/retry.py"
     ],
     "mode": "pagerank",
     "repo": "python_app",
@@ -304,11 +254,7 @@
       "app/auth.py",
       "app/payments.py",
       "app/session.py",
-      "app/emailer.py",
-      "app/retry.py",
-      "README.md",
-      "app/cleanup.py",
-      "docs/setup.md"
+      "app/emailer.py"
     ],
     "mode": "bfs",
     "repo": "python_app",
@@ -336,8 +282,8 @@
   },
   {
     "files": [
-      "app/network.py",
       "app/messages.py",
+      "app/network.py",
       "README.md"
     ],
     "mode": "pagerank",
@@ -346,8 +292,8 @@
   },
   {
     "files": [
-      "app/network.py",
       "app/messages.py",
+      "app/network.py",
       "README.md"
     ],
     "mode": "bfs",
@@ -356,8 +302,8 @@
   },
   {
     "files": [
-      "app/network.py",
       "app/messages.py",
+      "app/network.py",
       "README.md"
     ],
     "mode": "skeleton_on",
@@ -366,8 +312,8 @@
   },
   {
     "files": [
-      "app/network.py",
       "app/messages.py",
+      "app/network.py",
       "README.md"
     ],
     "mode": "skeleton_off",
@@ -424,8 +370,8 @@
     "files": [
       "storage/repository.py",
       "handlers/incidents.py",
-      "tests/test_incidents.py",
       "integrations/slack.py",
+      "tests/test_incidents.py",
       "config.py",
       "server.py"
     ],
@@ -437,8 +383,8 @@
     "files": [
       "storage/repository.py",
       "handlers/incidents.py",
-      "tests/test_incidents.py",
       "integrations/slack.py",
+      "tests/test_incidents.py",
       "config.py",
       "server.py"
     ],
@@ -450,8 +396,7 @@
     "files": [
       "storage/repository.py",
       "handlers/incidents.py",
-      "tests/test_incidents.py",
-      "config.py"
+      "integrations/slack.py"
     ],
     "mode": "skeleton_on",
     "repo": "web_service",
@@ -470,10 +415,10 @@
   {
     "files": [
       "server.py",
+      "config.py",
       "handlers/incidents.py",
       "integrations/slack.py",
       "storage/repository.py",
-      "config.py",
       "tests/test_incidents.py"
     ],
     "mode": "pagerank",
@@ -483,11 +428,10 @@
   {
     "files": [
       "server.py",
+      "config.py",
       "handlers/incidents.py",
       "integrations/slack.py",
-      "storage/repository.py",
-      "config.py",
-      "tests/test_incidents.py"
+      "storage/repository.py"
     ],
     "mode": "bfs",
     "repo": "web_service",
@@ -496,9 +440,9 @@
   {
     "files": [
       "server.py",
-      "server.py",
+      "config.py",
       "handlers/incidents.py",
-      "config.py"
+      "server.py"
     ],
     "mode": "skeleton_on",
     "repo": "web_service",
@@ -507,9 +451,9 @@
   {
     "files": [
       "server.py",
-      "server.py",
+      "config.py",
       "handlers/incidents.py",
-      "config.py"
+      "server.py"
     ],
     "mode": "skeleton_off",
     "repo": "web_service",
@@ -576,8 +520,7 @@
     "files": [
       "src/ranker.py",
       "README.md",
-      "docs/plan.md",
-      "src/packer.py"
+      "docs/plan.md"
     ],
     "mode": "bfs",
     "repo": "noisy_lib",
@@ -617,8 +560,7 @@
     "files": [
       "src/packer.py",
       "README.md",
-      "docs/plan.md",
-      "src/ranker.py"
+      "docs/plan.md"
     ],
     "mode": "bfs",
     "repo": "noisy_lib",
@@ -699,12 +641,12 @@
   },
   {
     "files": [
-      "qml/DeviceDelegate.qml",
-      "qml/Main.qml",
       "include/DeviceManager.hpp",
       "include/DeviceModel.hpp",
+      "qml/DeviceDelegate.qml",
       "src/DeviceModel.cpp",
       "src/DeviceManager.cpp",
+      "qml/Main.qml",
       "CMakeLists.txt",
       "resources.qrc"
     ],
@@ -714,12 +656,12 @@
   },
   {
     "files": [
-      "qml/DeviceDelegate.qml",
-      "qml/Main.qml",
       "include/DeviceManager.hpp",
       "include/DeviceModel.hpp",
+      "qml/DeviceDelegate.qml",
       "src/DeviceModel.cpp",
       "src/DeviceManager.cpp",
+      "qml/Main.qml",
       "CMakeLists.txt",
       "resources.qrc"
     ],
@@ -729,11 +671,11 @@
   },
   {
     "files": [
-      "qml/DeviceDelegate.qml",
-      "qml/Main.qml",
       "include/DeviceManager.hpp",
       "include/DeviceModel.hpp",
-      "src/DeviceModel.cpp"
+      "qml/DeviceDelegate.qml",
+      "src/DeviceModel.cpp",
+      "qml/Main.qml"
     ],
     "mode": "skeleton_on",
     "repo": "qt_app",
@@ -741,11 +683,11 @@
   },
   {
     "files": [
-      "qml/DeviceDelegate.qml",
-      "qml/Main.qml",
       "include/DeviceManager.hpp",
       "include/DeviceModel.hpp",
-      "src/DeviceModel.cpp"
+      "qml/DeviceDelegate.qml",
+      "src/DeviceModel.cpp",
+      "qml/Main.qml"
     ],
     "mode": "skeleton_off",
     "repo": "qt_app",
@@ -757,9 +699,9 @@
       "qml/Main.qml",
       "CMakeLists.txt",
       "resources.qrc",
-      "src/DeviceManager.cpp",
       "include/DeviceManager.hpp",
       "include/DeviceModel.hpp",
+      "src/DeviceManager.cpp",
       "src/DeviceModel.cpp"
     ],
     "mode": "pagerank",
@@ -773,9 +715,7 @@
       "CMakeLists.txt",
       "resources.qrc",
       "include/DeviceManager.hpp",
-      "include/DeviceModel.hpp",
-      "src/DeviceManager.cpp",
-      "src/DeviceModel.cpp"
+      "include/DeviceModel.hpp"
     ],
     "mode": "bfs",
     "repo": "qt_app",
@@ -803,8 +743,8 @@
   },
   {
     "files": [
-      "qml/Main.qml",
       "qml/DeviceDelegate.qml",
+      "qml/Main.qml",
       "CMakeLists.txt",
       "resources.qrc",
       "src/DeviceManager.cpp",
@@ -818,14 +758,10 @@
   },
   {
     "files": [
-      "qml/Main.qml",
       "qml/DeviceDelegate.qml",
+      "qml/Main.qml",
       "CMakeLists.txt",
-      "resources.qrc",
-      "include/DeviceManager.hpp",
-      "include/DeviceModel.hpp",
-      "src/DeviceManager.cpp",
-      "src/DeviceModel.cpp"
+      "resources.qrc"
     ],
     "mode": "bfs",
     "repo": "qt_app",
@@ -833,8 +769,8 @@
   },
   {
     "files": [
-      "qml/Main.qml",
       "qml/DeviceDelegate.qml",
+      "qml/Main.qml",
       "CMakeLists.txt"
     ],
     "mode": "skeleton_on",
@@ -843,8 +779,8 @@
   },
   {
     "files": [
-      "qml/Main.qml",
       "qml/DeviceDelegate.qml",
+      "qml/Main.qml",
       "CMakeLists.txt"
     ],
     "mode": "skeleton_off",

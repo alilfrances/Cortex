@@ -250,6 +250,20 @@ def test_filename_match_outranks_keyword_dense_doc(tmp_path):
     assert scores['bundle.py'] > scores.get('README.md', 0.0)
 
 
+
+def test_a_doc_restating_the_whole_task_does_not_push_out_the_filename_match(tmp_path):
+    # Since the proportional name bonus (0.14) a README holding every task term may rank above a file whose
+    # stem holds one of them, but the code file is still packed (docs are capped at DOC_BUDGET_SHARE).
+    store, repo = _make_doc_heavy_store(tmp_path)
+    result = generate_bundle(
+        repo,
+        task='how does bundle scoring rank nodes and apply the token budget',
+        budget=4000,
+        db_path=store.db_path,
+        output_format='json',
+    )
+    assert 'bundle.py' in {item['path'] for item in result['items']}
+
 def _make_aux_store(tmp_path: Path) -> tuple[CortexStore, Path]:
     import subprocess
     db_path = tmp_path / 'cortex.db'

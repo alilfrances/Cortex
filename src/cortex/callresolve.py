@@ -46,10 +46,12 @@ Nothing is ever resolved by scanning the corpus per candidate.
 from __future__ import annotations
 
 import builtins
+import functools
 from collections import defaultdict
 from pathlib import PurePosixPath
 from typing import Iterable
 
+from .externals import CPP_FAMILY, QML_FAMILY, classify_base, classify_call
 from .models import GraphEdge, GraphNode
 from .testpatterns import is_test_path
 
@@ -58,7 +60,11 @@ MAX_INHERIT_DEPTH = 6
 _HEADER_SUFFIXES = {".h", ".hpp", ".hh", ".hxx"}
 _IMPL_SUFFIXES = {".c", ".cc", ".cpp", ".cxx"}
 _PY_BUILTINS = frozenset(dir(builtins))
-_RESOLUTION_KEYS = ("resolution", "candidates", "ambiguous")
+# `preferred` is written when locality step 2 ("production over mock") decided the edge: the call graph keeps
+# that answer, `impacted_tests` does not walk it (a test target may compile the mock instead).
+# `external` (see `externals`) marks an `inherits` base or a `calls` callee that is outside the repository;
+# the target is unchanged.
+_RESOLUTION_KEYS = ("resolution", "candidates", "ambiguous", "preferred", "external")
 
 
 def is_contract_call(edge: GraphEdge) -> bool:
@@ -80,6 +86,7 @@ _FAMILIES = {
 }
 
 
+@functools.lru_cache(maxsize=65536)
 def language_family(path: str) -> str:
     """Resolution never crosses language families: a Java call is never matched against a
     Swift or Rust symbol that happens to share a name (each family gets its own index)."""
@@ -220,11 +227,23 @@ class ClassIndex:
         return self.qualified_defs.get(label, {}).get(name, [])
 
 
+def _common_prefix(a: tuple[str, ...], b: tuple[str, ...]) -> int:
+    """Number of leading path segments two directories share."""
+    count = 0
+    for left, right in zip(a, b):
+        if left != right:
+            break
+        count += 1
+    return count
+
+
 class _Index(ClassIndex):
     """All hash indexes the resolver needs, built in one pass over the graph."""
 
     def __init__(self, nodes: Iterable[GraphNode], edges: list[GraphEdge]) -> None:
         nodes = list(nodes)
+        # Reasons the edge being resolved was narrowed ("production": locality step 2); set only by `_resolve_into`.
+        self.trace: set[str] | None = None
         self.node_ids: set[str] = set()
         py_files: list[str] = []
         stems: defaultdict[str, list[str]] = defaultdict(list)
@@ -274,18 +293,33 @@ class _Index(ClassIndex):
                     self.free_by_label[node.label].append(node_id)
                     self.exported_by_path_label[(node.source_ref, node.label)].append(node_id)
 
+        # Every name the family defines as a free function, a class or an out-of-line member: a free call to
+        # one of them is never classified as external (`min`, `close`).
+        self.defined_names: set[str] = set(self.free_by_label) | set(self.classes_by_label)
+        for members in self.qualified_defs.values():
+            self.defined_names.update(members)
+
         self.free_by_dir_label: defaultdict[tuple[str, str], list[str]] = defaultdict(list)
         for (path, label), ids in self.exported_by_path_label.items():
             self.free_by_dir_label[(str(PurePosixPath(path).parent), label)].extend(ids)
 
         imports: defaultdict[str, set[str]] = defaultdict(set)
+        module_imports: defaultdict[str, set[str]] = defaultdict(set)
         inherits: list[GraphEdge] = []
         for edge in edges:
-            if edge.relation == "imports" and edge.source.startswith("file:") and edge.target.startswith("file:"):
-                imports[edge.source.removeprefix("file:")].add(edge.target.removeprefix("file:"))
+            if edge.relation == "imports" and edge.source.startswith("file:"):
+                if edge.target.startswith("file:"):
+                    imports[edge.source.removeprefix("file:")].add(edge.target.removeprefix("file:"))
+                elif edge.target.startswith("module:"):
+                    module_imports[edge.source.removeprefix("file:")].add(edge.target.removeprefix("module:"))
             elif edge.relation == "inherits" and edge.source in symbols:
                 inherits.append(edge)
         self.imports: dict[str, list[str]] = {path: sorted(targets) for path, targets in imports.items()}
+        # What a file imports that did not resolve to a file of the repository (`#include <gtest/gtest.h>`,
+        # `import QtQuick 2.15`), as the extractor wrote it; `classify_base` reads it.
+        self.module_imports: dict[str, list[str]] = {path: sorted(targets) for path, targets in module_imports.items()}
+        self._file_dirs = {str(PurePosixPath(n.source_ref).parent) for n in nodes if n.kind == "file" and n.source_ref}
+        self._dir_suffixes: set[str] | None = None
 
         self.module_exact: dict[str, list[str]] = {}
         self.module_suffix: defaultdict[str, list[str]] = defaultdict(list)
@@ -316,6 +350,26 @@ class _Index(ClassIndex):
                         found = self.prefer(found, node.source_ref)
                     bases[cid].update(found)
         self.bases: dict[str, list[str]] = {cid: sorted(ids - {cid}) for cid, ids in bases.items()}
+
+    def is_repo_module(self, module: str) -> bool:
+        """A QML import that names a directory of the repository (``import "components"``, ``import App.Ui``)."""
+        if self._dir_suffixes is None:
+            suffixes: set[str] = set()
+            for directory in self._file_dirs:
+                parts = PurePosixPath(directory).parts
+                suffixes.update("/".join(parts[i:]) for i in range(len(parts)))
+            self._dir_suffixes = suffixes
+        text = module.strip("\"'")
+        parts = [p for p in (text.split("/") if "/" in text or text.startswith(".") else text.split(".")) if p not in ("", ".", "..")]
+        return "/".join(parts) in self._dir_suffixes
+
+    def external_imports(self, path: str, family: str) -> list[str]:
+        """The imports of `path` that can make one of its bases external: the headers it includes and the
+        modules it imports, minus (for QML) the modules that are directories of the repository."""
+        modules = self.module_imports.get(path, [])
+        if family == QML_FAMILY:
+            return [m for m in modules if not self.is_repo_module(m)]
+        return [*self.imports.get(path, ()), *modules]
 
     def base_candidates(self, class_id: str, label: str) -> list[str]:
         """The classes labelled `label` that `class_id` can derive from: not itself, narrowed by `prefer`."""
@@ -358,6 +412,17 @@ class _Index(ClassIndex):
             return same
         imported = set(self.reachable(from_path))
         near = [c for c in candidate_ids if self.symbols[c].source_ref in imported]
+        if near and len(near) < len(candidate_ids) and self.trace is not None and not _is_auxiliary(from_path):
+            # A same-named mock header can replace the included one on a test target's include path
+            # (review 0.13.0 section C), so impacted_tests must not walk this edge; the call graph keeps the answer.
+            kept = {PurePosixPath(self.symbols[c].source_ref).name for c in near}
+            if any(
+                c not in near
+                and _is_auxiliary(self.symbols[c].source_ref)
+                and PurePosixPath(self.symbols[c].source_ref).name in kept
+                for c in candidate_ids
+            ):
+                self.trace.add("production")
         return self.locality(near or candidate_ids, from_path)
 
     def locality(self, candidate_ids: list[str], from_path: str) -> list[str]:
@@ -367,26 +432,65 @@ class _Index(ClassIndex):
         2. outside test/mock/fixture trees when the caller itself is production code;
         3. declared in a header, not nested in an implementation file (a .cpp-local class is not
            visible to any other file);
-        4. the caller's own directory.
+        4. the nearest directory: the longest common directory prefix (in path segments) with the
+           caller's, so a mock base one directory above its users beats a production header far away.
+
+        Steps 3 and 4 are skipped when every candidate is a namespace: a namespace is split over
+        its header and the .cpp files that define its members, so no one node is "the" declaration
+        (see `namespace_members`).
         """
         pool = list(candidate_ids)
         if len(pool) < 2:
             return pool
+        production_only = (
+            (lambda c: not _is_auxiliary(self.symbols[c].source_ref)) if not _is_auxiliary(from_path) else None
+        )
         steps = [
             lambda c: language_family(self.symbols[c].source_ref) == language_family(from_path),
-            (lambda c: not _is_auxiliary(self.symbols[c].source_ref)) if not _is_auxiliary(from_path) else None,
+            production_only,
             lambda c: PurePosixPath(self.symbols[c].source_ref).suffix.lower() in _HEADER_SUFFIXES,
-            lambda c: PurePosixPath(self.symbols[c].source_ref).parent == PurePosixPath(from_path).parent,
         ]
-        for keep in steps:
+        namespaces = all(self.is_namespace(c) for c in pool)
+        for keep in steps[:2] if namespaces else steps:
             if keep is None:
                 continue
             narrowed = [c for c in pool if keep(c)]
             if narrowed:
+                if keep is production_only and len(narrowed) < len(pool) and self.trace is not None:
+                    self.trace.add("production")
                 pool = narrowed
             if len(pool) == 1:
-                break
-        return pool
+                return pool
+        if namespaces:
+            return pool
+        # Nearest = longest shared prefix, then fewest directories below it: from `src/a.cpp`,
+        # `src/b.h` beats `src/x/b.h` as the old same-directory step did.
+        caller = PurePosixPath(from_path).parent.parts
+        nearness = {}
+        for c in pool:
+            parts = PurePosixPath(self.symbols[c].source_ref).parent.parts
+            shared = _common_prefix(parts, caller)
+            nearness[c] = (shared, shared - len(parts))
+        nearest = max(nearness.values())
+        return [c for c in pool if nearness[c] == nearest]
+
+    def namespace_members(self, label: str, callee: str, source_file: str) -> list[str]:
+        """Members `callee` of every namespace node labelled `label`, narrowed like `prefer`.
+
+        A namespace is one entity spread over several nodes (the header's `namespace Ns {}` and one
+        per .cpp that defines members), so the candidate classes cannot be narrowed first: the
+        header-only node would hide the members that live in the .cpp ones.
+        """
+        pool = [c for c in self.classes_by_label.get(label, []) if self.is_namespace(c)]
+        if not _is_auxiliary(source_file):
+            production = [c for c in pool if not _is_auxiliary(self.symbols[c].source_ref)]
+            if production and len(production) < len(pool) and self.trace is not None:
+                self.trace.add("production")  # the same rule as `locality` step 2
+            pool = production or pool
+        members = sorted({m for ns in pool for m in self.class_members(ns, callee)})
+        if len(members) > 1:
+            members = self.prefer(members, source_file)
+        return members
 
     def module_paths(self, dotted: str) -> list[str]:
         exact = self.module_exact.get(dotted)
@@ -573,6 +677,10 @@ def _resolve_scoped(edge: GraphEdge, index: _Index, source_file: str) -> _Outcom
             return _tier_from_lookup(index.lookup(sorted(set(class_ids)), callee), "scoped")
         return None  # module/class outside the repo (stdlib, third party)
     label = _last_segment(scope)
+    labelled = index.classes_by_label.get(label, []) if label else []
+    if labelled and all(index.is_namespace(c) for c in labelled):
+        found = index.namespace_members(label, callee, source_file)
+        return ("scoped", found) if found else None
     if label:
         class_ids = index.prefer(index.classes_by_label.get(label, []), source_file)
         return _members(index, class_ids, label, callee, source_file, "scoped")
@@ -773,6 +881,14 @@ def _resolve_inherits_into(edge: GraphEdge, index: _Index) -> None:
             edge.confidence = "LOW"
         edge.metadata["candidates"] = candidates[:MAX_CANDIDATES]
         edge.metadata["ambiguous"] = True
+    else:
+        # No class carries the label in the file's language family: the base is outside the repository or
+        # unknown.  Name the reason in metadata, leave the target as written.
+        path = _edge_path(edge)
+        family = language_family(path)
+        rule = classify_base(_inherits_label(edge), edge.target, index.external_imports(path, family), family)
+        if rule:
+            edge.metadata["external"] = rule
 
 
 def resolve_call_endpoints(
@@ -842,16 +958,54 @@ def _call_path(edge: GraphEdge) -> str:
     return str(source_file) if source_file else _edge_path(edge)
 
 
+def _mark_external_call(edge: GraphEdge, index: _Index) -> None:
+    """Record in `metadata.external` why a call nothing resolved stays `name:` (target unchanged).
+
+    Called only when no candidate exists at all (never for an ambiguous edge).  A free name that the
+    repository defines anywhere in the family is never external, and neither is a call whose scope or
+    receiver type is a repository class: the repository, not a library, owns that member.
+    """
+    md = edge.metadata
+    family = language_family(_call_path(edge))
+    if family != CPP_FAMILY:
+        return
+    callee = str(md["callee"])
+    receiver_type = md.get("receiver_type")
+    if not receiver_type and md.get("receiver_kind") == "var" and md.get("receiver_member"):
+        receiver_type = _member_type(edge, index, _call_source_file(edge, index), str(md["receiver_member"]))
+        if receiver_type:
+            md = {**md, "receiver_type": receiver_type}
+    typed = False
+    for text in (md.get("scope"), receiver_type):
+        if text:
+            typed = True
+            label = _last_segment(str(text))
+            if index.classes_by_label.get(label) or index.qualified_defs.get(label):
+                return
+    if not typed and callee in index.defined_names:
+        return
+    rule = classify_call(md, family)
+    if rule:
+        edge.metadata["external"] = rule
+
+
 def _resolve_into(edge: GraphEdge, index: _Index) -> None:
     _reset(edge)
-    outcome = _resolve_one(edge, index)
+    trace = index.trace = set()
+    try:
+        outcome = _resolve_one(edge, index)
+    finally:
+        index.trace = None
     if outcome is None:
+        _mark_external_call(edge, index)
         return
     tier, candidate_ids = outcome
     candidate_ids = sorted(set(candidate_ids))
     if len(candidate_ids) == 1:
         edge.target = candidate_ids[0]
         edge.metadata["resolution"] = tier
+        if "production" in trace:
+            edge.metadata["preferred"] = "production"
     elif len(candidate_ids) > 1:
         if edge.confidence != "LOW":
             edge.metadata["extracted_confidence"] = edge.confidence

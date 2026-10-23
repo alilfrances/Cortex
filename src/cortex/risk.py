@@ -18,9 +18,9 @@ import subprocess
 from collections.abc import Callable
 from typing import Any, Iterable, Mapping, Sequence
 
-from .deadline import check_deadline
+from .deadline import DeadlineExceeded, check_deadline
 from .gitutils import discover_repo_root
-from .impacted_tests import select_tests_with_coverage
+from .impacted_tests import is_documentation, is_runnable_test, select_tests_with_coverage
 from .store import CortexStore, default_db_path
 from .testpatterns import is_test_path, pairs_with_test, test_name_info
 from .tokenizer import count_text_tokens
@@ -820,16 +820,28 @@ def analyze_risk(
 
     file_payloads.sort(key=lambda value: (-float(value["risk_score"]), str(value["path"]), str(value.get("previous_path", ""))))
     missing_cochange.sort(key=lambda value: (value["for"], -float(value["weight"]), value["path"]))
-    tests_to_run, tests_run_all, tests_run_all_reason, tests_by_changed_file, uncovered_changed_files = select_tests_with_coverage(
-        diff.files,
-        diff.raw_zero_context,
-        graph_nodes,
-        graph_edges,
-        all_paths=all_paths,
-        indexed_paths=indexed_paths,
-        cochange=cochange,
-        index_status=index_status,
-    )
+    partial = False
+    try:
+        tests_to_run, tests_run_all, tests_run_all_reason, tests_by_changed_file, uncovered_changed_files = select_tests_with_coverage(
+            diff.files,
+            diff.raw_zero_context,
+            graph_nodes,
+            graph_edges,
+            all_paths=all_paths,
+            indexed_paths=indexed_paths,
+            cochange=cochange,
+            index_status=index_status,
+        )
+    except DeadlineExceeded:
+        # Test selection is the unbounded part.  `file_payloads` (the ranking) is already complete,
+        # so return it instead of an error.  No test was traced, so run everything, and every
+        # reviewable changed file is reported as not yet shown to be covered.
+        partial = True
+        tests_to_run, tests_run_all, tests_run_all_reason, tests_by_changed_file = [], True, _TESTS_DEADLINE_REASON, {}
+        uncovered_changed_files = [
+            item.path for item in diff.files
+            if item.status != "D" and not is_runnable_test(item.path) and not is_documentation(item.path)
+        ]
     # Highest-risk changed file first (the `files` ranking), then path, so any prefix of the
     # list is the riskiest subset and the truncator can cut it from the end.
     uncovered_rank = {str(value["path"]): position for position, value in enumerate(file_payloads)}
@@ -878,10 +890,13 @@ def analyze_risk(
         "tests_by_changed_file": tests_by_changed_file,
         "uncovered_changed_files": uncovered_changed_files,
     }
+    if partial:
+        result["partial"] = True
     return result
 
 
-# Secondary buckets, in the order truncation gives them up once `files` is empty.
+# Secondary buckets, in the order truncation gives them up: one at a time, first of all (after
+# the `uncovered_changed_files` cut), before `files.detail`, `directives` and `files` are touched.
 # `tests_by_changed_file` is not among them: it is re-encoded first and given up last.
 _RISK_DROP_ORDER = (
     "score_formula",
@@ -895,6 +910,8 @@ _RISK_DROP_ORDER = (
     "analysis_errors",
     "unindexed_files",
 )
+# `analyze_risk` sets this reason (and `partial: true`) when the deadline expires inside test selection.
+_TESTS_DEADLINE_REASON = "time budget exceeded during test selection"
 _TESTS_TRUNCATED_REASON = "tests_to_run was truncated to fit the response budget"
 # `tests_to_run` is cut down to this many entries before the per-file test map is touched.
 TESTS_TO_RUN_FLOOR = 10
@@ -902,8 +919,8 @@ TESTS_TO_RUN_FLOOR = 10
 # (`uncovered_changed_files_total` keeps the full count); it goes below it only once everything
 # else is at its floor.
 UNCOVERED_FLOOR = 20
-# `files` is cut to this many entries while the rest of the payload is reduced, and refilled with
-# whatever room is left at the end; it goes below it only once everything else is at its floor.
+# `files` is cut to this many entries after `directives` and before `tests_to_run`; it goes below
+# it only once everything else is at its floor.
 FILES_FLOOR = 10
 # Under budget pressure each entry of `files` keeps only these keys, plus `indexed: false` on an
 # unindexed file, and `omitted_fields` gains `files.detail`: the duplicate scores, the score
@@ -941,13 +958,14 @@ _RISK_SCALAR_KEYS = frozenset(
         "unindexed",
         "tests_run_all",
         "tests_run_all_reason",
+        "partial",
     }
 )
 # What survives the minimal fallback payload (see `truncate_risk_result`).
 _RISK_MINIMAL_KEYS = frozenset(
     {
         "status", "range", "staged", "index_status", "unindexed", "tests_run_all", "tests_run_all_reason",
-        "files", "directives", "tests_to_run", "uncovered_changed_files", "uncovered_changed_files_total",
+        "partial", "files", "directives", "tests_to_run", "uncovered_changed_files", "uncovered_changed_files_total",
         "budget", "truncated", "returned_count", "budget_feasible", "omitted_fields", "minimal_payload",
     }
 ) | frozenset(_MAP_KEYS)
@@ -982,7 +1000,11 @@ def _longest_fitting_prefix(count: int, fits: Callable[[int], bool], floor: int 
 def truncate_risk_result(result: Mapping[str, Any], budget: int, *, _pre_omitted: Sequence[str] = ()) -> dict[str, Any]:
     """Deterministically keep high-risk files and directives within a budget.
 
-    Give-up order as the budget shrinks:
+    Give-up order as the budget shrinks (each step runs only while the result is still over
+    budget).  From most to least protected above the floors: the per-file map, `tests_to_run`,
+    the `files` count, `directives`, `files.detail`, the `tests_to_run` reasons, the buckets.
+    Every cut is the longest prefix that fits, in this priority order, so a larger budget never
+    returns less of a higher-priority key:
 
     0. `uncovered_changed_files` (a diagnostic, ranked by the changed file's risk) is cut to
        `UNCOVERED_FLOOR` entries and `uncovered_changed_files_total` records the full count;
@@ -990,25 +1012,28 @@ def truncate_risk_result(result: Mapping[str, Any], budget: int, *, _pre_omitted
     1. `tests_by_changed_file` is re-encoded (lossless) as indices into its own table
        of tests, `tests_by_changed_file_tests`, so cuts to `tests_to_run` cannot
        invalidate it;
-    2. lower-ranked `files`, down to `FILES_FLOOR` entries (refilled at the end, see below);
-    3. the secondary buckets in `_RISK_DROP_ORDER`;
-    4. the `reason` text of every `tests_to_run` entry;
-    4b. the detail of every `files` entry (`files.detail`): each keeps `_FILE_COMPACT_KEYS`;
-    5. `directives`;
-    6. `tests_to_run`, down to `TESTS_TO_RUN_FLOOR` entries (which switches
+    2. the secondary buckets in `_RISK_DROP_ORDER`, one at a time;
+    3. the `reason` text of every `tests_to_run` entry;
+    4. the detail of every `files` entry (`files.detail`): each keeps `_FILE_COMPACT_KEYS`;
+    5. `directives`, down to none;
+    6. lower-ranked `files`, down to `FILES_FLOOR` entries;
+    7. `tests_to_run`, down to `TESTS_TO_RUN_FLOOR` entries (which switches
        `tests_run_all` on);
-    6b. `uncovered_changed_files` below `UNCOVERED_FLOOR`, down to none (the total stays);
-    7. the per-file map itself: first every changed file keeps only its highest-scoring tests,
+    8. `uncovered_changed_files` below `UNCOVERED_FLOOR`, down to none (the total stays);
+    9. the per-file map itself: first every changed file keeps only its highest-scoring tests,
        at the largest cap in `MAP_TESTS_PER_FILE_CAPS` that fits (`tests_by_changed_file_more`
        counts the rest per file); below the smallest cap the highest-risk changed files are
        kept (`tests_by_changed_file_omitted` counts the rest);
-    8. `tests_to_run` below the floor: the map is fitted first with no tests at all and the
-       tests get the room left over;
-    8b. `files` below `FILES_FLOOR`, down to none;
-    9. only then the map as a whole.
+    10. `tests_to_run` below the floor: the map is fitted first with no tests at all and the
+        tests get the room left over;
+    11. `files` below `FILES_FLOOR`, down to none;
+    12. only then the map as a whole.
 
-    Whatever room is left after these steps goes back to `files` (the longest prefix of the
-    ranked list, in its compact form if 4b ran, that still fits).
+    There is no refill at the end: a key that was cut keeps its cut, so the count of `files`,
+    the per-file test cap and `tests_to_run` do not decrease as the budget grows, and
+    `files.detail` is omitted at every budget below the first one that keeps the detail.  The
+    one exception is the map's changed-file count across the step-10 transition, where the
+    map is deliberately fitted before `tests_to_run`.
 
     Every fully removed key is named in `omitted_fields`. Prefix lengths are found by
     binary search: size only grows with the prefix.
@@ -1118,6 +1143,7 @@ def truncate_risk_result(result: Mapping[str, Any], budget: int, *, _pre_omitted
             output.pop("uncovered_changed_files_total", None)
 
     all_files = list(output.get("files") or [])
+    output["returned_count"] = len(all_files)  # measured from the first fit on
 
     def files_probe(_items: list[Any], count: int) -> None:
         output["returned_count"] = count  # part of the fit, so a fitted payload stays within it
@@ -1131,8 +1157,6 @@ def truncate_risk_result(result: Mapping[str, Any], budget: int, *, _pre_omitted
         output["truncated"] = True
     if has_map and over():
         set_map(len(pairs))  # lossless
-    if over():
-        shorten("files", files_probe, floor=FILES_FLOOR)
     for key in _RISK_DROP_ORDER:
         if not over():
             break
@@ -1150,6 +1174,8 @@ def truncate_risk_result(result: Mapping[str, Any], budget: int, *, _pre_omitted
         # Keep directives in stable order but drop from the end; the full
         # directive arrays remain available in an unbudgeted CLI analysis.
         shorten("directives")
+    if over():
+        shorten("files", files_probe, floor=FILES_FLOOR)
 
     # A shortened impacted-test list can no longer be vouched for, so it switches to run-all;
     # ``tests_run_all``/``tests_run_all_reason`` themselves are never dropped.
@@ -1195,11 +1221,6 @@ def truncate_risk_result(result: Mapping[str, Any], budget: int, *, _pre_omitted
         shorten("files", files_probe)  # below FILES_FLOOR, down to none
     if has_map and "tests_by_changed_file" not in omitted and (not output.get("tests_by_changed_file") or over()):
         drop_map()
-    kept_files = len(output.get("files") or [])
-    if not over() and kept_files < len(all_files):
-        # Whatever room the steps above left goes back to the ranked files.
-        output["files"] = all_files
-        shorten("files", files_probe, floor=kept_files)
     output["returned_count"] = len(output.get("files", []))
     output["budget_feasible"] = not over()  # measured before the flag itself is added
     if not output["budget_feasible"] and not _pre_omitted:

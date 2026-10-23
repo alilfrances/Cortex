@@ -251,3 +251,62 @@ def test_cortex_relations_renders_ambiguous_call_targets(tmp_path, monkeypatch):
     assert concise[ambiguous]["confidence"] == "LOW"
     assert detailed[ambiguous]["candidates"] == ["symbol:b.cpp:render", "symbol:c.cpp:render"]
     assert "candidates" not in detailed["printf"]
+
+
+# ---------------------------------------------------------------------------
+# A bare label that names several symbols resolves to the best candidate.
+# ---------------------------------------------------------------------------
+
+
+def _duplicate_label_repo(tmp_path: Path, extra_nodes: list[GraphNode] | None = None) -> Path:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git_init(repo)
+    nodes = [
+        _symbol("tests/mock/widget.h", "Widget", kind="class"),
+        _symbol("src/widget.cpp", "Widget", kind="class"),
+        _symbol("src/widget.h", "Widget", kind="class"),
+        _symbol("src/run.cpp", "run"),
+        *(extra_nodes or []),
+    ]
+    edges = [
+        _edge("regex:calls:real", "symbol:src/run.cpp:run", "symbol:src/widget.h:Widget", "calls", "SEMANTIC"),
+        _edge("regex:calls:mock", "symbol:src/run.cpp:run", "symbol:tests/mock/widget.h:Widget", "calls", "SEMANTIC"),
+    ]
+    store = CortexStore(repo / ".cortex" / "cortex.db")
+    store.reset_repo(repo)
+    store.save_graph(repo, nodes, edges)
+    return repo
+
+
+def test_cortex_path_ranks_a_duplicated_label_and_lists_alternatives(tmp_path, monkeypatch):
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    repo = _duplicate_label_repo(tmp_path)
+
+    result = call_tool("cortex_path", {
+        "repo_path": str(repo), "symbol_a": "run", "symbol_b": "Widget", "response_format": "detailed",
+    })
+    payload = _payload(result)
+
+    assert result["isError"] is False
+    # production over the mock tree, a header over a class nested in a .cpp
+    assert payload["target"] == "Widget @ src/widget.h:1"
+    assert payload["ambiguous"] is True
+    assert payload["alternatives_for"] == "symbol_b"
+    assert payload["alternatives"] == ["symbol:src/widget.cpp:Widget", "symbol:tests/mock/widget.h:Widget"]
+    assert payload["returned_count"] >= 1
+
+
+def test_cortex_path_alternatives_are_capped_and_exact_ids_stay_unambiguous(tmp_path, monkeypatch):
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    extra = [_symbol(f"lib/v{i}/widget.cpp", "Widget", kind="class") for i in range(12)]
+    repo = _duplicate_label_repo(tmp_path, extra)
+
+    payload = _payload(call_tool("cortex_path", {"repo_path": str(repo), "symbol_a": "run", "symbol_b": "Widget"}))
+    assert payload["target"] == "Widget @ src/widget.h:1"
+    assert len(payload["alternatives"]) == 8
+
+    exact = _payload(call_tool("cortex_path", {
+        "repo_path": str(repo), "symbol_a": "run", "symbol_b": "symbol:src/widget.h:Widget",
+    }))
+    assert "ambiguous" not in exact and "alternatives" not in exact

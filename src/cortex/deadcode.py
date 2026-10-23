@@ -57,6 +57,17 @@ _OVERRIDE_MARKER_RE = re.compile(r"@Override\b|\boverride\b|\bvirtual\b")
 _CLASS_QUALIFIER_RE = re.compile(r"\b([A-Za-z_]\w*)::~?[A-Za-z_]\w*\s*\(")
 _OVERRIDE_REASON = "no incoming edges; overrides a base-class or framework method"
 _METHOD_KINDS = frozenset({"func", "method"})
+_CPP_SUFFIXES = (".h", ".hh", ".hpp", ".hxx", ".c", ".cc", ".cpp", ".cxx")
+_PURE_VIRTUAL_RE = re.compile(r"\)[^;{}]*=\s*0\s*;\s*$")
+
+
+def _is_pure_virtual(node: GraphNode) -> bool:
+    """A C++ `virtual R f(...) = 0;` declaration: an interface other code implements or calls through a base."""
+    return (
+        node.kind in _METHOD_KINDS
+        and node.source_ref.lower().endswith(_CPP_SUFFIXES)
+        and bool(_PURE_VIRTUAL_RE.search(node.signature or ""))
+    )
 
 
 class _OverrideIndex:
@@ -115,7 +126,11 @@ class _OverrideIndex:
             picked.append(lines[start])  # the declaration under an annotation-only line
         return "\n".join(picked)
 
-    def _enclosing_class(self, node: GraphNode) -> GraphNode | None:
+    def _enclosing_classes(self, node: GraphNode) -> list[GraphNode]:
+        """The innermost class whose span holds the method, then the class a `Class::method` qualifier names.
+
+        Both are returned: an out-of-line definition inside `namespace ns { ... }` is contained
+        by the namespace (a `class` node too), which says nothing about the method's owner."""
         start = node.span_start or 0
         best: GraphNode | None = None
         for cls in self._classes_by_file.get(node.source_ref, ()):
@@ -125,14 +140,13 @@ class _OverrideIndex:
                 best is None or (cls.span_end - cls.span_start) < ((best.span_end or 0) - (best.span_start or 0))
             ):
                 best = cls
-        if best is not None:
-            return best
+        found = [best] if best is not None else []
         qualifier = _CLASS_QUALIFIER_RE.search(node.signature or "")
         if qualifier:
             matches = self._classes_by_label.get(qualifier.group(1), [])
-            if len(matches) == 1:
-                return matches[0]
-        return None
+            if len(matches) == 1 and matches[0] not in found:
+                found.append(matches[0])
+        return found
 
     def _base_nodes(self, cls: GraphNode) -> list[GraphNode]:
         """Base classes that are defined in the repository."""
@@ -177,12 +191,12 @@ class _OverrideIndex:
             return False
         if _OVERRIDE_MARKER_RE.search(self._declaration_text(node)):
             return True
-        cls = self._enclosing_class(node)
-        if cls is None:
-            return False
-        if self._class_declares_with_marker(cls, node.label):
-            return True
-        return any(self._declares_method(base, node.label, set()) for base in self._base_nodes(cls))
+        for cls in self._enclosing_classes(node):
+            if self._class_declares_with_marker(cls, node.label):
+                return True
+            if any(self._declares_method(base, node.label, set()) for base in self._base_nodes(cls)):
+                return True
+        return False
 
 
 class _AnalysisContext:
@@ -473,6 +487,8 @@ def analyze_dead_code(
             break
         if _is_test_path(node.source_ref) or _is_dunder_or_entry_point(node) or node.label in reexports:
             continue
+        if _is_pure_virtual(node):
+            continue  # an interface method is never dead code on its own, called or not
         if node.kind == "target":
             continue  # a CMake/qmake build target is an entry point, not code that something calls
         if node.metadata.get("qt") == "handler":

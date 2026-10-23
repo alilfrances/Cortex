@@ -4,7 +4,7 @@ Cortex is a graph-aware, local-first context engine for code agents. It ingests 
 
 The result is a repo-native context service: MCP tools for live agent queries, CLI commands for reports and exports, and local parser/runtime state. Parser setup downloads only locked artifacts; repository source is never sent during setup. Normal ingest/query is offline after setup.
 
-Current package and plugin metadata is `0.13.0` (`pyproject.toml` and plugin manifests).
+Current package and plugin metadata is `0.14.0` (`pyproject.toml` and plugin manifests).
 
 ## What Cortex Builds
 
@@ -216,6 +216,20 @@ Every tool definition carries a human-readable `title` and MCP `annotations` (`r
 ### Risk score policy
 
 `cortex risk` uses fixed normalized components: `min(1, churn/100)`, stored hotspot score `/1000`, structural fan-in `/10`, strongest missing COCHANGE weight, and actionable-directive count `/3`. Their weights are respectively `0.30`, `0.20`, `0.15`, `0.15`, and `0.20`; the deterministic score is `round(10 * sum(weight * component), 2)`. Missing COCHANGE advice uses a documented threshold of `0.50`. Ties sort by descending score, then repository-relative path. Risk never runs network commands.
+
+### Query configuration (`.cortex/config.toml`)
+
+The `[query]` table of the repository's `.cortex/config.toml` tunes how a task is matched:
+
+```toml
+[query]
+# Two-way vocabulary bridge: a task that says "USB" also matches code named after the OS device-event API.
+synonyms = { usb = ["devicechange"] }
+# Files named `*_win.*`, `*_mac.*`, `*_linux.*`, `*_android.*`, `*_ios.*` (or under a directory of that name) are
+# demoted, and their overriders ranked last, unless the task names the platform. A product name listed here counts
+# as naming it: a task that says "explorer" is a Windows task. Platforms: win, mac, linux, android, ios.
+platform_terms = { explorer = "win", finder = "mac", udev = "linux" }
+```
 
 ### Impacted tests
 

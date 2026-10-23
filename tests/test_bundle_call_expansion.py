@@ -110,9 +110,9 @@ def test_walk_scores_callees_from_the_seed_and_passes_through_same_file_calls() 
     }
     got = _walk([("symbol:a.cpp:top", 100.0)], calls)
 
-    assert got["symbol:b.cpp:direct"] == (100.0 * CALLEE_HOP_SHARE[0], "symbol:a.cpp:top", 1)
+    assert got["symbol:b.cpp:direct"][:3] == (100.0 * CALLEE_HOP_SHARE[0], "symbol:a.cpp:top", 1)
     assert got["symbol:b.cpp:sibling"][2] == 1
-    assert got["symbol:c.cpp:far"] == (100.0 * CALLEE_HOP_SHARE[1], "symbol:a.cpp:top", 2)
+    assert got["symbol:c.cpp:far"][:3] == (100.0 * CALLEE_HOP_SHARE[1], "symbol:a.cpp:top", 2)
     assert "symbol:d.cpp:too_far" not in got
     assert "symbol:a.cpp:top" not in got
 
@@ -121,7 +121,7 @@ def test_walk_keeps_the_best_route_over_several_seeds_and_never_expands_callers(
     calls = {"symbol:a.cpp:s1": ["symbol:x.cpp:shared"], "symbol:b.cpp:s2": ["symbol:x.cpp:shared"]}
     got = _walk([("symbol:a.cpp:s1", 80.0), ("symbol:b.cpp:s2", 120.0)], calls)
 
-    assert got["symbol:x.cpp:shared"][1:] == ("symbol:b.cpp:s2", 1)
+    assert got["symbol:x.cpp:shared"][1:3] == ("symbol:b.cpp:s2", 1)
     # A caller of a seed is not a callee of anything: nothing lifts it.
     got = _walk([("symbol:x.cpp:shared", 100.0)], calls)
     assert got == {}
@@ -144,7 +144,7 @@ def test_walk_scores_the_bases_of_the_seeds_class() -> None:
         bases={"symbol:a.h:Derived": ["symbol:base.h:Base"]},
     )
 
-    assert got == {"symbol:base.h:Base": (100.0 * BASE_CLASS_SHARE, "symbol:a.cpp:method", 1)}
+    assert got == {"symbol:base.h:Base": (100.0 * BASE_CLASS_SHARE, "symbol:a.cpp:method", 1, 0.0)}
 
 
 def test_expanded_items_say_why_they_were_selected(tmp_path, monkeypatch) -> None:
@@ -176,7 +176,7 @@ def test_walk_keeps_the_shortest_route_when_a_longer_one_is_met_first() -> None:
     }
     got = _walk([("symbol:a.cpp:top", 100.0)], calls)
 
-    assert got["symbol:x.cpp:deep"] == (100.0 * CALLEE_HOP_SHARE[0], "symbol:a.cpp:top", 1)
+    assert got["symbol:x.cpp:deep"][:3] == (100.0 * CALLEE_HOP_SHARE[0], "symbol:a.cpp:top", 1)
 
 
 @pytest.mark.parametrize("mode", ["pagerank", "bfs", "skeleton_on", "skeleton_off"])
@@ -269,3 +269,47 @@ def test_a_handler_without_a_task_word_in_its_name_leads_to_the_file_it_calls(tm
     packed = _items_by_path(bundle)
     route = (packed.get("src/registry_store.cpp") or {}).get("metadata", {}).get("call_expansion")
     assert route and route["from"] == "symbol:src/hub.cpp:dispatch", (sorted(packed), route)
+
+
+# --- relevance is a small score factor and IDF-weighted (docs/plan-0.14-field-review.md, Task 5.2) ---
+
+
+def test_walk_scales_a_callee_score_by_a_small_relevance_factor() -> None:
+    from cortex.bundle import CALLEE_HOP_SHARE, CALLEE_RELEVANCE_MIN, RELEVANCE_FLOOR, _callee_scores
+
+    calls = {"symbol:a.cpp:top": ["symbol:b.cpp:hit", "symbol:c.cpp:miss"]}
+    levels = {"symbol:b.cpp:hit": 1.0, "symbol:c.cpp:miss": RELEVANCE_FLOOR}
+    got = _callee_scores(
+        [("symbol:a.cpp:top", 100.0)], calls, lambda sid: sid.split(":")[1], lambda sid: None, {},
+        relevance=lambda sid: levels[sid],
+    )
+
+    share = 100.0 * CALLEE_HOP_SHARE[0]
+    assert got["symbol:b.cpp:hit"][0] == pytest.approx(share)
+    assert got["symbol:c.cpp:miss"][0] == pytest.approx(share * (CALLEE_RELEVANCE_MIN + (1 - CALLEE_RELEVANCE_MIN) * RELEVANCE_FLOOR))
+    # A callee that shares no word keeps most of its share: the 0.13.0 range 0.25-1 lost the companion fixture.
+    assert 0.75 <= CALLEE_RELEVANCE_MIN <= 0.95
+    assert got["symbol:c.cpp:miss"][0] >= 0.85 * share
+
+
+def test_walk_does_not_scale_the_bases_of_the_seeds_class() -> None:
+    from cortex.bundle import BASE_CLASS_SHARE, _callee_scores
+
+    got = _callee_scores(
+        [("symbol:a.cpp:method", 100.0)], {}, lambda sid: sid.split(":")[1],
+        lambda sid: "symbol:a.h:Derived" if sid == "symbol:a.cpp:method" else None,
+        {"symbol:a.h:Derived": ["symbol:base.h:Base"]}, relevance=lambda sid: 0.25,
+    )
+
+    assert got["symbol:base.h:Base"][0] == 100.0 * BASE_CLASS_SHARE
+
+
+def test_body_relevance_weighs_the_rare_term_above_the_common_one() -> None:
+    from cortex.bundle import RELEVANCE_FILE_HIT, _body_relevance
+
+    weights = {"rare": 8.0, "common": 1.0, "mid": 4.0}
+    assert _body_relevance({"rare"}, weights) == 1.0                          # the heaviest term alone
+    assert _body_relevance({"common"}, weights) == RELEVANCE_FILE_HIT         # 1/8 floors at the file hit
+    assert _body_relevance({"mid"}, weights) == pytest.approx(0.5)
+    assert _body_relevance({"mid", "common"}, weights) == pytest.approx(5 / 8)
+    assert _body_relevance({"rare", "mid", "common"}, weights) == 1.0         # capped

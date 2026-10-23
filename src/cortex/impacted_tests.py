@@ -31,7 +31,7 @@ from pathlib import PurePosixPath
 import re
 from typing import Any, Iterable, Mapping, Sequence
 
-from .callresolve import _base_label, _inherits_label
+from .callresolve import _base_label, _inherits_label, _is_auxiliary
 from .deadline import check_deadline
 from .models import GraphEdge
 from .testpatterns import is_test_path, pairs_with_test, test_base_name
@@ -270,6 +270,7 @@ class _GraphIndex:
         for bucket in (*self.reverse.values(), *self.forward_hub.values()):
             bucket.sort(key=lambda item: (item.relation, item.source, item.target, item.edge_id))
         self._cpp_equivalents = self._build_cpp_equivalents(nodes)
+        self.shadowable_headers = self._build_shadowable_headers(nodes)
         self._classes_by_label: dict[str, list[Any]] = defaultdict(list)
         for node in nodes:
             if getattr(node, "granularity", "") == "symbol" and node.kind in _CLASS_KINDS:
@@ -325,6 +326,21 @@ class _GraphIndex:
                     attached.add(base.node_id)
         for node_id in attached:
             self.reverse[node_id].sort(key=lambda item: (item.relation, item.source, item.target, item.edge_id))
+
+    @staticmethod
+    def _build_shadowable_headers(nodes: Sequence[Any]) -> set[str]:
+        """Production files whose file name is also the name of a test/mock/fixture file."""
+        by_name: dict[str, list[str]] = defaultdict(list)
+        for node in nodes:
+            if node.node_id.startswith("file:"):
+                by_name[PurePosixPath(node.source_ref).name].append(node.source_ref)
+        return {
+            path
+            for paths in by_name.values()
+            if len(paths) > 1 and any(_is_auxiliary(p) for p in paths)
+            for path in paths
+            if not _is_auxiliary(path)
+        }
 
     # -- C/C++ declaration <-> out-of-line definition --------------------------
     def _build_cpp_equivalents(self, nodes: Sequence[Any]) -> dict[str, list[str]]:
@@ -416,6 +432,30 @@ def _label(node_id: str, index: _GraphIndex) -> str:
     return f"{node.source_ref}:{node.label}"
 
 
+def _shadowed_include(edge: Any, index: "_GraphIndex") -> bool:
+    """An `imports` edge, newly resolved by the includer-relative rule, to a header a same-named mock can replace.
+
+    A quoted include resolves relative to the including file, so a duplicated basename no longer leaves
+    the edge unresolved (`metadata.include_rule == "relative"`; includes 0.12.1 resolved stay walked);
+    but a test target may put the mock directory first on its include path and compile the mock header instead (review 0.13.0 section C). Such an edge is not walked, like a `calls` edge the
+    resolver settled by preferring production. The graph keeps the edge.
+    """
+    if edge.relation != "imports" or not edge.target.startswith("file:"):
+        return False
+    if not isinstance(edge.metadata, Mapping) or edge.metadata.get("include_rule") != "relative":
+        return False
+    return edge.target[5:] in index.shadowable_headers and not _is_auxiliary(index.path_of(edge.source))
+
+
+def _preferred_production(edge: Any) -> bool:
+    """A `calls` edge the resolver pointed at the real class only because the alternatives were mocks/tests.
+
+    A test target may put the mock directory ahead of the sources, so the call can reach the mock instead;
+    such an edge is not walked (in 0.12.1 it was an unresolved `name:` edge). The call graph keeps the target.
+    """
+    return isinstance(edge.metadata, Mapping) and edge.metadata.get("preferred") == "production"
+
+
 def _structural(
     seeds: list[tuple[str, int, str]],
     changed_path: str,
@@ -468,6 +508,10 @@ def _structural(
         next_items: list[tuple[int, str, str, str]] = []
         for edge in index.reverse.get(node_id, []):
             if edge.relation not in allowed[mode]:
+                continue
+            if edge.relation == "calls" and _preferred_production(edge):
+                continue
+            if _shadowed_include(edge, index):
                 continue
             if mode == "owner" and edge.relation == "calls":
                 node = index.nodes.get(node_id)

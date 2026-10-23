@@ -614,3 +614,75 @@ def test_a_resolver_rewritten_inherits_edge_selects_tests_exactly_as_the_label_e
         assert [e.source for e in rewritten.reverse.get(base.node_id, [])] == [
             e.source for e in original.reverse.get(base.node_id, [])
         ]
+
+
+# --- production-over-mock edges are not walked (0.14: review 0.13.0 section C) ---
+
+STEP_H = "#pragma once\nclass Step {\npublic:\n    explicit Step(int v);\n    int run();\n};\n"
+OPS_CPP = '#include "ops.h"\n#include "steps/step.h"\n\nint runOp() {\n    Step *step = new Step(1);\n    return step->run();\n}\n'
+
+
+def _mock_step_repo(tmp_path: Path) -> Path:
+    """`src/ops.cpp` builds `new Step`; `src/steps/step.h` and a mock under `tests/header-mocks` both define it.
+    The test target lists the mock directory ahead of `src`, so `opstest` compiles the mock, not the real header."""
+    repo = tmp_path / "mockstep"
+    init_git(repo)
+    _write(repo, "src/steps/step.h", STEP_H)
+    _write(repo, "tests/header-mocks/steps/step.h", STEP_H.replace("int run();", "int run() { return 0; }"))
+    _write(repo, "src/ops.cpp", OPS_CPP)
+    _write(repo, "src/ops.h", "#pragma once\nint runOp();\n")
+    _write(repo, "tests/opstest.cpp", '#include "ops.h"\n\nvoid testOp() {\n    runOp();\n}\n')
+    _write(repo, "tests/CMakeLists.txt", "add_executable(opstest opstest.cpp ../src/ops.cpp)\n"
+           "target_include_directories(opstest PRIVATE header-mocks ../src)\n")
+    _write(repo, "notes/log.txt", "0\n")
+    commit_all(repo, "initial")
+    for value in range(1, 4):  # keep the initial commit's co-change pairs below the test threshold
+        _write(repo, "notes/log.txt", f"{value}\n")
+        _write(repo, "notes/more.txt", f"{value}\n")
+        commit_all(repo, f"notes {value}")
+    return repo
+
+
+@pytest.mark.skipif(not treesitter_available(), reason="managed tree-sitter runtime is not ready")
+def test_a_header_whose_calls_were_resolved_only_by_preferring_production_maps_to_no_test(tmp_path: Path) -> None:
+    repo = _mock_step_repo(tmp_path)
+
+    result = _change(repo, "src/steps/step.h", STEP_H.replace("int run();", "int run();\n    int extra();"))
+
+    assert "tests/opstest.cpp" not in result["tests_by_changed_file"].get("src/steps/step.h", [])
+    assert "tests/opstest.cpp" not in _by_test(result)
+    assert result["tests_run_all"] is True  # nothing vouches for the header: the honest answer, as in 0.12.1
+
+    from cortex.store import CortexStore, default_db_path
+
+    _, edges = CortexStore(default_db_path(repo)).fetch_graph(repo)
+    new_step = [e for e in edges if e.relation == "calls" and e.metadata.get("callee") == "Step"]
+    assert [(e.source, e.target) for e in new_step] == [("symbol:src/ops.cpp:runOp", "symbol:src/steps/step.h:Step")]
+    assert new_step[0].metadata["preferred"] == "production"  # the call graph keeps the production answer
+
+
+@pytest.mark.skipif(not treesitter_available(), reason="managed tree-sitter runtime is not ready")
+def test_an_include_that_resolved_by_exact_path_stays_walked_despite_a_mock_twin(tmp_path: Path) -> None:
+    """Only an include newly resolved by the includer-relative rule is shadowable: `#include "src/steps/step.h"`
+    resolved by its exact path in 0.12.1 too, so the header still selects the test that builds the includer."""
+    repo = _mock_step_repo(tmp_path)
+    _write(repo, "src/ops.cpp", OPS_CPP.replace('"steps/step.h"', '"src/steps/step.h"'))
+    commit_all(repo, "exact path include")
+
+    result = _change(repo, "src/steps/step.h", STEP_H.replace("int run();", "int run();\n    int extra();"))
+
+    assert result["tests_by_changed_file"]["src/steps/step.h"] == ["tests/opstest.cpp"]
+    assert result["tests_run_all"] is False
+
+
+@QT_BACKENDS
+def test_a_change_to_the_caller_of_a_preferred_edge_still_maps_to_its_test(
+    backend: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _set_backend(backend, monkeypatch)
+    repo = _mock_step_repo(tmp_path)
+
+    result = _change(repo, "src/ops.cpp", OPS_CPP.replace("return step->run();", "return step->run() + 1;"))
+
+    assert result["tests_by_changed_file"]["src/ops.cpp"] == ["tests/opstest.cpp"]
+    assert "structural" in _by_test(result)["tests/opstest.cpp"]["via"]

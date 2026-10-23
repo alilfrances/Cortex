@@ -20,7 +20,7 @@ from ..gitutils import discover_repo_root
 from ..impact import IMPACT_CACHE_VERSION, UnknownPathError, rank_file_impact
 from ..ingest import compute_repo_fingerprint, ingest_repository
 from ..models import GraphEdge, GraphNode
-from ..pathfind import shortest_paths
+from ..pathfind import MAX_ALTERNATIVES, rank_candidates, shortest_paths
 from ..rank import collapse_to_file_graph
 from ..references import find_references
 from ..report import build_report_data, render_report
@@ -246,7 +246,9 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "repo_path": {
                     "type": "string",
                     "description": "Only read with response_format detailed: also report how far calls and "
-                    "inherits edges of this repository's index are resolved (`resolution`).",
+                    "inherits edges of this repository's index are resolved (`resolution`: edge counts by target "
+                    "kind, `name_external` for unresolved targets classified as out-of-repo, and "
+                    "`in_repo_symbol_share`, the share of in-repo targets that resolved to a symbol).",
                 },
                 "response_format": {"type": "string", "enum": ["concise", "detailed"], "default": "concise"},
             },
@@ -1063,6 +1065,10 @@ def _overview_payload_for_report(
     extra_fields: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     report = render_report(analysis, dead_code, omitted_count=omitted_count)
+    progress = analysis.get("dead_code_progress") if analysis.get("dead_code_partial", False) else None
+    if isinstance(progress, dict) and "processed" in progress and "total" in progress:
+        # The scan stopped at the time budget; the cursor is cached, so the next call resumes it.
+        report += f"\ndead_code: scanned {progress['processed']} of {progress['total']} candidates; call again to resume"
     payload: dict[str, Any] = {
         "repo_path": str(repo_root),
         "report": report,
@@ -1965,7 +1971,8 @@ def _call_risk(arguments: dict[str, Any]) -> dict[str, Any]:
         **graph_args,
     )
     result = truncate_risk_result(result, int(arguments.get("budget", 2000)))
-    if store is not None and cache_key and result.get("status") != "error":
+    # A partial payload (deadline inside test selection) is not cached: a later call may have the time to finish.
+    if store is not None and cache_key and result.get("status") != "error" and not result.get("partial"):
         _cache_set(store, repo_root, cache_key, result)
     return _content(_format_payload(result, status, response_format), is_error=result.get("status") == "error")
 
@@ -2174,6 +2181,7 @@ def _symbol_match_payload(node: Any) -> dict[str, Any]:
 
 _IMPL_SUFFIXES = (".c", ".cc", ".cpp", ".cxx", ".m", ".mm")
 _HEADER_SUFFIXES = (".h", ".hh", ".hpp", ".hxx")
+_BARE_LABEL_RE = re.compile(r"^~?[A-Za-z_]\w*$")
 _QUALIFIED_PATH_RE = re.compile(r"^(?P<path>[^:]+\.[A-Za-z0-9]+)(?:::|:)(?P<label>[^:].*)$")
 _QUALIFIED_MEMBER_RE = re.compile(r"^(?P<cls>[A-Za-z_]\w*)(?:::|\.)(?P<member>~?[A-Za-z_]\w*)$")
 
@@ -2252,6 +2260,16 @@ def _resolve_symbol(store: CortexStore, repo_root: Path, symbol: str) -> tuple[A
     if len(related) == 1:
         return related[0], []
     return None, related
+
+
+def _same_label_candidates(matches: list[Any]) -> list[Any]:
+    """The symbols of an ambiguous lookup when they all carry one label (`Class::member` in several files).
+
+    A fuzzy query whose hits have different labels stays a plain ambiguity.
+    """
+    if len(matches) > 1 and all(node.granularity == "symbol" for node in matches) and len({node.label for node in matches}) == 1:
+        return matches
+    return []
 
 
 def _numbered_span(content: str, start: int, end: int) -> str:
@@ -2580,9 +2598,23 @@ def _call_path(arguments: dict[str, Any]) -> dict[str, Any]:
         return _content({"error": "missing_symbol", "message": "symbol_a and symbol_b are required"}, is_error=True)
 
     resolved: dict[str, Any] = {}
+    candidates: dict[str, list[Any]] = {}
     for key, symbol in (("symbol_a", symbol_a), ("symbol_b", symbol_b)):
+        if _BARE_LABEL_RE.match(symbol):
+            # `_resolve_symbol` would let one implementation file win over header declarations;
+            # here the whole label is ranked instead (a header beats a class nested in a .cpp).
+            same_label = store.symbols_by_label(repo_root, symbol)
+            if len(same_label) > 1:
+                candidates[key] = same_label
+                continue
         node, matches = _resolve_symbol(store, repo_root, symbol)
         if node is None:
+            # A label that names several symbols is not a dead end: the likeliest one is used
+            # and the others are listed (`ambiguous` stays for clients that look for it).
+            same_label = _same_label_candidates(matches)
+            if same_label:
+                candidates[key] = same_label
+                continue
             if matches:
                 ambiguous = {
                     "repo_path": str(repo_root),
@@ -2603,6 +2635,12 @@ def _call_path(arguments: dict[str, Any]) -> dict[str, Any]:
                 is_error=True,
             )
         resolved[key] = node
+    alternatives: dict[str, list[str]] = {}
+    for key, found in candidates.items():
+        other = resolved.get("symbol_b" if key == "symbol_a" else "symbol_a")
+        ranked = rank_candidates(found, other.source_ref if other is not None else "")
+        resolved[key] = ranked[0]
+        alternatives[key] = [node.node_id for node in ranked[1:1 + MAX_ALTERNATIVES]]
 
     graph_nodes, graph_edges = _cached_graph(store, repo_root)
     node_by_id = {node.node_id: node for node in graph_nodes}
@@ -2639,6 +2677,15 @@ def _call_path(arguments: dict[str, Any]) -> dict[str, Any]:
     }
     if not paths:
         payload["note"] = f"No path between the symbols within {max_depth} hops (COCHANGE edges and commit nodes excluded)."
+    if alternatives:
+        # `alternatives` lists the runners-up of the first ambiguous endpoint and `alternatives_for`
+        # names it; a second ambiguous endpoint is listed in `alternatives_symbol_b`.
+        first, *rest = alternatives
+        payload["ambiguous"] = True
+        payload["alternatives"] = alternatives[first]
+        payload["alternatives_for"] = first
+        if rest:
+            payload["alternatives_symbol_b"] = alternatives[rest[0]]
     _stash_detailed_rendering(_content(_format_payload(payload, status, "detailed")))
     return _content(_format_payload(payload, status, response_format))
 

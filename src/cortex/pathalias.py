@@ -11,6 +11,9 @@ from the graph alone so a full ingest and an incremental one agree:
   parts of the repository's symbol labels (parts of at least `MIN_PART` characters, whole stem
   covered, fewest parts).
 
+A stem with ``_`` (``wm_devicechange_win``) is split on ``_`` first and each part goes through both rules
+on its own; the aliases are the union (``change device``).
+
 The unsplit stem is never replaced: aliases are extra path tokens, stored on the file node as
 ``metadata["path_aliases"]``.
 """
@@ -123,12 +126,15 @@ def compute_path_aliases(nodes: Sequence[GraphNode]) -> dict[str, list[str]]:
         if node.kind != "file" or node.granularity == "symbol":
             continue
         stem = PurePosixPath(node.source_ref).stem
-        if not splittable(stem):
-            continue
-        words = set(parts_from_labels(stem, declared.get(node.source_ref, ())))
-        if not words:
-            segmented = segment_stem(stem, vocabulary)
-            words = set(segmented or ())
+        words: set[str] = set()
+        for part in stem.split("_"):
+            if not splittable(part):
+                continue
+            found = set(parts_from_labels(part, declared.get(node.source_ref, ())))
+            if not found:
+                found = set(segment_stem(part, vocabulary) or ())
+            found.discard(part)
+            words |= found
         words.discard(stem)
         if words:
             aliases[node.node_id] = sorted(words)

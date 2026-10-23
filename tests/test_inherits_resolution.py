@@ -38,6 +38,10 @@ def test_status_reports_the_resolution_block(field_shape_repo):
     assert {"symbol", "name", "external"} <= set(resolution["calls"])
     assert {"symbol", "name", "module"} <= set(resolution["inherits"])
     assert resolution["inherits"]["symbol"] > 0 and resolution["calls"]["symbol"] > 0
+    assert {"name_external", "in_repo_symbol_share", "name_by_family"} <= set(resolution["calls"])
+    assert {"name_external", "in_repo_symbol_share"} <= set(resolution["inherits"])
+    assert resolution["inherits"]["in_repo_symbol_share"] >= 0.95, resolution["inherits"]
+    assert resolution["calls"]["in_repo_symbol_share"] >= 0.6, resolution["calls"]
 
 
 # --- the resolver on hand-built graphs --------------------------------------------------------------
@@ -104,12 +108,13 @@ def test_mocks_fixtures_other_languages_and_file_local_classes_lose_to_the_real_
 
 def test_a_test_class_may_derive_from_a_mock():
     nodes = [
-        cls("tests/unit/t.cpp", "Probe"), cls("src/b.h", "Base"), cls("tests/mocks/base.h", "Base"),
+        cls("tests/unit/t.cpp", "Probe"), cls("src/b.h", "Base"), cls("mocks/base.h", "Base"),
     ]
     edge = inherits("tests/unit/t.cpp", "Probe", "Base")
 
     out = resolved(nodes, [edge])[edge.edge_id]
 
+    # neither shares a directory with the caller (a mock under tests/ would win, see the nearest-directory tests)
     assert out.target.startswith("name:")  # both stay candidates: a test may mean either
     assert out.metadata["ambiguous"] is True and len(out.metadata["candidates"]) == 2
 
@@ -256,7 +261,7 @@ def test_a_second_class_with_the_label_in_an_unrelated_file_reopens_then_closes_
 def _resolution_state(repo):
     nodes, edges = CortexStore(default_db_path(repo)).fetch_graph(repo)
     edge_state = {
-        e.edge_id: (e.target, e.confidence, {k: e.metadata.get(k) for k in ("unresolved_target", "resolution", "candidates", "ambiguous")})
+        e.edge_id: (e.target, e.confidence, {k: e.metadata.get(k) for k in ("unresolved_target", "resolution", "candidates", "ambiguous", "external")})
         for e in edges if e.relation in ("calls", "inherits")
     }
     alias_state = {n.node_id: n.metadata.get("path_aliases") for n in nodes if n.kind == "file"}
@@ -313,3 +318,281 @@ def test_the_server_answers_status_with_the_resolution_block_from_its_reader_thr
     replies = {r["id"]: json.loads(r["result"]["content"][0]["text"]) for r in map(json.loads, out.getvalue().splitlines())}
     assert replies[1]["resolution"]["inherits"]["symbol"] == 1
     assert "resolution" not in replies[2]
+
+
+# --- out-of-repo bases are classified, not rewritten (0.14.0, plan Task 3.1) -------------------------------
+
+
+def file_import(path: str, target: str) -> GraphEdge:
+    return GraphEdge(
+        edge_id=f"treesitter:{path}:import:1:{target}", source=f"file:{path}", target=target, relation="imports",
+        layer="STRUCTURAL", confidence="EXTRACTED", metadata={"lineno": 1, "source_file": path},
+    )
+
+
+def file_node(path: str) -> GraphNode:
+    return GraphNode(node_id=f"file:{path}", kind="file", label=path, source_ref=path, granularity="file")
+
+
+def test_a_qt_base_outside_the_repository_is_classified_and_keeps_its_target():
+    nodes = [cls("src/w.h", "Worker")]
+    edge = inherits("src/w.h", "Worker", "QObject")
+
+    out = resolved(nodes, [edge])[edge.edge_id]
+
+    assert out.target == "name:QObject"
+    assert out.metadata["external"] == "qt"
+    assert "unresolved_target" not in out.metadata and "resolution" not in out.metadata
+
+
+def test_prefixed_and_std_bases_are_classified_by_how_they_are_written():
+    nodes = [cls("tests/t.cpp", "T"), cls("src/e.h", "Failure")]
+    gtest = inherits("tests/t.cpp", "T", "Test", target="name:::testing::Test")
+    boost = inherits("tests/t.cpp", "T", "noncopyable", target="name:boost::noncopyable")
+    std = inherits("src/e.h", "Failure", "runtime_error", target="name:std::runtime_error")
+    templated = inherits("src/e.h", "Failure", "variant", target="name:std::variant<int, double>")
+
+    out = resolved(nodes, [gtest, boost, std, templated])
+
+    assert out[gtest.edge_id].metadata["external"] == "prefix" and out[gtest.edge_id].target == "name:::testing::Test"
+    assert out[boost.edge_id].metadata["external"] == "prefix"
+    assert out[std.edge_id].metadata["external"] == "std"
+    assert out[templated.edge_id].metadata["external"] == "std"
+
+
+def test_a_bare_gtest_base_is_external_only_when_the_file_includes_a_gtest_header():
+    nodes = [cls("tests/with.cpp", "WithHeader"), cls("tests/without.cpp", "WithoutHeader")]
+    with_header = inherits("tests/with.cpp", "WithHeader", "Test")
+    without = inherits("tests/without.cpp", "WithoutHeader", "Test")
+    imports = [file_import("tests/with.cpp", "module:gtest/gtest.h"), file_import("tests/without.cpp", "module:vector")]
+
+    out = resolved(nodes, [with_header, without, *imports])
+
+    assert out[with_header.edge_id].metadata["external"] == "gtest"
+    assert "external" not in out[without.edge_id].metadata
+
+
+def test_a_qml_root_without_a_repository_component_is_a_builtin_or_an_imported_type():
+    nodes = [cls("qml/A.qml", "A"), cls("qml/B.qml", "B"), cls("qml/C.qml", "C"), cls("qml/D.qml", "D")]
+    builtin = inherits("qml/A.qml", "A", "Item", target="module:Item")
+    aliased = inherits("qml/B.qml", "B", "TextField", target="module:Controls.TextField")
+    vendor = inherits("qml/C.qml", "C", "VendorPanel", target="module:VendorPanel")
+    local_only = inherits("qml/D.qml", "D", "Nowhere", target="module:Nowhere")
+    imports = [
+        file_import("qml/C.qml", "module:QtQuick"),
+        file_import("qml/D.qml", "module:components"),  # `import "components"`: a repository directory
+    ]
+    nodes += [file_node("qml/components/Row.qml"), file_node("qml/C.qml"), file_node("qml/D.qml")]
+    nodes.append(cls("qml/components/Row.qml", "Row"))
+
+    out = resolved(nodes, [builtin, aliased, vendor, local_only, *imports])
+
+    assert out[builtin.edge_id].metadata["external"] == "qml_builtin" and out[builtin.edge_id].target == "module:Item"
+    assert out[aliased.edge_id].metadata["external"] == "qml_import"
+    assert out[vendor.edge_id].metadata["external"] == "qml_import"
+    assert "external" not in out[local_only.edge_id].metadata  # a repository directory is not an outside module
+
+
+def test_a_repository_class_wins_over_every_external_rule():
+    nodes = [
+        cls("qml/View.qml", "View"), cls("qml/Item.qml", "Item"),
+        cls("src/d.h", "Derived"), cls("src/q.h", "QWidgetBase"),
+    ]
+    qml = inherits("qml/View.qml", "View", "Item", target="module:Item")
+    qt_shaped = inherits("src/d.h", "Derived", "QWidgetBase")
+
+    out = resolved(nodes, [qml, qt_shaped])
+
+    assert out[qml.edge_id].target == "symbol:qml/Item.qml:Item" and "external" not in out[qml.edge_id].metadata
+    assert out[qt_shaped.edge_id].target == "symbol:src/q.h:QWidgetBase"
+    assert "external" not in out[qt_shaped.edge_id].metadata
+
+
+def test_an_ambiguous_base_is_not_external_and_other_languages_are_left_alone():
+    nodes = [cls("src/d.h", "Derived"), cls("a/q.h", "QThing"), cls("b/q.h", "QThing"), cls("py/m.py", "Model")]
+    ambiguous = inherits("src/d.h", "Derived", "QThing")
+    python = inherits("py/m.py", "Model", "QObject")
+
+    out = resolved(nodes, [ambiguous, python])
+
+    assert out[ambiguous.edge_id].metadata["ambiguous"] is True and "external" not in out[ambiguous.edge_id].metadata
+    assert "external" not in out[python.edge_id].metadata
+
+
+def test_the_external_mark_is_cleared_when_the_base_appears_and_back_when_it_goes():
+    nodes = [cls("src/w.h", "Worker")]
+    edge = inherits("src/w.h", "Worker", "QObject")
+    assert resolved(nodes, [edge])[edge.edge_id].metadata["external"] == "qt"
+
+    with_base = [*nodes, cls("src/fake.h", "QObject")]
+    out = resolved(with_base, [edge], changed_labels={"QObject"})[edge.edge_id]
+    assert out.target == "symbol:src/fake.h:QObject" and "external" not in out.metadata
+
+    back = resolved(nodes, [edge], changed_labels={"QObject"})[edge.edge_id]
+    assert back.target == "name:QObject" and back.metadata["external"] == "qt"
+
+
+def test_classify_base_returns_the_rule_or_none():
+    from cortex.externals import EXTERNAL_PREFIXES, QML_BUILTINS, QT_CLASS_RE, classify_base
+
+    assert QT_CLASS_RE.match("QAbstractListModel") and not QT_CLASS_RE.match("Quality") and not QT_CLASS_RE.match("Qt") and not QT_CLASS_RE.match("Foo")
+    assert isinstance(QML_BUILTINS, frozenset) and {"Item", "QtObject", "ColumnLayout"} <= QML_BUILTINS
+    assert "std::" in EXTERNAL_PREFIXES
+    assert classify_base("QThread", "QThread", [], "c") == "qt"
+    assert classify_base("Foo", "Foo", [], "c") is None
+    assert classify_base("Test", "Test", ["gtest/gtest.h"], "c") == "gtest"
+    assert classify_base("Test", "Test", ["gmock/gmock.h"], "c") == "gtest"
+    assert classify_base("Test", "Test", ["vector"], "c") is None
+    assert classify_base("Test", "testing::Test", [], "c") == "prefix"
+    assert classify_base("vector", "std::vector<int>", [], "c") == "std"
+    assert classify_base("Item", "Item", [], ".qml") == "qml_builtin"
+    assert classify_base("Foo", "Foo", [], ".qml") is None
+    assert classify_base("Foo", "Foo", ["QtQuick"], ".qml") == "qml_import"
+    assert classify_base("Foo", "Lib.Foo", [], ".qml") == "qml_import"
+    assert classify_base("Item", "QtQuick.Item", [], ".qml") == "prefix"
+    assert classify_base("QObject", "QObject", [], ".py") is None  # only the C and QML families are classified
+    assert classify_base("QObject", "QObject", [], ".qml") is None  # a Qt C++ class is not a QML type
+
+
+# --- through the real extractors ---------------------------------------------------------------------------
+
+
+import os  # noqa: E402
+
+import pytest  # noqa: E402
+
+needs_parsers = pytest.mark.skipif(os.environ.get("CORTEX_FORCE_REGEX") == "1", reason="needs the full parsers")
+
+
+def _inherit_edges(repo):
+    _nodes, edges = CortexStore(default_db_path(repo)).fetch_graph(repo)
+    return {e.source: e for e in edges if e.relation == "inherits"}
+
+
+@needs_parsers
+def test_cpp_bases_as_the_extractor_writes_them_are_classified(tmp_path):
+    repo = make_repo(tmp_path / "repo", {
+        "src/worker.h": "#include <QObject>\nclass Worker : public QObject\n{\n    Q_OBJECT\n};\n",
+        "src/slow.h": "#include <QThread>\nclass Slow : public QThread {};\n",
+        "tests/t.cpp": "#include <gtest/gtest.h>\nclass Fixture : public ::testing::Test {};\nclass Plain : public Test {};\n",
+        "tests/u.cpp": "class Lonely : public Test {};\n",
+        "src/own.h": "class Own {};\nclass Child : public Own {};\n",
+    })
+
+    edges = _inherit_edges(repo)
+
+    assert edges["symbol:src/worker.h:Worker"].metadata["external"] == "qt"
+    assert edges["symbol:src/slow.h:Slow"].metadata["external"] == "qt"
+    assert edges["symbol:tests/t.cpp:Fixture"].metadata["external"] == "prefix"
+    assert edges["symbol:tests/t.cpp:Plain"].metadata["external"] == "gtest"
+    assert "external" not in edges["symbol:tests/u.cpp:Lonely"].metadata
+    child = edges["symbol:src/own.h:Child"]
+    assert child.target == "symbol:src/own.h:Own" and "external" not in child.metadata
+
+
+@needs_parsers
+def test_a_qml_root_item_is_a_builtin_through_the_real_extractor_and_a_repository_item_replaces_it(tmp_path, monkeypatch):
+    qml = {
+        "qml/Main.qml": "import QtQuick 2.15\nItem {\n    id: root\n}\n",
+        "qml/Panel.qml": "import QtQuick 2.15\nimport QtQuick.Controls 2.15 as Controls\nControls.Pane {}\n",
+        "qml/Vendor.qml": "import QtQuick 2.15\nimport com.vendor.ctl 1.0\nVendorButton {}\n",
+        "qml/Local.qml": 'import "components"\nGizmo {}\n',
+        "qml/components/Row.qml": "import QtQuick 2.15\nItem {}\n",
+    }
+    repo = make_repo(tmp_path / "repo", qml)
+
+    edges = _inherit_edges(repo)
+
+    assert edges["symbol:qml/Main.qml:Main"].target == "module:Item"
+    assert edges["symbol:qml/Main.qml:Main"].metadata["external"] == "qml_builtin"
+    assert edges["symbol:qml/Panel.qml:Panel"].metadata["external"] == "qml_import"
+    assert edges["symbol:qml/Vendor.qml:Vendor"].metadata["external"] == "qml_import"
+    assert "external" not in edges["symbol:qml/Local.qml:Local"].metadata
+
+    (repo / "qml/Item.qml").write_text("import QtQuick 2.15\nQtObject {}\n")
+    _commit(repo, "a repository Item")
+    ingest_repository(repo)  # incremental
+
+    incremental = _inherit_edges(repo)
+    main = incremental["symbol:qml/Main.qml:Main"]
+    assert main.target == "symbol:qml/Item.qml:Item" and "external" not in main.metadata
+    assert incremental["symbol:qml/Panel.qml:Panel"].metadata["external"] == "qml_import"
+
+
+@needs_parsers
+def test_adding_a_repository_class_with_an_external_label_drops_the_mark_incrementally(tmp_path, monkeypatch):
+    """The old fake-node case: a repository class named like the Qt base re-resolves the edge."""
+    repo = make_repo(tmp_path / "repo", {
+        "src/worker.h": "class Worker : public QObject\n{\n};\n",
+        "src/other.h": "class Other : public QObject\n{\n};\n",
+    })
+    assert _inherit_edges(repo)["symbol:src/worker.h:Worker"].metadata["external"] == "qt"
+
+    (repo / "src/qobject.h").write_text("class QObject {};\n")
+    _commit(repo, "add QObject")
+    ingest_repository(repo)  # incremental
+    state = {s: (e.target, e.metadata.get("external")) for s, e in _inherit_edges(repo).items()}
+    assert state["symbol:src/worker.h:Worker"] == ("symbol:src/qobject.h:QObject", None)
+    assert state["symbol:src/other.h:Other"] == ("symbol:src/qobject.h:QObject", None)
+    assert state == {s: (e.target, e.metadata.get("external")) for s, e in _fresh_inherit_edges(repo, tmp_path, monkeypatch, "f1").items()}
+
+    (repo / "src/qobject.h").unlink()
+    _commit(repo, "remove QObject")
+    ingest_repository(repo)
+    back = {s: (e.target, e.metadata.get("external")) for s, e in _inherit_edges(repo).items()}
+    assert back["symbol:src/worker.h:Worker"] == ("name:QObject", "qt")
+    assert back == {s: (e.target, e.metadata.get("external")) for s, e in _fresh_inherit_edges(repo, tmp_path, monkeypatch, "f2").items()}
+
+
+def _fresh_inherit_edges(repo, tmp_path, monkeypatch, name):
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / name))
+    ingest_repository(repo, incremental=False)
+    return _inherit_edges(repo)
+
+
+# --- locality step 4: the nearest directory, not only the same one (plan 0.14, Task 4.2) ----------------
+
+def test_a_mock_base_one_directory_above_its_user_beats_the_production_base():
+    """Review 0.13.0 section D: the caller is a test header, so the production-only step does not apply, and the
+    mock base sits in the parent directory of the caller."""
+    nodes = [
+        cls("tests/header-mocks/steps/stepa.h", "StepA"),
+        cls("tests/header-mocks/stepbase.h", "StepBase"),
+        cls("src/stepbase.h", "StepBase"),
+    ]
+    edge = inherits("tests/header-mocks/steps/stepa.h", "StepA", "StepBase")
+
+    out = resolved(nodes, [edge])[edge.edge_id]
+
+    assert out.target == "symbol:tests/header-mocks/stepbase.h:StepBase"
+    assert out.metadata["resolution"] == "preferred"
+    assert "ambiguous" not in out.metadata
+
+
+def test_the_nearest_directory_is_the_longest_common_prefix_and_a_tie_changes_nothing():
+    from cortex.callresolve import _Index
+
+    def pick(paths, caller):
+        index = _Index([cls(p, "B") for p in paths], [])
+        return [index.symbols[c].source_ref for c in index.locality([f"symbol:{p}:B" for p in paths], caller)]
+
+    assert pick(["a/b/x.h", "a/y.h", "c/z.h"], "a/b/c/d.h") == ["a/b/x.h"]  # prefix 2 beats 1 and 0
+    assert pick(["a/b/x.h", "a/c/x.h"], "a/d/e.h") == ["a/b/x.h", "a/c/x.h"]  # same prefix length: unchanged
+    assert pick(["a/x.h", "b/x.h"], "c/d.h") == ["a/x.h", "b/x.h"]  # no common prefix at all
+    assert pick(["a/b/x.h", "a/x.h"], "a/b/d.h") == ["a/b/x.h"]  # the caller's own directory is still the closest
+
+
+def test_a_mock_base_above_its_user_resolves_through_the_real_extractor_with_an_angle_include(tmp_path):
+    base = "class StepBase {\npublic:\n    virtual void run();\n};\n"
+    files = {
+        "src/stepbase.h": base,
+        "tests/header-mocks/stepbase.h": base,
+        "tests/header-mocks/steps/stepa.h": "#include <stepbase.h>\nclass StepA : public StepBase {\npublic:\n    void run() override;\n};\n",
+        "tests/header-mocks/steps/stepb.h": "class StepB : public StepBase {\npublic:\n    void run() override;\n};\n",
+    }
+    repo = make_repo(tmp_path / "repo", files)
+
+    targets = _inherit_targets(repo)
+
+    assert targets["symbol:tests/header-mocks/steps/stepa.h:StepA"][0] == "symbol:tests/header-mocks/stepbase.h:StepBase"
+    assert targets["symbol:tests/header-mocks/steps/stepb.h:StepB"][0] == "symbol:tests/header-mocks/stepbase.h:StepBase"

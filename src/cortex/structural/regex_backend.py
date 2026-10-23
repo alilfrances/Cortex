@@ -25,7 +25,9 @@ class _Pattern:
 _C_SUFFIXES = (".c",)
 _CPP_SUFFIXES = (".h", ".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx")
 _C_IMPORT_PATTERNS = [
-    re.compile(r'^\s*#\s*include\s+[<"](?P<target>[^>"]+)[>"]', re.MULTILINE),
+    # `open` is the opening delimiter: only a quoted include (`"x.h"`) searches the
+    # including file's directory; `<x.h>` does not.
+    re.compile(r'^\s*#\s*include\s+(?P<open>[<"])(?P<target>[^>"]+)[>"]', re.MULTILINE),
 ]
 _C_DEF_PATTERNS = [
     _Pattern(re.compile(r"^\s*(?:struct|enum|union)\s+(?P<name>[A-Za-z_]\w*)\s*\{", re.MULTILINE), "class"),
@@ -245,23 +247,63 @@ def _normalised_cpp_stem_index(known_paths: set[str]) -> dict[str, list[str]]:
     return index
 
 
-def resolve_local_import(target: str, known_paths: set[str]) -> str | None:
+def resolve_local_import(target: str, known_paths: set[str], from_path: str | None = None) -> str | None:
     """Resolve an include/import target to a repo-relative path if it matches a known file.
 
-    Tries an exact relative-path match first, then falls back to a unique basename
-    match (so `#include "airpod.h"` resolves even when the include omits the
+    With ``from_path`` (the including file; passed only for quoted C/C++ includes)
+    the target is first tried relative to that file's directory and then to each
+    ancestor directory up to the repository root, nearest first -- the compiler's
+    own rule for ``#include "x.h"``. ``..`` segments are normalised and a result
+    that would leave the repository root never matches. Then, as for every
+    caller, an exact relative-path match, then a unique basename match (so
+    ``#include "airpod.h"`` resolves even when the include omits the
     subdirectory the file actually lives in).
+    """
+    return resolve_local_import_rule(target, known_paths, from_path)[0]
+
+
+def resolve_local_import_rule(
+    target: str, known_paths: set[str], from_path: str | None = None
+) -> tuple[str | None, str]:
+    """`resolve_local_import` plus the deciding rule: ``exact``, ``basename``, ``relative`` or ``none``.
+
+    ``relative`` means the includer-relative lookup resolved a target that the exact and unique-basename
+    rules (all that 0.12.1 had) would have left unresolved; an include those rules resolve keeps their rule
+    name even when the includer-relative lookup finds the same file, or a different one.
     """
     candidate = target.strip().strip('"').lstrip("./")
     if not candidate:
-        return None
+        return None, "none"
+    old: str | None = None
+    rule = "none"
     if candidate in known_paths:
-        return candidate
-    basename = PurePosixPath(candidate).name
-    matches = _path_index("basename", known_paths, _basename_index).get(basename, ())  # type: ignore[attr-defined]
-    if len(matches) == 1:
-        return matches[0]
-    return None
+        old, rule = candidate, "exact"
+    else:
+        basename = PurePosixPath(candidate).name
+        matches = _path_index("basename", known_paths, _basename_index).get(basename, ())  # type: ignore[attr-defined]
+        if len(matches) == 1:
+            old, rule = matches[0], "basename"
+    if from_path:
+        relative = _resolve_from_includer(target.strip().strip('"'), known_paths, from_path)
+        if relative is not None:
+            if relative == old:
+                return old, rule
+            return relative, "relative" if old is None else "includer"
+    return old, rule
+
+
+def _resolve_from_includer(raw: str, known_paths: set[str], from_path: str) -> str | None:
+    """Nearest-directory-first lookup of a quoted include; O(depth) set membership."""
+    if not raw or raw.startswith("/"):
+        return None
+    directory = posixpath.dirname(from_path)
+    while True:
+        joined = posixpath.normpath(posixpath.join(directory, raw))
+        if joined != ".." and not joined.startswith("../") and joined in known_paths:
+            return joined
+        if not directory:
+            return None
+        directory = posixpath.dirname(directory)
 
 
 def resolve_qml_component(name: str, known_paths: set[str]) -> str | None:
@@ -1344,7 +1386,11 @@ def extract_regex_edges(
         for index, match in enumerate(pattern.finditer(content), start=1):
             line = _line_number(content, match.start())
             target = match.group("target")
-            resolved = resolve_local_import(target, known_paths)
+            quoted = match.groupdict().get("open") == '"'
+            resolved, rule = resolve_local_import_rule(target, known_paths, path if quoted else None)
+            import_metadata: dict[str, object] = {"lineno": line, "source_file": path}
+            if rule == "relative":
+                import_metadata["include_rule"] = "relative"
             edges.append(
                 GraphEdge(
                     edge_id=f"regex:{path}:import:{line}:{index}:{target}",
@@ -1354,7 +1400,7 @@ def extract_regex_edges(
                     layer="STRUCTURAL",
                     confidence="LOW",
                     weight=1.0,
-                    metadata={"lineno": line, "source_file": path},
+                    metadata=import_metadata,
                 )
             )
 

@@ -23,6 +23,7 @@ ALL_GOLDENS = sorted(p for p in GOLDEN_ROOT.rglob("*") if p.is_file())
 # Counts per category directory (first two path components; ``mcp`` files at its top level
 # are counted under ``mcp``).  Update deliberately when a task adds or removes a golden.
 EXPECTED_INVENTORY = {
+    "calls": 1,  # invariant_0121.json: frozen 0.12.1 call targets (plan 0.14 Task 0.1); never regenerated
     "evals": 3,
     "extraction/baseline-7b0e6e0": 52,  # frozen pre-calls copy (Task 6); never regenerated
     "extraction/python": 8,

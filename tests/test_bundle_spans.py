@@ -239,7 +239,25 @@ def test_a_span_nested_in_a_selected_span_is_not_selected_again(tmp_path):
 
     spans = [item["item_id"] for item in bundle["items"] if item["kind"] == "symbol"]
     # The whole file does not fit, but the class span and the method span (its last two
-    # lines) both do; selecting both would print the same lines twice.
+    # lines) both do; selecting both would print the same lines twice.  Since the proportional name
+    # bonus (0.14) the method (2 of 3 task terms) outscores the class (1 of 3) and is selected first:
+    # the enclosing class span must then be skipped too.
+    assert len(spans) == 1, spans
+
+
+def test_a_span_enclosing_a_selected_span_is_not_selected_either(tmp_path):
+    padding = "\n".join(f"def pad_{i}():\n    return unrelated_widget_{i} + gadget_{i}\n" for i in range(60))
+    content = (
+        "class ReconnectDeviceHandler:\n"
+        "    def reconnect_device(self):\n"
+        "        return self.reconnect_state\n"
+        "\n"
+        f"{padding}\n"
+    )
+    bundle = _packed(
+        tmp_path, content, [("ReconnectDeviceHandler", 1, 3), ("reconnect_device", 2, 3)], "reconnect device state", budget=400
+    )
+    spans = [item["item_id"] for item in bundle["items"] if item["kind"] == "symbol"]
     assert len(spans) == 1, spans
 
 

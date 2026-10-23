@@ -738,3 +738,51 @@ def test_resolving_2000_symbols_stays_under_half_a_second(count):
     calls = [e for e in edges if e.relation == "calls"]
     assert sum(1 for e in calls if e.target.startswith("symbol:")) >= 4 * count
     assert elapsed < 0.5, f"resolving {count} symbols took {elapsed:.3f}s"
+
+
+# -- namespace candidates in prefer()/locality() (plan 0.14, Task 1.1) ------------------------------
+
+
+def _ns(path: str, name: str = "Ns", span: tuple[int, int] = (1, 5)) -> GraphNode:
+    return GraphNode(
+        node_id=f"symbol:{path}:{name}", kind="class", label=name, source_ref=path, granularity="symbol",
+        signature=f"namespace {name}", span_start=span[0], span_end=span[1], metadata={},
+    )
+
+
+def test_locality_keeps_every_namespace_node_of_a_split_namespace():
+    """The header's `namespace Ns` and the .cpp's are one entity: neither the header step nor the
+    directory step may drop the one that holds the out-of-line members."""
+    from cortex.callresolve import _Index
+
+    nodes = [_ns("lib/ns.h"), _ns("lib/ns.cpp"), sym("app/c.cpp", "main")]
+    index = _Index(nodes, [])
+    ids = ["symbol:lib/ns.cpp:Ns", "symbol:lib/ns.h:Ns"]
+    assert index.locality(ids, "app/c.cpp") == ids
+    assert index.locality(ids, "lib/other.cpp") == ids
+
+
+def test_locality_still_narrows_classes_to_the_header():
+    from cortex.callresolve import _Index
+
+    nodes = [
+        sym("lib/a.h", "Foo", "class", (1, 5)),
+        sym("lib/a.cpp", "Foo", "class", (1, 5)),
+    ]
+    index = _Index(nodes, [])
+    assert index.locality(["symbol:lib/a.cpp:Foo", "symbol:lib/a.h:Foo"], "app/c.cpp") == ["symbol:lib/a.h:Foo"]
+
+
+def test_locality_prefers_the_callers_own_directory_over_a_subdirectory():
+    """Nearest directory: from `src/a.cpp`, `src/b.h` (same directory) beats `src/x/b.h`, which shares
+    the same prefix but lies one level below it."""
+    from cortex.callresolve import _Index
+
+    nodes = [sym("src/b.h", "Base", "class", (1, 3)), sym("src/x/b.h", "Base", "class", (1, 3))]
+    index = _Index(nodes, [])
+    assert index.locality(["symbol:src/b.h:Base", "symbol:src/x/b.h:Base"], "src/a.cpp") == ["symbol:src/b.h:Base"]
+    # two subdirectories one level below the caller stay a tie
+    nodes = [sym("src/x/b.h", "Base", "class", (1, 3)), sym("src/y/b.h", "Base", "class", (1, 3))]
+    index = _Index(nodes, [])
+    ids = ["symbol:src/x/b.h:Base", "symbol:src/y/b.h:Base"]
+    assert index.locality(ids, "src/a.cpp") == ids

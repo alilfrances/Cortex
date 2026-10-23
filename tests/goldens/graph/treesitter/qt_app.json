@@ -740,6 +740,7 @@
       "edge_id": "qml:qml/DeviceDelegate.qml:inherits:symbol:qml/DeviceDelegate.qml:DeviceDelegate:module:Item:3",
       "layer": "STRUCTURAL",
       "metadata": {
+        "external": "qml_builtin",
         "lineno": 3,
         "source_file": "qml/DeviceDelegate.qml",
         "type_name": "Item",
@@ -1075,6 +1076,7 @@
       "edge_id": "qml:qml/Main.qml:inherits:symbol:qml/Main.qml:Main:module:ApplicationWindow:4",
       "layer": "STRUCTURAL",
       "metadata": {
+        "external": "qml_builtin",
         "lineno": 4,
         "source_file": "qml/Main.qml",
         "type_name": "ApplicationWindow",
@@ -1422,6 +1424,7 @@
       "edge_id": "treesitter:include/DeviceManager.hpp:inherits:DeviceManager:QObject",
       "layer": "STRUCTURAL",
       "metadata": {
+        "external": "qt",
         "lineno": 4,
         "source_file": "include/DeviceManager.hpp"
       },
@@ -1461,6 +1464,7 @@
       "edge_id": "treesitter:include/DeviceModel.hpp:inherits:DeviceModel:QObject",
       "layer": "STRUCTURAL",
       "metadata": {
+        "external": "qt",
         "lineno": 4,
         "source_file": "include/DeviceModel.hpp"
       },

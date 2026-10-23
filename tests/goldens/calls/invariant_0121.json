@@ -1,0 +1,53 @@
+{
+  "cpp_tiers": {
+    "app.cpp|16|Engine": "symbol:app.cpp:Engine",
+    "app.cpp|32|free_helper": "symbol:app.cpp:free_helper",
+    "app.cpp|33|warm_up": "symbol:app.cpp:warm_up",
+    "app.cpp|34|warm_up": "symbol:app.cpp:warm_up",
+    "app.cpp|35|make": "symbol:app.cpp:make",
+    "app.cpp|36|connect_count": "symbol:app.cpp:connect_count",
+    "app.cpp|38|work": "symbol:worker.hpp:work",
+    "app.cpp|39|work": "symbol:worker.hpp:work",
+    "app.cpp|40|warm": "symbol:app.cpp:warm",
+    "app.cpp|41|warm": "symbol:app.cpp:warm",
+    "app.cpp|42|work": "symbol:worker.hpp:work",
+    "app.cpp|43|Engine": "symbol:app.cpp:Engine",
+    "app.cpp|44|warm": "symbol:app.cpp:warm",
+    "app.cpp|45|Worker": "symbol:worker.hpp:Worker",
+    "app.cpp|46|work": "symbol:worker.hpp:work",
+    "app.cpp|47|ping": "symbol:base.hpp:ping",
+    "app.cpp|48|tick": "symbol:base.hpp:tick",
+    "app.cpp|49|clamp": "symbol:util.hpp:clamp",
+    "app.cpp|50|compute_total": "symbol:util.cpp:compute_total",
+    "app.cpp|51|render": "name:render",
+    "app.cpp|53|push_back": "name:push_back",
+    "app.cpp|54|printf": "name:printf",
+    "diamond.cpp|7|name": "name:name",
+    "gateway.cpp|4|warm": "symbol:app.cpp:warm",
+    "gateway.cpp|5|work": "symbol:worker.hpp:work",
+    "gateway.cpp|6|warm": "symbol:app.cpp:warm",
+    "util.cpp|4|clamp": "symbol:util.hpp:clamp",
+    "worker.hpp|7|ping": "symbol:base.hpp:ping"
+  },
+  "nested_namespace": {
+    "app/c.cpp|2|f": "name:f"
+  },
+  "nested_namespace_blocks": {
+    "app/c.cpp|2|f": "symbol:lib/ab.cpp:f"
+  },
+  "split_namespace": {
+    "app/caller.cpp|2|f": "symbol:lib/ns.cpp:f",
+    "app/caller.cpp|2|g": "symbol:lib/ns.cpp:g",
+    "lib/ns.cpp|4|f": "symbol:lib/ns.cpp:f"
+  },
+  "split_namespace_dup_basename": {
+    "app/caller.cpp|2|f": "symbol:lib/ns.cpp:f",
+    "app/caller.cpp|2|g": "symbol:lib/ns.cpp:g",
+    "lib/ns.cpp|4|f": "symbol:lib/ns.cpp:f"
+  },
+  "split_namespace_indirect": {
+    "app/caller.cpp|2|f": "symbol:lib/ns.cpp:f",
+    "app/caller.cpp|2|g": "symbol:lib/ns.cpp:g",
+    "lib/ns.cpp|4|f": "symbol:lib/ns.cpp:f"
+  }
+}

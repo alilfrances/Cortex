@@ -4,16 +4,19 @@ import functools
 import hashlib
 import math
 import re
+import statistics
 import time
 from collections import Counter, defaultdict, deque
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
+from types import MappingProxyType
 from typing import NamedTuple
 
-from .config import load_config
+from .config import PLATFORM_SUFFIXES, load_config
 from .deadline import DeadlineExceeded, check_deadline, current_deadline, deadline_scope
 from .fusion import rrf_fuse
 from .gitutils import discover_repo_root
+from .callresolve import _last_segment
 from .models import BundleItem, GraphEdge, GraphNode, RetrievalBundle
 from .overrides import find_overriders
 from .pathalias import parts_from_labels
@@ -29,9 +32,25 @@ STOPWORDS = {
     'a', 'an', 'the', 'in', 'on', 'of', 'for', 'to', 'is', 'are', 'and', 'or',
     'with', 'from', 'by', 'at', 'it', 'this', 'that', 'be', 'as', 'do', 'does',
     'how', 'what', 'where', 'when', 'why', 'i', 'we', 'you',
+    # Instruction words of a task description; they carry no code vocabulary. `re` is the `re-` of
+    # `re-enumerates`. Leaving `path` out of the query changes no eval row (the one task that says `path` still
+    # finds its file by the other words).
+    'find', 'then', 'very', 'all', 'after', 'because', 'every', 'too', 'shows', 'show', 'come', 'back',
+    'during', 'handles', 'handle', 'path', 're',
 }
 # Exact task-term hit on a file stem or symbol name must beat keyword-dense docs.
 NAME_MATCH_BONUS = 100.0
+# The bonus is proportional to the IDF weight of the task terms the name carries: a name that holds one common
+# word of a long task earns `NAME_BONUS_BASE` of it, a name that holds every weighted term earns all of it.
+# The base alone does not keep a single exact stem hit above keyword-dense text (a README holding every task term
+# scored 76.8 against 62.1 for a stem holding one of seven); `DOC_TEXT_CAP` does that for markdown/text.
+NAME_BONUS_BASE = 0.5
+# A markdown/text file with no name or path hit of its own: its text score is capped at this much while a code
+# file has a stem/alias hit. A doc that restates the task (all its words, none in a file name) must not outrank
+# code named after it; it still enters the bundle through the doc budget share.
+DOC_TEXT_CAP = NAME_MATCH_BONUS * NAME_BONUS_BASE
+# A symbol name inside the file earns the file at most this share of the stem formula (the span keeps its own).
+SYMBOL_NAME_FILE_SHARE = 0.5
 # Task-term hit on a directory segment of the path ("ui", "backend", "mcp")
 # is a weaker locality signal than a stem/symbol hit but must still beat
 # body-text keyword density.
@@ -46,6 +65,18 @@ ITEM_BUDGET_SHARE = 0.4
 # Symbol spans inherit a small share of their file's keyword score so file
 # context still counts without letting spans outrank the file wholesale.
 SYMBOL_FILE_SCORE_SHARE = 0.25
+# A span inherits its share from the file's UN-normalised score, at most this much of it: a hub file scores
+# several hundred on text alone, and uncapped every span inside it would carry the same bonus whether or not
+# it matches the task. (Which whole file to pack is the normalisation's question; a span's own text is
+# already length-local.)
+SPAN_FILE_SHARE_CAP = 2 * NAME_MATCH_BONUS
+# The text score of a code file far above the median size is divided by 1 + LENGTH_NORM * log2(ratio /
+# LENGTH_NORM_FROM), ratio = tokens / median tokens of the code files that share a task term: the overlap sum is
+# over the set of words in the whole file, so a file that is 10x as long contains nearly every task word. Files
+# up to LENGTH_NORM_FROM times the median are untouched (a small fixture's modest file lost a 0.7 point margin
+# when 0.14.0 divided from the median). The name/path bonuses are not divided. Tuning range 0.25-1.0 / 3-8.
+LENGTH_NORM = 0.5
+LENGTH_NORM_FROM = 4.0
 # Test/eval/fixture files are demoted unless the task itself is about them.
 AUX_PATH_DEMOTION = 0.5
 # Translation catalogues and other locale data match almost any task word (they
@@ -59,6 +90,8 @@ LOCALE_PATH_DEMOTION = 0.25
 # name or path hit.
 CALL_EXPANSION_BONUS = 20.0
 CALL_EXPANSION_SEEDS = 8
+# A seed linked to more files than this lifts them by the relevance of the linking symbols instead of flat.
+CALL_EXPANSION_FANOUT = 20
 # A resolved `calls` edge out of a top-ranked symbol is stronger evidence than a shared word:
 # the callees of the best-matching symbols (and the bases of their class) are scored from the
 # calling symbol's own score, so they outrank files that merely share a term. Callers are not
@@ -73,27 +106,54 @@ OVERRIDES_PER_METHOD = 4
 # Seeds are real functions: no class nodes, nothing of at most TRIVIAL_SPAN_LINES lines (a factory or an
 # accessor says nothing about what the task is about), and the best span of each of the SEED_FILES best
 # files is always a seed so one file's methods cannot take every slot.
-SEED_FILES = 3
+SEED_FILES = 5
 TRIVIAL_SPAN_LINES = 3
 # Of the other-file callees of a function the CALLEES_PER_SEED most relevant are followed, not the first
-# ones in call-site order: relevance is 1 when the callee's name (or, beyond TRIVIAL_SPAN_LINES lines, its
-# body) shares a task term, RELEVANCE_FILE_HIT when only its file does, else RELEVANCE_FLOOR. Trivial
-# callees (accessor-shaped names, spans of at most TRIVIAL_SPAN_LINES lines, functions called from more
-# places than UTILITY_PERCENTILE of the called functions and at least UTILITY_MIN_CALLERS times) are not
-# followed at all unless their name carries a task term. Relevance orders and filters; it does not scale
-# the score: a callee that shares no word with the task is often the cause (the 0.12.0 review), and
-# scaling it down below keyword-only files lost it (companion fixture recall 1.0 -> 0.67).
+# ones in call-site order: relevance is 1 when the callee's name shares a task term; beyond
+# TRIVIAL_SPAN_LINES lines its body counts too, weighted by how rare the shared terms are (the summed
+# term weights over the largest task-term weight, at most 1, at least RELEVANCE_FILE_HIT); RELEVANCE_FILE_HIT
+# when only its file shares one, else RELEVANCE_FLOOR. Trivial callees (accessor-shaped names, spans of at
+# most TRIVIAL_SPAN_LINES lines, functions called from more places than UTILITY_PERCENTILE of the called
+# functions and at least UTILITY_MIN_CALLERS times) are not followed at all unless their name carries a
+# task term; a trivial virtual that has overriders is traversed to them but is not itself offered as a candidate
+# (`offerable`). Relevance orders, filters, and scales the score only slightly: a callee that shares no word
+# with the task is often the cause (the 0.12.0 review), so it keeps CALLEE_RELEVANCE_MIN of its share.
+# 0.13.0 scaled by 0.25-1 and lost it (companion fixture recall 1.0 -> 0.67); a floor of 0.85 puts a
+# relevant callee ahead of an irrelevant one at the same hop without ever dropping the latter below the
+# keyword-only files. Tuning range 0.75-0.95.
 RELEVANCE_FILE_HIT = 0.5
 RELEVANCE_FLOOR = 0.25
+CALLEE_RELEVANCE_MIN = 0.85
 UTILITY_PERCENTILE = 0.99
 UTILITY_MIN_CALLERS = 20
 ACCESSOR_RE = re.compile(r'^(get|set|is|has)([A-Z_0-9]|$)|Changed$')
 # One keyword-dense file (every method name-matches) can fill the whole bundle with symbol spans while
-# other matching files wait: until nothing else is left to pack, at most FILE_SPAN_SHARE of the budget goes
-# to the spans of one file (its first SPANS_BEFORE_CAP spans are never held back). The held-back room is
-# released for a second pass, so a lone dense file still gets the whole budget.
+# other matching files wait: until nothing else is left to pack, at most a share of the budget goes to the
+# spans of one file (its first SPANS_BEFORE_CAP spans are never held back). The share is 1 / the number of
+# matching code files, between FILE_SPAN_SHARE_MIN and 1, and never below FILE_SPAN_SHARE while fewer than
+# FILE_SPAN_SHARE_FILES files match (a handful of matches keeps today's quarter of the budget). The
+# held-back room is released for a second pass, so a lone dense file still gets the whole budget.
 FILE_SPAN_SHARE = 0.25
+FILE_SPAN_SHARE_MIN = 0.1
+FILE_SPAN_SHARE_FILES = 4
 SPANS_BEFORE_CAP = 3
+# A span larger than its file's share of the budget (see above) is a first-span exemption that can fill the
+# bundle by itself: with many matching files, three hub spans of 250 tokens leave a 900-token budget no room
+# for the smaller files that follow them. In the capped pass such spans may together take at most this share
+# of the budget; the rest wait for the second pass, which packs them if room is left. Measured in tokens, so
+# it follows whatever token estimate is in use (the same spans are 180/130/167 tokens with the stdlib
+# estimate and 285/205/265 with o200k_base).
+OVERSIZE_SPAN_SHARE = 0.8
+# A file with many similarly named methods (a hub: every `deviceX()` name-matches) would hold the top of the
+# list with its spans while a small file that is the answer waits. The k-th ranked span of one file (k = 0 for
+# its best) scores x SPAN_REPEAT_DECAY ** k: the second method of a file is worth less than the first of
+# another. Tuning range 0.6-0.9.
+SPAN_REPEAT_DECAY = 0.9
+# A file with no task term in its path or text, no call-expansion lift and a graph score below GRAPH_EVIDENCE_MIN
+# scores recency and a trace of graph mass only (`no_evidence`). While anything with evidence exists, such a file
+# is not packed into the budget left over: the first unrelated file by path is not an answer. (A weak match is not
+# held back: a file that shares one common task word is packed whatever its score relative to the best.)
+GRAPH_EVIDENCE_MIN = 0.5
 LOCALE_PATH_RE = re.compile(r'(^|/)(i18n|l10n|locales?|translations?)(/|$)')
 LOCALE_SUFFIXES = frozenset({'.ts', '.po', '.pot', '.xlf', '.xliff', '.qm'})
 LOCALE_INTENT_TERMS = {
@@ -105,6 +165,12 @@ AUX_INTENT_TERMS = {
     'test', 'tests', 'testing', 'eval', 'evals', 'evaluation', 'fixture', 'fixtures',
     'benchmark', 'benchmarks', 'example', 'examples', 'sample', 'samples',
 }
+# Platform variants (`wm_devicechange_win.cpp`, `mac/`) are what a Windows/macOS/... task is about and noise to
+# every other one: the file is multiplied by PLATFORM_DEMOTION, and its overriders are ranked after the other
+# overriders of a method, unless a task term names the platform (`PLATFORM_SUFFIXES`, plus the products of the
+# `platform_terms` config map).
+PLATFORM_DEMOTION = 0.5
+_PLATFORM_OF_WORD = {word: key for key, words in PLATFORM_SUFFIXES.items() for word in words | {key}}
 # When the task names a language/extension, boost same-language files and demote
 # other code languages so e.g. a QML task does not resolve to C++. Only tokens
 # that unambiguously denote a language are used, to avoid false hints from
@@ -180,6 +246,52 @@ class CallLinks(NamedTuple):
     bases_of: dict[str, list[str]]  # class symbol -> base class symbols
     overridden_by: dict[str, list[str]]  # base method symbol -> same-named methods of derived classes
     utilities: frozenset[str]  # symbols called from so many places that calling one says nothing
+    # class symbol -> its constructor symbols (functions labelled like the class); only when overrides are derived
+    constructors_of: Mapping[str, Sequence[str]] = MappingProxyType({})
+
+
+def _constructors_by_class(nodes: Iterable[GraphNode]) -> dict[str, list[str]]:
+    """class symbol id -> sorted ids of its constructors, for the classes that have a constructor symbol.
+
+    A constructor is a function or method whose label is the label of its class: the smallest class
+    (other than itself) whose span holds it, else the class its `Cls::` qualifier names when that label
+    is unique (an out-of-line `Foo::Foo`). Destructors (`~Foo`) have another label and are not constructors.
+    An inline constructor usually shares the class's own node id; its calls then hang on the class node
+    and no separate constructor symbol exists.
+    """
+    symbols = [node for node in nodes if node.granularity == 'symbol']
+    classes: defaultdict[str, list[GraphNode]] = defaultdict(list)
+    for node in symbols:
+        if node.kind == 'class':
+            classes[node.label].append(node)
+    if not classes:
+        return {}
+    classes_by_file: defaultdict[str, list[GraphNode]] = defaultdict(list)
+    class_label: dict[str, str] = {}
+    for group in classes.values():
+        for cls in group:
+            classes_by_file[cls.source_ref].append(cls)
+            class_label[cls.node_id] = cls.label
+    found: defaultdict[str, set[str]] = defaultdict(set)
+    for node in symbols:
+        if node.kind not in ('func', 'method') or node.label not in classes:
+            continue
+        owner: str | None = None
+        if node.span_start is not None:
+            holders = [
+                cls for cls in classes_by_file.get(node.source_ref, ())
+                if cls.node_id != node.node_id and cls.span_start is not None and cls.span_end is not None
+                and cls.span_start <= node.span_start <= cls.span_end
+            ]
+            if holders:
+                owner = min(holders, key=lambda cls: (cls.span_end - cls.span_start, cls.node_id)).node_id
+        if owner is None:
+            qualifier = node.metadata.get('qualifier') if isinstance(node.metadata, dict) else None
+            matches = classes.get(_last_segment(qualifier), []) if isinstance(qualifier, str) and qualifier else []
+            owner = matches[0].node_id if len(matches) == 1 else None
+        if owner is not None and class_label[owner] == node.label:
+            found[owner].add(node.node_id)
+    return {class_id: sorted(ids) for class_id, ids in found.items()}
 
 
 def _call_graph_links(nodes: list[GraphNode], edges: list[GraphEdge], *, with_overrides: bool = True) -> CallLinks:
@@ -187,7 +299,9 @@ def _call_graph_links(nodes: list[GraphNode], edges: list[GraphEdge], *, with_ov
 
     Returns the file links, the call lists in call-site order (same-file callees included), the base
     classes of each class and, derived from those, the overriding methods (`overrides.find_overriders`;
-    the graph holds no `overrides` relation) and the utility functions (see `UTILITY_PERCENTILE`).
+    the graph holds no `overrides` relation), the utility functions (see `UTILITY_PERCENTILE`) and the
+    constructors of each class (`_constructors_by_class`). The overriders and constructors, which the
+    file links do not need, are skipped with `with_overrides=False`.
     Only edges whose endpoints are both known symbols count; `name:`/`module:` targets are unresolved
     and same-file pairs add nothing to the file links.
     """
@@ -229,7 +343,22 @@ def _call_graph_links(nodes: list[GraphNode], edges: list[GraphEdge], *, with_ov
     return CallLinks(
         dict(neighbors), dict(symbols), calls_from, dict(bases),
         find_overriders(nodes, bases) if with_overrides else {}, utilities,
+        _constructors_by_class(nodes) if with_overrides else MappingProxyType({}),
     )
+
+
+def _body_relevance(
+    body_terms: set[str] | frozenset[str], term_weights: dict[str, float], max_weight: float | None = None
+) -> float:
+    """Relevance of a callee whose body shares `body_terms` with the task: the summed term weights over
+    the largest task-term weight (so one rare term counts as much as several common ones), capped at 1
+    and floored at RELEVANCE_FILE_HIT."""
+    if max_weight is None:
+        max_weight = max(term_weights.values(), default=0.0)
+    if max_weight <= 0:
+        return 1.0 if body_terms else RELEVANCE_FILE_HIT
+    total = sum(term_weights.get(term, 1.0) for term in body_terms)
+    return max(RELEVANCE_FILE_HIT, min(1.0, total / max_weight))
 
 
 def _callee_scores(
@@ -242,28 +371,53 @@ def _callee_scores(
     relevance: Callable[[str], float] | None = None,
     overriders: Callable[[str], Sequence[str]] | None = None,
     routes: dict[str, str] | None = None,
-) -> dict[str, tuple[float, str, int]]:
-    """callee symbol id -> (score, seed symbol id, hop) for the best route from any seed.
+    constructors_of: Mapping[str, Sequence[str]] | None = None,
+    offerable: Callable[[str], bool] | None = None,
+) -> dict[str, tuple[float, str, int, float]]:
+    """callee symbol id -> (score, seed symbol id, hop, relevance) for the best route from any seed.
 
     A hop is a call into another file. From each seed the walk follows resolved calls: callees
     in another file at hop 1 score CALLEE_HOP_SHARE[0] of the seed, at hop 2 CALLEE_HOP_SHARE[1];
     a callee in the same file as its caller is walked through at the same hop (a function that
     delegates to a sibling still leads on). At most CALLEES_PER_SEED other-file callees are taken
     per function: the most relevant ones (`relevance(callee)`; 0 = not worth following), call-site order
-    breaking ties; without `relevance` call-site order decides. The score does not depend on relevance.
-    The bases of the seed's class score BASE_CLASS_SHARE.
+    breaking ties; without `relevance` call-site order decides. A callee's score is scaled by
+    CALLEE_RELEVANCE_MIN + (1 - CALLEE_RELEVANCE_MIN) * relevance(callee), so an irrelevant callee keeps
+    CALLEE_RELEVANCE_MIN of its share; the fourth element is `relevance(callee)` (0.0 without it, and then
+    no scaling) and orders callees whose scores tie. The bases of the seed's class score BASE_CLASS_SHARE,
+    unscaled.
 
     `overriders(method)` lists the methods of derived classes that override a reached callee; each is
-    offered at the callee's own score and hop, and `routes` (when given) receives overrider -> the base
-    method it was reached through.
-    """
-    best: dict[str, tuple[float, str, int]] = {}
+    offered at the callee's own score and hop and walked from there (their callees follow the normal hop
+    budget), and `routes` (when given) receives overrider -> the base method it was reached through.
+    A reached callee for which `offerable(callee)` is False (a one-line virtual that has overriders and whose
+    name carries no task term) is still traversed, so its overriders are offered and walked, but it is not
+    itself returned: it is no bundle candidate.
 
-    def offer(symbol_id: str, score: float, seed_id: str, hop: int, via: str | None = None) -> None:
+    A `new X` resolves to the class node, whose body is only a declaration: a callee that is a class with
+    entries in `constructors_of` (class id -> constructor ids) is replaced by those constructors, at the same
+    hop and under the same relevance rules. The class node stays a candidate when it carries calls itself
+    (an inline constructor shares its id); a class without a constructor symbol is offered as before.
+    """
+    best: dict[str, tuple[float, str, int, float]] = {}
+
+    def offer(
+        symbol_id: str,
+        score: float,
+        seed_id: str,
+        hop: int,
+        via: str | None = None,
+        *,
+        scaled: bool = True,
+        origin: str | None = None,
+    ) -> None:
         if symbol_id == seed_id:
             return
+        level = relevance(symbol_id) if relevance is not None else 0.0
+        if scaled and relevance is not None:
+            score *= CALLEE_RELEVANCE_MIN + (1 - CALLEE_RELEVANCE_MIN) * level
         if symbol_id not in best or score > best[symbol_id][0]:
-            best[symbol_id] = (score, seed_id, hop)
+            best[symbol_id] = (score, origin or seed_id, hop, level)
             if routes is not None:
                 if via is None:
                     routes.pop(symbol_id, None)
@@ -274,51 +428,71 @@ def _callee_scores(
         # 0-1 BFS: a same-file call costs no hop and goes to the front of the queue, so every
         # function is settled (expanded) at its smallest hop count, whatever order calls are met in.
         settled: set[str] = set()
-        queue: deque[tuple[str, int]] = deque([(seed_id, 0)])
+        queue: deque[tuple[str, int, str]] = deque([(seed_id, 0, seed_id)])
         while queue:
-            current, hop = queue.popleft()
+            current, hop, origin = queue.popleft()
             if current in settled:
                 continue
             settled.add(current)
             if hop >= 1:
                 score = seed_score * CALLEE_HOP_SHARE[hop - 1]
-                offer(current, score, seed_id, hop)
+                if offerable is None or offerable(current):
+                    offer(current, score, seed_id, hop, origin=origin)
                 if overriders is not None:
                     for overrider in list(overriders(current))[:OVERRIDES_PER_METHOD]:
-                        offer(overrider, score, seed_id, hop, via=current)
+                        offer(overrider, score, seed_id, hop, via=current, origin=origin)
+                        if overrider not in settled:
+                            # The virtual call is one call: the overrider's own callees follow at the
+                            # same hop (front of the queue, like a same-file call) and name the
+                            # overrider as the function they were reached from.
+                            queue.appendleft((overrider, hop, overrider))
             current_file = file_of(current)
             crossing: list[tuple[float, int, str]] = []
-            for order, callee in enumerate(calls_from.get(current, ())):
+            targets: list[str] = []
+            for callee in calls_from.get(current, ()):
+                built = constructors_of.get(callee) if constructors_of else None
+                if built:
+                    targets.extend(built)
+                    if callee in calls_from:
+                        targets.append(callee)
+                else:
+                    targets.append(callee)
+            for order, callee in enumerate(targets):
                 if callee in settled:
                     continue
                 if file_of(callee) == current_file:
-                    queue.appendleft((callee, hop))
+                    queue.appendleft((callee, hop, origin))
                 elif hop + 1 <= len(CALLEE_HOP_SHARE):
                     factor = relevance(callee) if relevance is not None else 1.0
                     if factor > 0:
                         crossing.append((-factor, order, callee))
             crossing.sort()
             for _negative, _order, callee in crossing[:CALLEES_PER_SEED]:
-                queue.append((callee, hop + 1))
+                queue.append((callee, hop + 1, origin))
         owner = class_of(seed_id)
         for base in bases_of.get(owner, ()) if owner else ():
-            offer(base, seed_score * BASE_CLASS_SHARE, seed_id, 1)
+            offer(base, seed_score * BASE_CLASS_SHARE, seed_id, 1, scaled=False)
     return best
 
 
 def _select_seeds(
-    items: list[BundleItem], symbol_by_id: dict[str, GraphNode], file_scores: dict[str, float]
+    items: list[BundleItem],
+    symbol_by_id: dict[str, GraphNode],
+    file_scores: dict[str, float],
+    constructors: Iterable[str] = (),
 ) -> list[BundleItem]:
     """The spans whose callees are followed: the best CALLEE_SEEDS functions that are not trivial.
 
-    Class nodes and spans of at most TRIVIAL_SPAN_LINES lines never seed (they outscore the function the
+    Class nodes, the `constructors` (a hub constructor calls everything the object needs, and outscores
+    the method the task is about) and spans of at most TRIVIAL_SPAN_LINES lines never seed (they outscore the function the
     task is about but call nothing worth following); the best span of each of the SEED_FILES best-scoring
     files is taken first, then the rest by score.
     """
     eligible = []
+    constructor_ids = frozenset(constructors)
     for item in items:
         symbol = symbol_by_id.get(item.metadata['node_id'])
-        if symbol is None or symbol.kind == 'class' or symbol.span_start is None or symbol.span_end is None:
+        if symbol is None or symbol.kind == 'class' or symbol.node_id in constructor_ids or symbol.span_start is None or symbol.span_end is None:
             continue
         if symbol.span_end - symbol.span_start + 1 <= TRIVIAL_SPAN_LINES:
             continue
@@ -344,6 +518,28 @@ def _call_graph_file_neighbors(nodes: list[GraphNode], edges: list[GraphEdge]) -
 def _is_aux_path(path: str) -> bool:
     stem = Path(path).stem
     return bool(AUX_PATH_RE.search(path)) or stem.startswith('test_') or stem.endswith('_test')
+
+
+_UI_WORDS = frozenset({'windows'})
+
+
+@functools.lru_cache(maxsize=65536)
+def _platform_of(path: str) -> str | None:
+    """The PLATFORM_SUFFIXES key of the platform a path is a variant for: a stem ending in `_<word>` or a
+    directory segment equal to a word other than `windows` (`wm_devicechange_win.cpp`, `src/mac/x.mm`), else None."""
+    lowered = path.lower()
+    *directories, name = lowered.split('/')
+    stem = name.rsplit('.', 1)[0] if '.' in name else name
+    if '_' in stem:
+        key = _PLATFORM_OF_WORD.get(stem.rsplit('_', 1)[1])
+        if key is not None:
+            return key
+    # A `windows/` directory is usually window management in UI code, not the OS: directories count only
+    # for the unambiguous words.
+    return next(
+        (_PLATFORM_OF_WORD[segment] for segment in directories if segment in _PLATFORM_OF_WORD and segment not in _UI_WORDS),
+        None,
+    )
 
 
 def _symbol_qualname(node: GraphNode) -> str:
@@ -563,6 +759,12 @@ def _render_symbol_skeleton(content: str, all_symbols: list[GraphNode], target: 
     return '\n'.join(out)
 
 
+def file_span_share(matching_files: int) -> float:
+    """The share of the budget that the spans of one file may take while other matching files wait."""
+    share = max(FILE_SPAN_SHARE_MIN, 1.0 / max(1, matching_files))
+    return max(share, FILE_SPAN_SHARE) if matching_files < FILE_SPAN_SHARE_FILES else share
+
+
 def _skeleton_item(
     item: BundleItem,
     symbols: list[GraphNode],
@@ -609,12 +811,21 @@ def _skeleton_item(
 _CAMEL_SPLIT_RE = re.compile(r'([a-z0-9])([A-Z])')
 _ALNUM_RUN_RE = re.compile(r'[A-Za-z0-9]+')
 _IDENTIFIER_RUN_RE = re.compile(r'[A-Za-z0-9_]+')
+# `iOS`, `macOS`, `tvOS`: a lower-case prefix and an `OS` run are one word, not `os`. Other acronym runs
+# (`getURL`, `isUSB`) stay split: they are real word boundaries and the parts occur on their own.
+_OS_NAME_RE = re.compile(r'[a-z]+OS')
 
 
 @functools.lru_cache(maxsize=65536)
 def _split_identifier(token: str) -> tuple[str, ...]:
-    normalized = _CAMEL_SPLIT_RE.sub(r'\1 \2', token.replace('_', ' '))
-    return tuple(part.lower() for part in _ALNUM_RUN_RE.findall(normalized) if part)
+    parts: list[str] = []
+    for segment in token.split('_'):
+        if _OS_NAME_RE.fullmatch(segment):
+            parts.append(segment.lower())
+            continue
+        normalized = _CAMEL_SPLIT_RE.sub(r'\1 \2', segment)
+        parts.extend(part.lower() for part in _ALNUM_RUN_RE.findall(normalized) if part)
+    return tuple(parts)
 
 
 def _tokenize_text(text: str, *, drop_stopwords: bool = False, labels: Iterable[str] = ()) -> set[str]:
@@ -634,6 +845,39 @@ def _tokenize_text(text: str, *, drop_stopwords: bool = False, labels: Iterable[
         if labels:
             terms.update(parts_from_labels(token, labels))
     return terms
+
+
+_STEM_ES_AFTER = ('s', 'x', 'z', 'ch', 'sh')
+
+
+@functools.lru_cache(maxsize=65536)
+def _stem(term: str) -> str:
+    """Light suffix stemming for matching only (`removed`/`removes`/`remove` -> `remov`, `entries` -> `entry`).
+
+    A plural step (`ies` -> `y`; `es` after s, x, z, ch, sh; `s` not after s, u, i), then `ed` or `ing` when 4 or
+    more letters are left. A final `e` of a long word goes last so `cache`/`caches` and `remove`/`removed` meet. Terms with a
+    digit or other non-letter, and short ones, are left alone. Never used on the text that is indexed.
+    """
+    if not term.isalpha():
+        return term
+    if term.endswith('ies') and len(term) >= 6:
+        term = term[:-3] + 'y'
+    elif term.endswith('es') and len(term) >= 5 and term[:-2].endswith(_STEM_ES_AFTER):
+        term = term[:-2]
+    elif term.endswith('s') and len(term) >= 4 and term[-2] not in 'sui':
+        term = term[:-1]
+    if term.endswith('ed') and len(term) >= 6:
+        term = term[:-2]
+    elif term.endswith('ing') and len(term) >= 7:
+        term = term[:-3]
+    if len(term) >= 5 and term.endswith('e'):
+        term = term[:-1]
+    return term
+
+
+def _tokenize_match(text: str) -> set[str]:
+    """`_tokenize_text` with every term stemmed: the form term sets are intersected in."""
+    return {_stem(term) for term in _tokenize_text(text)}
 
 
 def _expand_synonyms(terms: set[str], synonyms: dict[str, list[str]]) -> set[str]:
@@ -656,6 +900,24 @@ def _tokenize_query(task: str, synonyms: dict[str, list[str]] | None = None) -> 
     if synonyms:
         terms = _expand_synonyms(terms, synonyms)
     return terms
+
+
+def _match_terms(task: str, synonyms: dict[str, list[str]] | None = None) -> tuple[set[str], dict[str, tuple[str, str]]]:
+    """The stemmed query terms the ranking intersects with stemmed text, and the concatenations among them.
+
+    Adjacent query parts also yield their stemmed concatenation (`GizmoPods` -> `gizmopod`), which matches a
+    code name that is one token (`Gizmopod`); `_term_weights` weights it like its rarer part.
+    """
+    terms = {_stem(term) for term in _tokenize_query(task, synonyms)}
+    parts = [part for token in _IDENTIFIER_RUN_RE.findall(task) for part in _split_identifier(token)]
+    concatenations: dict[str, tuple[str, str]] = {}
+    for left, right in zip(parts, parts[1:]):
+        if left in STOPWORDS or right in STOPWORDS:
+            continue
+        joined = _stem(left + right)
+        if joined not in terms:
+            concatenations.setdefault(joined, (_stem(left), _stem(right)))
+    return terms | set(concatenations), concatenations
 
 
 _IDENTIFIER_TOKEN_RE = re.compile(r'[A-Za-z_][A-Za-z0-9_:]*')
@@ -691,7 +953,7 @@ def _score_text(
     term_weights: dict[str, float] | None = None,
     noise_terms: frozenset[str] = frozenset(),
 ) -> float:
-    haystack_terms = _tokenize_text(text) - noise_terms
+    haystack_terms = _tokenize_match(text) - noise_terms
     overlap = task_terms & haystack_terms
     if term_weights is None:
         return len(overlap) * 10.0 + recency_weight
@@ -699,12 +961,15 @@ def _score_text(
 
 
 def _term_weights(
-    task_terms: set[str], sources: list, docs: list[set[str]] | None = None
+    task_terms: set[str],
+    sources: list,
+    docs: list[set[str]] | None = None,
+    concatenations: dict[str, tuple[str, str]] | None = None,
 ) -> dict[str, float]:
     if not task_terms:
         return {}
     if docs is None:
-        docs = [_tokenize_text(f'{source.path}\n{source.content}') for source in sources]
+        docs = [_tokenize_match(f'{source.path}\n{source.content}') for source in sources]
     total = len(docs)
     if total == 0:
         return {term: 1.0 for term in task_terms}
@@ -712,7 +977,24 @@ def _term_weights(
     for term in task_terms:
         df = sum(1 for doc in docs if term in doc)
         weights[term] = math.log((total + 1) / df) if df else math.log(total + 1)
+    for joined, parts in (concatenations or {}).items():
+        if joined in weights:
+            weights[joined] = max(weights.get(part, 0.0) for part in parts)
     return weights
+
+
+def _name_bonus(
+    matched: set[str],
+    term_weights: dict[str, float],
+    total_weight: float,
+) -> float:
+    """`NAME_MATCH_BONUS` scaled by the IDF-weighted share of the task a name carries; 0 for no hit."""
+    if not matched:
+        return 0.0
+    if total_weight <= 0:
+        return NAME_MATCH_BONUS
+    share = min(1.0, sum(term_weights.get(term, 1.0) for term in matched) / total_weight)
+    return NAME_MATCH_BONUS * (NAME_BONUS_BASE + (1.0 - NAME_BONUS_BASE) * share)
 
 
 def _build_adjacency(edges: list[GraphEdge]) -> dict[str, list[tuple[str, float]]]:
@@ -841,9 +1123,12 @@ def generate_bundle(
     nodes, edges = graph if graph is not None else store.fetch_graph(repo_root)
 
     config = load_config(repo_root)
-    task_terms = _tokenize_query(task, config.synonyms)
+    # `intent_terms` (raw words: test/translation/language intent) and `task_terms` (stemmed, plus the
+    # concatenations of adjacent parts) are different sets; everything compared with file text uses the latter.
+    intent_terms = _tokenize_query(task, config.synonyms)
+    task_terms, concatenations = _match_terms(task, config.synonyms)
     noise_terms = frozenset(
-        term for identifier in config.noise_identifiers for term in _tokenize_text(identifier)
+        term for identifier in config.noise_identifiers for term in _tokenize_match(identifier)
     )
     check_deadline()
     # Words of concatenated lowercase stems (`widgetwaitready.cpp` -> widget wait ready), set at ingest.
@@ -856,18 +1141,31 @@ def generate_bundle(
     # Tokenized once: term weights, the symbol-span prefilter and the semantic gate all use it.
     file_tokens: dict[str, set[str]] = (
         {
-            source.path: _tokenize_text(f'{source.path} {path_aliases.get(source.path, "")}\n{source.content}')
+            source.path: _tokenize_match(f'{source.path} {path_aliases.get(source.path, "")}\n{source.content}')
             for source in sources
         }
         if task_terms
         else {}
     )
     term_weights = _term_weights(
-        task_terms, sources, [file_tokens[source.path] for source in sources] if task_terms else None
+        task_terms, sources, [file_tokens[source.path] for source in sources] if task_terms else None, concatenations
     )
+    # The weight of the whole task; a concatenation (`gizmopod`) repeats the weight of its parts, so it is not
+    # counted again.
+    total_term_weight = sum(weight for term, weight in term_weights.items() if term not in concatenations)
     check_deadline()
-    demote_aux = not (task_terms & AUX_INTENT_TERMS)
-    demote_locale = not (task_terms & LOCALE_INTENT_TERMS)
+    # Stemmed like `task_terms`, which they are compared with; a platform the task names is not demoted.
+    platform_names = {key: {_stem(word) for word in words | {key}} for key, words in PLATFORM_SUFFIXES.items()}
+    for product, platform in config.platform_terms.items():
+        platform_names[platform] |= _tokenize_match(product)
+    named_platforms = frozenset(key for key, names in platform_names.items() if task_terms & names)
+
+    def platform_demoted(path: str) -> bool:
+        key = _platform_of(path)
+        return key is not None and key not in named_platforms
+
+    demote_aux = not (intent_terms & AUX_INTENT_TERMS)
+    demote_locale = not (intent_terms & LOCALE_INTENT_TERMS)
     hotspot_by_path: dict[str, dict] = {}
     for node in nodes:
         if node.kind != 'file' or not isinstance(node.metadata.get('hotspot'), dict):
@@ -880,7 +1178,7 @@ def generate_bundle(
         ),
         default=0.0,
     )
-    lang_suffixes = _language_hint_suffixes(task, task_terms)
+    lang_suffixes = _language_hint_suffixes(task, intent_terms)
     adj = _build_adjacency(edges)
 
     symbols_by_path: defaultdict[str, list[GraphNode]] = defaultdict(list)
@@ -889,37 +1187,70 @@ def generate_bundle(
         if node.granularity == 'symbol':
             symbols_by_path[node.source_ref].append(node)
             symbol_names_by_path[node.source_ref].update(
-                _tokenize_text(_symbol_qualname(node).rsplit('.', 1)[-1])
+                _tokenize_match(_symbol_qualname(node).rsplit('.', 1)[-1])
             )
+
+    # Counted once here: the length normalisation below and the candidates use the same numbers.
+    token_counts: dict[str, int] = {}
+    for position, source in enumerate(sources):
+        if position % 500 == 0:
+            check_deadline()
+        token_counts[source.path] = count_text_tokens(source.content, kind=source.kind)
+    matching_sizes = [
+        token_counts[source.path]
+        for source in sources
+        if task_terms and source.kind == 'code' and task_terms & (file_tokens[source.path] - noise_terms)
+    ]
+    median_tokens = max(1.0, statistics.median(matching_sizes)) if matching_sizes else None
+
+    stem_terms_by_path = {
+        source.path: _tokenize_match(f'{Path(source.path).stem} {path_aliases.get(source.path, "")}')
+        for source in sources
+    }
+    code_has_name_hit = any(
+        source.kind == 'code' and task_terms & stem_terms_by_path[source.path] for source in sources
+    )
 
     newest_commit = max((c.authored_at for c in commits), default=0)
     base_scores: dict[str, float] = {}
+    raw_base_scores: dict[str, float] = {}
     for position, source in enumerate(sources):
         if position % 500 == 0:
             check_deadline()
         recency_weight = 0.0
         if newest_commit:
             recency_weight = max(0.0, 5.0 - math.log2(max(1, newest_commit - int(source.modified_at) + 1)))
-        name_candidates = (
-            _tokenize_text(f'{Path(source.path).stem} {path_aliases.get(source.path, "")}')
-            | symbol_names_by_path.get(source.path, set())
+        stem_terms = stem_terms_by_path[source.path]
+        name_bonus = max(
+            _name_bonus(task_terms & stem_terms, term_weights, total_term_weight),
+            SYMBOL_NAME_FILE_SHARE
+            * _name_bonus(task_terms & symbol_names_by_path.get(source.path, set()), term_weights, total_term_weight),
         )
-        name_bonus = NAME_MATCH_BONUS if task_terms & name_candidates else 0.0
-        dir_tokens = _tokenize_text("/".join(Path(source.path).parts[:-1]))
+        dir_tokens = _tokenize_match("/".join(Path(source.path).parts[:-1]))
         path_bonus = PATH_MATCH_BONUS if task_terms & dir_tokens else 0.0
         haystack = _strip_boilerplate(source.content) if source.kind == 'code' else source.content
-        score = name_bonus + path_bonus + _score_text(
+        text_score = _score_text(
             task_terms,
             f'{source.path} {path_aliases.get(source.path, "")}\n{haystack}',
             recency_weight,
             term_weights,
             noise_terms,
         )
+        if code_has_name_hit and source.kind != 'code' and name_bonus == 0 and path_bonus == 0:
+            text_score = min(text_score, DOC_TEXT_CAP)
+        score = raw_score = name_bonus + path_bonus + text_score
+        if source.kind == 'code' and median_tokens is not None and text_score > 0:
+            ratio = token_counts[source.path] / median_tokens
+            if ratio > LENGTH_NORM_FROM:
+                score = name_bonus + path_bonus + text_score / (1.0 + LENGTH_NORM * math.log2(ratio / LENGTH_NORM_FROM))
         if hotspot_boost and score > 0 and max_hotspot_score > 0:
             values = hotspot_by_path.get(source.path, {})
             hotspot_score = float(values.get('score', values.get('churn', 0) * values.get('complexity', 0)))
-            score *= 1.0 + HOTSPOT_BOOST_MAX * (hotspot_score / max_hotspot_score)
+            factor = 1.0 + HOTSPOT_BOOST_MAX * (hotspot_score / max_hotspot_score)
+            score *= factor
+            raw_score *= factor
         base_scores[source.path] = score
+        raw_base_scores[source.path] = raw_score
 
     # P0-2: fuse the existing name/keyword ranking with an FTS5 body-text
     # ranked list (plus a definition-boost list) via reciprocal rank fusion,
@@ -945,7 +1276,7 @@ def generate_bundle(
         content_by_path = {source.path: source.content for source in sources}
         fts_rank_list = [
             path for path in fts_rank_list
-            if task_terms & (_tokenize_text(content_by_path.get(path, '')) - noise_terms)
+            if task_terms & (_tokenize_match(content_by_path.get(path, '')) - noise_terms)
         ]
     # Definition boost (semble-style, P0-2 step 5): a file that *defines* a
     # queried identifier (its own symbol names overlap the task terms) gets
@@ -992,25 +1323,86 @@ def generate_bundle(
     fusion_scores = rrf_fuse(fusion_lists) if any(fusion_lists) else {}
 
     source_scores: dict[str, float] = {}
+    # The same scores without the length normalisation: what the spans of a file inherit.
+    raw_source_scores: dict[str, float] = {}
     for source in sources:
-        score = base_scores[source.path] + fusion_scores.get(source.path, 0.0) * FUSION_SCORE_MULTIPLIER
-        if demote_aux and _is_aux_path(source.path):
-            score *= AUX_PATH_DEMOTION
-        if demote_locale and _is_locale_source(source.path, source.kind):
-            score *= LOCALE_PATH_DEMOTION
-        if lang_suffixes and score > 0:
-            # Multiplicative so unrelated files (score 0) are never seeded by
-            # language alone; only reorders files the task already matches.
-            suffix = Path(source.path).suffix.lower()
-            if suffix in lang_suffixes:
-                score *= LANG_MATCH_BOOST
-            elif source.kind == 'code' and suffix:
-                score *= LANG_MISMATCH_DEMOTION
-        source_scores[source.path] = score
+        fusion_part = fusion_scores.get(source.path, 0.0) * FUSION_SCORE_MULTIPLIER
+        final = []
+        for score in (base_scores[source.path] + fusion_part, raw_base_scores[source.path] + fusion_part):
+            if demote_aux and _is_aux_path(source.path):
+                score *= AUX_PATH_DEMOTION
+            if demote_locale and _is_locale_source(source.path, source.kind):
+                score *= LOCALE_PATH_DEMOTION
+            if platform_demoted(source.path):
+                score *= PLATFORM_DEMOTION
+            if lang_suffixes and score > 0:
+                # Multiplicative so unrelated files (score 0) are never seeded by
+                # language alone; only reorders files the task already matches.
+                suffix = Path(source.path).suffix.lower()
+                if suffix in lang_suffixes:
+                    score *= LANG_MATCH_BOOST
+                elif source.kind == 'code' and suffix:
+                    score *= LANG_MISMATCH_DEMOTION
+            final.append(score)
+        source_scores[source.path], raw_source_scores[source.path] = final
 
     check_deadline()
+    lifted: set[str] = set()  # files the call-expansion bonus raised
     top_score = max(source_scores.values(), default=0.0)
     links = CallLinks({}, {}, {}, {}, {}, frozenset())
+
+    source_by_path = {source.path: source for source in sources}
+    symbol_by_id = {symbol.node_id: symbol for symbols in symbols_by_path.values() for symbol in symbols}
+    live_terms = task_terms - noise_terms
+    source_lines: dict[str, list[str]] = {}
+    term_cache: dict[str, tuple[set[str], set[str]]] = {}
+
+    def terms_of(symbol: GraphNode) -> tuple[set[str], set[str]]:
+        """(task terms in the symbol's name, task terms in its span's body)"""
+        cached = term_cache.get(symbol.node_id)
+        if cached is None:
+            source = source_by_path.get(symbol.source_ref)
+            lines = source_lines.get(symbol.source_ref)
+            if lines is None and source is not None:
+                lines = source_lines[symbol.source_ref] = source.content.splitlines()
+            span = '\n'.join((lines or [])[(symbol.span_start or 1) - 1:symbol.span_end or 0])
+            cached = (live_terms & _tokenize_match(symbol.label), live_terms & _tokenize_match(span))
+            term_cache[symbol.node_id] = cached
+        return cached
+
+    max_term_weight = max((term_weights.get(term, 1.0) for term in live_terms), default=0.0)
+
+    def is_trivial(symbol: GraphNode) -> bool:
+        return (
+            symbol.span_end - symbol.span_start + 1 <= TRIVIAL_SPAN_LINES
+            or ACCESSOR_RE.search(symbol.label) is not None
+            or symbol.node_id in links.utilities
+        )
+
+    def relevance(callee_id: str) -> float:
+        symbol = symbol_by_id.get(callee_id)
+        if symbol is None or symbol.span_start is None or symbol.span_end is None:
+            return RELEVANCE_FLOOR
+        in_name, in_body = terms_of(symbol)
+        if in_name:
+            return 1.0
+        if is_trivial(symbol):
+            # A one-line virtual is still the way to its overrides.
+            return RELEVANCE_FLOOR if callee_id in links.overridden_by and callee_id not in links.utilities else 0.0
+        if in_body:
+            return _body_relevance(in_body, term_weights, max_term_weight)
+        return RELEVANCE_FLOOR if not (live_terms & file_tokens.get(symbol.source_ref, set())) else RELEVANCE_FILE_HIT
+
+    def offerable(callee_id: str) -> bool:
+        """False for a trivial virtual that has overriders and no task term in its name: the walk goes through it
+        to its overriders (the T1 route) but the one-line base itself is not a bundle candidate."""
+        if callee_id not in links.overridden_by:
+            return True
+        symbol = symbol_by_id.get(callee_id)
+        if symbol is None or symbol.span_start is None or symbol.span_end is None:
+            return True
+        return bool(terms_of(symbol)[0]) or not is_trivial(symbol)
+
     if top_score > 0:
         links = call_links if call_links is not None else _call_graph_links(nodes, edges)
         file_neighbors = links.neighbors
@@ -1020,15 +1412,28 @@ def generate_bundle(
         )[:CALL_EXPANSION_SEEDS]
         kind_by_path = {source.path: source.kind for source in sources}
         for path, score in seeds:
-            bonus = CALL_EXPANSION_BONUS * (score / top_score)
+            seed_bonus = CALL_EXPANSION_BONUS * (score / top_score)
+            hub = len(file_neighbors.get(path, ())) > CALL_EXPANSION_FANOUT
             for neighbor in sorted(file_neighbors.get(path, ())):
-                if neighbor not in source_scores or source_scores[neighbor] >= bonus:
+                bonus = seed_bonus
+                if hub:
+                    # A file linked to dozens of others says nothing about each: the lift is worth what the
+                    # symbols that link the two files are worth to the task, and nothing when they share no
+                    # term with it (`RELEVANCE_FLOOR` is the relevance of a symbol that does not), so the
+                    # first of a hundred helpers by path is not lifted.
+                    linked = max(
+                        (relevance(symbol_id) for symbol_id in links.symbols.get((neighbor, path), ())), default=0.0
+                    )
+                    bonus = seed_bonus * linked if linked > RELEVANCE_FLOOR else 0.0
+                if bonus <= 0 or neighbor not in source_scores or source_scores[neighbor] >= bonus:
                     continue
                 if demote_aux and _is_aux_path(neighbor):
                     continue
                 if demote_locale and _is_locale_source(neighbor, kind_by_path.get(neighbor, 'code')):
                     continue
                 source_scores[neighbor] = bonus
+                raw_source_scores[neighbor] = max(raw_source_scores[neighbor], bonus)
+                lifted.add(neighbor)
     seed_scores = {f'file:{path}': score for path, score in source_scores.items() if score > 0}
     degraded = False
     if rank == 'bfs':
@@ -1057,7 +1462,7 @@ def generate_bundle(
             graph_bonus = pagerank_scores.get(file_node_id, 0.0) * PAGERANK_SCORE_MULTIPLIER
         final_score = keyword_score + graph_bonus
 
-        token_count = count_text_tokens(source.content, kind=source.kind)
+        token_count = token_counts[source.path]
         candidates.append(
             BundleItem(
                 item_id=f'source:{source.path}',
@@ -1067,7 +1472,17 @@ def generate_bundle(
                 content=source.content,
                 token_count=token_count,
                 score=final_score,
-                metadata={'modified_at': source.modified_at, 'graph_bonus': graph_bonus},
+                metadata={
+                    'modified_at': source.modified_at,
+                    'graph_bonus': graph_bonus,
+                    # No task term in the path or text, no call-expansion lift and next to no graph score: what is
+                    # left is recency and a trace of graph mass.
+                    'no_evidence': (
+                        source.path not in lifted
+                        and graph_bonus < GRAPH_EVIDENCE_MIN
+                        and not (task_terms & (file_tokens[source.path] - noise_terms))
+                    ),
+                },
             )
         )
 
@@ -1089,7 +1504,6 @@ def generate_bundle(
             )
         )
 
-    source_by_path = {source.path: source for source in sources}
     symbol_items_by_path: defaultdict[str, list[BundleItem]] = defaultdict(list)
     symbol_scores: dict[str, float] = {}
     for position, (path, path_symbols) in enumerate(symbols_by_path.items()):
@@ -1103,11 +1517,11 @@ def generate_bundle(
         # yield spans whose symbol name matches: skip everything else without cutting the text.
         file_matches = bool(task_terms & (file_tokens.get(path, set()) - noise_terms))
         if not file_matches:
-            path_symbols = [s for s in path_symbols if task_terms & _tokenize_text(s.label)]
+            path_symbols = [s for s in path_symbols if task_terms & _tokenize_match(s.label)]
             if not path_symbols:
                 continue
         lines = source.content.splitlines()
-        file_share = SYMBOL_FILE_SCORE_SHARE * source_scores.get(path, 0.0)
+        file_share = SYMBOL_FILE_SCORE_SHARE * min(raw_source_scores.get(path, 0.0), SPAN_FILE_SHARE_CAP)
         for symbol in path_symbols:
             if symbol.span_start is None or symbol.span_end is None:
                 continue
@@ -1115,13 +1529,17 @@ def generate_bundle(
             if not span_lines:
                 continue
             span_text = '\n'.join(span_lines)
-            name_bonus = NAME_MATCH_BONUS if task_terms & _tokenize_text(symbol.label) else 0.0
+            name_bonus = _name_bonus(task_terms & _tokenize_match(symbol.label), term_weights, total_term_weight)
             span_score = _score_text(task_terms, _strip_boilerplate(span_text), 0.0, term_weights, noise_terms)
             # The file share is a tiebreaker for spans that match the task
             # themselves, not a qualifier for spans that match nothing.
             if name_bonus + span_score <= 0:
                 continue
             score = name_bonus + span_score + file_share
+            # Test/fixture files are demoted whole (above); their spans must not escape that policy, which the
+            # proportional name bonus exposed (a test named after four task terms outranking the production span).
+            if demote_aux and _is_aux_path(path):
+                score *= AUX_PATH_DEMOTION
             item = BundleItem(
                 item_id=f'symbol-span:{symbol.node_id}',
                 kind='symbol',
@@ -1141,7 +1559,6 @@ def generate_bundle(
             symbol_items_by_path[path].append(item)
             symbol_scores[symbol.node_id] = score
     if links.calls_from or links.bases_of:
-        symbol_by_id = {symbol.node_id: symbol for symbols in symbols_by_path.values() for symbol in symbols}
         classes_by_label: defaultdict[str, list[GraphNode]] = defaultdict(list)
         for symbol in symbol_by_id.values():
             if symbol.kind == 'class':
@@ -1165,44 +1582,9 @@ def generate_bundle(
             return matches[0].node_id if len(matches) == 1 else None
 
         seed_items = _select_seeds(
-            [item for item in candidates if item.kind == 'symbol' and item.score > 0], symbol_by_id, source_scores
+            [item for item in candidates if item.kind == 'symbol' and item.score > 0], symbol_by_id, source_scores,
+            [constructor for built in links.constructors_of.values() for constructor in built],
         )
-        live_terms = task_terms - noise_terms
-        source_lines: dict[str, list[str]] = {}
-        term_cache: dict[str, tuple[set[str], set[str]]] = {}
-
-        def terms_of(symbol: GraphNode) -> tuple[set[str], set[str]]:
-            """(task terms in the symbol's name, task terms in its span's body)"""
-            cached = term_cache.get(symbol.node_id)
-            if cached is None:
-                source = source_by_path.get(symbol.source_ref)
-                lines = source_lines.get(symbol.source_ref)
-                if lines is None and source is not None:
-                    lines = source_lines[symbol.source_ref] = source.content.splitlines()
-                span = '\n'.join((lines or [])[(symbol.span_start or 1) - 1:symbol.span_end or 0])
-                cached = (live_terms & _tokenize_text(symbol.label), live_terms & _tokenize_text(span))
-                term_cache[symbol.node_id] = cached
-            return cached
-
-        def relevance(callee_id: str) -> float:
-            symbol = symbol_by_id.get(callee_id)
-            if symbol is None or symbol.span_start is None or symbol.span_end is None:
-                return RELEVANCE_FLOOR
-            in_name, in_body = terms_of(symbol)
-            if in_name:
-                return 1.0
-            trivial = (
-                symbol.span_end - symbol.span_start + 1 <= TRIVIAL_SPAN_LINES
-                or ACCESSOR_RE.search(symbol.label) is not None
-                or callee_id in links.utilities
-            )
-            if trivial:
-                # A one-line virtual is still the way to its overrides.
-                return RELEVANCE_FLOOR if callee_id in links.overridden_by and callee_id not in links.utilities else 0.0
-            if in_body:
-                return 1.0
-            return RELEVANCE_FLOOR if not (live_terms & file_tokens.get(symbol.source_ref, set())) else RELEVANCE_FILE_HIT
-
         def overriders(method_id: str) -> list[str]:
             ranked = []
             for overrider_id in links.overridden_by.get(method_id, ()):
@@ -1213,8 +1595,8 @@ def generate_bundle(
                 if demote_aux and _is_aux_path(overrider.source_ref):
                     continue
                 in_name, in_body = terms_of(overrider)
-                ranked.append((-len(in_name | in_body), overrider.source_ref, overrider_id))
-            return [overrider_id for _overlap, _path, overrider_id in sorted(ranked)]
+                ranked.append((platform_demoted(overrider.source_ref), -len(in_name | in_body), overrider.source_ref, overrider_id))
+            return [overrider_id for _demoted, _overlap, _path, overrider_id in sorted(ranked)]
 
         override_routes: dict[str, str] = {}
         callees = _callee_scores(
@@ -1226,16 +1608,19 @@ def generate_bundle(
             relevance=relevance,
             overriders=overriders,
             routes=override_routes,
+            constructors_of=links.constructors_of,
+            offerable=offerable,
         )
         file_candidate = {item.path: item for item in candidates if item.item_id.startswith('source:')}
-        for callee_id, (callee_score, seed_id, hop) in sorted(callees.items()):
+        for callee_id, (callee_score, seed_id, hop, callee_relevance) in sorted(callees.items()):
             symbol = symbol_by_id.get(callee_id)
             source = source_by_path.get(symbol.source_ref) if symbol is not None else None
             if symbol is None or source is None or source.kind != 'code':
                 continue
             if symbol.span_start is None or symbol.span_end is None:
                 continue
-            route = {'from': seed_id, 'hop': hop}
+            # `relevance` orders tied candidates below; the `why` renderer reads the other keys only.
+            route = {'from': seed_id, 'hop': hop, 'relevance': callee_relevance}
             if callee_id in override_routes:
                 route = {**route, 'type': 'override', 'via': override_routes[callee_id]}
             existing = next((i for i in symbol_items_by_path.get(symbol.source_ref, ()) if i.metadata.get('node_id') == callee_id), None)
@@ -1276,8 +1661,17 @@ def generate_bundle(
                     owner_file.metadata['call_expansion'] = {**route, 'to': callee_id, 'score': callee_score}
     for items in symbol_items_by_path.values():
         items.sort(key=lambda item: (-item.score, item.item_id))
+        # The sort is by the undecayed score and the decay is monotone, so the order stands.
+        for rank_in_file, item in enumerate(items):
+            if rank_in_file:
+                item.score *= SPAN_REPEAT_DECAY**rank_in_file
 
-    candidates.sort(key=lambda item: (-item.score, item.path, item.item_id))
+    def tie_order(item: BundleItem) -> tuple[float, float, int]:
+        """(-score, -relevance, hop): callees that tie on score are ordered by relevance, then hop."""
+        route = item.metadata.get('call_expansion') or {}
+        return (-item.score, -route.get('relevance', 0.0), route.get('hop', 0))
+
+    candidates.sort(key=lambda item: (*tie_order(item), item.path, item.item_id))
 
     has_code_matches = any(item.kind == 'code' and item.score > 0 for item in candidates)
     doc_cap = int(budget * DOC_BUDGET_SHARE) if has_code_matches else budget
@@ -1285,9 +1679,13 @@ def generate_bundle(
     # With multiple matches, cap each item so the top file cannot swallow the
     # whole budget; lone matches keep the full budget.
     item_cap = int(budget * ITEM_BUDGET_SHARE) if positive_matches > 1 else budget
+    evidence_exists = any(
+        item.kind != 'commit' and item.score > 0 and not item.metadata.get('no_evidence') for item in candidates
+    )
 
     file_item_by_path = {item.path: item for item in candidates if item.item_id.startswith('source:')}
 
+    matching_code_files = sum(1 for item in candidates if item.kind == 'code' and item.score > 0)
     selected: list[BundleItem] = []
     selected_ids: set[str] = set()
     files_fully_selected: set[str] = set()
@@ -1305,23 +1703,34 @@ def generate_bundle(
 
     selected_spans: dict[str, list[tuple[int, int]]] = defaultdict(list)
     span_tokens: defaultdict[str, int] = defaultdict(int)
+    oversize_tokens = 0
 
     def inside_selected_span(item: BundleItem) -> bool:
         start, end = item.metadata.get('span_start'), item.metadata.get('span_end')
         if start is None or end is None:
             return False
-        return any(lo <= start and end <= hi for lo, hi in selected_spans[item.path])
+        # Either way round: a span inside a selected one, or one enclosing a selected one, repeats its lines
+        # (the method can outscore its class and be selected first).
+        return any((lo <= start and end <= hi) or (start <= lo and hi <= end) for lo, hi in selected_spans[item.path])
 
     def over_file_cap(item: BundleItem, file_cap: int | None) -> bool:
-        """True when one more span of this file would pass its share of the budget (see FILE_SPAN_SHARE)."""
-        return (
-            file_cap is not None
-            and len(selected_spans[item.path]) >= SPANS_BEFORE_CAP
-            and span_tokens[item.path] + item.token_count > file_cap
-        )
+        """True when one more span of this file would pass its share of the budget (see FILE_SPAN_SHARE), or would take
+        the oversize spans past OVERSIZE_SPAN_SHARE of it."""
+        if file_cap is None:
+            return False
+        if (
+            matching_code_files >= FILE_SPAN_SHARE_FILES
+            and item.token_count > file_cap
+            and oversize_tokens + item.token_count > int(budget * OVERSIZE_SPAN_SHARE)
+        ):
+            return True
+        return len(selected_spans[item.path]) >= SPANS_BEFORE_CAP and span_tokens[item.path] + item.token_count > file_cap
 
-    def select_span(item: BundleItem) -> None:
+    def select_span(item: BundleItem, file_cap: int | None = None) -> None:
+        nonlocal oversize_tokens
         span_tokens[item.path] += item.token_count
+        if file_cap is not None and item.token_count > file_cap:
+            oversize_tokens += item.token_count
         select(item)
         if item.metadata.get('span_start') is not None and item.metadata.get('span_end') is not None:
             selected_spans[item.path].append((item.metadata['span_start'], item.metadata['span_end']))
@@ -1334,6 +1743,8 @@ def generate_bundle(
                 continue
             if item.token_count <= 0:
                 continue  # an empty file or span adds nothing to a bundle
+            if item.metadata.get('no_evidence') and evidence_exists:
+                continue  # leftover budget is for matches, not for the first unrelated file by path
             allowed = min(budget - total_tokens, item_cap)
             if item.kind == 'symbol':
                 if item.path in files_fully_selected or inside_selected_span(item):
@@ -1350,7 +1761,7 @@ def generate_bundle(
                     files_fully_selected.add(file_item.path)
                     continue
                 if 0 < item.token_count <= allowed and not over_file_cap(item, file_cap):
-                    select_span(item)
+                    select_span(item, file_cap)
                     paths_with_symbols.add(item.path)
                 continue
             if item.kind == 'code' and item.path in paths_with_symbols:
@@ -1374,7 +1785,7 @@ def generate_bundle(
                     if over_file_cap(symbol_item, file_cap):
                         continue
                     if 0 < symbol_item.token_count <= remaining:
-                        select_span(symbol_item)
+                        select_span(symbol_item, file_cap)
                         remaining -= symbol_item.token_count
                         picked_symbol = True
                 if picked_symbol:
@@ -1407,7 +1818,7 @@ def generate_bundle(
 
     # First the capped pass, so a dense file leaves room for the other matches; then the same pass without
     # the cap, which only adds what the cap held back and what is still left of the budget.
-    pack(max(1, int(budget * FILE_SPAN_SHARE)))
+    pack(max(1, int(budget * file_span_share(matching_code_files))))
     pack()
 
     bundle = RetrievalBundle(

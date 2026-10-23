@@ -13,7 +13,9 @@ jobs:
   test:
     name: test
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # The suite runs twice (plain, then with coverage) before the regex suite, evals and build; at 0.14 the
+    # plain run alone takes about 7 minutes on the hosted runner.
+    timeout-minutes: 30
 
     steps:
       - name: Checkout

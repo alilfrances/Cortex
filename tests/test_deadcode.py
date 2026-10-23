@@ -127,6 +127,26 @@ def test_qt_dead_code_credits_runtime_edges_and_keeps_orphan_helper(tmp_path: Pa
     assert not any(item["symbol"] in {"onClicked", "onDeviceConnected"} for item in findings)
 
 
+def test_dead_code_credits_calls_into_a_namespace_split_over_header_and_source(tmp_path: Path, monkeypatch) -> None:
+    repo = tmp_path / "repo"
+    (repo / "lib").mkdir(parents=True)
+    (repo / "app").mkdir()
+    (repo / "lib" / "ns.h").write_text("namespace Ns {\nint f();\nint g();\nint unused();\n}\n", encoding="utf-8")
+    (repo / "lib" / "ns.cpp").write_text(
+        '#include "ns.h"\nnamespace Ns {\nint f() { return 1; }\nint g() { return 2; }\nint unused() { return 3; }\n}\n',
+        encoding="utf-8",
+    )
+    (repo / "app" / "main.cpp").write_text('#include "../lib/ns.h"\nint main() { return Ns::f() + Ns::g(); }\n', encoding="utf-8")
+    _init_git(repo)
+
+    store = _ingest(repo, tmp_path / "data", monkeypatch)
+    nodes, edges = store.fetch_graph(repo)
+    symbols = {item["symbol"] for item in analyze_dead_code(repo, store=store, nodes=nodes, edges=edges)["findings"]}
+
+    assert "unused" in symbols  # the analysis ran and still reports what nothing calls
+    assert not symbols & {"f", "g"}
+
+
 def test_cortex_dead_code_mcp_returns_findings_and_respects_budget(tmp_path: Path, monkeypatch) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()

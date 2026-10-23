@@ -28,6 +28,8 @@ _DEGREE_KEYS = {"degree"}
 # out-of-line `Foo::bar()` defined in another file.  Ids, spans, signatures, labels and every
 # other metadata key must stay identical.
 _ALLOWED_NEW_NODE_KEYS = {"member_types"}
+# The one metadata key the resolver may add to a frozen `inherits` edge: `external` (an out-of-repo base).
+_ALLOWED_NEW_INHERITS_KEYS = {"external"}
 
 
 def _frozen(rel: str) -> dict:
@@ -85,12 +87,23 @@ def _assert_additive(old: dict, new: dict, *, drop: set[str] = frozenset()) -> N
     # Every frozen edge (QML files already carried `calls` edges) survives unchanged and the
     # only new edges are `calls`; non-call edges are exactly the frozen non-call edges.
     old_edges = {e["edge_id"]: e for e in old["edges"]}
-    new_edges = {e["edge_id"]: e for e in new["edges"]}
+    new_edges = {e["edge_id"]: _without_resolver_notes(e) for e in new["edges"]}
     assert len(new_edges) == len(new["edges"]), "duplicate edge ids"
     assert {k: v for k, v in new_edges.items() if k in old_edges} == old_edges, "a frozen edge changed or vanished"
     added = [e for k, e in new_edges.items() if k not in old_edges]
     assert all(e["relation"] == "calls" for e in added), "call extraction added a non-call edge"
-    assert [e for e in new["edges"] if e["relation"] != "calls"] == [e for e in old["edges"] if e["relation"] != "calls"]
+    assert [_without_resolver_notes(e) for e in new["edges"] if e["relation"] != "calls"] == [
+        e for e in old["edges"] if e["relation"] != "calls"
+    ]
+
+
+def _without_resolver_notes(edge: dict) -> dict:
+    """The resolver may annotate an `inherits` edge whose base is outside the repository with
+    `metadata.external` (0.14, the target stays as extracted); nothing else on a frozen edge may move."""
+    metadata = edge.get("metadata") or {}
+    if edge.get("relation") != "inherits" or not set(metadata) & _ALLOWED_NEW_INHERITS_KEYS:
+        return edge
+    return {**edge, "metadata": {k: v for k, v in metadata.items() if k not in _ALLOWED_NEW_INHERITS_KEYS}}
 
 
 def test_ruby_exception_is_narrow() -> None:
@@ -169,3 +182,18 @@ def test_baseline_has_no_code_calls_edges() -> None:
         for edge in data["edges"]:
             if edge["relation"] == "calls":
                 assert edge["metadata"].get("source_file", "").endswith(".qml") or edge["source"].startswith("file:") or ".qml" in edge["edge_id"], (path, edge["edge_id"])
+
+
+def test_inherits_exception_is_narrow() -> None:
+    """Only `metadata.external` on an `inherits` edge is ignored: any other new key, or the same key on
+    another relation, still fails."""
+    base = {"edge_id": "i", "relation": "inherits", "source": "symbol:a.h:A", "target": "name:QObject", "metadata": {"lineno": 1}}
+    old = {"nodes": [], "edges": [base]}
+    _assert_additive(old, {"nodes": [], "edges": [dict(base, metadata={"lineno": 1, "external": "qt"})]})
+    with pytest.raises(AssertionError):
+        _assert_additive(old, {"nodes": [], "edges": [dict(base, metadata={"lineno": 1, "resolution": "label"})]})
+    with pytest.raises(AssertionError):
+        _assert_additive(old, {"nodes": [], "edges": [dict(base, target="symbol:a.h:QObject")]})
+    imports = dict(base, relation="imports")
+    with pytest.raises(AssertionError):
+        _assert_additive({"nodes": [], "edges": [imports]}, {"nodes": [], "edges": [dict(imports, metadata={"lineno": 1, "external": "qt"})]})
