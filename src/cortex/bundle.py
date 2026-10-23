@@ -137,6 +137,13 @@ FILE_SPAN_SHARE = 0.25
 FILE_SPAN_SHARE_MIN = 0.1
 FILE_SPAN_SHARE_FILES = 4
 SPANS_BEFORE_CAP = 3
+# A span larger than its file's share of the budget (see above) is a first-span exemption that can fill the
+# bundle by itself: with many matching files, three hub spans of 250 tokens leave a 900-token budget no room
+# for the smaller files that follow them. In the capped pass such spans may together take at most this share
+# of the budget; the rest wait for the second pass, which packs them if room is left. Measured in tokens, so
+# it follows whatever token estimate is in use (the same spans are 180/130/167 tokens with the stdlib
+# estimate and 285/205/265 with o200k_base).
+OVERSIZE_SPAN_SHARE = 0.8
 # A file with many similarly named methods (a hub: every `deviceX()` name-matches) would hold the top of the
 # list with its spans while a small file that is the answer waits. The k-th ranked span of one file (k = 0 for
 # its best) scores x SPAN_REPEAT_DECAY ** k: the second method of a file is worth less than the first of
@@ -1678,6 +1685,7 @@ def generate_bundle(
 
     file_item_by_path = {item.path: item for item in candidates if item.item_id.startswith('source:')}
 
+    matching_code_files = sum(1 for item in candidates if item.kind == 'code' and item.score > 0)
     selected: list[BundleItem] = []
     selected_ids: set[str] = set()
     files_fully_selected: set[str] = set()
@@ -1695,6 +1703,7 @@ def generate_bundle(
 
     selected_spans: dict[str, list[tuple[int, int]]] = defaultdict(list)
     span_tokens: defaultdict[str, int] = defaultdict(int)
+    oversize_tokens = 0
 
     def inside_selected_span(item: BundleItem) -> bool:
         start, end = item.metadata.get('span_start'), item.metadata.get('span_end')
@@ -1705,15 +1714,23 @@ def generate_bundle(
         return any((lo <= start and end <= hi) or (start <= lo and hi <= end) for lo, hi in selected_spans[item.path])
 
     def over_file_cap(item: BundleItem, file_cap: int | None) -> bool:
-        """True when one more span of this file would pass its share of the budget (see FILE_SPAN_SHARE)."""
-        return (
-            file_cap is not None
-            and len(selected_spans[item.path]) >= SPANS_BEFORE_CAP
-            and span_tokens[item.path] + item.token_count > file_cap
-        )
+        """True when one more span of this file would pass its share of the budget (see FILE_SPAN_SHARE), or would take
+        the oversize spans past OVERSIZE_SPAN_SHARE of it."""
+        if file_cap is None:
+            return False
+        if (
+            matching_code_files >= FILE_SPAN_SHARE_FILES
+            and item.token_count > file_cap
+            and oversize_tokens + item.token_count > int(budget * OVERSIZE_SPAN_SHARE)
+        ):
+            return True
+        return len(selected_spans[item.path]) >= SPANS_BEFORE_CAP and span_tokens[item.path] + item.token_count > file_cap
 
-    def select_span(item: BundleItem) -> None:
+    def select_span(item: BundleItem, file_cap: int | None = None) -> None:
+        nonlocal oversize_tokens
         span_tokens[item.path] += item.token_count
+        if file_cap is not None and item.token_count > file_cap:
+            oversize_tokens += item.token_count
         select(item)
         if item.metadata.get('span_start') is not None and item.metadata.get('span_end') is not None:
             selected_spans[item.path].append((item.metadata['span_start'], item.metadata['span_end']))
@@ -1744,7 +1761,7 @@ def generate_bundle(
                     files_fully_selected.add(file_item.path)
                     continue
                 if 0 < item.token_count <= allowed and not over_file_cap(item, file_cap):
-                    select_span(item)
+                    select_span(item, file_cap)
                     paths_with_symbols.add(item.path)
                 continue
             if item.kind == 'code' and item.path in paths_with_symbols:
@@ -1768,7 +1785,7 @@ def generate_bundle(
                     if over_file_cap(symbol_item, file_cap):
                         continue
                     if 0 < symbol_item.token_count <= remaining:
-                        select_span(symbol_item)
+                        select_span(symbol_item, file_cap)
                         remaining -= symbol_item.token_count
                         picked_symbol = True
                 if picked_symbol:
@@ -1801,7 +1818,6 @@ def generate_bundle(
 
     # First the capped pass, so a dense file leaves room for the other matches; then the same pass without
     # the cap, which only adds what the cap held back and what is still left of the budget.
-    matching_code_files = sum(1 for item in candidates if item.kind == 'code' and item.score > 0)
     pack(max(1, int(budget * file_span_share(matching_code_files))))
     pack()
 

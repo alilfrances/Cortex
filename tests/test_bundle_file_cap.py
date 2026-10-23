@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from cortex.bundle import FILE_SPAN_SHARE, SPANS_BEFORE_CAP, generate_bundle
+from cortex.tokenizer import count_text_tokens
 from tests.bundle_shapes import make_repo
 
 TASK = "reconnect device timeout"
@@ -71,9 +72,16 @@ def test_many_matching_files_shrink_what_a_dense_file_may_take_first(tmp_path):
             f"int helper{k}(int value_) {{\n    // reconnect\n    value_ += {k};\n{pad}\n    return value_;\n}}\n"
         )
     repo = make_repo(tmp_path / "repo", files)
+    # The room the helpers have is derived from measured sizes, so it does not depend on the token estimate in use
+    # (a fixed 3000 is right for the stdlib estimate, where a helper is 283 tokens, and 2 helpers short with
+    # o200k_base, where it is 463): the dense file's three first spans, nine helpers whole, and for the other eight
+    # a signature each (a tenth of a helper is more than enough for one), but not a tenth whole helper.
+    dense_span = count_text_tokens(files["src/dense.cpp"].split("\n\n")[0], kind="code")
+    helper = count_text_tokens(files["src/helper_5.cpp"], kind="code")
+    budget = SPANS_BEFORE_CAP * dense_span + 9 * helper + 8 * helper // 10
 
-    bundle = generate_bundle(repo, task=TASK, budget=3000, output_format="json")
+    bundle = generate_bundle(repo, task=TASK, budget=budget, output_format="json")
 
     helpers = {item["path"] for item in bundle["items"] if item["path"].startswith("src/helper_")}
     assert len(helpers) == 17, sorted(helpers)  # a quarter of the budget for the dense file left 5 of them out
-    assert bundle["total_tokens"] <= 3000
+    assert bundle["total_tokens"] <= budget
