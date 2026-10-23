@@ -99,6 +99,27 @@ def test_hub_flood_leaves_the_small_gold_file_in_the_bundle(field, mode, budget)
     assert set(task.expected_files) <= set(files), f"hub spans filled the bundle: {sorted(set(files))}"
 
 
+# The fixture was tuned on seed 5023 (the generated words and method names decide how many hub spans outscore the
+# 81-token gold file); the same repository from neighbouring seeds shows the fix is not a property of that one draw.
+@pytest.mark.parametrize("seed", range(5020, 5028))
+def test_hub_flood_gold_file_is_packed_for_every_seed(seed, tmp_path, monkeypatch):
+    fixed_git_env(monkeypatch)
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("CORTEX_SEMANTIC", "0")
+    repo = _build_field_hub_repo(tmp_path, seed=seed)
+    db_path = tmp_path / "hub.db"
+    ingest_repository(repo, commit_limit=20, db_path=db_path)
+
+    task = TASKS["field_hub_repo"]
+    missing = []
+    for mode in MODES:
+        for budget in (900, 4000):
+            bundle = _run_bundle(repo, dataclasses.replace(task, budget=budget, tight_budget=budget), mode, db_path)["bundle"]
+            if not set(task.expected_files) <= set(_selected_file_list(bundle["items"])):
+                missing.append(f"{mode}@{budget}")
+    assert not missing, f"seed {seed}: gold file not packed in {missing}"
+
+
 # --- tie-break: cause 4 (callee scores are flat, ties break on path)
 
 

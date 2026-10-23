@@ -681,14 +681,15 @@ _HUB_WORDS = tuple(dict.fromkeys(
 ))
 
 
-def _build_field_hub_repo(base: Path) -> Path:
+def _build_field_hub_repo(base: Path, seed: int = 5023) -> Path:
     """Hub flood: four ~3k-line files whose comments use every common word and whose hundreds of
-    `deviceX()` methods collect a name hit through `device`, next to a small file that is the answer."""
+    `deviceX()` methods collect a name hit through `device`, next to a small file that is the answer.
+    `seed` drives the generated words and names (5023 is the committed fixture)."""
     import random
 
     repo = base / "field_hub_repo"
     _init_repo(repo)
-    rng = random.Random(5023)
+    rng = random.Random(seed)
     words = _HUB_WORDS
 
     def sentence(count: int) -> str:
