@@ -6,11 +6,7 @@
       "app/audit.py",
       "app/cleanup.py",
       "app/orders.py",
-      "app/payments.py",
-      "README.md",
-      "app/emailer.py",
-      "app/retry.py",
-      "docs/setup.md"
+      "app/payments.py"
     ],
     "mode": "pagerank",
     "repo": "python_app",
@@ -23,11 +19,7 @@
       "app/audit.py",
       "app/cleanup.py",
       "app/orders.py",
-      "app/payments.py",
-      "README.md",
-      "app/emailer.py",
-      "app/retry.py",
-      "docs/setup.md"
+      "app/payments.py"
     ],
     "mode": "bfs",
     "repo": "python_app",
@@ -62,11 +54,7 @@
       "app/audit.py",
       "app/auth.py",
       "app/orders.py",
-      "app/payments.py",
-      "README.md",
-      "app/emailer.py",
-      "app/retry.py",
-      "docs/setup.md"
+      "app/payments.py"
     ],
     "mode": "pagerank",
     "repo": "python_app",
@@ -77,13 +65,7 @@
       "app/session.py",
       "app/cleanup.py",
       "app/audit.py",
-      "app/auth.py",
-      "app/orders.py",
-      "app/payments.py",
-      "README.md",
-      "app/emailer.py",
-      "app/retry.py",
-      "docs/setup.md"
+      "app/auth.py"
     ],
     "mode": "bfs",
     "repo": "python_app",
@@ -119,10 +101,7 @@
       "app/audit.py",
       "app/retry.py",
       "app/session.py",
-      "app/auth.py",
-      "app/cleanup.py",
-      "README.md",
-      "docs/setup.md"
+      "app/auth.py"
     ],
     "mode": "pagerank",
     "repo": "python_app",
@@ -134,12 +113,7 @@
       "app/payments.py",
       "app/emailer.py",
       "app/audit.py",
-      "app/retry.py",
-      "README.md",
-      "app/auth.py",
-      "app/cleanup.py",
-      "app/session.py",
-      "docs/setup.md"
+      "app/retry.py"
     ],
     "mode": "bfs",
     "repo": "python_app",
@@ -150,7 +124,7 @@
       "app/orders.py",
       "app/payments.py",
       "app/emailer.py",
-      "app/orders.py"
+      "app/retry.py"
     ],
     "mode": "skeleton_on",
     "repo": "python_app",
@@ -160,8 +134,7 @@
     "files": [
       "app/orders.py",
       "app/payments.py",
-      "app/emailer.py",
-      "app/orders.py"
+      "app/emailer.py"
     ],
     "mode": "skeleton_off",
     "repo": "python_app",
@@ -175,10 +148,7 @@
       "app/auth.py",
       "app/audit.py",
       "app/emailer.py",
-      "app/session.py",
-      "app/cleanup.py",
-      "README.md",
-      "docs/setup.md"
+      "app/session.py"
     ],
     "mode": "pagerank",
     "repo": "python_app",
@@ -191,11 +161,7 @@
       "app/orders.py",
       "app/auth.py",
       "app/audit.py",
-      "app/emailer.py",
-      "app/session.py",
-      "README.md",
-      "app/cleanup.py",
-      "docs/setup.md"
+      "app/emailer.py"
     ],
     "mode": "bfs",
     "repo": "python_app",
@@ -205,8 +171,7 @@
     "files": [
       "app/payments.py",
       "app/retry.py",
-      "app/orders.py",
-      "README.md"
+      "app/orders.py"
     ],
     "mode": "skeleton_on",
     "repo": "python_app",
@@ -216,8 +181,7 @@
     "files": [
       "app/payments.py",
       "app/retry.py",
-      "app/orders.py",
-      "README.md"
+      "app/orders.py"
     ],
     "mode": "skeleton_off",
     "repo": "python_app",
@@ -231,10 +195,8 @@
       "app/cleanup.py",
       "app/audit.py",
       "app/auth.py",
-      "app/retry.py",
       "app/orders.py",
-      "app/payments.py",
-      "app/emailer.py"
+      "app/payments.py"
     ],
     "mode": "pagerank",
     "repo": "python_app",
@@ -243,15 +205,7 @@
   {
     "files": [
       "docs/setup.md",
-      "README.md",
-      "app/retry.py",
-      "app/session.py",
-      "app/audit.py",
-      "app/auth.py",
-      "app/cleanup.py",
-      "app/emailer.py",
-      "app/orders.py",
-      "app/payments.py"
+      "README.md"
     ],
     "mode": "bfs",
     "repo": "python_app",
@@ -287,10 +241,7 @@
       "app/payments.py",
       "app/session.py",
       "app/emailer.py",
-      "app/retry.py",
-      "app/cleanup.py",
-      "README.md",
-      "docs/setup.md"
+      "app/retry.py"
     ],
     "mode": "pagerank",
     "repo": "python_app",
@@ -303,11 +254,7 @@
       "app/auth.py",
       "app/payments.py",
       "app/session.py",
-      "app/emailer.py",
-      "app/retry.py",
-      "README.md",
-      "app/cleanup.py",
-      "docs/setup.md"
+      "app/emailer.py"
     ],
     "mode": "bfs",
     "repo": "python_app",
@@ -484,8 +431,7 @@
       "config.py",
       "handlers/incidents.py",
       "integrations/slack.py",
-      "storage/repository.py",
-      "tests/test_incidents.py"
+      "storage/repository.py"
     ],
     "mode": "bfs",
     "repo": "web_service",
@@ -495,8 +441,8 @@
     "files": [
       "server.py",
       "config.py",
-      "server.py",
-      "handlers/incidents.py"
+      "handlers/incidents.py",
+      "server.py"
     ],
     "mode": "skeleton_on",
     "repo": "web_service",
@@ -506,8 +452,8 @@
     "files": [
       "server.py",
       "config.py",
-      "server.py",
-      "handlers/incidents.py"
+      "handlers/incidents.py",
+      "server.py"
     ],
     "mode": "skeleton_off",
     "repo": "web_service",
@@ -574,8 +520,7 @@
     "files": [
       "src/ranker.py",
       "README.md",
-      "docs/plan.md",
-      "src/packer.py"
+      "docs/plan.md"
     ],
     "mode": "bfs",
     "repo": "noisy_lib",
@@ -615,8 +560,7 @@
     "files": [
       "src/packer.py",
       "README.md",
-      "docs/plan.md",
-      "src/ranker.py"
+      "docs/plan.md"
     ],
     "mode": "bfs",
     "repo": "noisy_lib",
@@ -771,9 +715,7 @@
       "CMakeLists.txt",
       "resources.qrc",
       "include/DeviceManager.hpp",
-      "include/DeviceModel.hpp",
-      "src/DeviceManager.cpp",
-      "src/DeviceModel.cpp"
+      "include/DeviceModel.hpp"
     ],
     "mode": "bfs",
     "repo": "qt_app",
@@ -819,11 +761,7 @@
       "qml/Main.qml",
       "qml/DeviceDelegate.qml",
       "CMakeLists.txt",
-      "resources.qrc",
-      "include/DeviceManager.hpp",
-      "include/DeviceModel.hpp",
-      "src/DeviceManager.cpp",
-      "src/DeviceModel.cpp"
+      "resources.qrc"
     ],
     "mode": "bfs",
     "repo": "qt_app",

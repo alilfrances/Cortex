@@ -2,7 +2,7 @@
   {
     "file_recall": 1.0,
     "mode": "pagerank",
-    "precision": 0.3,
+    "precision": 0.5,
     "precision_at_3": 1.0,
     "recall": 1.0,
     "repo": "python_app",
@@ -12,7 +12,7 @@
   {
     "file_recall": 1.0,
     "mode": "bfs",
-    "precision": 0.3,
+    "precision": 0.5,
     "precision_at_3": 1.0,
     "recall": 1.0,
     "repo": "python_app",
@@ -42,7 +42,7 @@
   {
     "file_recall": 1.0,
     "mode": "pagerank",
-    "precision": 0.2,
+    "precision": 0.333333,
     "precision_at_3": 0.666667,
     "recall": 1.0,
     "repo": "python_app",
@@ -52,7 +52,7 @@
   {
     "file_recall": 1.0,
     "mode": "bfs",
-    "precision": 0.2,
+    "precision": 0.5,
     "precision_at_3": 0.666667,
     "recall": 1.0,
     "repo": "python_app",
@@ -82,7 +82,7 @@
   {
     "file_recall": 1.0,
     "mode": "pagerank",
-    "precision": 0.3,
+    "precision": 0.428571,
     "precision_at_3": 1.0,
     "recall": 1.0,
     "repo": "python_app",
@@ -92,7 +92,7 @@
   {
     "file_recall": 1.0,
     "mode": "bfs",
-    "precision": 0.3,
+    "precision": 0.6,
     "precision_at_3": 1.0,
     "recall": 1.0,
     "repo": "python_app",
@@ -102,7 +102,7 @@
   {
     "file_recall": 1.0,
     "mode": "skeleton_on",
-    "precision": 1.0,
+    "precision": 0.75,
     "precision_at_3": 1.0,
     "recall": 0.75,
     "repo": "python_app",
@@ -122,7 +122,7 @@
   {
     "file_recall": 1.0,
     "mode": "pagerank",
-    "precision": 0.2,
+    "precision": 0.285714,
     "precision_at_3": 0.666667,
     "recall": 1.0,
     "repo": "python_app",
@@ -132,7 +132,7 @@
   {
     "file_recall": 1.0,
     "mode": "bfs",
-    "precision": 0.2,
+    "precision": 0.333333,
     "precision_at_3": 0.666667,
     "recall": 1.0,
     "repo": "python_app",
@@ -142,7 +142,7 @@
   {
     "file_recall": 1.0,
     "mode": "skeleton_on",
-    "precision": 0.5,
+    "precision": 0.666667,
     "precision_at_3": 0.666667,
     "recall": 1.0,
     "repo": "python_app",
@@ -152,7 +152,7 @@
   {
     "file_recall": 1.0,
     "mode": "skeleton_off",
-    "precision": 0.5,
+    "precision": 0.666667,
     "precision_at_3": 0.666667,
     "recall": 1.0,
     "repo": "python_app",
@@ -162,7 +162,7 @@
   {
     "file_recall": 1.0,
     "mode": "pagerank",
-    "precision": 0.2,
+    "precision": 0.25,
     "precision_at_3": 0.666667,
     "recall": 1.0,
     "repo": "python_app",
@@ -172,7 +172,7 @@
   {
     "file_recall": 1.0,
     "mode": "bfs",
-    "precision": 0.2,
+    "precision": 1.0,
     "precision_at_3": 0.666667,
     "recall": 1.0,
     "repo": "python_app",
@@ -202,7 +202,7 @@
   {
     "file_recall": 1.0,
     "mode": "pagerank",
-    "precision": 0.3,
+    "precision": 0.428571,
     "precision_at_3": 1.0,
     "recall": 1.0,
     "repo": "python_app",
@@ -212,7 +212,7 @@
   {
     "file_recall": 1.0,
     "mode": "bfs",
-    "precision": 0.3,
+    "precision": 0.5,
     "precision_at_3": 1.0,
     "recall": 1.0,
     "repo": "python_app",
@@ -372,7 +372,7 @@
   {
     "file_recall": 1.0,
     "mode": "bfs",
-    "precision": 0.333333,
+    "precision": 0.4,
     "precision_at_3": 0.666667,
     "recall": 1.0,
     "repo": "web_service",
@@ -452,7 +452,7 @@
   {
     "file_recall": 1.0,
     "mode": "bfs",
-    "precision": 0.25,
+    "precision": 0.333333,
     "precision_at_3": 0.333333,
     "recall": 1.0,
     "repo": "noisy_lib",
@@ -492,7 +492,7 @@
   {
     "file_recall": 1.0,
     "mode": "bfs",
-    "precision": 0.25,
+    "precision": 0.333333,
     "precision_at_3": 0.333333,
     "recall": 1.0,
     "repo": "noisy_lib",
@@ -612,7 +612,7 @@
   {
     "file_recall": 1.0,
     "mode": "bfs",
-    "precision": 0.25,
+    "precision": 0.333333,
     "precision_at_3": 0.666667,
     "recall": 0.75,
     "repo": "qt_app",
@@ -652,7 +652,7 @@
   {
     "file_recall": 1.0,
     "mode": "bfs",
-    "precision": 0.25,
+    "precision": 0.5,
     "precision_at_3": 0.333333,
     "recall": 1.0,
     "repo": "qt_app",

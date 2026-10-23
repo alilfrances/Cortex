@@ -85,6 +85,8 @@ LOCALE_PATH_DEMOTION = 0.25
 # name or path hit.
 CALL_EXPANSION_BONUS = 20.0
 CALL_EXPANSION_SEEDS = 8
+# A seed linked to more files than this lifts them by the relevance of the linking symbols instead of flat.
+CALL_EXPANSION_FANOUT = 20
 # A resolved `calls` edge out of a top-ranked symbol is stronger evidence than a shared word:
 # the callees of the best-matching symbols (and the bases of their class) are scored from the
 # calling symbol's own score, so they outrank files that merely share a term. Callers are not
@@ -129,6 +131,16 @@ FILE_SPAN_SHARE = 0.25
 FILE_SPAN_SHARE_MIN = 0.1
 FILE_SPAN_SHARE_FILES = 4
 SPANS_BEFORE_CAP = 3
+# A file with many similarly named methods (a hub: every `deviceX()` name-matches) would hold the top of the
+# list with its spans while a small file that is the answer waits. The k-th ranked span of one file (k = 0 for
+# its best) scores x SPAN_REPEAT_DECAY ** k: the second method of a file is worth less than the first of
+# another. Tuning range 0.6-0.9.
+SPAN_REPEAT_DECAY = 0.9
+# A file with no task term in its path or text, no call-expansion lift and a graph score below GRAPH_EVIDENCE_MIN
+# scores recency and a trace of graph mass only (`no_evidence`). While anything with evidence exists, such a file
+# is not packed into the budget left over: the first unrelated file by path is not an answer. (A weak match is not
+# held back: a file that shares one common task word is packed whatever its score relative to the best.)
+GRAPH_EVIDENCE_MIN = 0.5
 LOCALE_PATH_RE = re.compile(r'(^|/)(i18n|l10n|locales?|translations?)(/|$)')
 LOCALE_SUFFIXES = frozenset({'.ts', '.po', '.pot', '.xlf', '.xliff', '.qm'})
 LOCALE_INTENT_TERMS = {
@@ -1307,8 +1319,50 @@ def generate_bundle(
         source_scores[source.path], raw_source_scores[source.path] = final
 
     check_deadline()
+    lifted: set[str] = set()  # files the call-expansion bonus raised
     top_score = max(source_scores.values(), default=0.0)
     links = CallLinks({}, {}, {}, {}, {}, frozenset())
+
+    source_by_path = {source.path: source for source in sources}
+    symbol_by_id = {symbol.node_id: symbol for symbols in symbols_by_path.values() for symbol in symbols}
+    live_terms = task_terms - noise_terms
+    source_lines: dict[str, list[str]] = {}
+    term_cache: dict[str, tuple[set[str], set[str]]] = {}
+
+    def terms_of(symbol: GraphNode) -> tuple[set[str], set[str]]:
+        """(task terms in the symbol's name, task terms in its span's body)"""
+        cached = term_cache.get(symbol.node_id)
+        if cached is None:
+            source = source_by_path.get(symbol.source_ref)
+            lines = source_lines.get(symbol.source_ref)
+            if lines is None and source is not None:
+                lines = source_lines[symbol.source_ref] = source.content.splitlines()
+            span = '\n'.join((lines or [])[(symbol.span_start or 1) - 1:symbol.span_end or 0])
+            cached = (live_terms & _tokenize_match(symbol.label), live_terms & _tokenize_match(span))
+            term_cache[symbol.node_id] = cached
+        return cached
+
+    max_term_weight = max((term_weights.get(term, 1.0) for term in live_terms), default=0.0)
+
+    def relevance(callee_id: str) -> float:
+        symbol = symbol_by_id.get(callee_id)
+        if symbol is None or symbol.span_start is None or symbol.span_end is None:
+            return RELEVANCE_FLOOR
+        in_name, in_body = terms_of(symbol)
+        if in_name:
+            return 1.0
+        trivial = (
+            symbol.span_end - symbol.span_start + 1 <= TRIVIAL_SPAN_LINES
+            or ACCESSOR_RE.search(symbol.label) is not None
+            or callee_id in links.utilities
+        )
+        if trivial:
+            # A one-line virtual is still the way to its overrides.
+            return RELEVANCE_FLOOR if callee_id in links.overridden_by and callee_id not in links.utilities else 0.0
+        if in_body:
+            return _body_relevance(in_body, term_weights, max_term_weight)
+        return RELEVANCE_FLOOR if not (live_terms & file_tokens.get(symbol.source_ref, set())) else RELEVANCE_FILE_HIT
+
     if top_score > 0:
         links = call_links if call_links is not None else _call_graph_links(nodes, edges)
         file_neighbors = links.neighbors
@@ -1318,9 +1372,20 @@ def generate_bundle(
         )[:CALL_EXPANSION_SEEDS]
         kind_by_path = {source.path: source.kind for source in sources}
         for path, score in seeds:
-            bonus = CALL_EXPANSION_BONUS * (score / top_score)
+            seed_bonus = CALL_EXPANSION_BONUS * (score / top_score)
+            hub = len(file_neighbors.get(path, ())) > CALL_EXPANSION_FANOUT
             for neighbor in sorted(file_neighbors.get(path, ())):
-                if neighbor not in source_scores or source_scores[neighbor] >= bonus:
+                bonus = seed_bonus
+                if hub:
+                    # A file linked to dozens of others says nothing about each: the lift is worth what the
+                    # symbols that link the two files are worth to the task, and nothing when they share no
+                    # term with it (`RELEVANCE_FLOOR` is the relevance of a symbol that does not), so the
+                    # first of a hundred helpers by path is not lifted.
+                    linked = max(
+                        (relevance(symbol_id) for symbol_id in links.symbols.get((neighbor, path), ())), default=0.0
+                    )
+                    bonus = seed_bonus * linked if linked > RELEVANCE_FLOOR else 0.0
+                if bonus <= 0 or neighbor not in source_scores or source_scores[neighbor] >= bonus:
                     continue
                 if demote_aux and _is_aux_path(neighbor):
                     continue
@@ -1328,6 +1393,7 @@ def generate_bundle(
                     continue
                 source_scores[neighbor] = bonus
                 raw_source_scores[neighbor] = max(raw_source_scores[neighbor], bonus)
+                lifted.add(neighbor)
     seed_scores = {f'file:{path}': score for path, score in source_scores.items() if score > 0}
     degraded = False
     if rank == 'bfs':
@@ -1366,7 +1432,17 @@ def generate_bundle(
                 content=source.content,
                 token_count=token_count,
                 score=final_score,
-                metadata={'modified_at': source.modified_at, 'graph_bonus': graph_bonus},
+                metadata={
+                    'modified_at': source.modified_at,
+                    'graph_bonus': graph_bonus,
+                    # No task term in the path or text, no call-expansion lift and next to no graph score: what is
+                    # left is recency and a trace of graph mass.
+                    'no_evidence': (
+                        source.path not in lifted
+                        and graph_bonus < GRAPH_EVIDENCE_MIN
+                        and not (task_terms & (file_tokens[source.path] - noise_terms))
+                    ),
+                },
             )
         )
 
@@ -1388,7 +1464,6 @@ def generate_bundle(
             )
         )
 
-    source_by_path = {source.path: source for source in sources}
     symbol_items_by_path: defaultdict[str, list[BundleItem]] = defaultdict(list)
     symbol_scores: dict[str, float] = {}
     for position, (path, path_symbols) in enumerate(symbols_by_path.items()):
@@ -1444,7 +1519,6 @@ def generate_bundle(
             symbol_items_by_path[path].append(item)
             symbol_scores[symbol.node_id] = score
     if links.calls_from or links.bases_of:
-        symbol_by_id = {symbol.node_id: symbol for symbols in symbols_by_path.values() for symbol in symbols}
         classes_by_label: defaultdict[str, list[GraphNode]] = defaultdict(list)
         for symbol in symbol_by_id.values():
             if symbol.kind == 'class':
@@ -1471,44 +1545,6 @@ def generate_bundle(
             [item for item in candidates if item.kind == 'symbol' and item.score > 0], symbol_by_id, source_scores,
             [constructor for built in links.constructors_of.values() for constructor in built],
         )
-        live_terms = task_terms - noise_terms
-        source_lines: dict[str, list[str]] = {}
-        term_cache: dict[str, tuple[set[str], set[str]]] = {}
-
-        def terms_of(symbol: GraphNode) -> tuple[set[str], set[str]]:
-            """(task terms in the symbol's name, task terms in its span's body)"""
-            cached = term_cache.get(symbol.node_id)
-            if cached is None:
-                source = source_by_path.get(symbol.source_ref)
-                lines = source_lines.get(symbol.source_ref)
-                if lines is None and source is not None:
-                    lines = source_lines[symbol.source_ref] = source.content.splitlines()
-                span = '\n'.join((lines or [])[(symbol.span_start or 1) - 1:symbol.span_end or 0])
-                cached = (live_terms & _tokenize_match(symbol.label), live_terms & _tokenize_match(span))
-                term_cache[symbol.node_id] = cached
-            return cached
-
-        max_term_weight = max((term_weights.get(term, 1.0) for term in live_terms), default=0.0)
-
-        def relevance(callee_id: str) -> float:
-            symbol = symbol_by_id.get(callee_id)
-            if symbol is None or symbol.span_start is None or symbol.span_end is None:
-                return RELEVANCE_FLOOR
-            in_name, in_body = terms_of(symbol)
-            if in_name:
-                return 1.0
-            trivial = (
-                symbol.span_end - symbol.span_start + 1 <= TRIVIAL_SPAN_LINES
-                or ACCESSOR_RE.search(symbol.label) is not None
-                or callee_id in links.utilities
-            )
-            if trivial:
-                # A one-line virtual is still the way to its overrides.
-                return RELEVANCE_FLOOR if callee_id in links.overridden_by and callee_id not in links.utilities else 0.0
-            if in_body:
-                return _body_relevance(in_body, term_weights, max_term_weight)
-            return RELEVANCE_FLOOR if not (live_terms & file_tokens.get(symbol.source_ref, set())) else RELEVANCE_FILE_HIT
-
         def overriders(method_id: str) -> list[str]:
             ranked = []
             for overrider_id in links.overridden_by.get(method_id, ()):
@@ -1584,6 +1620,10 @@ def generate_bundle(
                     owner_file.metadata['call_expansion'] = {**route, 'to': callee_id, 'score': callee_score}
     for items in symbol_items_by_path.values():
         items.sort(key=lambda item: (-item.score, item.item_id))
+        # The sort is by the undecayed score and the decay is monotone, so the order stands.
+        for rank_in_file, item in enumerate(items):
+            if rank_in_file:
+                item.score *= SPAN_REPEAT_DECAY**rank_in_file
 
     def tie_order(item: BundleItem) -> tuple[float, float, int]:
         """(-score, -relevance, hop): callees that tie on score are ordered by relevance, then hop."""
@@ -1598,6 +1638,9 @@ def generate_bundle(
     # With multiple matches, cap each item so the top file cannot swallow the
     # whole budget; lone matches keep the full budget.
     item_cap = int(budget * ITEM_BUDGET_SHARE) if positive_matches > 1 else budget
+    evidence_exists = any(
+        item.kind != 'commit' and item.score > 0 and not item.metadata.get('no_evidence') for item in candidates
+    )
 
     file_item_by_path = {item.path: item for item in candidates if item.item_id.startswith('source:')}
 
@@ -1649,6 +1692,8 @@ def generate_bundle(
                 continue
             if item.token_count <= 0:
                 continue  # an empty file or span adds nothing to a bundle
+            if item.metadata.get('no_evidence') and evidence_exists:
+                continue  # leftover budget is for matches, not for the first unrelated file by path
             allowed = min(budget - total_tokens, item_cap)
             if item.kind == 'symbol':
                 if item.path in files_fully_selected or inside_selected_span(item):

@@ -86,20 +86,10 @@ def _items(bundle: dict, path: str) -> list[dict]:
 
 # Task 5.8 (proportional name bonus) ranks the gold file first and packs it in every mode but skeleton_off,
 # where it stays out at both budgets; Task 5.9 (the per-file span share scales with the matching files) packs it at 4000 there too.
-# At 900 the six hub spans that outscore the 81-token gold file leave 22 tokens, which only a skeleton (the
-# mode without them) could use: not met.
-_HUB_CASES = [
-    pytest.param(
-        mode, budget,
-        marks=pytest.mark.xfail(strict=True, reason="skeleton_off at 900: the hub spans leave 22 tokens, only a skeleton fits the gold file (Task 5.9: not met)"),
-    )
-    if (mode, budget) == ("skeleton_off", 900) else pytest.param(mode, budget)
-    for mode in MODES
-    for budget in (900, 4000)
-]
-
-
-@pytest.mark.parametrize(("mode", "budget"), _HUB_CASES)
+# At 900 the six hub spans that outscore the 81-token gold file used to leave 22 tokens, which only a skeleton
+# (the mode without them) could use; the per-file span decay (R3) lets the gold file rank above a hub's second span.
+@pytest.mark.parametrize("mode", MODES)
+@pytest.mark.parametrize("budget", [900, 4000])
 def test_hub_flood_leaves_the_small_gold_file_in_the_bundle(field, mode, budget):
     task = TASKS["field_hub_repo"]
     bundle, files = _run(field, "field_hub_repo", mode, budget)
@@ -151,18 +141,11 @@ def test_the_override_chain_reaches_the_accessory(field, repo_name, mode):
 # --- constructor flood: cause 5 (constructors seed)
 
 
-# skeleton_off keeps the room that skeletons take in the other modes, and one file of the hub file's 100 call
-# neighbours fits into it: helper000.cpp, the first by path, at the file-level CALL_EXPANSION_BONUS (the
-# constructor no longer seeds the walk; this is the flat file-level bonus, whose ties break on path)
-_CTOR_MODES = [
-    pytest.param(mode, marks=pytest.mark.xfail(strict=True, reason="skeleton_off: the file-level call-expansion bonus (flat, ties on path) packs helper000.cpp into the leftover budget"))
-    if mode == "skeleton_off" else mode
-    for mode in MODES
-]
-
-
+# skeleton_off keeps the room that skeletons take in the other modes; one of the hub file's 100 call neighbours
+# used to fit into it (helper000.cpp, the first by path, at the flat file-level CALL_EXPANSION_BONUS). The
+# relative score floor (R3) keeps a file whose score is a tenth of the best item's out of the bundle.
 @TREE_SITTER_ONLY  # resolved calls: the regex fallback emits name-only call edges
-@pytest.mark.parametrize("mode", _CTOR_MODES)
+@pytest.mark.parametrize("mode", MODES)
 def test_a_hub_constructor_does_not_flood_the_bundle_with_its_helpers(field, mode):
     task = TASKS["field_ctor_repo"]
     bundle, files = _run(field, "field_ctor_repo", mode)
