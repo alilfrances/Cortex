@@ -101,6 +101,13 @@ FIELD_GOLD_TASKS: tuple[GoldTask, ...] = (
         tight_budget=900,
     ),
     GoldTask(
+        repo="field_override_pure_repo",
+        description="peripheral reattach demotes the entry and removes it",
+        expected_files=("src/secondmanager.cpp", "src/accessory.cpp"),
+        budget=900,
+        tight_budget=900,
+    ),
+    GoldTask(
         repo="field_ctor_repo",
         description="controller startup hangs while the session handshake retries",
         expected_files=("src/hub_controller.cpp",),
@@ -748,10 +755,13 @@ def _build_field_tiebreak_repo(base: Path) -> Path:
     return repo
 
 
-def _build_field_override_repo(base: Path) -> Path:
-    """Override chain (T1 shape): the manager calls a pure virtual on a base manager; the behaviour is
-    in the second manager's override, which calls into an accessory class that shares no task word."""
-    repo = base / "field_override_repo"
+def _build_field_override_repo(base: Path, *, pure: bool = False) -> Path:
+    """Override chain (T1 shape): the manager calls a virtual on a base manager; the behaviour is
+    in the second manager's override, which calls into an accessory class that shares no task word.
+
+    `pure=True` declares the base method `= 0` (the field's actual shape); the default keeps the
+    `{}` body that the fixture had while the extractor emitted no symbol for a pure virtual."""
+    repo = base / ("field_override_pure_repo" if pure else "field_override_repo")
     _init_repo(repo)
     pad = "\n".join(f"    int pad{i} = value + {i};" for i in range(40))
     _write(repo / "src/manager.h", "class BaseManager;\nclass Manager {\npublic:\n    void onReattach(BaseManager* base);\n};\n")
@@ -761,7 +771,10 @@ def _build_field_override_repo(base: Path) -> Path:
         "    // peripheral reattach: demotes the entry, then removes it\n"
         "    int attempts = 3;\n    base->createForCompanion();\n    attempts -= 1;\n}\n"
     ))
-    _write(repo / "src/basemanager.h", "class BaseManager {\npublic:\n    virtual void createForCompanion() {}\n};\n")
+    _write(repo / "src/basemanager.h", (
+        "class BaseManager {\npublic:\n    virtual void createForCompanion() = 0;\n};\n" if pure
+        else "class BaseManager {\npublic:\n    virtual void createForCompanion() {}\n};\n"
+    ))
     _write(repo / "src/secondmanager.h", (
         '#include "basemanager.h"\nclass SecondManager : public BaseManager {\npublic:\n    void createForCompanion() override;\n};\n'
     ))
@@ -783,6 +796,11 @@ def _build_field_override_repo(base: Path) -> Path:
         ))
     _commit_all(repo, "add override chain fixture")
     return repo
+
+
+def _build_field_override_pure_repo(base: Path) -> Path:
+    """`field_override_repo` with the base method pure virtual (`= 0`)."""
+    return _build_field_override_repo(base, pure=True)
 
 
 def _build_field_ctor_repo(base: Path) -> Path:
@@ -1123,6 +1141,7 @@ def build_fixture_repos(base: Path) -> dict[str, Path]:
         "field_hub_repo": _build_field_hub_repo(base),
         "field_tiebreak_repo": _build_field_tiebreak_repo(base),
         "field_override_repo": _build_field_override_repo(base),
+        "field_override_pure_repo": _build_field_override_pure_repo(base),
         "field_ctor_repo": _build_field_ctor_repo(base),
         "field_vocab_repo": _build_field_vocab_repo(base),
         "qt_app": _build_qt_app(base),

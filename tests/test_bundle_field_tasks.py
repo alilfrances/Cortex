@@ -21,6 +21,7 @@ from evals.run_evals import (
     FIELD_GOLD_TASKS,
     _build_field_ctor_repo,
     _build_field_hub_repo,
+    _build_field_override_pure_repo,
     _build_field_override_repo,
     _build_field_tiebreak_repo,
     _build_field_vocab_repo,
@@ -35,6 +36,7 @@ BUILDERS = {
     "field_hub_repo": _build_field_hub_repo,
     "field_tiebreak_repo": _build_field_tiebreak_repo,
     "field_override_repo": _build_field_override_repo,
+    "field_override_pure_repo": _build_field_override_pure_repo,
     "field_ctor_repo": _build_field_ctor_repo,
     "field_vocab_repo": _build_field_vocab_repo,
 }
@@ -43,7 +45,7 @@ TASKS = {task.repo: task for task in FIELD_GOLD_TASKS}
 
 @pytest.fixture(scope="module")
 def _field_built(tmp_path_factory):
-    """The five fixture repositories, built and indexed once per module (eval settings: 20 commits)."""
+    """The six fixture repositories (the override chain in two variants), built and indexed once per module (eval settings: 20 commits)."""
     root = tmp_path_factory.mktemp("field-tasks")
     data_dir = root / "data"
     built: dict[str, tuple[Path, Path]] = {}
@@ -123,10 +125,13 @@ def test_tied_callees_do_not_hide_the_relevant_one(field, mode):
 # --- override chain: cause 6 (overriders were offered but never walked)
 
 
+# `field_override_pure_repo`: the base method is `= 0` (the field's shape); the tree-sitter extractor
+# used to emit no symbol for it, so the call stayed `name:` and the override walk never started.
 @TREE_SITTER_ONLY  # resolved calls: the regex fallback emits name-only call edges
+@pytest.mark.parametrize("repo_name", ["field_override_repo", "field_override_pure_repo"])
 @pytest.mark.parametrize("mode", MODES)
-def test_the_override_chain_reaches_the_accessory(field, mode):
-    bundle, files = _run(field, "field_override_repo", mode)
+def test_the_override_chain_reaches_the_accessory(field, repo_name, mode):
+    bundle, files = _run(field, repo_name, mode)
 
     assert "src/secondmanager.cpp" in files, files
     second = _bundle_why(_items(bundle, "src/secondmanager.cpp")[0], set(), set(), [])
@@ -201,10 +206,11 @@ def test_the_fixtures_resolve_the_call_chains_the_tasks_depend_on(_field_built):
     assert ("calls", "symbol:src/sequencer.cpp:stage9", "symbol:z/ops/resetop.cpp:execute") in edges
     assert sum(1 for r, s, t in edges if r == "inherits" and s.startswith("symbol:a/w") and t.startswith("symbol:a/v")) == 30
 
-    _nodes, edges = graph("field_override_repo")
-    assert ("calls", "symbol:src/manager.cpp:onReattach", "symbol:src/basemanager.h:createForCompanion") in edges
-    assert ("inherits", "symbol:src/secondmanager.h:SecondManager", "symbol:src/basemanager.h:BaseManager") in edges
-    assert ("calls", "symbol:src/secondmanager.cpp:createForCompanion", "symbol:src/accessory.cpp:assignCompanion") in edges
+    for name in ("field_override_repo", "field_override_pure_repo"):
+        _nodes, edges = graph(name)
+        assert ("calls", "symbol:src/manager.cpp:onReattach", "symbol:src/basemanager.h:createForCompanion") in edges, name
+        assert ("inherits", "symbol:src/secondmanager.h:SecondManager", "symbol:src/basemanager.h:BaseManager") in edges, name
+        assert ("calls", "symbol:src/secondmanager.cpp:createForCompanion", "symbol:src/accessory.cpp:assignCompanion") in edges, name
 
     nodes, edges = graph("field_ctor_repo")
     constructor = next(n for n in nodes if n.node_id == "symbol:src/hub_controller.cpp:HubController")

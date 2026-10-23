@@ -141,6 +141,29 @@ def _cpp_member_for_definition(node: Any, source: bytes) -> tuple[str | None, st
     return None, _identifier_text(first_declarator, source) if first_declarator is not None else ""
 
 
+def _cpp_pure_virtual_name(node: Any, source: bytes) -> str:
+    """Method name of a pure virtual declaration (`virtual void f() = 0;`), "" for anything else.
+
+    tree-sitter-cpp parses it as a `field_declaration` whose first declarator is a
+    `function_declarator` (possibly under pointer / reference declarators for the return
+    type) and whose `default_value` is the literal `0`.  A function-pointer member
+    (`void (*cb)() = 0;`), a data member (`int n = 0;`), an operator and a destructor
+    (`function_definition` with a `pure_virtual_clause`, handled as a definition) give "".
+    """
+    default = node.child_by_field_name("default_value")
+    if default is None or _node_text(default, source).strip() != "0":
+        return ""
+    declarator = node.child_by_field_name("declarator")
+    while declarator is not None and declarator.type in {"pointer_declarator", "reference_declarator"}:
+        declarator = declarator.child_by_field_name("declarator") or next(
+            (child for child in declarator.children if child.type == "function_declarator"), None
+        )
+    if declarator is None or declarator.type != "function_declarator":
+        return ""
+    name = declarator.child_by_field_name("declarator")
+    return _node_text(name, source) if name is not None and name.type == "field_identifier" else ""
+
+
 def _identifier_text(node: Any, source: bytes) -> str:
     if node.type in {
         "identifier",
@@ -322,6 +345,55 @@ def _qml_instantiates_edge(
     )
 
 
+def _add_cpp_pure_virtual(
+    path: str,
+    node: Any,
+    source: bytes,
+    file_node_id: str,
+    nodes: list[GraphNode],
+    edges: list[GraphEdge],
+    seen_symbols: set[str],
+) -> None:
+    """Emit a `func` symbol for a pure virtual declaration, so a call through a base pointer resolves to it.
+
+    Only `= 0` declarations: every other member declaration stays a non-symbol (it would flood
+    dead_code and the goldens).  No call sites sit inside a declaration, so nothing is attributed
+    to it; a name already taken in the file (a class, a definition, an earlier pure virtual) keeps
+    its node, like every other same-named symbol.
+    """
+    name = _cpp_pure_virtual_name(node, source)
+    if not name or name in seen_symbols:
+        return
+    seen_symbols.add(name)
+    line = node.start_point[0] + 1
+    symbol_id = f"symbol:{path}:{name}"
+    nodes.append(
+        GraphNode(
+            node_id=symbol_id,
+            kind="func",
+            label=name,
+            source_ref=path,
+            granularity="symbol",
+            signature=" ".join(_node_text(node, source).split()),
+            span_start=line,
+            span_end=node.end_point[0] + 1,
+            metadata={"lineno": line},
+        )
+    )
+    edges.append(
+        GraphEdge(
+            edge_id=f"treesitter:{path}:contains:{name}",
+            source=file_node_id,
+            target=symbol_id,
+            relation="contains",
+            layer="STRUCTURAL",
+            confidence="EXTRACTED",
+            weight=1.0,
+            metadata={"lineno": line, "source_file": path},
+        )
+    )
+
+
 def _extract_ruby_method_symbols(
     path: str,
     source: bytes,
@@ -488,6 +560,9 @@ def extract_treesitter_edges(
                     metadata=import_metadata,
                 )
             )
+        if suffix in _CPP_SUFFIXES and node.type == "field_declaration":
+            _add_cpp_pure_virtual(path, node, source, file_node_id, nodes, edges, seen_symbols)
+            continue
         if node.type not in _DEF_TYPES:
             continue
         if node.type in _BODY_REQUIRED_TYPES and node.child_by_field_name("body") is None:
