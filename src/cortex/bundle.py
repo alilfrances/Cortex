@@ -42,8 +42,13 @@ STOPWORDS = {
 NAME_MATCH_BONUS = 100.0
 # The bonus is proportional to the IDF weight of the task terms the name carries: a name that holds one common
 # word of a long task earns `NAME_BONUS_BASE` of it, a name that holds every weighted term earns all of it.
-# The base keeps a single exact stem hit above keyword-dense text (the reason for the bonus).
+# The base alone does not keep a single exact stem hit above keyword-dense text (a README holding every task term
+# scored 76.8 against 62.1 for a stem holding one of seven); `DOC_TEXT_CAP` does that for markdown/text.
 NAME_BONUS_BASE = 0.5
+# A markdown/text file with no name or path hit of its own: its text score is capped at this much while a code
+# file has a stem/alias hit. A doc that restates the task (all its words, none in a file name) must not outrank
+# code named after it; it still enters the bundle through the doc budget share.
+DOC_TEXT_CAP = NAME_MATCH_BONUS * NAME_BONUS_BASE
 # A symbol name inside the file earns the file at most this share of the stem formula (the span keeps its own).
 SYMBOL_NAME_FILE_SHARE = 0.5
 # Task-term hit on a directory segment of the path ("ui", "backend", "mcp")
@@ -1191,6 +1196,14 @@ def generate_bundle(
     ]
     median_tokens = max(1.0, statistics.median(matching_sizes)) if matching_sizes else None
 
+    stem_terms_by_path = {
+        source.path: _tokenize_match(f'{Path(source.path).stem} {path_aliases.get(source.path, "")}')
+        for source in sources
+    }
+    code_has_name_hit = any(
+        source.kind == 'code' and task_terms & stem_terms_by_path[source.path] for source in sources
+    )
+
     newest_commit = max((c.authored_at for c in commits), default=0)
     base_scores: dict[str, float] = {}
     raw_base_scores: dict[str, float] = {}
@@ -1200,7 +1213,7 @@ def generate_bundle(
         recency_weight = 0.0
         if newest_commit:
             recency_weight = max(0.0, 5.0 - math.log2(max(1, newest_commit - int(source.modified_at) + 1)))
-        stem_terms = _tokenize_match(f'{Path(source.path).stem} {path_aliases.get(source.path, "")}')
+        stem_terms = stem_terms_by_path[source.path]
         name_bonus = max(
             _name_bonus(task_terms & stem_terms, term_weights, total_term_weight),
             SYMBOL_NAME_FILE_SHARE
@@ -1216,6 +1229,8 @@ def generate_bundle(
             term_weights,
             noise_terms,
         )
+        if code_has_name_hit and source.kind != 'code' and name_bonus == 0 and path_bonus == 0:
+            text_score = min(text_score, DOC_TEXT_CAP)
         score = raw_score = name_bonus + path_bonus + text_score
         if source.kind == 'code' and median_tokens is not None and text_score > 0:
             ratio = token_counts[source.path] / median_tokens

@@ -210,9 +210,7 @@ def test_pagerank_surfaces_three_hop_relevant_node_that_bfs_depth_two_misses(tmp
     assert 'hop3.py' not in bfs_result
 
 
-def _make_doc_heavy_store(
-    tmp_path: Path, readme_tokens: int = 60, readme_terms: str = 'bundle scoring rank nodes apply token budget overview'
-) -> tuple[CortexStore, Path]:
+def _make_doc_heavy_store(tmp_path: Path, readme_tokens: int = 60) -> tuple[CortexStore, Path]:
     import subprocess
     db_path = tmp_path / 'cortex.db'
     store = CortexStore(db_path)
@@ -221,7 +219,7 @@ def _make_doc_heavy_store(
     subprocess.run(['git', 'init'], cwd=repo, capture_output=True)
 
     # README contains every task term; bundle.py matches the task only via its filename.
-    readme_content = f'{readme_terms}\n' + ('filler words padding the document\n' * readme_tokens)
+    readme_content = 'bundle scoring rank nodes apply token budget overview\n' + ('filler words padding the document\n' * readme_tokens)
     code_content = 'def generate(items):\n    return sorted(items)\n'
     sources = [
         SourceRecord(path='README.md', content=readme_content, kind='markdown', size_bytes=len(readme_content), modified_at=0.0, content_hash='hd1'),
@@ -239,9 +237,7 @@ def _make_doc_heavy_store(
 
 
 def test_filename_match_outranks_keyword_dense_doc(tmp_path):
-    # The name bonus is proportional to the weighted share of the task a stem holds (Task 5.8): a stem with one of
-    # seven rare task terms no longer beats a doc that holds all seven, but still beats a doc that holds four.
-    store, repo = _make_doc_heavy_store(tmp_path, readme_terms='bundle scoring rank nodes overview')
+    store, repo = _make_doc_heavy_store(tmp_path)
     result = generate_bundle(
         repo,
         task='how does bundle scoring rank nodes and apply the token budget',
