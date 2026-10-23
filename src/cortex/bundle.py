@@ -110,7 +110,8 @@ TRIVIAL_SPAN_LINES = 3
 # when only its file shares one, else RELEVANCE_FLOOR. Trivial callees (accessor-shaped names, spans of at
 # most TRIVIAL_SPAN_LINES lines, functions called from more places than UTILITY_PERCENTILE of the called
 # functions and at least UTILITY_MIN_CALLERS times) are not followed at all unless their name carries a
-# task term. Relevance orders, filters, and scales the score only slightly: a callee that shares no word
+# task term; a trivial virtual that has overriders is traversed to them but is not itself offered as a candidate
+# (`offerable`). Relevance orders, filters, and scales the score only slightly: a callee that shares no word
 # with the task is often the cause (the 0.12.0 review), so it keeps CALLEE_RELEVANCE_MIN of its share.
 # 0.13.0 scaled by 0.25-1 and lost it (companion fixture recall 1.0 -> 0.67); a floor of 0.85 puts a
 # relevant callee ahead of an irrelevant one at the same hop without ever dropping the latter below the
@@ -359,6 +360,7 @@ def _callee_scores(
     overriders: Callable[[str], Sequence[str]] | None = None,
     routes: dict[str, str] | None = None,
     constructors_of: Mapping[str, Sequence[str]] | None = None,
+    offerable: Callable[[str], bool] | None = None,
 ) -> dict[str, tuple[float, str, int, float]]:
     """callee symbol id -> (score, seed symbol id, hop, relevance) for the best route from any seed.
 
@@ -376,6 +378,9 @@ def _callee_scores(
     `overriders(method)` lists the methods of derived classes that override a reached callee; each is
     offered at the callee's own score and hop and walked from there (their callees follow the normal hop
     budget), and `routes` (when given) receives overrider -> the base method it was reached through.
+    A reached callee for which `offerable(callee)` is False (a one-line virtual that has overriders and whose
+    name carries no task term) is still traversed, so its overriders are offered and walked, but it is not
+    itself returned: it is no bundle candidate.
 
     A `new X` resolves to the class node, whose body is only a declaration: a callee that is a class with
     entries in `constructors_of` (class id -> constructor ids) is replaced by those constructors, at the same
@@ -419,7 +424,8 @@ def _callee_scores(
             settled.add(current)
             if hop >= 1:
                 score = seed_score * CALLEE_HOP_SHARE[hop - 1]
-                offer(current, score, seed_id, hop, origin=origin)
+                if offerable is None or offerable(current):
+                    offer(current, score, seed_id, hop, origin=origin)
                 if overriders is not None:
                     for overrider in list(overriders(current))[:OVERRIDES_PER_METHOD]:
                         offer(overrider, score, seed_id, hop, via=current, origin=origin)
@@ -1344,6 +1350,13 @@ def generate_bundle(
 
     max_term_weight = max((term_weights.get(term, 1.0) for term in live_terms), default=0.0)
 
+    def is_trivial(symbol: GraphNode) -> bool:
+        return (
+            symbol.span_end - symbol.span_start + 1 <= TRIVIAL_SPAN_LINES
+            or ACCESSOR_RE.search(symbol.label) is not None
+            or symbol.node_id in links.utilities
+        )
+
     def relevance(callee_id: str) -> float:
         symbol = symbol_by_id.get(callee_id)
         if symbol is None or symbol.span_start is None or symbol.span_end is None:
@@ -1351,17 +1364,22 @@ def generate_bundle(
         in_name, in_body = terms_of(symbol)
         if in_name:
             return 1.0
-        trivial = (
-            symbol.span_end - symbol.span_start + 1 <= TRIVIAL_SPAN_LINES
-            or ACCESSOR_RE.search(symbol.label) is not None
-            or callee_id in links.utilities
-        )
-        if trivial:
+        if is_trivial(symbol):
             # A one-line virtual is still the way to its overrides.
             return RELEVANCE_FLOOR if callee_id in links.overridden_by and callee_id not in links.utilities else 0.0
         if in_body:
             return _body_relevance(in_body, term_weights, max_term_weight)
         return RELEVANCE_FLOOR if not (live_terms & file_tokens.get(symbol.source_ref, set())) else RELEVANCE_FILE_HIT
+
+    def offerable(callee_id: str) -> bool:
+        """False for a trivial virtual that has overriders and no task term in its name: the walk goes through it
+        to its overriders (the T1 route) but the one-line base itself is not a bundle candidate."""
+        if callee_id not in links.overridden_by:
+            return True
+        symbol = symbol_by_id.get(callee_id)
+        if symbol is None or symbol.span_start is None or symbol.span_end is None:
+            return True
+        return bool(terms_of(symbol)[0]) or not is_trivial(symbol)
 
     if top_score > 0:
         links = call_links if call_links is not None else _call_graph_links(nodes, edges)
@@ -1569,6 +1587,7 @@ def generate_bundle(
             overriders=overriders,
             routes=override_routes,
             constructors_of=links.constructors_of,
+            offerable=offerable,
         )
         file_candidate = {item.path: item for item in candidates if item.item_id.startswith('source:')}
         for callee_id, (callee_score, seed_id, hop, callee_relevance) in sorted(callees.items()):

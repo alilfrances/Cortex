@@ -53,3 +53,23 @@ def test_t1_like_query_selects_no_accessor_through_calls(field_shape_repo, monke
     # `isReady` carries a task word and is the point of the query; `isConnected` or `setName` are not.
     accessors = [name for name in names if ACCESSOR.search(name) and not any(w in name.lower() for w in TASK_WORDS)]
     assert not accessors, names
+
+
+def test_t1_like_query_offers_no_one_line_virtual_base_but_still_reaches_its_override(field_shape_repo, monkeypatch):
+    """`CoreDevice::isReady` / `waitForReady` are one-line virtuals with overriders and no task word in their
+    name: the walk traverses them (their overriders are offered) but does not offer them as bundle candidates."""
+    import cortex.bundle as bundle_module
+
+    offered: dict[str, tuple] = {}
+    original = bundle_module._callee_scores
+
+    def spy(*args, **kwargs):
+        offered.update(original(*args, **kwargs))
+        return offered
+
+    monkeypatch.setattr(bundle_module, "_callee_scores", spy)
+    _bundle(field_shape_repo)
+
+    assert "symbol:src/field/coredevice.cpp:isReady" not in offered
+    assert "symbol:src/field/coredevice.cpp:waitForReady" not in offered
+    assert any(symbol_id.endswith(":isReady") and "coredevice" not in symbol_id for symbol_id in offered), sorted(offered)

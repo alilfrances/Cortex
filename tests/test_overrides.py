@@ -313,3 +313,25 @@ def test_a_constructor_in_the_callers_file_is_walked_through_without_a_hop():
     got = _walk([("symbol:a.cpp:top", 100.0)], calls, constructors_of={"symbol:a.cpp:Widget": ["symbol:a.cpp:Widget"]})
 
     assert got["symbol:z.cpp:build"][:3] == (100.0 * CALLEE_HOP_SHARE[0], "symbol:a.cpp:top", 1)
+
+
+def test_a_base_that_is_not_offerable_is_still_traversed_to_its_overriders_and_their_callees():
+    from cortex.bundle import CALLEE_HOP_SHARE
+
+    base = "symbol:base.cpp:run"
+    calls = {
+        "symbol:a.cpp:top": [base],
+        "symbol:d0.cpp:run": ["symbol:e.cpp:assign"],
+    }
+    routes: dict[str, str] = {}
+
+    got = _walk(
+        [("symbol:a.cpp:top", 100.0)], calls, routes=routes,
+        overriders=lambda sid: ["symbol:d0.cpp:run"] if sid == base else [],
+        offerable=lambda sid: sid != base,
+    )
+
+    assert base not in got  # a one-line virtual is not a bundle candidate ...
+    assert got["symbol:d0.cpp:run"][:3] == (100.0 * CALLEE_HOP_SHARE[0], "symbol:a.cpp:top", 1)  # ... its override is
+    assert routes == {"symbol:d0.cpp:run": base}  # and still names the base as its route
+    assert got["symbol:e.cpp:assign"][:3] == (100.0 * CALLEE_HOP_SHARE[1], "symbol:d0.cpp:run", 2)
