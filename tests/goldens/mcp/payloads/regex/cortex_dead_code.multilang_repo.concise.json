@@ -61,13 +61,6 @@
     {
       "confidence": "low",
       "file": "engine.cpp",
-      "line": 3,
-      "reason": "no incoming edges; regex/dynamic-language caveat",
-      "symbol": "Engine"
-    },
-    {
-      "confidence": "low",
-      "file": "engine.cpp",
       "line": 4,
       "reason": "no incoming edges; regex/dynamic-language caveat",
       "symbol": "Runner"
@@ -144,7 +137,7 @@
     }
   ],
   "repo_path": "<repo>",
-  "returned_count": 20,
+  "returned_count": 19,
   "stale": false,
   "truncated": false
 }

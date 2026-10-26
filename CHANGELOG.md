@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+Fifth pass on the field review (`docs/review-0.14.0-field.md`), implemented from `docs/plan-0.15-field-review.md`.
+
+- Fix (§1.1a, plan Task 1.1): `dead_code` no longer reports C++ namespace nodes. A `namespace X {` is a `class` node whose signature starts with `namespace` (the test `callresolve._Index.is_namespace` uses); `deadcode._is_namespace` skips it in the candidate loop. Plain `namespace Plain {}` and `inline namespace v1 {}` nodes were reported in 0.13.0 as well, so this removes more than the ones 0.14.0 relabelled. No graph format change. On `tests/fixtures/calls_invariant` every finding that disappears is a namespace node (`Net`, `A`, `B`, `Ns`, `Other`) and no other finding changes.
+- Goldens (Task 1.1): `tests/goldens/mcp/payloads/{treesitter,regex}/cortex_dead_code.multilang_repo.{concise,detailed}.json` lose the `engine.cpp` / `Engine` finding (a `namespace Engine {` node, a false positive) and `returned_count` goes 20 -> 19. The plan expected no golden to change; these snapshots had recorded the namespace finding.
 ## 0.14.0 — 2026-10-22
 
 Fourth pass on the field review (`docs/review-0.13.0-field.md`), implemented from `docs/plan-0.14-field-review.md`. A minor release: **graph format 7** (an index from an older format is rebuilt in full by its next refresh), changed query ranking and new response fields. Fixed: the 0.13.0 `Ns::f()` regression and the `dead_code` false positives it caused (§A), `cortex_risk` returning fewer ranked files at a larger budget (§B), the 0.13.0 `tests_by_changed_file` false mappings through "production over mock" (§C, by restoring 0.12.1's behaviour for impacted tests), fake `class QString` nodes from anonymous namespaces and `namespace A::B` labelled `A` (§E.2). New: out-of-repo `inherits` bases and calls are classified in `metadata.external` and `cortex_status` reports in-repo resolution shares with them excluded (§D, §E); quoted includes resolve relative to the includer (§D.2); query ranking changes for §F (ties, relevance, overriders, constructors, tokeniser, platform variants, proportional name bonus, span share). Acceptance numbers were measured on the synthetic `--field-shape` profile and the eval fixtures; **none has been verified on the reviewer's repository**.

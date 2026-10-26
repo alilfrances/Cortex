@@ -59,6 +59,8 @@ _OVERRIDE_REASON = "no incoming edges; overrides a base-class or framework metho
 _METHOD_KINDS = frozenset({"func", "method"})
 _CPP_SUFFIXES = (".h", ".hh", ".hpp", ".hxx", ".c", ".cc", ".cpp", ".cxx")
 _PURE_VIRTUAL_RE = re.compile(r"\)[^;{}]*=\s*0\s*;\s*$")
+# The signature of a C++ namespace node, the same test as `callresolve._Index.is_namespace`.
+_NAMESPACE_SIGNATURE_RE = re.compile(r"^\s*(?:inline\s+)?namespace\b")
 
 
 def _is_pure_virtual(node: GraphNode) -> bool:
@@ -68,6 +70,11 @@ def _is_pure_virtual(node: GraphNode) -> bool:
         and node.source_ref.lower().endswith(_CPP_SUFFIXES)
         and bool(_PURE_VIRTUAL_RE.search(node.signature or ""))
     )
+
+
+def _is_namespace(node: GraphNode) -> bool:
+    """A C++ `namespace X {` node (a `class` node in the graph): a scope, never something code calls."""
+    return node.kind == "class" and bool(_NAMESPACE_SIGNATURE_RE.match(node.signature or ""))
 
 
 class _OverrideIndex:
@@ -489,6 +496,8 @@ def analyze_dead_code(
             continue
         if _is_pure_virtual(node):
             continue  # an interface method is never dead code on its own, called or not
+        if _is_namespace(node):
+            continue  # a namespace is a scope that code opens, not a symbol that something calls
         if node.kind == "target":
             continue  # a CMake/qmake build target is an entry point, not code that something calls
         if node.metadata.get("qt") == "handler":
