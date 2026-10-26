@@ -38,7 +38,8 @@ INGEST_LOCK_NAME = "ingest.lock"
 # 7 = 0.14.0: anonymous namespaces emit no class node, nested namespaces are labelled by their last
 # segment; namespace-scoped call resolution; pure virtual declarations (`virtual f() = 0;`) are
 # `func` symbols.
-GRAPH_FORMAT_VERSION = 7
+# 8 = 0.15.0: unnamed C/C++ struct/class/union/enum emit no class node; a typedef'd one is labelled by its typedef name.
+GRAPH_FORMAT_VERSION = 8
 INGEST_LOCK_TIMEOUT_SECONDS = 120.0
 _LOCK_POLL_SECONDS = 0.05
 
