@@ -91,17 +91,20 @@ def main() -> int:
             _emit("No Cortex index found for this project; cortex_refresh can build it." + runtime_warning)
             return 0
 
-        state = "fresh" if freshness == "fresh" else "stale"
-        context = (
-            f"Cortex index is {state} ({file_count} indexed files). Prefer Cortex MCP tools "
-            "(cortex_query, cortex_context, cortex_search_symbols, cortex_read_file) over raw "
-            "Grep/Glob/Read; delegate multi-step exploration to the cortex-explorer agent, keep "
-            "single lookups direct."
-        )
+        agent_hint = " Multi-step exploration can go to the cortex-explorer agent."
         if freshness == "outdated":
-            context += " It was built by an older Cortex; the next read/query tool call or cortex_refresh rebuilds it in full."
-        elif state == "stale":
-            context += " Read/query tools auto-refresh incrementally; cortex_refresh forces it."
+            context = (
+                f"Cortex index was built by an older Cortex ({file_count} indexed files) and is answered "
+                "as-is until rebuilt; run cortex_refresh (a full rebuild, about a minute on a large repository)."
+            )
+        elif freshness == "stale":
+            context = (
+                f"Cortex index is stale ({file_count} indexed files); read/query tools refresh it "
+                "incrementally, cortex_refresh forces it."
+            )
+        else:
+            context = f"Cortex index is fresh ({file_count} indexed files)."
+        context += agent_hint
         _emit(context + runtime_warning)
         return 0
     except Exception:

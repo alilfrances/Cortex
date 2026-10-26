@@ -95,7 +95,7 @@ resolution boundaries, and the artifact/source-egress distinction.
 
 ## Hooks
 
-Cortex provides a lean native Claude Code `SessionStart` hook matched only for `startup|resume|clear`, so context compaction does not repeatedly inject guidance. In a git repository it reports only index freshness, indexed-file count, four common entry tools (`cortex_query`, `cortex_context`, `cortex_search_symbols`, and `cortex_read_file`), and the `cortex-explorer` delegation boundary. If no database exists, it emits a one-line hint that `cortex_refresh` can build it. Detailed routing stays in the MCP server instructions and three workflow skills rather than the hook.
+Cortex provides a lean native Claude Code `SessionStart` hook matched only for `startup|resume|clear`, so context compaction does not repeatedly inject guidance. In a git repository it reports only index state (fresh, stale, or built by an older Cortex), the indexed-file count and a one-clause `cortex-explorer` delegation hint; the tool preference list lives in the MCP server instructions. If no database exists, it emits a one-line hint that `cortex_refresh` can build it. Detailed routing stays in the MCP server instructions and three workflow skills rather than the hook.
 
 The hook is advisory and fail-open: it never runs ingest, exits quietly on malformed or unreadable databases, and stays silent entirely when the working directory is not inside a git repository. Staleness resolves itself at query time — the MCP read tools auto-refresh incrementally before answering — so the hook only informs.
 

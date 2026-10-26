@@ -68,6 +68,16 @@ def _additional_context(stdout: str) -> str:
     return payload["hookSpecificOutput"]["additionalContext"]
 
 
+def _assert_outdated_text(context: str) -> None:
+    # The old text promised that the next read call rebuilds an outdated index; it does not (a call deadline
+    # answers a format-outdated index as-is), so the message must say what really happens.
+    assert "older Cortex" in context
+    assert "cortex_refresh" in context
+    assert "answered as-is" in context
+    assert "next read" not in context
+    assert "rebuilds it in full" not in context
+
+
 def test_session_start_hook_emits_fresh_context(tmp_path: Path) -> None:
     repo = _write_repo(tmp_path)
     _seed_db(repo)
@@ -80,18 +90,9 @@ def test_session_start_hook_emits_fresh_context(tmp_path: Path) -> None:
 
     assert "Cortex index is fresh" in context
     assert "2 indexed files" in context
-    for tool_name in (
-        "cortex_query",
-        "cortex_context",
-        "cortex_search_symbols",
-        "cortex_read_file",
-    ):
-        assert tool_name in context
     assert "cortex-explorer" in context
-    assert "Grep" in context
-    assert "single lookups direct" in context
     context_without_runtime_warning = context.split(" Parser runtime", maxsplit=1)[0]
-    assert len(context_without_runtime_warning) <= 500
+    assert len(context_without_runtime_warning) <= 200
 
 
 def test_session_start_hook_emits_stale_context(tmp_path: Path) -> None:
@@ -105,7 +106,8 @@ def test_session_start_hook_emits_stale_context(tmp_path: Path) -> None:
     context = _additional_context(result.stdout)
     assert "Cortex index is stale" in context
     assert "2 indexed files" in context
-    assert "auto-refresh incrementally" in context
+    assert "refresh it incrementally" in context
+    assert "cortex-explorer" in context
     assert "cortex_refresh" in context
 
 
@@ -118,8 +120,7 @@ def test_session_start_hook_reports_an_index_from_an_older_graph_format(tmp_path
     assert result.returncode == 0
     assert result.stderr == ""
     context = _additional_context(result.stdout)
-    assert "Cortex index is stale" in context
-    assert "older Cortex" in context and "rebuilds it in full" in context
+    _assert_outdated_text(context)
 
 
 def test_session_start_hook_reads_a_pre_010_database_without_the_column(tmp_path: Path) -> None:
@@ -139,7 +140,7 @@ def test_session_start_hook_reads_a_pre_010_database_without_the_column(tmp_path
 
     context = _additional_context(_run_hook(repo).stdout)
 
-    assert "Cortex index is stale" in context and "older Cortex" in context
+    _assert_outdated_text(context)
 
 
 def test_session_start_hook_matcher_excludes_compaction() -> None:
