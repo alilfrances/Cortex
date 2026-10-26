@@ -23,6 +23,8 @@ from evals.run_evals import (
     _build_field_hub_repo,
     _build_field_override_pure_repo,
     _build_field_override_repo,
+    _build_field_seed_markup_calls_repo,
+    _build_field_seed_markup_repo,
     _build_field_tiebreak_repo,
     _build_field_vocab_repo,
     _run_bundle,
@@ -39,13 +41,15 @@ BUILDERS = {
     "field_override_pure_repo": _build_field_override_pure_repo,
     "field_ctor_repo": _build_field_ctor_repo,
     "field_vocab_repo": _build_field_vocab_repo,
+    "field_seed_markup_repo": _build_field_seed_markup_repo,
+    "field_seed_markup_calls_repo": _build_field_seed_markup_calls_repo,
 }
 TASKS = {task.repo: task for task in FIELD_GOLD_TASKS}
 
 
 @pytest.fixture(scope="module")
 def _field_built(tmp_path_factory):
-    """The six fixture repositories (the override chain in two variants), built and indexed once per module (eval settings: 20 commits)."""
+    """The eight fixture repositories (the override chain and the seed markup in two variants each), built and indexed once per module (eval settings: 20 commits)."""
     root = tmp_path_factory.mktemp("field-tasks")
     data_dir = root / "data"
     built: dict[str, tuple[Path, Path]] = {}
@@ -192,6 +196,30 @@ def test_the_vocabulary_of_the_task_reaches_the_gizmo_file(field, mode):
     assert set(task.expected_files) <= set(files), files
 
 
+# --- call-expansion seeds: the seeds went to small UI spans that reach nothing (section 1.4)
+
+
+# Six small QML screens are dense with the task's words, so their spans outscore the large model file's
+# `onTypeChanged` on raw text, and the model file loses on length-normalised score. Seeds are picked from the
+# best files by the normalised score, then the best spans in them: the screens' spans took every seed, and
+# they have no resolved call (`field_seed_markup_repo`) or only a same-file helper (`..._calls_repo`), so the
+# walk from the seeds returned nothing and the virtual `detach` with its two overriders was never reached.
+@TREE_SITTER_ONLY  # resolved calls: the regex fallback emits name-only call edges
+@pytest.mark.parametrize("repo_name", ["field_seed_markup_repo", "field_seed_markup_calls_repo"])
+@pytest.mark.parametrize("mode", MODES)
+def test_the_seed_that_can_reach_a_callee_is_expanded(field, repo_name, mode):
+    bundle, files = _run(field, repo_name, mode)
+
+    expanded = [item for item in bundle["items"] if (item.get("metadata") or {}).get("call_expansion")]
+    from_model = [
+        item for item in expanded
+        if item["metadata"]["call_expansion"]["from"].startswith("symbol:src/itemmodel.cpp:")
+    ]
+    assert from_model, f"no call-expansion item starts from src/itemmodel.cpp: {files}"
+    packed = {item["path"] for item in expanded if (item["metadata"]["call_expansion"].get("type") == "override")}
+    assert packed & {"src/kinds/textentry.cpp", "src/kinds/imageentry.cpp"}, f"no overrider packed through an override route: {sorted(packed)}"
+
+
 # --- the fixtures themselves
 
 
@@ -221,6 +249,13 @@ def test_the_fixtures_resolve_the_call_chains_the_tasks_depend_on(_field_built):
     assert constructor.span_end - constructor.span_start + 1 >= 300
     resolved = {t for r, s, t in edges if r == "calls" and s == constructor.node_id and t.startswith("symbol:src/helpers/")}
     assert len(resolved) == 100
+
+    for name, calls_helper in (("field_seed_markup_repo", False), ("field_seed_markup_calls_repo", True)):
+        _nodes, edges = graph(name)
+        assert ("calls", "symbol:src/itemmodel.cpp:onTypeChanged", "symbol:src/baseitem.cpp:detach") in edges, name
+        assert sum(1 for r, s, t in edges if r == "inherits" and s.startswith("symbol:src/kinds/") and t == "symbol:src/baseitem.h:BaseItem") == 2, name
+        screen_calls = {t for r, s, t in edges if r == "calls" and s.startswith("symbol:ui/ItemScreen")}
+        assert bool(screen_calls) == calls_helper, (name, screen_calls)  # the screens of the plain variant call nothing
 
 
 def _tree_digest(root: Path) -> dict[str, str]:

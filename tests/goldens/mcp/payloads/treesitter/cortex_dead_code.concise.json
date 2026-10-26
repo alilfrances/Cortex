@@ -15,17 +15,10 @@
       "line": 5,
       "reason": "no incoming edges; Qt meta-object or dynamic-language caveat",
       "symbol": "sceneReady"
-    },
-    {
-      "confidence": "low",
-      "file": "src/DeviceModel.cpp",
-      "line": 3,
-      "reason": "no incoming edges; grep refs in code/config",
-      "symbol": "DeviceModel"
     }
   ],
   "repo_path": "<repo>",
-  "returned_count": 3,
+  "returned_count": 2,
   "stale": false,
   "truncated": false
 }

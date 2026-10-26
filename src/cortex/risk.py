@@ -821,6 +821,7 @@ def analyze_risk(
     file_payloads.sort(key=lambda value: (-float(value["risk_score"]), str(value["path"]), str(value.get("previous_path", ""))))
     missing_cochange.sort(key=lambda value: (value["for"], -float(value["weight"]), value["path"]))
     partial = False
+    untraced_changed_files_total = 0
     try:
         tests_to_run, tests_run_all, tests_run_all_reason, tests_by_changed_file, uncovered_changed_files = select_tests_with_coverage(
             diff.files,
@@ -834,14 +835,15 @@ def analyze_risk(
         )
     except DeadlineExceeded:
         # Test selection is the unbounded part.  `file_payloads` (the ranking) is already complete,
-        # so return it instead of an error.  No test was traced, so run everything, and every
-        # reviewable changed file is reported as not yet shown to be covered.
+        # so return it instead of an error.  No test was traced, so run everything; the changed files
+        # are counted as untraced, not uncovered: nothing was shown to have no reaching test.
         partial = True
         tests_to_run, tests_run_all, tests_run_all_reason, tests_by_changed_file = [], True, _TESTS_DEADLINE_REASON, {}
-        uncovered_changed_files = [
-            item.path for item in diff.files
+        uncovered_changed_files = []
+        untraced_changed_files_total = sum(
+            1 for item in diff.files
             if item.status != "D" and not is_runnable_test(item.path) and not is_documentation(item.path)
-        ]
+        )
     # Highest-risk changed file first (the `files` ranking), then path, so any prefix of the
     # list is the riskiest subset and the truncator can cut it from the end.
     uncovered_rank = {str(value["path"]): position for position, value in enumerate(file_payloads)}
@@ -892,6 +894,7 @@ def analyze_risk(
     }
     if partial:
         result["partial"] = True
+        result["untraced_changed_files_total"] = untraced_changed_files_total
     return result
 
 
@@ -959,13 +962,15 @@ _RISK_SCALAR_KEYS = frozenset(
         "tests_run_all",
         "tests_run_all_reason",
         "partial",
+        "untraced_changed_files_total",
     }
 )
 # What survives the minimal fallback payload (see `truncate_risk_result`).
 _RISK_MINIMAL_KEYS = frozenset(
     {
         "status", "range", "staged", "index_status", "unindexed", "tests_run_all", "tests_run_all_reason",
-        "partial", "files", "directives", "tests_to_run", "uncovered_changed_files", "uncovered_changed_files_total",
+        "partial", "untraced_changed_files_total", "files", "directives", "tests_to_run", "uncovered_changed_files",
+        "uncovered_changed_files_total",
         "budget", "truncated", "returned_count", "budget_feasible", "omitted_fields", "minimal_payload",
     }
 ) | frozenset(_MAP_KEYS)

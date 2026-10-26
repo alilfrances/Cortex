@@ -20,6 +20,20 @@ Buckets (first matching rule wins, in this order):
 * ``cast_local``          receiver typed by a cast function name (``qobject_cast``) -- extractor gap
 * ``ambiguous``           the resolver kept ``name:`` on purpose: several candidates
 * ``chain``               receiver is a call/field chain (``a->b()->c()``)
+* ``member:*``            ``m_x->f()`` where the extractor recorded ``receiver_member`` and no declared type
+                          (the resolver then joins it with the ``member_types`` of the enclosing class and its
+                          bases, ``callresolve._member_type``); why that join gave nothing:
+                            ``member:no_enclosing_class``  no class node for ``enclosing_class``
+                            ``member:not_declared``        the class and its bases declare no such member
+                            ``member:type_external``       the declared type names no repository class
+                            ``member:type_wrapped``        the declared type is a template wrapper
+                                                           (``Handle<T>``) whose ``T`` is a repository class
+                                                           (read back from the declaring header: ``member_types``
+                                                           keeps only the wrapper's name)
+                            ``member:ambiguous``           several declared types, or several classes of that
+                                                           label, so the resolver keeps ``name:``
+                            ``member:method_not_found``    the type is one repository class and neither it nor
+                                                           its bases has the method (external base, macro, ...)
 * ``untyped_receiver``    ``recv->m()`` where nothing static says what ``recv`` is
 * ``type_not_in_repo``    receiver type / ``Scope::`` is not a class of the repository (Qt, std, ...)
 * ``member_not_found``    the class is in the repository but no member (or base member) has the name
@@ -32,6 +46,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import tempfile
 from collections import Counter
@@ -74,7 +89,56 @@ def _scope_label(md) -> str | None:
     return str(scope).replace("::", ".").rsplit(".", 1)[-1] if scope else None
 
 
-def classify(edge, index) -> str:
+def _wrapper_arguments(repo: Path | None, index, classes: list[str], member: str, label: str) -> str:
+    """Template arguments of the declaration `Label<...> member;` in the files of the enclosing classes.
+
+    The extractor records only the wrapper's name (`Handle` for `Handle<Target> m_h;`) in `member_types`, so the
+    argument can only be read back from the source.  Empty when there is no repository path or no match."""
+    if repo is None:
+        return ""
+    pattern = re.compile(rf"\b{re.escape(label)}\s*<([^;{{}}()]*)>\s*[*&\s]*\b{re.escape(member)}\b\s*[;=\[{{,]")
+    for path in sorted({index.symbols[cid].source_ref for cid in classes}):
+        try:
+            text = (repo / path).read_text(errors="replace")
+        except OSError:
+            continue
+        match = pattern.search(text)
+        if match:
+            return match.group(1)
+    return ""
+
+
+def classify_member(edge, index, repo: Path | None = None) -> str:
+    """Why `receiver_member` could not type this call: the sub-bucket (see the module docstring).
+
+    Uses the resolver's own helpers, so the audit cannot drift from what `_resolve` does with the same edge."""
+    from cortex.callresolve import _call_source_file, _enclosing_classes, _last_segment, _member_type_candidates
+
+    source_file = _call_source_file(edge, index)
+    enclosing = _enclosing_classes(edge, index, source_file)
+    if not enclosing:
+        return "member:no_enclosing_class"
+    member = str(edge.metadata["receiver_member"])
+    types = _member_type_candidates(edge, index, source_file, member)
+    if not types:
+        return "member:not_declared"
+    if len(types) > 1:
+        return "member:ambiguous"
+    declared = types[0]
+    label = _last_segment(declared)
+    classes = index.prefer(index.classes_by_label.get(label, []), source_file)
+    if not classes and not index.qualified_defs.get(label):
+        # `Handle<Foo> m_h;`: the wrapper names no class, its argument might
+        arguments = declared.split("<", 1)[1] if "<" in declared else _wrapper_arguments(repo, index, enclosing, member, label)
+        if any(index.classes_by_label.get(_last_segment(name)) for name in re.findall(r"[A-Za-z_][\w:]*", arguments)):
+            return "member:type_wrapped"
+        return "member:type_external"
+    if len(classes) > 1:
+        return "member:ambiguous"
+    return "member:method_not_found"
+
+
+def classify(edge, index, repo: Path | None = None) -> str:
     from cortex.callresolve import language_family
 
     md = edge.metadata
@@ -96,6 +160,8 @@ def classify(edge, index) -> str:
     kind = md.get("receiver_kind") or "none"
     if kind == "chain":
         return "chain"
+    if kind == "var" and md.get("receiver_member") and not receiver_type and not scope_label:
+        return classify_member(edge, index, repo)
     label = None
     if scope_label:
         label = scope_label
@@ -142,7 +208,7 @@ def audit(repo: Path, sample: int, only_file: str | None, all_edges: bool = Fals
             indexes[family] = _Index([n for n in nodes if language_family(n.source_ref) == family], [
                 e for e in edges if e.relation in ("imports", "inherits")
             ])
-        buckets[classify(edge, indexes[family])] += 1
+        buckets[classify(edge, indexes[family], repo)] += 1
     report["unresolved_calls"] = len(unresolved)
     report["sampled"] = len(picked)
     report["buckets"] = dict(buckets.most_common())
@@ -176,7 +242,7 @@ def main() -> int:
         print(f"file      {report['file']}")
     print(f"unresolved name: calls {report['unresolved_calls']}, sampled {report['sampled']}")
     for bucket, count in report["buckets"].items():
-        print(f"  {bucket:<18} {count}")
+        print(f"  {bucket:<26} {count}")
     return 0
 
 

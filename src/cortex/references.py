@@ -468,8 +468,54 @@ def _grep_hits(
 def _items_with_prefix(eligible: list[dict[str, Any]], count: int) -> dict[str, list[dict[str, str]]]:
     items: dict[str, list[dict[str, str]]] = {"code": [], "script": [], "doc": [], "config": [], "other": []}
     for hit in eligible[:count]:
-        items[hit["bucket"]].append({"text": hit["text"], "origin": hit["origin"], "access": hit["access"]})
+        item = {"text": hit["text"], "origin": hit["origin"], "access": hit["access"]}
+        if "snippet" in hit:
+            item["snippet"] = hit["snippet"]
+        items[hit["bucket"]].append(item)
     return items
+
+
+# A snippet is one source line, enough to tell a call from a comment without opening the file.
+SNIPPET_MAX_CHARS = 160
+
+
+def _snippet(line: str) -> str:
+    stripped = line.strip()
+    return stripped if len(stripped) <= SNIPPET_MAX_CHARS else stripped[:SNIPPET_MAX_CHARS] + "\u2026"
+
+
+class _SnippetReader:
+    """The source line behind a hit's `path:line`, read once per file within one call.
+
+    Prefers the indexed content (the text the graph's line numbers refer to) and falls back to the file on
+    disk for what Cortex does not index (docs, config). Only the hits that are actually pulled are looked up.
+    """
+
+    def __init__(self, store: CortexStore, repo_root: Path) -> None:
+        self._store = store
+        self._repo_root = repo_root
+        self._lines: dict[str, list[str]] = {}
+
+    def _file_lines(self, path: str) -> list[str]:
+        lines = self._lines.get(path)
+        if lines is None:
+            text = self._store.fetch_source_content(self._repo_root, path)
+            if text is None:
+                try:
+                    text = (self._repo_root / path).read_text(encoding="utf-8")
+                except (UnicodeDecodeError, OSError):
+                    text = ""
+            lines = self._lines[path] = text.splitlines()
+        return lines
+
+    def annotate(self, hit: dict[str, Any]) -> dict[str, Any]:
+        path, _, line_text = str(hit["text"]).rpartition(":")
+        if path and line_text.isdigit():
+            lines = self._file_lines(path)
+            number = int(line_text)
+            if 1 <= number <= len(lines):
+                hit["snippet"] = _snippet(lines[number - 1])
+        return hit
 
 
 def find_references(
@@ -480,7 +526,15 @@ def find_references(
     mode: str = "all",
     corpus: ReferenceCorpus | None = None,
     graph_index: GraphReferenceIndex | None = None,
+    *,
+    snippets: bool = False,
 ) -> dict[str, Any]:
+    """Cross-file references for `symbol`, the longest prefix of the hits that fits `budget` tokens.
+
+    `snippets=True` adds the stripped source line to each hit as `snippet`, before the budget fit so
+    `returned_count`/`truncated` stay honest. It is opt-in: dead-code analysis fits these results to its own
+    budget and must keep its tiers.
+    """
     if graph_index is not None:
         graph_hits, covered = graph_index.hits(symbol)
     else:
@@ -490,6 +544,9 @@ def find_references(
         hit for hit in all_hits
         if not (mode == "writes" and hit["access"] not in {"definition", "write"})
     )
+    if snippets:
+        reader = _SnippetReader(store, repo_root)
+        hit_stream = (reader.annotate(hit) for hit in hit_stream)
 
     # Only the longest prefix that fits the budget is returned, so hits are pulled
     # lazily and the scan stops as soon as the prefix has overflowed: no need to read

@@ -38,7 +38,8 @@ INGEST_LOCK_NAME = "ingest.lock"
 # 7 = 0.14.0: anonymous namespaces emit no class node, nested namespaces are labelled by their last
 # segment; namespace-scoped call resolution; pure virtual declarations (`virtual f() = 0;`) are
 # `func` symbols.
-GRAPH_FORMAT_VERSION = 7
+# 8 = 0.15.0: unnamed C/C++ struct/class/union/enum emit no class node; a typedef'd one is labelled by its typedef name.
+GRAPH_FORMAT_VERSION = 8
 INGEST_LOCK_TIMEOUT_SECONDS = 120.0
 _LOCK_POLL_SECONDS = 0.05
 
@@ -718,29 +719,57 @@ class CortexStore:
             self.connection.execute("DROP TABLE chunk_embeddings_legacy")
 
     def reset_repo(self, repo_path: Path, fingerprint: str = '') -> None:
-        repo_key = str(repo_path.resolve())
         with self.connection:
-            self.connection.execute(
-                "INSERT OR REPLACE INTO repos(repo_path, updated_at, fingerprint) VALUES(?, ?, ?)",
-                (repo_key, int(time.time()), fingerprint),
+            self._reset_repo_rows(repo_path, fingerprint)
+
+    def _reset_repo_rows(self, repo_path: Path, fingerprint: str) -> None:
+        """`reset_repo` without the commit, for `write_full_index`'s single transaction."""
+        repo_key = str(repo_path.resolve())
+        self.connection.execute(
+            "INSERT OR REPLACE INTO repos(repo_path, updated_at, fingerprint) VALUES(?, ?, ?)",
+            (repo_key, int(time.time()), fingerprint),
+        )
+        bundle_ids = [
+            row["bundle_id"]
+            for row in self.connection.execute(
+                "SELECT bundle_id FROM bundles WHERE repo_path = ?",
+                (repo_key,),
+            ).fetchall()
+        ]
+        if bundle_ids:
+            self.connection.executemany(
+                "DELETE FROM bundle_items WHERE bundle_id = ?",
+                [(bundle_id,) for bundle_id in bundle_ids],
             )
-            bundle_ids = [
-                row["bundle_id"]
-                for row in self.connection.execute(
-                    "SELECT bundle_id FROM bundles WHERE repo_path = ?",
-                    (repo_key,),
-                ).fetchall()
-            ]
-            if bundle_ids:
-                self.connection.executemany(
-                    "DELETE FROM bundle_items WHERE bundle_id = ?",
-                    [(bundle_id,) for bundle_id in bundle_ids],
-                )
-                self.connection.execute("DELETE FROM bundles WHERE repo_path = ?", (repo_key,))
-            for table in ("sources", "commits", "graph_nodes", "graph_edges", "chunk_embeddings"):
-                self.connection.execute(f"DELETE FROM {table} WHERE repo_path = ?", (repo_key,))
-            if self.fts_enabled:
-                self.connection.execute("DELETE FROM source_fts WHERE repo_path = ?", (repo_key,))
+            self.connection.execute("DELETE FROM bundles WHERE repo_path = ?", (repo_key,))
+        for table in ("sources", "commits", "graph_nodes", "graph_edges", "chunk_embeddings"):
+            self.connection.execute(f"DELETE FROM {table} WHERE repo_path = ?", (repo_key,))
+        if self.fts_enabled:
+            self.connection.execute("DELETE FROM source_fts WHERE repo_path = ?", (repo_key,))
+
+    def write_full_index(
+        self,
+        repo_path: Path,
+        fingerprint: str,
+        sources: list[SourceRecord],
+        commits: list[CommitRecord],
+        nodes: list[GraphNode],
+        edges: list[GraphEdge],
+        graph_version: int,
+    ) -> None:
+        """Replace everything a full ingest owns for this repo in ONE transaction.
+
+        The five steps used to commit one by one, so a reader (another Cortex process, or this one after a
+        crash) could see the repo with its rows deleted and not yet rewritten. In WAL mode readers keep the
+        previous snapshot until this commits. The `source_fts` rows are written inside it (by `_reset_repo_rows` and
+        `_save_sources_rows`); only the semantic embedding sync stays with the caller, after it.
+        """
+        with self.connection:
+            self._reset_repo_rows(repo_path, fingerprint)
+            self._save_sources_rows(repo_path, sources)
+            self._save_commits_rows(repo_path, commits)
+            self._save_graph_rows(repo_path, nodes, edges)
+            self._set_repo_graph_version_rows(repo_path, graph_version)
 
     def set_repo_fingerprint(self, repo_path: Path, fingerprint: str) -> None:
         repo_key = str(repo_path.resolve())
@@ -783,12 +812,16 @@ class CortexStore:
         return 0 if row is None else int(row["graph_version"] or 0)
 
     def set_repo_graph_version(self, repo_path: Path, version: int) -> None:
-        repo_key = str(repo_path.resolve())
         with self.connection:
-            self.connection.execute(
-                "UPDATE repos SET graph_version = ? WHERE repo_path = ?",
-                (int(version), repo_key),
-            )
+            self._set_repo_graph_version_rows(repo_path, version)
+
+    def _set_repo_graph_version_rows(self, repo_path: Path, version: int) -> None:
+        """`set_repo_graph_version` without the commit."""
+        repo_key = str(repo_path.resolve())
+        self.connection.execute(
+            "UPDATE repos SET graph_version = ? WHERE repo_path = ?",
+            (int(version), repo_key),
+        )
 
     def get_repo_fingerprint(self, repo_path: Path) -> str:
         repo_key = str(repo_path.resolve())
@@ -799,45 +832,49 @@ class CortexStore:
         return "" if row is None else row["fingerprint"]
 
     def save_sources(self, repo_path: Path, sources: list[SourceRecord]) -> None:
-        repo_key = str(repo_path.resolve())
         with self.connection:
+            self._save_sources_rows(repo_path, sources)
+
+    def _save_sources_rows(self, repo_path: Path, sources: list[SourceRecord]) -> None:
+        """`save_sources` without the commit."""
+        repo_key = str(repo_path.resolve())
+        self.connection.executemany(
+            '''
+            INSERT OR REPLACE INTO sources(repo_path, path, kind, size_bytes, modified_at, content, content_hash, mtime_ns)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+            ''',
+            [
+                (
+                    repo_key,
+                    source.path,
+                    source.kind,
+                    source.size_bytes,
+                    source.modified_at,
+                    source.content,
+                    source.content_hash,
+                    source.mtime_ns,
+                )
+                for source in sources
+            ],
+        )
+        # P0-2: keep source_fts in sync at the same delete+insert-per-path
+        # granularity as the `sources` table it mirrors, so a re-saved
+        # path's old FTS row (and stale identifiers) never lingers.
+        if self.fts_enabled and sources:
+            self.connection.executemany(
+                'DELETE FROM source_fts WHERE repo_path = ? AND path = ?',
+                [(repo_key, source.path) for source in sources],
+            )
             self.connection.executemany(
                 '''
-                INSERT OR REPLACE INTO sources(repo_path, path, kind, size_bytes, modified_at, content, content_hash, mtime_ns)
-                VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO source_fts(repo_path, path, kind, content, identifiers)
+                VALUES (?, ?, ?, ?, ?)
                 ''',
                 [
-                    (
-                        repo_key,
-                        source.path,
-                        source.kind,
-                        source.size_bytes,
-                        source.modified_at,
-                        source.content,
-                        source.content_hash,
-                        source.mtime_ns,
-                    )
+                    (repo_key, source.path, source.kind, source.content, _fts_identifier_text(source.content))
                     for source in sources
                 ],
             )
-            # P0-2: keep source_fts in sync at the same delete+insert-per-path
-            # granularity as the `sources` table it mirrors, so a re-saved
-            # path's old FTS row (and stale identifiers) never lingers.
-            if self.fts_enabled and sources:
-                self.connection.executemany(
-                    'DELETE FROM source_fts WHERE repo_path = ? AND path = ?',
-                    [(repo_key, source.path) for source in sources],
-                )
-                self.connection.executemany(
-                    '''
-                    INSERT INTO source_fts(repo_path, path, kind, content, identifiers)
-                    VALUES (?, ?, ?, ?, ?)
-                    ''',
-                    [
-                        (repo_key, source.path, source.kind, source.content, _fts_identifier_text(source.content))
-                        for source in sources
-                    ],
-                )
 
     def delete_sources(self, repo_path: Path, paths: list[str]) -> None:
         repo_key = str(repo_path.resolve())
@@ -952,10 +989,11 @@ class CortexStore:
         so an unrelated file's rows are never rewritten (P0-3).
         """
         repo_key = str(repo_path.resolve())
+        # One transaction: a reader never sees the repo with its graph deleted and not yet rewritten.
         with self.connection:
             self.connection.execute('DELETE FROM graph_nodes WHERE repo_path = ?', (repo_key,))
             self.connection.execute('DELETE FROM graph_edges WHERE repo_path = ?', (repo_key,))
-        self.save_graph(repo_path, nodes, edges)
+            self._save_graph_rows(repo_path, nodes, edges)
 
     def delete_graph_for_sources(self, repo_path: Path, paths: list[str]) -> None:
         """Delete graph rows owned by specific source files: nodes by
@@ -1073,90 +1111,98 @@ class CortexStore:
                 )
 
     def save_commits(self, repo_path: Path, commits: list[CommitRecord]) -> None:
-        repo_key = str(repo_path.resolve())
         with self.connection:
-            self.connection.executemany(
-                """
-                INSERT OR REPLACE INTO commits(repo_path, sha, summary, author, authored_at, files_json, renames_json)
-                VALUES(?, ?, ?, ?, ?, ?, ?)
-                """,
-                [
-                    (
-                        repo_key,
-                        commit.sha,
-                        commit.summary,
-                        commit.author,
-                        commit.authored_at,
-                        json.dumps(commit.files),
-                        json.dumps([list(pair) for pair in commit.renames]),
-                    )
-                    for commit in commits
-                ],
-            )
+            self._save_commits_rows(repo_path, commits)
+
+    def _save_commits_rows(self, repo_path: Path, commits: list[CommitRecord]) -> None:
+        """`save_commits` without the commit."""
+        repo_key = str(repo_path.resolve())
+        self.connection.executemany(
+            """
+            INSERT OR REPLACE INTO commits(repo_path, sha, summary, author, authored_at, files_json, renames_json)
+            VALUES(?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    repo_key,
+                    commit.sha,
+                    commit.summary,
+                    commit.author,
+                    commit.authored_at,
+                    json.dumps(commit.files),
+                    json.dumps([list(pair) for pair in commit.renames]),
+                )
+                for commit in commits
+            ],
+        )
 
     def save_graph(self, repo_path: Path, nodes: list[GraphNode], edges: list[GraphEdge]) -> None:
-        repo_key = str(repo_path.resolve())
         with self.connection:
-            self.connection.executemany(
-                '''
-                INSERT INTO graph_nodes(repo_path, node_id, kind, label, source_ref, granularity, signature, span_start, span_end, metadata_json)
-                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(repo_path, node_id) DO UPDATE SET
-                    kind = excluded.kind,
-                    label = excluded.label,
-                    source_ref = excluded.source_ref,
-                    granularity = excluded.granularity,
-                    signature = excluded.signature,
-                    span_start = excluded.span_start,
-                    span_end = excluded.span_end,
-                    metadata_json = excluded.metadata_json
-                ''',
-                [
-                    (
-                        repo_key,
-                        node.node_id,
-                        node.kind,
-                        node.label,
-                        node.source_ref,
-                        node.granularity,
-                        node.signature,
-                        node.span_start,
-                        node.span_end,
-                        json.dumps(node.metadata),
-                    )
-                    for node in nodes
-                ],
-            )
-            self.connection.executemany(
-                '''
-                INSERT INTO graph_edges(repo_path, edge_id, source, target, relation, layer, confidence, weight, metadata_json, source_file)
-                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(repo_path, edge_id) DO UPDATE SET
-                    source = excluded.source,
-                    target = excluded.target,
-                    relation = excluded.relation,
-                    layer = excluded.layer,
-                    confidence = excluded.confidence,
-                    weight = excluded.weight,
-                    metadata_json = excluded.metadata_json,
-                    source_file = excluded.source_file
-                ''',
-                [
-                    (
-                        repo_key,
-                        edge.edge_id,
-                        edge.source,
-                        edge.target,
-                        edge.relation,
-                        edge.layer,
-                        edge.confidence,
-                        edge.weight,
-                        json.dumps(edge.metadata),
-                        edge.metadata.get('source_file', '') or '',
-                    )
-                    for edge in edges
-                ],
-            )
+            self._save_graph_rows(repo_path, nodes, edges)
+
+    def _save_graph_rows(self, repo_path: Path, nodes: list[GraphNode], edges: list[GraphEdge]) -> None:
+        """`save_graph` without the commit."""
+        repo_key = str(repo_path.resolve())
+        self.connection.executemany(
+            '''
+            INSERT INTO graph_nodes(repo_path, node_id, kind, label, source_ref, granularity, signature, span_start, span_end, metadata_json)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(repo_path, node_id) DO UPDATE SET
+                kind = excluded.kind,
+                label = excluded.label,
+                source_ref = excluded.source_ref,
+                granularity = excluded.granularity,
+                signature = excluded.signature,
+                span_start = excluded.span_start,
+                span_end = excluded.span_end,
+                metadata_json = excluded.metadata_json
+            ''',
+            [
+                (
+                    repo_key,
+                    node.node_id,
+                    node.kind,
+                    node.label,
+                    node.source_ref,
+                    node.granularity,
+                    node.signature,
+                    node.span_start,
+                    node.span_end,
+                    json.dumps(node.metadata),
+                )
+                for node in nodes
+            ],
+        )
+        self.connection.executemany(
+            '''
+            INSERT INTO graph_edges(repo_path, edge_id, source, target, relation, layer, confidence, weight, metadata_json, source_file)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(repo_path, edge_id) DO UPDATE SET
+                source = excluded.source,
+                target = excluded.target,
+                relation = excluded.relation,
+                layer = excluded.layer,
+                confidence = excluded.confidence,
+                weight = excluded.weight,
+                metadata_json = excluded.metadata_json,
+                source_file = excluded.source_file
+            ''',
+            [
+                (
+                    repo_key,
+                    edge.edge_id,
+                    edge.source,
+                    edge.target,
+                    edge.relation,
+                    edge.layer,
+                    edge.confidence,
+                    edge.weight,
+                    json.dumps(edge.metadata),
+                    edge.metadata.get('source_file', '') or '',
+                )
+                for edge in edges
+            ],
+        )
 
     def save_bundle(self, repo_path: Path, bundle: RetrievalBundle) -> None:
         repo_key = str(repo_path.resolve())

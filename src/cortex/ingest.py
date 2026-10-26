@@ -623,11 +623,7 @@ def _ingest_locked(
     nodes, edges = build_graph(all_sources, commits, connect_names=config.connect_functions, progress=progress)
 
     report("write")
-    store.reset_repo(repo_root, fingerprint=fingerprint)
-    store.save_sources(repo_root, all_sources)
-    store.save_commits(repo_root, commits)
-    store.save_graph(repo_root, nodes, edges)
-    store.set_repo_graph_version(repo_root, GRAPH_FORMAT_VERSION)
+    store.write_full_index(repo_root, fingerprint, all_sources, commits, nodes, edges, GRAPH_FORMAT_VERSION)
     _sync_semantic_embeddings(store, repo_root, all_sources, nodes, replace_paths=[source.path for source in all_sources])
     parser_summary = _parser_summary(nodes)
 

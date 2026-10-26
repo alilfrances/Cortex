@@ -174,28 +174,42 @@ def test_estimate_baseline_read_symbol_ambiguous_match_has_zero_baseline(tmp_pat
     assert baseline == 0
 
 
-def test_estimate_baseline_references_sums_files_stripping_line_numbers(tmp_path, monkeypatch):
+def test_estimate_baseline_references_is_the_grep_equivalent_output(tmp_path, monkeypatch):
+    # Plan Task 5.6: this used to price a full read of every referenced file. The realistic alternative to
+    # a references lookup is `grep -rn`, so the baseline is one `path:line:<line text>` line per location.
     repo = _repo_with_index(tmp_path, monkeypatch)
     store = CortexStore(default_db_path(repo))
 
     result = call_tool("cortex_references", {"repo_path": str(repo), "symbol": "login"})
     payload = _payload(result)
 
-    referenced_paths = set()
+    grep_lines = []
     for bucket in payload["items"].values():
         for entry in bucket:
-            text = entry["text"] if isinstance(entry, dict) else entry
-            referenced_paths.add(text.rsplit(":", 1)[0] if ":" in text else text)
-    expected = sum(
+            assert entry["snippet"], entry
+            grep_lines.append(f"{entry['text']}:{entry['snippet']}")
+    whole_files = sum(
         count_text_tokens(source.content, kind=source.kind)
-        for path in referenced_paths
+        for path in {line.split(":", 1)[0] for line in grep_lines}
         if (source := store.fetch_source_record(repo, path)) is not None
     )
     baseline = mcp_tools._estimate_baseline("cortex_references", {"repo_path": str(repo)}, payload, store, repo)
 
-    assert referenced_paths
-    assert baseline == expected
-    assert baseline > 0
+    assert grep_lines
+    assert baseline == count_text_tokens("\n".join(grep_lines))
+    assert 0 < baseline < whole_files
+
+
+def test_references_saved_tokens_never_exceeds_the_grep_equivalent_text(tmp_path, monkeypatch):
+    repo = _repo_with_index(tmp_path, monkeypatch)
+
+    payload = _payload(call_tool("cortex_references", {"repo_path": str(repo), "symbol": "login", "response_format": "detailed"}))
+
+    grep_text = "\n".join(
+        f"{entry['text']}:{entry['snippet']}" for bucket in payload["items"].values() for entry in bucket
+    )
+    saved = payload.get("_meta", {}).get("saved_tokens")
+    assert saved is None or saved <= count_text_tokens(grep_text)
 
 
 # --- _estimate_baseline: structure-only tools use detailed-render tokens ---

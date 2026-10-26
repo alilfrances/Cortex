@@ -545,8 +545,13 @@ def test_cortex_references_unions_graph_and_grep_hits_bucketed(tmp_path: Path, m
 
     payload = _payload(call_tool("cortex_references", {"repo_path": str(repo), "symbol": "Runner"}))
 
-    assert payload["items"]["code"] == [{"text": "engine.cpp:1", "origin": "graph", "access": "definition"}]
-    assert payload["items"]["config"] == [{"text": "CMakeLists.txt:1", "origin": "grep", "access": "read"}]
+    # Each hit carries its source line (Task 5.5); the store holds no sources here, so it is read from disk.
+    assert payload["items"]["code"] == [
+        {"text": "engine.cpp:1", "origin": "graph", "access": "definition", "snippet": "class Runner {};"}
+    ]
+    assert payload["items"]["config"] == [
+        {"text": "CMakeLists.txt:1", "origin": "grep", "access": "read", "snippet": "target_link_libraries(app Runner)"}
+    ]
     assert payload["truncated"] is False
 
 
@@ -700,3 +705,22 @@ def test_tools_list_serializes_annotations_over_stdio(tmp_path: Path) -> None:
     assert len(tools) == 15
     assert all("title" in tool and "annotations" in tool for tool in tools)
     assert {t["name"] for t in tools if t["annotations"]["readOnlyHint"] is False} == {"cortex_refresh"}
+
+
+_ALWAYS_LOAD = {
+    "cortex_search_symbols", "cortex_references", "cortex_relations", "cortex_read_symbol", "cortex_impact",
+}
+
+
+def test_tools_list_marks_exactly_the_five_lookup_tools_as_always_loaded() -> None:
+    from cortex.mcp.server import _handle
+
+    tools = _handle({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})["result"]["tools"]
+
+    marked = {tool["name"] for tool in tools if tool.get("_meta", {}).get("anthropic/alwaysLoad") is True}
+    assert marked == _ALWAYS_LOAD
+    assert all("_meta" not in tool for tool in tools if tool["name"] not in _ALWAYS_LOAD)
+    upfront = [tool for tool in tools if tool["name"] in _ALWAYS_LOAD]
+    # Claude Code cuts an upfront tool's description at 4096 characters; the five also have to stay cheap.
+    assert all(len(tool["description"]) <= 4096 for tool in upfront)
+    assert sum(len(json.dumps(tool)) for tool in upfront) < 4500

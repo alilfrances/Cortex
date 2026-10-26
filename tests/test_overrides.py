@@ -233,6 +233,23 @@ def test_the_best_span_of_each_of_the_five_best_files_is_a_seed():
     assert not any(":f5.cpp:" in name or ":f6.cpp:" in name for name in names)
 
 
+def test_a_span_that_reaches_nothing_does_not_seed():
+    nodes = {n.node_id: n for n in [method("ui.qml", "handler", span=(1, 8)), method("core.cpp", "run", span=(1, 8))]}
+    items = [_span_item("ui.qml", "handler", 200.0), _span_item("core.cpp", "run", 100.0)]
+    files = {"ui.qml": 1000.0, "core.cpp": 400.0}  # the higher-scoring file has the span with no calls
+    reaching = {"symbol:core.cpp:run"}
+
+    seeds = _select_seeds(items, nodes, files, reaches=lambda symbol_id: symbol_id in reaching)
+
+    assert [item.metadata["node_id"] for item in seeds] == ["symbol:core.cpp:run"]
+    unfiltered = [item.metadata["node_id"] for item in _select_seeds(items, nodes, files)]
+    assert unfiltered == ["symbol:ui.qml:handler", "symbol:core.cpp:run"]  # without `reaches` nothing changes
+    assert [item.item_id for item in _select_seeds(items, nodes, files, reaches=lambda _symbol_id: True)] == [
+        item.item_id for item in _select_seeds(items, nodes, files)
+    ]
+    assert _select_seeds(items, nodes, files, reaches=lambda _symbol_id: False) == []
+
+
 # --- Task 5.4: constructors do not seed, and `new X` (an edge to the class node) reaches the constructors
 
 

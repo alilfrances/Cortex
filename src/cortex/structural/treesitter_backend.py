@@ -58,6 +58,9 @@ _BODY_REQUIRED_TYPES = {
 
 _CPP_SUFFIXES = {".h", ".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx"}
 
+# Type specifiers that can appear without a name (`struct { ... } v;`, `enum { kMax };`).
+_CPP_TYPE_SPECIFIERS = frozenset({"struct_specifier", "class_specifier", "union_specifier", "enum_specifier"})
+
 
 def _language_for_suffix(suffix: str) -> Any:
     # The managed language pack is the single parser source of truth. It
@@ -118,6 +121,36 @@ def _cpp_namespace_name(node: Any, source: bytes) -> str:
             break
         stack.extend(current.children)  # the rightmost child is popped first
     return last
+
+
+def _cpp_type_name(node: Any, source: bytes) -> str:
+    """Label of a C/C++ `struct`/`class`/`union`/`enum` specifier, "" when it has no name to give.
+
+    `_name_for_node` falls back to the first identifier in the body for an unnamed type, so
+    `enum { kMax = 10 };` became a class `kMax` and `typedef struct { QString name; } Rec;` a class
+    `QString`.  A named specifier (`struct Tag {...}`, also inside `typedef struct Tag {...} TagT;`)
+    keeps its name.  An unnamed one under a `typedef` takes the typedef name (`Rec`, the name code
+    uses; with `typedef struct {...} A, *PA;` the first plain `type_identifier`, `A`).  Any other
+    unnamed type (`struct {...} v;`, `enum { kMax };`, `union {...} u;`, an anonymous member struct)
+    emits no node, like an anonymous namespace.
+    """
+    if node.child_by_field_name("name") is not None:
+        return _name_for_node(node, source)
+    parent = node.parent
+    if parent is None or parent.type != "type_definition":
+        return ""
+    declarators = parent.children_by_field_name("declarator")
+    for declarator in declarators:
+        if declarator.type == "type_identifier":
+            return _node_text(declarator, source)
+    for declarator in declarators:  # `typedef struct {...} *PA;`
+        stack = [declarator]
+        while stack:
+            current = stack.pop()
+            if current.type == "type_identifier":
+                return _node_text(current, source)
+            stack.extend(reversed(current.children))
+    return ""
 
 
 def _cpp_member_for_definition(node: Any, source: bytes) -> tuple[str | None, str]:
@@ -576,6 +609,9 @@ def extract_treesitter_edges(
         if node.type == "namespace_definition" and suffix in _CPP_SUFFIXES:
             # An anonymous namespace emits no node; its members become file-level symbols.
             name = _cpp_namespace_name(node, source)
+        elif suffix in _CPP_SUFFIXES | {".c"} and node.type in _CPP_TYPE_SPECIFIERS:
+            # An unnamed type emits no node unless a typedef names it.
+            name = _cpp_type_name(node, source)
         else:
             name = member_name or _name_for_node(node, source)
         if name and name in seen_symbols:

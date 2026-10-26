@@ -59,13 +59,6 @@
       "symbol": "connect"
     },
     {
-      "confidence": "low",
-      "file": "engine.cpp",
-      "line": 3,
-      "reason": "no incoming edges; grep refs in code/config",
-      "symbol": "Engine"
-    },
-    {
       "confidence": "high",
       "file": "engine.cpp",
       "line": 4,
@@ -144,7 +137,7 @@
     }
   ],
   "repo_path": "<repo>",
-  "returned_count": 20,
+  "returned_count": 19,
   "stale": false,
   "truncated": false
 }

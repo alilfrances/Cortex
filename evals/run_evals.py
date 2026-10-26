@@ -121,6 +121,20 @@ FIELD_GOLD_TASKS: tuple[GoldTask, ...] = (
         budget=900,
         tight_budget=900,
     ),
+    GoldTask(
+        repo="field_seed_markup_repo",
+        description="item changes type and then the item is removed",
+        expected_files=("src/itemmodel.cpp", "src/baseitem.cpp"),
+        budget=2000,
+        tight_budget=2000,
+    ),
+    GoldTask(
+        repo="field_seed_markup_calls_repo",
+        description="item changes type and then the item is removed",
+        expected_files=("src/itemmodel.cpp", "src/baseitem.cpp"),
+        budget=2000,
+        tight_budget=2000,
+    ),
 )
 
 
@@ -843,6 +857,67 @@ def _build_field_ctor_repo(base: Path) -> Path:
     return repo
 
 
+def _build_field_seed_markup_repo(base: Path, *, ui_calls: bool = False) -> Path:
+    """Call-expansion seeds (0.14.0 field review, section 1.4): six small QML screens dense with the task's
+    words and no resolved call, and one large C++ model file whose `onTypeChanged` calls a virtual with two
+    overriders. The screens outscore the model file on raw text and the model file loses on length-normalised
+    score, so the seeds go to the screens, which reach nothing. With `ui_calls`, `onItemTypeChanged` and
+    `removeItem` of each screen call a helper of the same file (`hideItem`), so their spans have an outgoing `calls`
+    edge and survive a filter on "reaches something"; `onItemTypeChanged` carries three task words in its name and
+    outscores the model file's `onTypeChanged` (126.5 against 121.5), so the sixth seed slot, which goes by score,
+    does not fall to the model file either. Only ranking the files by the score their spans inherit seeds it."""
+    repo = base / ("field_seed_markup_calls_repo" if ui_calls else "field_seed_markup_repo")
+    _init_repo(repo)
+    for k in range(6):
+        helper = (
+            f"    function hideItem() {{\n        // hide the item that was removed ({k})\n"
+            "        listItem.visible = false\n        removedItem.opacity = 0\n        itemTypeLabel.text = itemType\n    }\n"
+        ) if ui_calls else ""
+        call = "        hideItem()\n" if ui_calls else ""
+        _write(repo / f"ui/ItemScreen{k}.qml", (
+            "import QtQuick 2.15\nItem {\n    id: root\n    property int itemType: 0\n"
+            f"    function onItemTypeChanged() {{\n        // item type changed then the item is removed ({k})\n"
+            f"        removedItem.visible = false\n{call}        itemTypeLabel.text = itemType\n        listItem.opacity = 0\n    }}\n"
+            f"    function removeItem() {{\n        // remove item when the item type changed\n{call}"
+            "        listItem.visible = false\n        removedItem.opacity = 1\n        itemType = 0\n    }\n"
+            f"{helper}}}\n"
+        ))
+    _write(repo / "src/baseitem.h", "class BaseItem {\npublic:\n    virtual ~BaseItem();\n    virtual void detach(int slot);\n};\n")
+    _write(repo / "src/baseitem.cpp", (
+        '#include "baseitem.h"\nBaseItem::~BaseItem() {}\n'
+        "void BaseItem::detach(int slot) {\n    int cell = slot;\n    cell += 1;\n    cell *= 2;\n}\n"
+    ))
+    for name in ("TextEntry", "ImageEntry"):
+        stem = name.lower()
+        _write(repo / f"src/kinds/{stem}.h", (
+            f'#include "../baseitem.h"\nclass {name} : public BaseItem {{\npublic:\n    void detach(int slot) override;\n}};\n'
+        ))
+        _write(repo / f"src/kinds/{stem}.cpp", (
+            f'#include "{stem}.h"\nvoid {name}::detach(int slot) {{\n    int cell = slot;\n    cell -= 1;\n    cell *= 3;\n}}\n'
+        ))
+    declarations = "".join(f"    void refresh{index:03d}(int v);\n" for index in range(150))
+    filler = "".join(
+        f"void ItemModel::refresh{index:03d}(int v) {{\n    // item model refresh {index}\n    int cell = v;\n"
+        f"    cell += {index};\n    cell *= 2;\n    cell -= 1;\n}}\n\n"
+        for index in range(150)
+    )
+    _write(repo / "src/itemmodel.h", (
+        '#include "baseitem.h"\nclass ItemModel {\npublic:\n    void onTypeChanged(BaseItem* entry, int slot);\n' + declarations + "};\n"
+    ))
+    _write(repo / "src/itemmodel.cpp", (
+        '#include "itemmodel.h"\n\nvoid ItemModel::onTypeChanged(BaseItem* entry, int slot) {\n'
+        "    // the item type changed: the old item is removed\n    int removed = slot;\n    removed += 1;\n"
+        "    entry->detach(removed);\n}\n\n" + filler
+    ))
+    _commit_all(repo, "add call-expansion seed fixture")
+    return repo
+
+
+def _build_field_seed_markup_calls_repo(base: Path) -> Path:
+    """`field_seed_markup_repo` with a same-file helper call in each screen's `removeItem`."""
+    return _build_field_seed_markup_repo(base, ui_calls=True)
+
+
 def _build_field_vocab_repo(base: Path) -> Path:
     """Vocabulary: the task says `Gizmos`, `iOS` and `re-enumerates`; the code says `Gizmo`, `reconnect`
     and `remove`, and the other files talk about `os` and `re` so those split parts would match."""
@@ -1145,6 +1220,8 @@ def build_fixture_repos(base: Path) -> dict[str, Path]:
         "field_override_pure_repo": _build_field_override_pure_repo(base),
         "field_ctor_repo": _build_field_ctor_repo(base),
         "field_vocab_repo": _build_field_vocab_repo(base),
+        "field_seed_markup_repo": _build_field_seed_markup_repo(base),
+        "field_seed_markup_calls_repo": _build_field_seed_markup_calls_repo(base),
         "qt_app": _build_qt_app(base),
         "body_text_repo": _build_body_text_repo(base),
     }

@@ -178,7 +178,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "cortex_references",
-        "description": "Cross-language symbol references from graph edges and repository search. Use writes mode to find mutations.",
+        "description": "Cross-language symbol references from graph edges and repository search, each with its source line as snippet. Use writes mode to find mutations.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -281,6 +281,11 @@ TOOL_TITLES: dict[str, str] = {
     "cortex_status": "Cortex: server status",
 }
 _NON_READ_ONLY_TOOLS = frozenset({"cortex_refresh"})
+# Loaded upfront by Claude Code instead of behind ToolSearch: the cheap, reliable lookups a session
+# reaches for first (about 3.7k chars of schema of the ~11k for all tools). The rest stay deferred.
+_ALWAYS_LOAD_TOOLS = frozenset({
+    "cortex_search_symbols", "cortex_references", "cortex_relations", "cortex_read_symbol", "cortex_impact",
+})
 
 
 def _annotate_tool_definition(definition: dict[str, Any]) -> dict[str, Any]:
@@ -294,7 +299,11 @@ def _annotate_tool_definition(definition: dict[str, Any]) -> dict[str, Any]:
         "openWorldHint": False,
     }
     rest = {key: value for key, value in definition.items() if key != "name"}
-    return {"name": name, "title": title, **rest, "annotations": annotations}
+    annotated = {"name": name, "title": title, **rest, "annotations": annotations}
+    if name in _ALWAYS_LOAD_TOOLS:
+        # Other MCP clients ignore unknown `_meta` keys; MCP allows `_meta` on a Tool.
+        annotated["_meta"] = {"anthropic/alwaysLoad": True}
+    return annotated
 
 
 TOOL_DEFINITIONS = [_annotate_tool_definition(definition) for definition in TOOL_DEFINITIONS]
@@ -2706,6 +2715,7 @@ def _call_references(arguments: dict[str, Any]) -> dict[str, Any]:
         symbol,
         budget=int(arguments.get("budget", 2000)),
         mode=str(arguments.get("mode", "all")),
+        snippets=True,
     )
     response_format = _response_format(arguments)
     return _content(_format_payload({"repo_path": str(repo_root), **result}, status, response_format))
@@ -2810,10 +2820,6 @@ _LEDGER_TOOLS = {
 # _call_relations' endpoint() closure, to recover referenced file paths from
 # an already-formatted payload.
 _RELATION_ENDPOINT_FILE_RE = re.compile(r" @ (.+?)(?::\d+)?$")
-# Matches the "<path>:<line>" hit rendering built by references._graph_hits /
-# _grep_hits, to recover referenced file paths from an already-formatted
-# cortex_references payload.
-_REFERENCE_LOCATION_RE = re.compile(r"^(.*):\d+$")
 
 
 def build_status_result(**extra_fields: Any) -> dict[str, Any]:
@@ -2878,6 +2884,19 @@ def _referenced_file_tokens(store: CortexStore, repo_root: Path, paths: set[str]
     return total
 
 
+def _grep_equivalent_lines(payload: dict[str, Any]) -> list[str]:
+    """What `grep -rn` would print for a references payload: `path:line:<line text>` per returned location."""
+    lines: list[str] = []
+    for bucket in payload.get("items", {}).values():
+        for entry in bucket:
+            if isinstance(entry, dict):
+                location, snippet = str(entry.get("text", "")), str(entry.get("snippet", ""))
+            else:
+                location, snippet = str(entry), ""
+            lines.append(f"{location}:{snippet}" if snippet else location)
+    return lines
+
+
 def _detailed_rendering_tokens(tool: str, arguments: dict[str, Any]) -> int:
     """Count the `detailed` rendering of a structure-only tool call.
 
@@ -2925,7 +2944,7 @@ def _estimate_baseline(
     Policy is kept in this one function so it stays auditable:
 
     - File-returning tools (cortex_query, cortex_context, cortex_impact,
-      cortex_read_symbol, cortex_read_file, cortex_references,
+      cortex_read_symbol, cortex_read_file,
       cortex_search_text, cortex_risk, cortex_dead_code): baseline is
       the token cost of reading, in full and raw, every DISTINCT file
       referenced in the actual response -- the tokens an agent would have
@@ -2940,6 +2959,14 @@ def _estimate_baseline(
       (response_tokens), which is what makes the ledger credit skeleton/
       signature reads as bigger savings than a full-span read of the same
       symbol.
+    - `cortex_references` is priced against grep, not against reading files:
+      the realistic alternative to a references lookup is `grep -rn`, so the
+      baseline is the token count of one `path:line:<line text>` line per
+      returned location, built from the same snippets (the snippet is cut at
+      160 characters, so this slightly under-prices a long line). A hit
+      without a snippet contributes `path:line` only. The JSON response
+      carries the same text plus keys, so it often saves nothing and then
+      reports no `saved_tokens`.
     - `cortex_context` is file-returning for ledger purposes: its baseline is
       the full raw content of every distinct resolved target-card path (so a
       batch with the same file twice is priced once, and ambiguous/missing
@@ -2980,13 +3007,7 @@ def _estimate_baseline(
         return _referenced_file_tokens(store, repo_root, {str(path)})
 
     if tool == "cortex_references":
-        paths: set[str] = set()
-        for bucket in payload.get("items", {}).values():
-            for entry in bucket:
-                text = str(entry.get("text", "")) if isinstance(entry, dict) else str(entry)
-                match = _REFERENCE_LOCATION_RE.match(text)
-                paths.add(match.group(1) if match else text)
-        return _referenced_file_tokens(store, repo_root, paths)
+        return count_text_tokens("\n".join(_grep_equivalent_lines(payload)))
 
     if tool == "cortex_risk":
         paths = {str(item.get("path", "")) for item in payload.get("files", []) if item.get("path")}
