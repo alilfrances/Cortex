@@ -175,6 +175,27 @@ class PluginManifestTests(unittest.TestCase):
             self.assertIn(f"`{tool['name']}`", content)
         self.assertIn('`mode: "writes"`', content)
 
+    def test_cli_launcher_needs_no_pip_install(self) -> None:
+        import subprocess
+        import sys
+
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "bin" / "cortex-cli.py"), "--help"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            cwd=ROOT,
+            env={"PATH": "/usr/bin:/bin", "HOME": "/tmp"},
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("usage:", result.stdout.lower())
+        self.assertIn("risk", result.stdout)
+
+    def test_change_review_skill_names_the_cli_launcher_for_plugin_installs(self) -> None:
+        text = (ROOT / "skills" / "cortex-change-review" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("cortex risk --tests-only", text)
+        self.assertIn('"${CLAUDE_PLUGIN_ROOT}/bin/cortex-cli.py"', text)
+
     def test_mcp_launcher_needs_no_pip_install(self) -> None:
         import subprocess
         import sys
