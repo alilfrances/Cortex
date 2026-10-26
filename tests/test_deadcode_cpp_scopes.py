@@ -125,8 +125,41 @@ IN_CLASS_CALL_FILES = {
 @TREE_SITTER_ONLY
 def test_methods_called_only_from_their_own_class_are_not_reported(tmp_path, monkeypatch):
     findings = _findings(tmp_path, monkeypatch, IN_CLASS_CALL_FILES)
-    # The classes themselves are reported until Task 1.4 (they are used through declarations only); the
-    # methods, which is what this fence is about, never are.
-    classes = {"Inl", "Widget", "Bar", "Baz"}
-    reported = sorted(f"{file}:{symbol}" for file, symbol in findings if symbol not in classes)
+    reported = sorted(f"{file}:{symbol}" for file, symbol in findings)
     assert reported == [], reported
+
+
+LIVE_MEMBER_FILES = {
+    "lib/local.h": "class Local {\npublic:\n    int go() { return 1; }\n};\n",
+    "lib/island.h": (
+        "class Island {\npublic:\n"
+        "    void a() { b(); }\n"
+        "    void b() { }\n"
+        "};\n"
+    ),
+    "lib/out.h": "class Out {\npublic:\n    int run();\n    int step();\n};\n",
+    "lib/out.cpp": (
+        '#include "out.h"\n'
+        "int Out::run() { return step(); }\n"
+        "int Out::step() { return 2; }\n"
+    ),
+    "app/main.cpp": (
+        '#include "../lib/local.h"\n#include "../lib/out.h"\n'
+        "int main() {\n"
+        "    Local l;\n"
+        "    Out o;\n"
+        "    o.run();\n"
+        "    return l.go();\n"
+        "}\n"
+    ),
+}
+
+
+@TREE_SITTER_ONLY
+def test_a_class_with_a_member_called_from_outside_is_live(tmp_path, monkeypatch):
+    findings = _findings(tmp_path, monkeypatch, LIVE_MEMBER_FILES)
+    symbols = {symbol for _, symbol in findings}
+    # `Local l; l.go();` resolves `go` but never touches the class node; `Out` is reached through run().
+    assert "Local" not in symbols and "Out" not in symbols, findings
+    # A dead class whose methods only call each other must not hide itself.
+    assert ("lib/island.h", "Island") in findings, findings

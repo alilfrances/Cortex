@@ -84,6 +84,58 @@ def _is_special_member(node: GraphNode) -> bool:
     )
 
 
+def _classes_with_live_members(nodes: Sequence[GraphNode], edges: Sequence[GraphEdge]) -> set[str]:
+    """Class nodes (not namespaces) that have a `func`/`method` member called from outside the class.
+
+    `Local l; return l.go();` resolves `go` but gives the class node no edge of its own, so a class used only
+    through its members would be reported. A member is a node of the same file whose span lies inside the class
+    span, or a node whose `metadata.qualifier` is the class label when that label names exactly one class in
+    the repository. A call from another member of the same class does not count, or a dead class whose
+    methods call each other would hide itself."""
+    classes = [node for node in nodes if node.kind == "class" and not _is_namespace(node)]
+    if not classes:
+        return set()
+    by_file: dict[str, list[GraphNode]] = defaultdict(list)
+    by_label: dict[str, list[GraphNode]] = defaultdict(list)
+    for item in classes:
+        by_file[item.source_ref].append(item)
+        by_label[item.label].append(item)
+    nodes_by_id = {node.node_id: node for node in nodes}
+
+    def classes_of(node: GraphNode) -> set[str]:
+        owners: set[str] = set()
+        if node.kind == "class":
+            owners.add(node.node_id)  # the class node stands for its in-class constructors and destructors
+        if node.span_start is not None and node.span_end is not None:
+            for item in by_file.get(node.source_ref, ()):
+                if (
+                    item.node_id != node.node_id
+                    and item.span_start is not None
+                    and item.span_end is not None
+                    and item.span_start <= node.span_start
+                    and node.span_end <= item.span_end
+                ):
+                    owners.add(item.node_id)
+        qualifier = node.metadata.get("qualifier") if isinstance(node.metadata, dict) else None
+        if qualifier and len(by_label.get(str(qualifier), ())) == 1:
+            owners.add(by_label[str(qualifier)][0].node_id)
+        return owners
+
+    live: set[str] = set()
+    for edge in edges:
+        if edge.relation != "calls":
+            continue
+        target = nodes_by_id.get(edge.target)
+        if target is None or target.kind not in _METHOD_KINDS:
+            continue
+        owners = classes_of(target) - {target.node_id}
+        if not owners:
+            continue
+        source = nodes_by_id.get(edge.source)
+        live |= owners - (classes_of(source) if source is not None else set())
+    return live
+
+
 def _is_namespace(node: GraphNode) -> bool:
     """A C++ `namespace X {` node (a `class` node in the graph): a scope, never something code calls."""
     return node.kind == "class" and bool(_NAMESPACE_SIGNATURE_RE.match(node.signature or ""))
@@ -473,6 +525,7 @@ def analyze_dead_code(
             if value:
                 credited_labels.add(str(value))
 
+    live_classes = _classes_with_live_members(graph_nodes, graph_edges)
     reexports = _reexported_symbols(all_sources)
     def in_scope(node: GraphNode) -> bool:
         return not path_prefix or node.source_ref == path_prefix or node.source_ref.startswith(path_prefix.rstrip("/") + "/")
@@ -525,6 +578,8 @@ def analyze_dead_code(
             continue
         if node.node_id in credited_nodes or node.label in credited_labels:
             continue
+        if node.node_id in live_classes:
+            continue  # a member of this class is called from outside it
         try:
             tier, reason = _candidate_reason(
                 repo_root, active_store, node, all_sources, context.reference_budget, context
