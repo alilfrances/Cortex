@@ -39,3 +39,33 @@ def test_namespace_nodes_are_never_reported(tmp_path, monkeypatch):
         assert name not in symbols, (name, findings)
     # A real unreferenced function inside a namespace is still reported.
     assert ("app/versioned.cpp", "q") in findings
+
+
+SPECIAL_MEMBER_FILES = {
+    "core/foo.h": (
+        "namespace app::core {\n"
+        "class Foo {\npublic:\n    Foo();\n    ~Foo();\n    int x();\n    int unused();\n};\n"
+        "}\n"
+    ),
+    "core/foo.cpp": (
+        '#include "foo.h"\n'
+        "namespace app::core {\n"
+        "Foo::Foo() {}\n"
+        "Foo::~Foo() {}\n"
+        "int Foo::x() { return 1; }\n"
+        "int Foo::unused() { return 2; }\n"
+        "}\n"
+    ),
+    "ui/main.cpp": (
+        '#include "../core/foo.h"\n'
+        "int main() { auto* f = new app::core::Foo(); f->x(); delete f; return 0; }\n"
+    ),
+}
+
+
+def test_out_of_line_constructors_and_destructors_are_never_reported(tmp_path, monkeypatch):
+    findings = _findings(tmp_path, monkeypatch, SPECIAL_MEMBER_FILES)
+    in_foo = {symbol for file, symbol in findings if file == "core/foo.cpp"}
+    assert "Foo" not in in_foo and "~Foo" not in in_foo, findings
+    # The control: a method defined but never called is still dead.
+    assert ("core/foo.cpp", "unused") in findings

@@ -72,6 +72,18 @@ def _is_pure_virtual(node: GraphNode) -> bool:
     )
 
 
+def _is_special_member(node: GraphNode) -> bool:
+    """An out-of-line C++ constructor `X::X()` or destructor `X::~X()`: run by `new X`, `X x;` or scope
+    exit, which resolve to (or never name) the class, so the class node carries any finding."""
+    qualifier = node.metadata.get("qualifier") if isinstance(node.metadata, dict) else None
+    return (
+        node.kind in _METHOD_KINDS
+        and node.source_ref.lower().endswith(_CPP_SUFFIXES)
+        and bool(qualifier)
+        and node.label in (qualifier, f"~{qualifier}")
+    )
+
+
 def _is_namespace(node: GraphNode) -> bool:
     """A C++ `namespace X {` node (a `class` node in the graph): a scope, never something code calls."""
     return node.kind == "class" and bool(_NAMESPACE_SIGNATURE_RE.match(node.signature or ""))
@@ -498,6 +510,8 @@ def analyze_dead_code(
             continue  # an interface method is never dead code on its own, called or not
         if _is_namespace(node):
             continue  # a namespace is a scope that code opens, not a symbol that something calls
+        if _is_special_member(node):
+            continue  # `new X` / `X x;` resolve to the class, never to `X::X()`; nothing names `X::~X()`
         if node.kind == "target":
             continue  # a CMake/qmake build target is an entry point, not code that something calls
         if node.metadata.get("qt") == "handler":
