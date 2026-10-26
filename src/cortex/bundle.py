@@ -68,7 +68,7 @@ SYMBOL_FILE_SCORE_SHARE = 0.25
 # A span inherits its share from the file's UN-normalised score, at most this much of it: a hub file scores
 # several hundred on text alone, and uncapped every span inside it would carry the same bonus whether or not
 # it matches the task. (Which whole file to pack is the normalisation's question; a span's own text is
-# already length-local.)
+# already length-local, and the files that seed the call expansion are ranked by this same raw score: SEED_FILES.)
 SPAN_FILE_SHARE_CAP = 2 * NAME_MATCH_BONUS
 # The text score of a code file far above the median size is divided by 1 + LENGTH_NORM * log2(ratio /
 # LENGTH_NORM_FROM), ratio = tokens / median tokens of the code files that share a task term: the overlap sum is
@@ -108,7 +108,9 @@ OVERRIDES_PER_METHOD = 4
 # files is always a seed so one file's methods cannot take every slot. A span with no resolved outgoing call
 # and no base class never seeds: the walk would return nothing from it, and a small UI span dense with the
 # task's words (a QML handler that only sets properties) would take the slot of a function that does reach
-# something.
+# something. Files are ranked for this by the score their spans inherit (`raw_source_scores`, as for SPAN_FILE_SHARE_CAP
+# above), not by the length-normalised one: normalisation decides which whole file to pack, a seed is a span, and a
+# large file's best function is not worth less because the file around it is long.
 SEED_FILES = 5
 TRIVIAL_SPAN_LINES = 3
 # Of the other-file callees of a function the CALLEES_PER_SEED most relevant are followed, not the first
@@ -1589,7 +1591,7 @@ def generate_bundle(
             return matches[0].node_id if len(matches) == 1 else None
 
         seed_items = _select_seeds(
-            [item for item in candidates if item.kind == 'symbol' and item.score > 0], symbol_by_id, source_scores,
+            [item for item in candidates if item.kind == 'symbol' and item.score > 0], symbol_by_id, raw_source_scores,
             [constructor for built in links.constructors_of.values() for constructor in built],
             reaches=lambda symbol_id: bool(links.calls_from.get(symbol_id)) or bool(links.bases_of.get(class_of(symbol_id) or '')),
         )
