@@ -575,18 +575,19 @@ def _enclosing_classes(edge: GraphEdge, index: _Index, source_file: str) -> list
     return index.prefer(index.classes_by_label.get(_last_segment(str(name)), []), source_file)
 
 
-def _member_type(edge: GraphEdge, index: _Index, source_file: str, member: str) -> str | None:
-    """Declared type of member variable `member` of the enclosing class (or a base)."""
+def _member_type_candidates(edge: GraphEdge, index: _Index, source_file: str, member: str) -> list[str]:
+    """Declared types of member variable `member` at the nearest level (enclosing class, then bases) that
+    declares it: sorted, empty when no class declares it, more than one when the declarations disagree."""
     classes = _enclosing_classes(edge, index, source_file)
     if not classes:
-        return None
+        return []
     frontier = sorted(set(classes))
     visited = set(frontier)
     depth = 0
     while frontier and depth <= MAX_INHERIT_DEPTH:
         found = sorted({index.member_types[c][member] for c in frontier if member in index.member_types.get(c, {})})
         if found:
-            return found[0] if len(found) == 1 else None
+            return found
         nxt: list[str] = []
         for cid in frontier:
             for base in index.bases.get(cid, ()):
@@ -595,7 +596,13 @@ def _member_type(edge: GraphEdge, index: _Index, source_file: str, member: str) 
                     nxt.append(base)
         frontier = sorted(nxt)
         depth += 1
-    return None
+    return []
+
+
+def _member_type(edge: GraphEdge, index: _Index, source_file: str, member: str) -> str | None:
+    """Declared type of member variable `member` of the enclosing class (or a base)."""
+    found = _member_type_candidates(edge, index, source_file, member)
+    return found[0] if len(found) == 1 else None
 
 
 def _members(index: _Index, class_ids: list[str], label: str, callee: str, source_file: str, tier: str) -> _Outcome:
