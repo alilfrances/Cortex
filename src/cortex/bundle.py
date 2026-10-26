@@ -105,7 +105,10 @@ BASE_CLASS_SHARE = 0.6
 OVERRIDES_PER_METHOD = 4
 # Seeds are real functions: no class nodes, nothing of at most TRIVIAL_SPAN_LINES lines (a factory or an
 # accessor says nothing about what the task is about), and the best span of each of the SEED_FILES best
-# files is always a seed so one file's methods cannot take every slot.
+# files is always a seed so one file's methods cannot take every slot. A span with no resolved outgoing call
+# and no base class never seeds: the walk would return nothing from it, and a small UI span dense with the
+# task's words (a QML handler that only sets properties) would take the slot of a function that does reach
+# something.
 SEED_FILES = 5
 TRIVIAL_SPAN_LINES = 3
 # Of the other-file callees of a function the CALLEES_PER_SEED most relevant are followed, not the first
@@ -480,13 +483,15 @@ def _select_seeds(
     symbol_by_id: dict[str, GraphNode],
     file_scores: dict[str, float],
     constructors: Iterable[str] = (),
+    reaches: Callable[[str], bool] | None = None,
 ) -> list[BundleItem]:
     """The spans whose callees are followed: the best CALLEE_SEEDS functions that are not trivial.
 
     Class nodes, the `constructors` (a hub constructor calls everything the object needs, and outscores
     the method the task is about) and spans of at most TRIVIAL_SPAN_LINES lines never seed (they outscore the function the
     task is about but call nothing worth following); the best span of each of the SEED_FILES best-scoring
-    files is taken first, then the rest by score.
+    files is taken first, then the rest by score. When `reaches` is given, a span for which it is false (no
+    resolved outgoing call and no base class: the walk would return nothing from it) never seeds either.
     """
     eligible = []
     constructor_ids = frozenset(constructors)
@@ -495,6 +500,8 @@ def _select_seeds(
         if symbol is None or symbol.kind == 'class' or symbol.node_id in constructor_ids or symbol.span_start is None or symbol.span_end is None:
             continue
         if symbol.span_end - symbol.span_start + 1 <= TRIVIAL_SPAN_LINES:
+            continue
+        if reaches is not None and not reaches(symbol.node_id):
             continue
         eligible.append(item)
     eligible.sort(key=lambda item: (-item.score, item.item_id))
@@ -1584,6 +1591,7 @@ def generate_bundle(
         seed_items = _select_seeds(
             [item for item in candidates if item.kind == 'symbol' and item.score > 0], symbol_by_id, source_scores,
             [constructor for built in links.constructors_of.values() for constructor in built],
+            reaches=lambda symbol_id: bool(links.calls_from.get(symbol_id)) or bool(links.bases_of.get(class_of(symbol_id) or '')),
         )
         def overriders(method_id: str) -> list[str]:
             ranked = []

@@ -206,7 +206,7 @@ def test_the_vocabulary_of_the_task_reaches_the_gizmo_file(field, mode):
 # walk from the seeds returned nothing and the virtual `detach` with its two overriders was never reached.
 @TREE_SITTER_ONLY  # resolved calls: the regex fallback emits name-only call edges
 @pytest.mark.parametrize("repo_name", [
-    pytest.param("field_seed_markup_repo", marks=pytest.mark.xfail(strict=True, reason="Task 4.2")),
+    "field_seed_markup_repo",
     pytest.param("field_seed_markup_calls_repo", marks=pytest.mark.xfail(strict=True, reason="Task 4.3")),
 ])
 @pytest.mark.parametrize("mode", MODES)
