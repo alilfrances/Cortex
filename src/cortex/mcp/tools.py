@@ -281,6 +281,11 @@ TOOL_TITLES: dict[str, str] = {
     "cortex_status": "Cortex: server status",
 }
 _NON_READ_ONLY_TOOLS = frozenset({"cortex_refresh"})
+# Loaded upfront by Claude Code instead of behind ToolSearch: the cheap, reliable lookups a session
+# reaches for first (about 3.7k chars of schema of the ~11k for all tools). The rest stay deferred.
+_ALWAYS_LOAD_TOOLS = frozenset({
+    "cortex_search_symbols", "cortex_references", "cortex_relations", "cortex_read_symbol", "cortex_impact",
+})
 
 
 def _annotate_tool_definition(definition: dict[str, Any]) -> dict[str, Any]:
@@ -294,7 +299,11 @@ def _annotate_tool_definition(definition: dict[str, Any]) -> dict[str, Any]:
         "openWorldHint": False,
     }
     rest = {key: value for key, value in definition.items() if key != "name"}
-    return {"name": name, "title": title, **rest, "annotations": annotations}
+    annotated = {"name": name, "title": title, **rest, "annotations": annotations}
+    if name in _ALWAYS_LOAD_TOOLS:
+        # Other MCP clients ignore unknown `_meta` keys; MCP allows `_meta` on a Tool.
+        annotated["_meta"] = {"anthropic/alwaysLoad": True}
+    return annotated
 
 
 TOOL_DEFINITIONS = [_annotate_tool_definition(definition) for definition in TOOL_DEFINITIONS]

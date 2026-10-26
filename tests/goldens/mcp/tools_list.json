@@ -129,6 +129,9 @@
     "title": "Cortex: pre-edit context cards"
   },
   {
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    },
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
@@ -247,6 +250,9 @@
     "title": "Cortex: dead code candidates"
   },
   {
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    },
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
@@ -285,6 +291,9 @@
     "title": "Cortex: search symbols"
   },
   {
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    },
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
@@ -378,6 +387,9 @@
     "title": "Cortex: read indexed file"
   },
   {
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    },
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
@@ -452,6 +464,9 @@
     "title": "Cortex: graph relations"
   },
   {
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    },
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
