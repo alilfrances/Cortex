@@ -313,3 +313,114 @@ def test_body_relevance_weighs_the_rare_term_above_the_common_one() -> None:
     assert _body_relevance({"mid"}, weights) == pytest.approx(0.5)
     assert _body_relevance({"mid", "common"}, weights) == pytest.approx(5 / 8)
     assert _body_relevance({"rare", "mid", "common"}, weights) == 1.0         # capped
+
+
+# --- 0.15.1 Task 1: what the walk did, in the bundle (docs/plan-0.15.1-fixes.md) ---
+
+EXPANSION_KEYS = {
+    "seeds", "seeds_cross_file", "seed_refusals", "callees_computed", "callee_files", "callees_packed", "callees_dropped",
+}
+
+
+def _balanced(expansion: dict) -> bool:
+    """Every computed callee is either packed or has exactly one reason for being left out."""
+    return expansion["callees_computed"] == expansion["callees_packed"] + sum(expansion["callees_dropped"].values())
+
+
+def test_the_expansion_block_counts_the_companion_callees(tmp_path, monkeypatch):
+    from evals.run_evals import COMPANION_GOLD_TASKS, _build_companion_repo
+
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("CORTEX_SEMANTIC", "0")
+    task = COMPANION_GOLD_TASKS[0]
+    repo = _build_companion_repo(tmp_path)
+    ingest_repository(repo)
+
+    expansion = generate_bundle(repo, task=task.description, budget=900, output_format="json")["expansion"]
+
+    assert set(expansion) == EXPANSION_KEYS
+    assert expansion["callees_computed"] >= 1
+    assert expansion["callees_packed"] >= 1
+    assert expansion["callee_files"] >= 1
+    assert expansion["seeds"] and {"id", "path", "score"} == set(expansion["seeds"][0])
+    assert _balanced(expansion), expansion
+
+
+def test_the_expansion_block_names_the_seed_of_the_field_seed_fixture(tmp_path, monkeypatch):
+    from evals.run_evals import FIELD_GOLD_TASKS, _build_field_seed_markup_repo
+
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("CORTEX_SEMANTIC", "0")
+    task = next(t for t in FIELD_GOLD_TASKS if t.repo == "field_seed_markup_repo")
+    repo = _build_field_seed_markup_repo(tmp_path)
+    ingest_repository(repo)
+
+    expansion = generate_bundle(repo, task=task.description, budget=task.budget, output_format="json")["expansion"]
+
+    assert any(seed["id"].startswith("symbol:src/itemmodel.cpp:") for seed in expansion["seeds"]), expansion["seeds"]
+    # The screens' spans reach nothing, the model file's onTypeChanged does: refusals say which was which.
+    assert expansion["seed_refusals"]["no_reach"] > 0
+    assert set(expansion["seed_refusals"]) == {"class", "constructor", "trivial", "no_reach"}
+    assert expansion["seeds_cross_file"] >= 1
+    assert _balanced(expansion), expansion
+
+
+def test_a_repository_without_resolved_calls_gets_the_empty_shape(tmp_path, monkeypatch):
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    root = tmp_path / "repo"
+    (root / "pkg").mkdir(parents=True)
+    (root / "pkg" / "config.py").write_text("RETRY_LIMIT = 3\nTIMEOUT = 30\n")
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+    subprocess.run(["git", "-c", "user.email=a@b", "-c", "user.name=a", "commit", "-qm", "i"], cwd=root, check=True)
+    ingest_repository(root)
+
+    expansion = generate_bundle(root, task="retry limit timeout", budget=2000, output_format="json")["expansion"]
+
+    assert expansion == {
+        "seeds": [],
+        "seeds_cross_file": 0,
+        "seed_refusals": {"class": 0, "constructor": 0, "trivial": 0, "no_reach": 0},
+        "callees_computed": 0,
+        "callee_files": 0,
+        "callees_packed": 0,
+        "callees_dropped": {"budget": 0, "file_cap": 0, "inside_selected_span": 0, "not_reached": 0, "no_candidate": 0},
+    }
+
+
+def test_concise_cortex_query_carries_the_expansion_summary(tmp_path, monkeypatch):
+    import json
+
+    from cortex.mcp.tools import call_tool
+    from evals.run_evals import COMPANION_GOLD_TASKS, _build_companion_repo
+
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("CORTEX_SEMANTIC", "0")
+    task = COMPANION_GOLD_TASKS[0]
+    repo = _build_companion_repo(tmp_path)
+    ingest_repository(repo)
+    args = {"repo_path": str(repo), "task": task.description, "budget": 900}
+
+    concise = json.loads(call_tool("cortex_query", args)["content"][0]["text"])
+    detailed = json.loads(call_tool("cortex_query", {**args, "response_format": "detailed"})["content"][0]["text"])
+
+    assert "expansion" not in concise
+    assert concise["expansion_summary"].startswith("seeds ") and ", callees " in concise["expansion_summary"]
+    assert ", packed " in concise["expansion_summary"]
+    assert set(detailed["expansion"]) == EXPANSION_KEYS
+    assert f"callees {detailed['expansion']['callees_computed']}," in concise["expansion_summary"]
+
+
+def test_a_callee_that_does_not_fit_is_counted_as_dropped_for_budget(tmp_path, monkeypatch):
+    from evals.run_evals import COMPANION_GOLD_TASKS, _build_companion_repo
+
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("CORTEX_SEMANTIC", "0")
+    repo = _build_companion_repo(tmp_path)
+    ingest_repository(repo)
+
+    expansion = generate_bundle(repo, task=COMPANION_GOLD_TASKS[0].description, budget=250, output_format="json")["expansion"]
+
+    assert expansion["callees_dropped"]["budget"] >= 1, expansion
+    assert expansion["callees_packed"] < expansion["callees_computed"]
+    assert _balanced(expansion), expansion
