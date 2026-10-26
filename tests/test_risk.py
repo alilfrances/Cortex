@@ -277,8 +277,9 @@ def test_deadline_inside_test_selection_returns_a_partial_payload(tmp_path: Path
     # The ranking computed before test selection is the one a complete run returns.
     assert [item["path"] for item in result["files"]] == [item["path"] for item in full["files"]]
     assert result["files"]
-    # Test selection never finished, so every reviewable changed file is reported as unverified.
-    assert result["uncovered_changed_files"] == [item["path"] for item in result["files"]]
+    # Test selection never finished, so no changed file was shown to be uncovered: they are untraced.
+    assert result["uncovered_changed_files"] == []
+    assert result["untraced_changed_files_total"] == len(result["files"])
 
     truncated = truncate_risk_result(result, 2000)
     assert truncated["partial"] is True
@@ -289,6 +290,42 @@ def test_deadline_inside_test_selection_returns_a_partial_payload(tmp_path: Path
     # Even the minimal fallback payload (a budget too small for the ordinary one) keeps the flag.
     tiny = truncate_risk_result(result, 150)
     assert tiny["partial"] is True and tiny["tests_run_all"] is True
+
+
+def test_a_deadline_in_test_selection_counts_untraced_files_not_uncovered_ones(tmp_path: Path, monkeypatch) -> None:
+    from cortex.impacted_tests import is_documentation, is_runnable_test
+    from cortex.risk import _RISK_MINIMAL_KEYS, _RISK_SCALAR_KEYS, truncate_risk_result
+
+    repo = _repo(tmp_path)
+    _expire_inside_test_selection(monkeypatch)
+    result = analyze_risk(repo, "HEAD~2..HEAD")
+
+    # The same filter `analyze_risk` applies: not deleted, not a runnable test, not documentation.
+    reviewable = [
+        item["path"] for item in result["files"]
+        if item["status"] != "D" and not is_runnable_test(item["path"]) and not is_documentation(item["path"])
+    ]
+    assert result["partial"] is True
+    assert result["uncovered_changed_files"] == []
+    assert result["untraced_changed_files_total"] == len(reviewable) > 0
+    assert "untraced_changed_files_total" in _RISK_SCALAR_KEYS and "untraced_changed_files_total" in _RISK_MINIMAL_KEYS
+
+    for budget in (150, 500, 2000, 8000):
+        truncated = truncate_risk_result(result, budget)
+        assert truncated["untraced_changed_files_total"] == result["untraced_changed_files_total"], budget
+        assert "uncovered_changed_files_total" not in truncated, budget
+
+
+def test_uncovered_changed_files_total_does_not_depend_on_the_budget() -> None:
+    from cortex.risk import truncate_risk_result
+    from tests.test_risk_truncate import _large_diff_result
+
+    result = _large_diff_result()
+    full = len(result["uncovered_changed_files"])
+    for budget in range(500, 20001, 500):
+        out = truncate_risk_result(result, budget)
+        assert out.get("uncovered_changed_files_total", len(out["uncovered_changed_files"])) == full, budget
+        assert "untraced_changed_files_total" not in out, budget
 
 
 def test_mcp_risk_partial_payload_is_not_a_deadline_error_or_cached(tmp_path: Path, monkeypatch) -> None:
