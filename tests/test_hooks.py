@@ -191,7 +191,7 @@ def test_session_start_hook_starts_a_detached_full_rebuild_for_an_outdated_index
     assert json.loads(record.read_text(encoding="utf-8")) == ["refresh", "--full", str(repo)]
 
 
-def test_session_start_hook_does_not_start_a_rebuild_while_the_ingest_lock_is_held(tmp_path: Path) -> None:
+def test_session_start_hook_says_a_rebuild_is_running_while_the_ingest_lock_is_held(tmp_path: Path) -> None:
     repo = _write_repo(tmp_path)
     _seed_db(repo, graph_version=0)
     launcher, record = _fake_launcher(tmp_path)
@@ -199,9 +199,31 @@ def test_session_start_hook_does_not_start_a_rebuild_while_the_ingest_lock_is_he
     with ingest_lock(repo):
         result = _run_hook(repo, CORTEX_SESSION_START_REBUILD=None, CORTEX_CLI_LAUNCHER=str(launcher))
 
-    _assert_outdated_text(_additional_context(result.stdout))
+    # Another process is rebuilding: no second one is spawned, and "run cortex_refresh" would only queue
+    # behind that lock, so the text says what is happening instead.
+    assert result.returncode == 0
+    assert result.stderr == ""
+    context = _additional_context(result.stdout)
+    assert "older Cortex" in context
+    assert "2 indexed files" in context
+    assert "already running" in context
+    assert "stale: true" in context
+    assert "run cortex_refresh" not in context
+    assert "answered as-is" not in context
     time.sleep(0.5)
     assert not record.exists()
+
+
+def test_session_start_hook_keeps_the_refresh_text_for_every_other_skip_reason(tmp_path: Path) -> None:
+    repo = _write_repo(tmp_path)
+    _seed_db(repo, graph_version=0)
+    missing = tmp_path / "no-such-launcher.py"
+
+    # a missing launcher, with and without the opt-out, even while the lock is held
+    _assert_outdated_text(_additional_context(_run_hook(repo, CORTEX_SESSION_START_REBUILD=None, CORTEX_CLI_LAUNCHER=str(missing)).stdout))
+    with ingest_lock(repo):
+        opted_out = _run_hook(repo, CORTEX_SESSION_START_REBUILD="0", CORTEX_CLI_LAUNCHER=str(missing))
+    _assert_outdated_text(_additional_context(opted_out.stdout))
 
 
 def test_session_start_hook_does_not_rebuild_a_current_or_stale_index(tmp_path: Path) -> None:

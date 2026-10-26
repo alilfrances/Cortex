@@ -761,7 +761,8 @@ class CortexStore:
 
         The five steps used to commit one by one, so a reader (another Cortex process, or this one after a
         crash) could see the repo with its rows deleted and not yet rewritten. In WAL mode readers keep the
-        previous snapshot until this commits. FTS and semantic embedding sync stay with the caller, after it.
+        previous snapshot until this commits. The `source_fts` rows are written inside it (by `_reset_repo_rows` and
+        `_save_sources_rows`); only the semantic embedding sync stays with the caller, after it.
         """
         with self.connection:
             self._reset_repo_rows(repo_path, fingerprint)

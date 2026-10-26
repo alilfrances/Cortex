@@ -93,17 +93,22 @@ def _ingest_lock_held(repo_root: Path) -> bool:
         os.close(fd)
 
 
-def _start_background_rebuild(repo_root: Path) -> bool:
-    """Spawn `cortex refresh --full` detached and return at once; True when a rebuild was started.
+def _start_background_rebuild(repo_root: Path) -> str:
+    """Spawn `cortex refresh --full` detached and return at once: "started", "running" or "skipped".
+
+    "running" means the ingest lock is held, so another process is already rebuilding; "skipped" covers
+    the opt-out, Windows and a missing launcher.
 
     The hook never runs ingest itself (it has a 5 s timeout). The launcher sets up the parser runtime first,
     so the rebuilt index is not silently a regex-fallback one. CORTEX_CLI_LAUNCHER is the test seam.
     """
     if os.environ.get("CORTEX_SESSION_START_REBUILD") == "0" or os.name == "nt":
-        return False
+        return "skipped"
     launcher = Path(os.environ.get("CORTEX_CLI_LAUNCHER") or Path(__file__).resolve().parent.parent / "bin" / "cortex-cli.py")
-    if not launcher.is_file() or _ingest_lock_held(repo_root):
-        return False
+    if not launcher.is_file():
+        return "skipped"
+    if _ingest_lock_held(repo_root):
+        return "running"
     subprocess.Popen(
         [sys.executable, str(launcher), "refresh", "--full", str(repo_root)],
         stdin=subprocess.DEVNULL,
@@ -112,14 +117,14 @@ def _start_background_rebuild(repo_root: Path) -> bool:
         close_fds=True,
         start_new_session=True,
     )
-    return True
+    return "started"
 
 
-def _try_background_rebuild(repo_root: Path) -> bool:
+def _try_background_rebuild(repo_root: Path) -> str:
     try:
         return _start_background_rebuild(repo_root)
     except Exception:
-        return False  # fail open: the message then tells the model to run cortex_refresh
+        return "skipped"  # fail open: the message then tells the model to run cortex_refresh
 
 
 def _inside_git_repo(path: Path) -> bool:
@@ -150,11 +155,18 @@ def main() -> int:
             return 0
 
         agent_hint = " Multi-step exploration can go to the cortex-explorer agent."
-        if freshness == "outdated" and _try_background_rebuild(cwd):
+        rebuild = _try_background_rebuild(cwd) if freshness == "outdated" else "skipped"
+        if rebuild == "started":
             context = (
                 f"Cortex index was built by an older Cortex ({file_count} indexed files); a full rebuild has "
                 "started in the background (about a minute on a large repository). Until it finishes, tools "
                 "answer from the old index with stale: true."
+            )
+        elif rebuild == "running":
+            context = (
+                f"Cortex index was built by an older Cortex ({file_count} indexed files); a rebuild is already "
+                "running in another process. Until it finishes, tools answer from the old index with "
+                "stale: true; no cortex_refresh call is needed."
             )
         elif freshness == "outdated":
             context = (
