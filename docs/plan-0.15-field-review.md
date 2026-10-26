@@ -1,6 +1,25 @@
 # Plan: Cortex 0.15.0 — 0.14.0 field review (fifth pass)
 
-Status: **planned**, not implemented.
+Status: **implemented in 0.15.0**, except where noted. Outcomes and deviations (details in `CHANGELOG.md`):
+- Phases 1, 3, 4 and 5: as planned. Task 1.4 (optional) was done under its decision rule: 13 class findings
+  disappear across the fixtures, none is added. Task 5.4 took the owner default (`haiku`). Task 5.5, 5.6
+  and 5.7 as planned. Task 5.3 as planned (3,722 characters for the five tools).
+- Deviations: Task 1.1 also changed the `cortex_dead_code.multilang_repo` goldens (they had recorded the
+  namespace finding; the plan listed none). Task 2.1 leaves a call operator defined in an anonymous struct,
+  `bool operator()(int a)`, labelled `a` (a `func`, not a `class`; a separate naming limit of `operator`
+  definitions). Task 4.1's `ui_calls` variant needs `onItemTypeChanged` to call the helper as well, because
+  with the plan's shape Task 4.2 alone already restored the expansion; Task 4.3's `max(...)` fallback was
+  not needed. Task 5.2b: the hook already imported `cortex.ingest` at the top of `_repo_status`; the import
+  now sits below the format check. Task 6.1: `_member_type` was split into `_member_type_candidates` and a
+  wrapper so the audit reuses the lookup.
+- Added after the Phase 5 review: SessionStart says "a rebuild is already running" (instead of "run
+  cortex_refresh") when the background rebuild is skipped because the ingest lock is held.
+- Phase 6: the audit buckets landed; on the `--field-shape` repository every member bucket is 0 (all 64
+  unresolved calls are `external`), so the next release's choice needs the table from the field index.
+- Phase 7: the version is 0.15.0; `tests/goldens/mcp/initialize.json` carries the new `serverInfo.version`.
+- Still not met / not done: every field acceptance item of §5 (not verified until the reviewer's run); the
+  items of §3 (unresolved virtual call, plugin boundary, JS/Java/Python call coverage, partial test coverage
+  under a deadline).
 Input: `docs/review-0.14.0-field.md` ("Cortex 0.14.0: field review (fifth pass)", C++/Qt/QML repository,
 3.7k files, 161k nodes, 622k edges). Section numbers (§1.1–§3.4) below refer to that document.
 Base: `main` at 0.14.0 (`7365b10`).
