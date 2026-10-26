@@ -178,7 +178,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "cortex_references",
-        "description": "Cross-language symbol references from graph edges and repository search. Use writes mode to find mutations.",
+        "description": "Cross-language symbol references from graph edges and repository search, each with its source line as snippet. Use writes mode to find mutations.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -2715,6 +2715,7 @@ def _call_references(arguments: dict[str, Any]) -> dict[str, Any]:
         symbol,
         budget=int(arguments.get("budget", 2000)),
         mode=str(arguments.get("mode", "all")),
+        snippets=True,
     )
     response_format = _response_format(arguments)
     return _content(_format_payload({"repo_path": str(repo_root), **result}, status, response_format))

@@ -4,11 +4,13 @@
       {
         "access": "definition",
         "origin": "graph",
+        "snippet": "def login(self, username, password):",
         "text": "app/auth.py:11"
       },
       {
         "access": "read",
         "origin": "grep",
+        "snippet": "self.audit.record(\"auth.login\", {\"username\": username})",
         "text": "app/auth.py:17"
       }
     ],

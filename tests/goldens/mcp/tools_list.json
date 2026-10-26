@@ -474,7 +474,7 @@
       "readOnlyHint": true,
       "title": "Cortex: find references"
     },
-    "description": "Cross-language symbol references from graph edges and repository search. Use writes mode to find mutations.",
+    "description": "Cross-language symbol references from graph edges and repository search, each with its source line as snippet. Use writes mode to find mutations.",
     "inputSchema": {
       "properties": {
         "budget": {

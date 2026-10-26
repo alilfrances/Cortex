@@ -4,51 +4,61 @@
       {
         "access": "definition",
         "origin": "graph",
+        "snippet": "void deviceConnected(int deviceId);",
         "text": "include/DeviceManager.hpp:11"
       },
       {
         "access": "definition",
         "origin": "graph",
+        "snippet": "void onDeviceConnected(int deviceId);",
         "text": "include/DeviceManager.hpp:14"
       },
       {
         "access": "definition",
         "origin": "graph",
+        "snippet": "void onDeviceConnected(int deviceId);",
         "text": "include/DeviceModel.hpp:10"
       },
       {
         "access": "definition",
         "origin": "graph",
+        "snippet": "signal deviceConnected(int deviceId)",
         "text": "qml/DeviceDelegate.qml:4"
       },
       {
         "access": "definition",
         "origin": "graph",
+        "snippet": "onDeviceConnected: console.log(\"device connected\", deviceId)",
         "text": "qml/Main.qml:12"
       },
       {
         "access": "definition",
         "origin": "graph",
+        "snippet": "void DeviceManager::onDeviceConnected(int deviceId) {",
         "text": "src/DeviceManager.cpp:23"
       },
       {
         "access": "definition",
         "origin": "graph",
+        "snippet": "void DeviceModel::onDeviceConnected(int deviceId) {",
         "text": "src/DeviceModel.cpp:5"
       },
       {
         "access": "read",
         "origin": "grep",
+        "snippet": "connect(this, &DeviceManager::deviceConnected, model, &DeviceModel::onDeviceConnected);",
         "text": "src/DeviceManager.cpp:6"
       },
       {
         "access": "read",
         "origin": "grep",
+        "snippet": "emit deviceConnected(deviceId);",
         "text": "src/DeviceManager.cpp:13"
       },
       {
         "access": "read",
         "origin": "grep",
+        "snippet": "emit deviceConnected(deviceId);",
         "text": "src/DeviceManager.cpp:16"
       }
     ],

@@ -545,8 +545,13 @@ def test_cortex_references_unions_graph_and_grep_hits_bucketed(tmp_path: Path, m
 
     payload = _payload(call_tool("cortex_references", {"repo_path": str(repo), "symbol": "Runner"}))
 
-    assert payload["items"]["code"] == [{"text": "engine.cpp:1", "origin": "graph", "access": "definition"}]
-    assert payload["items"]["config"] == [{"text": "CMakeLists.txt:1", "origin": "grep", "access": "read"}]
+    # Each hit carries its source line (Task 5.5); the store holds no sources here, so it is read from disk.
+    assert payload["items"]["code"] == [
+        {"text": "engine.cpp:1", "origin": "graph", "access": "definition", "snippet": "class Runner {};"}
+    ]
+    assert payload["items"]["config"] == [
+        {"text": "CMakeLists.txt:1", "origin": "grep", "access": "read", "snippet": "target_link_libraries(app Runner)"}
+    ]
     assert payload["truncated"] is False
 
 
