@@ -91,6 +91,9 @@ class PluginManifestTests(unittest.TestCase):
 
         self.assertEqual(fields["name"], "cortex-explorer")
         self.assertTrue(fields["description"])
+        # Frontmatter beats CLAUDE_CODE_SUBAGENT_MODEL; the parent can still pass `model` per Agent call.
+        self.assertEqual(fields["model"], "haiku")
+        self.assertIn("pass `model` on the Agent call", body)
         tools_block = frontmatter
         for tool in ("Read", "Grep", "Glob"):
             self.assertIn(f"- {tool}", tools_block)
