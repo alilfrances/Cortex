@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from cortex.ingest import compute_repo_fingerprint
 from cortex.models import SourceRecord
-from cortex.store import GRAPH_FORMAT_VERSION, CortexStore, default_db_path
+from cortex.store import GRAPH_FORMAT_VERSION, CortexStore, default_db_path, ingest_lock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -52,13 +54,22 @@ def _seed_db(repo: Path, fingerprint: str | None = None, graph_version: int = GR
     store.connection.close()
 
 
-def _run_hook(repo: Path) -> subprocess.CompletedProcess[str]:
+def _run_hook(repo: Path, **env: str | None) -> subprocess.CompletedProcess[str]:
+    # The background rebuild is on by default; a test must never start a real one, so it is off unless a
+    # test turns it on together with a fake launcher (`CORTEX_CLI_LAUNCHER`). `None` removes a variable.
+    environment = {**os.environ, "CORTEX_SESSION_START_REBUILD": "0"}
+    for key, value in env.items():
+        if value is None:
+            environment.pop(key, None)
+        else:
+            environment[key] = value
     return subprocess.run(
         [sys.executable, str(HOOK)],
         cwd=repo,
         capture_output=True,
         text=True,
         timeout=5,
+        env=environment,
     )
 
 
@@ -121,6 +132,91 @@ def test_session_start_hook_reports_an_index_from_an_older_graph_format(tmp_path
     assert result.stderr == ""
     context = _additional_context(result.stdout)
     _assert_outdated_text(context)
+
+
+def _fake_launcher(tmp_path: Path) -> tuple[Path, Path]:
+    """A stand-in for bin/cortex-cli.py: records its argv, then lingers like a long rebuild would."""
+    record = tmp_path / "spawned.json"
+    launcher = tmp_path / "fake-cli.py"
+    launcher.write_text(
+        "import json, sys, time\n"
+        f"open({str(record)!r}, 'w').write(json.dumps(sys.argv[1:]))\n"
+        "time.sleep(3)\n",
+        encoding="utf-8",
+    )
+    return launcher, record
+
+
+def _wait_for_file(path: Path, seconds: float = 5.0) -> bool:
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if path.exists() and path.read_text(encoding="utf-8"):
+            return True
+        time.sleep(0.02)
+    return False
+
+
+def test_session_start_hook_without_the_rebuild_matches_the_plain_outdated_text(tmp_path: Path) -> None:
+    repo = _write_repo(tmp_path)
+    _seed_db(repo, graph_version=0)
+    launcher, record = _fake_launcher(tmp_path)
+
+    result = _run_hook(repo, CORTEX_SESSION_START_REBUILD="0", CORTEX_CLI_LAUNCHER=str(launcher))
+
+    context = _additional_context(result.stdout)
+    _assert_outdated_text(context)
+    assert "background" not in context
+    time.sleep(0.5)
+    assert not record.exists()
+
+
+def test_session_start_hook_starts_a_detached_full_rebuild_for_an_outdated_index(tmp_path: Path) -> None:
+    repo = _write_repo(tmp_path)
+    _seed_db(repo, graph_version=0)
+    launcher, record = _fake_launcher(tmp_path)
+
+    started = time.monotonic()
+    result = _run_hook(repo, CORTEX_SESSION_START_REBUILD=None, CORTEX_CLI_LAUNCHER=str(launcher))
+    elapsed = time.monotonic() - started
+
+    assert result.returncode == 0
+    assert result.stderr == ""
+    context = _additional_context(result.stdout)
+    assert "a full rebuild has started in the background" in context
+    assert "stale: true" in context
+    assert "2 indexed files" in context
+    # The child outlives the hook (it sleeps 3 s) without keeping the hook's stdout pipe open.
+    assert elapsed < 2.5
+    assert _wait_for_file(record)
+    assert json.loads(record.read_text(encoding="utf-8")) == ["refresh", "--full", str(repo)]
+
+
+def test_session_start_hook_does_not_start_a_rebuild_while_the_ingest_lock_is_held(tmp_path: Path) -> None:
+    repo = _write_repo(tmp_path)
+    _seed_db(repo, graph_version=0)
+    launcher, record = _fake_launcher(tmp_path)
+
+    with ingest_lock(repo):
+        result = _run_hook(repo, CORTEX_SESSION_START_REBUILD=None, CORTEX_CLI_LAUNCHER=str(launcher))
+
+    _assert_outdated_text(_additional_context(result.stdout))
+    time.sleep(0.5)
+    assert not record.exists()
+
+
+def test_session_start_hook_does_not_rebuild_a_current_or_stale_index(tmp_path: Path) -> None:
+    for index, fingerprint in enumerate((None, "old-fingerprint")):
+        case = tmp_path / str(index)
+        case.mkdir()
+        repo = _write_repo(case)
+        _seed_db(repo, fingerprint=fingerprint)
+        launcher, record = _fake_launcher(case)
+
+        result = _run_hook(repo, CORTEX_SESSION_START_REBUILD=None, CORTEX_CLI_LAUNCHER=str(launcher))
+
+        assert "background" not in _additional_context(result.stdout)
+        time.sleep(0.3)
+        assert not record.exists()
 
 
 def test_session_start_hook_reads_a_pre_010_database_without_the_column(tmp_path: Path) -> None:

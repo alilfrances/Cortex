@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
+import subprocess
 import sys
 from pathlib import Path
 
@@ -27,7 +29,6 @@ def _emit(additional_context: str) -> None:
 
 
 def _repo_status(repo_root: Path) -> tuple[str, int] | None:
-    from cortex.ingest import compute_repo_fingerprint
     from cortex.store import GRAPH_FORMAT_VERSION, default_db_path
 
     db_path = default_db_path(repo_root)
@@ -60,8 +61,65 @@ def _repo_status(repo_root: Path) -> tuple[str, int] | None:
     graph_version = int(version_row[0] or 0) if version_row is not None else 0
     if graph_version < GRAPH_FORMAT_VERSION:
         return ("outdated", file_count)
+    from cortex.ingest import compute_repo_fingerprint  # not needed (or imported) for an outdated index
+
     current_fingerprint = compute_repo_fingerprint(repo_root)
     return ("fresh" if stored_fingerprint == current_fingerprint else "stale", file_count)
+
+
+def _ingest_lock_held(repo_root: Path) -> bool:
+    """True when another process holds the ingest lock (a non-blocking probe, released at once).
+
+    Anything unexpected counts as held: the caller then skips the background rebuild.
+    """
+    import fcntl
+
+    from cortex.store import ingest_lock_path
+
+    try:
+        fd = os.open(ingest_lock_path(repo_root), os.O_RDWR)
+    except FileNotFoundError:
+        return False  # nothing has ever taken the lock
+    except OSError:
+        return True
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            return True
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        return False
+    finally:
+        os.close(fd)
+
+
+def _start_background_rebuild(repo_root: Path) -> bool:
+    """Spawn `cortex refresh --full` detached and return at once; True when a rebuild was started.
+
+    The hook never runs ingest itself (it has a 5 s timeout). The launcher sets up the parser runtime first,
+    so the rebuilt index is not silently a regex-fallback one. CORTEX_CLI_LAUNCHER is the test seam.
+    """
+    if os.environ.get("CORTEX_SESSION_START_REBUILD") == "0" or os.name == "nt":
+        return False
+    launcher = Path(os.environ.get("CORTEX_CLI_LAUNCHER") or Path(__file__).resolve().parent.parent / "bin" / "cortex-cli.py")
+    if not launcher.is_file() or _ingest_lock_held(repo_root):
+        return False
+    subprocess.Popen(
+        [sys.executable, str(launcher), "refresh", "--full", str(repo_root)],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        close_fds=True,
+        start_new_session=True,
+    )
+    return True
+
+
+def _try_background_rebuild(repo_root: Path) -> bool:
+    try:
+        return _start_background_rebuild(repo_root)
+    except Exception:
+        return False  # fail open: the message then tells the model to run cortex_refresh
 
 
 def _inside_git_repo(path: Path) -> bool:
@@ -92,7 +150,13 @@ def main() -> int:
             return 0
 
         agent_hint = " Multi-step exploration can go to the cortex-explorer agent."
-        if freshness == "outdated":
+        if freshness == "outdated" and _try_background_rebuild(cwd):
+            context = (
+                f"Cortex index was built by an older Cortex ({file_count} indexed files); a full rebuild has "
+                "started in the background (about a minute on a large repository). Until it finishes, tools "
+                "answer from the old index with stale: true."
+            )
+        elif freshness == "outdated":
             context = (
                 f"Cortex index was built by an older Cortex ({file_count} indexed files) and is answered "
                 "as-is until rebuilt; run cortex_refresh (a full rebuild, about a minute on a large repository)."
