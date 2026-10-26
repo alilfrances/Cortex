@@ -404,3 +404,103 @@ def test_two_processes_ingest_repository_concurrently_serialize(
     assert a_end <= b_start or b_end <= a_start, intervals
     assert sorted(r["updated"] for r in results) == [0, 10]
     _assert_consistent(repo)
+
+
+# --------------------------------------------------------------------------- #
+# A full ingest replaces the index in one transaction (plan Task 5.2a)
+# --------------------------------------------------------------------------- #
+
+# The child patches whichever graph-write step the store has (the public `save_graph` before the fix, the
+# row-level helper `write_full_index` calls after it) to sleep before it inserts, so the window between
+# "old rows deleted" and "new rows inserted" is half a second wide instead of microseconds.
+_SLOW_FULL_INGEST = """
+import sys, time
+from pathlib import Path
+sys.path.insert(0, {src!r})
+from cortex.store import CortexStore
+from cortex.ingest import ingest_repository
+
+for name in ("save_graph", "_save_graph_rows"):
+    original = getattr(CortexStore, name, None)
+    if original is None:
+        continue
+    def slow(self, *args, _original=original, **kwargs):
+        time.sleep(0.5)
+        return _original(self, *args, **kwargs)
+    setattr(CortexStore, name, slow)
+
+Path({ready!r}).write_text("1")
+ingest_repository(Path({repo!r}), commit_limit=10, incremental=False)
+"""
+
+
+def _index_counts(db_path: Path, repo: Path) -> tuple[int, int, int]:
+    """(sources, nodes, edges) read in ONE read transaction from a fresh connection."""
+    connection = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=30)
+    try:
+        connection.execute("BEGIN")
+        key = str(repo.resolve())
+        counts = tuple(
+            int(connection.execute(f"SELECT COUNT(*) FROM {table} WHERE repo_path = ?", (key,)).fetchone()[0])
+            for table in ("sources", "graph_nodes", "graph_edges")
+        )
+        connection.execute("COMMIT")
+        return counts  # type: ignore[return-value]
+    finally:
+        connection.close()
+
+
+def test_a_reader_never_sees_a_half_written_index_during_a_full_ingest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _repo(tmp_path, monkeypatch)
+    ingest_repository(repo, commit_limit=10)
+    db_path = default_db_path(repo)
+    old = _index_counts(db_path, repo)
+    assert old[1] > 0
+    (repo / "extra.py").write_text("def extra():\n    return 1\n\ndef more():\n    return extra()\n", encoding="utf-8")
+    commit_all(repo, "add extra")
+
+    ready = tmp_path / "ready"
+    script = _SLOW_FULL_INGEST.format(src=str(SRC), ready=str(ready), repo=str(repo))
+    proc = subprocess.Popen(
+        [sys.executable, "-c", script], env=dict(os.environ), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+    )
+    seen: set[tuple[int, int, int]] = set()
+    try:
+        _wait_for(ready)
+        while proc.poll() is None:
+            seen.add(_index_counts(db_path, repo))
+            time.sleep(0.01)
+        _, err = proc.communicate(timeout=60)
+        assert proc.returncode == 0, err
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+    new = _index_counts(db_path, repo)
+
+    assert new != old and new[1] > old[1]
+    assert seen, "the reader never ran while the child was ingesting"
+    assert seen <= {old, new}, f"a reader saw a state that is neither the old nor the new index: {sorted(seen)}"
+    assert old in seen, "the reader never overlapped the ingest, so the test would not catch the empty window"
+
+
+def test_a_failure_inside_the_full_write_leaves_the_old_index_in_place(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _repo(tmp_path, monkeypatch)
+    ingest_repository(repo, commit_limit=10)
+    db_path = default_db_path(repo)
+    old = _index_counts(db_path, repo)
+    (repo / "extra.py").write_text("def extra():\n    return 1\n", encoding="utf-8")
+    commit_all(repo, "add extra")
+
+    def boom(self, *args, **kwargs):
+        raise RuntimeError("crash between the sources and the graph")
+
+    monkeypatch.setattr(CortexStore, "_save_graph_rows", boom)
+    with pytest.raises(RuntimeError):
+        ingest_repository(repo, commit_limit=10, incremental=False)
+
+    assert _index_counts(db_path, repo) == old
+    assert CortexStore(db_path).get_repo_graph_version(repo) == store_module.GRAPH_FORMAT_VERSION
