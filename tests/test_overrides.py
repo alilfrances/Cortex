@@ -4,7 +4,10 @@ from __future__ import annotations
 from cortex.bundle import (
     CALLEES_PER_SEED,
     OVERRIDES_PER_METHOD,
+    REACH_WALK_NODES,
     UTILITY_MIN_CALLERS,
+    CallLinks,
+    _reaches_beyond_file,
     _call_graph_links,
     _callee_scores,
     _select_seeds,
@@ -231,6 +234,64 @@ def test_the_best_span_of_each_of_the_five_best_files_is_a_seed():
     for path in paths[:5]:
         assert any(f":{path}:" in name for name in names), (path, names)
     assert not any(":f5.cpp:" in name or ":f6.cpp:" in name for name in names)
+
+
+def _links(calls: dict[str, list[str]], *, bases=None, overridden=None) -> CallLinks:
+    return CallLinks({}, {}, calls, bases or {}, overridden or {}, frozenset())
+
+
+def _reaches(nodes: list[GraphNode], links: CallLinks, symbol_id: str) -> bool:
+    by_id = {n.node_id: n for n in nodes}
+    return _reaches_beyond_file(
+        symbol_id, links, lambda i: by_id[i].source_ref if i in by_id else None, lambda _i: None,
+    )
+
+
+def test_a_qml_span_whose_only_callee_is_an_external_node_of_its_own_file_does_not_reach():
+    nodes = [method("ui/S.qml", "handler", span=(1, 8)), method("ui/S.qml", "hide", span=(10, 14))]
+    links = _links({"symbol:ui/S.qml:handler": ["external:qml:ui/S.qml:hide"]})
+
+    assert not _reaches(nodes, links, "symbol:ui/S.qml:handler")
+    assert not _reaches(nodes, _links({}), "symbol:ui/S.qml:handler")  # no calls at all
+
+
+def test_a_span_reaches_through_a_same_file_helper_that_calls_another_file():
+    nodes = [
+        method("ui/S.qml", "handler", span=(1, 8)), method("ui/S.qml", "helper", span=(10, 14)),
+        method("ui/S.qml", "leaf", span=(16, 20)), method("core/model.cpp", "detach", span=(1, 8)),
+    ]
+    handler, helper, leaf, detach = (f"symbol:{n.source_ref}:{n.label}" for n in nodes)
+
+    through_helper = _links({handler: ["external:qml:ui/S.qml:x", helper], helper: [leaf], leaf: [detach]})
+    assert _reaches(nodes, through_helper, handler)
+    assert not _reaches(nodes, _links({handler: [helper], helper: [leaf, "external:qml:ui/S.qml:y"]}), handler)
+    assert not _reaches(nodes, _links({handler: [helper], helper: [handler, leaf], leaf: [helper]}), handler)  # cycles end
+
+
+def test_a_span_that_calls_a_same_file_function_with_overriders_reaches():
+    nodes = [method("a.cpp", "run", span=(1, 8)), method("a.cpp", "step", span=(10, 14))]
+    run, step = "symbol:a.cpp:run", "symbol:a.cpp:step"
+
+    assert _reaches(nodes, _links({run: [step]}, overridden={step: ["symbol:b.cpp:step"]}), run)
+    assert not _reaches(nodes, _links({run: [step]}), run)
+
+
+def test_a_span_whose_class_has_a_base_reaches_even_with_no_calls():
+    nodes = [cls("a.cpp", "Derived"), method("a.cpp", "run", span=(2, 9))]
+    by_id = {n.node_id: n for n in nodes}
+    links = _links({}, bases={"symbol:a.cpp:Derived": ["symbol:b.h:Base"]})
+
+    assert _reaches_beyond_file("symbol:a.cpp:run", links, lambda i: by_id[i].source_ref, lambda _i: "symbol:a.cpp:Derived")
+    assert not _reaches_beyond_file("symbol:a.cpp:run", _links({}), lambda i: by_id[i].source_ref, lambda _i: None)
+
+
+def test_the_walk_of_a_huge_same_file_chain_stops_and_gives_the_benefit_of_the_doubt():
+    nodes = [method("a.cpp", f"f{i}", span=(i * 10 + 1, i * 10 + 8)) for i in range(REACH_WALK_NODES + 50)]
+    ids = [f"symbol:a.cpp:f{i}" for i in range(len(nodes))]
+    chain = {ids[i]: [ids[i + 1]] for i in range(len(ids) - 1)}
+
+    assert _reaches(nodes, _links(chain), ids[0])
+    assert not _reaches(nodes, _links({k: v for k, v in chain.items() if int(k.rsplit("f", 1)[1]) < 20}), ids[0])
 
 
 def test_a_span_that_reaches_nothing_does_not_seed():

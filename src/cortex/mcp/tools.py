@@ -791,6 +791,20 @@ def _query_token_stats(
     }
 
 
+def _expansion_summary(expansion: dict[str, Any]) -> str:
+    """One line for the concise form: `seeds 6 (cross-file 1), callees 3, packed 3`, plus what was dropped and why."""
+    line = (
+        f"seeds {len(expansion.get('seeds', []))} (cross-file {expansion.get('seeds_cross_file', 0)}), "
+        f"callees {expansion.get('callees_computed', 0)}, packed {expansion.get('callees_packed', 0)}"
+    )
+    if expansion.get("reserved"):
+        line += ", reserved"
+    dropped = {reason: count for reason, count in expansion.get("callees_dropped", {}).items() if count}
+    if dropped:
+        line += " (dropped: " + ", ".join(f"{reason} {count}" for reason, count in dropped.items()) + ")"
+    return line
+
+
 def _concise_query_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
     compact: dict[str, Any] = {
         "task": bundle.get("task", ""),
@@ -802,6 +816,8 @@ def _concise_query_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
         "open_questions": bundle.get("open_questions", []),
         "items": [],
     }
+    if isinstance(bundle.get("expansion"), dict):
+        compact["expansion_summary"] = _expansion_summary(bundle["expansion"])
     if bundle.get("degraded"):
         compact["degraded"] = bundle["degraded"]
     for item in bundle.get("items", []):

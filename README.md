@@ -4,7 +4,7 @@ Cortex is a graph-aware, local-first context engine for code agents. It ingests 
 
 The result is a repo-native context service: MCP tools for live agent queries, CLI commands for reports and exports, and local parser/runtime state. Parser setup downloads only locked artifacts; repository source is never sent during setup. Normal ingest/query is offline after setup.
 
-Current package and plugin metadata is `0.15.0` (`pyproject.toml` and plugin manifests).
+Current package and plugin metadata is `0.15.1` (`pyproject.toml` and plugin manifests).
 
 ## What Cortex Builds
 
@@ -51,7 +51,7 @@ claude --plugin-dir /path/to/Cortex
 
 ### Claude Code exploration agent
 
-The Claude Code plugin ships a read-only `cortex-explorer` agent for multi-step exploration questions such as “where is X handled”, “how does Y flow”, and “what connects to Z”. Use it when the main agent would otherwise need several search, read, and graph calls; keep single lookups direct because a sub-agent round-trip costs more than one Cortex tool call. Its frontmatter explicitly allowlists the plugin-scoped Cortex MCP read/analysis tools plus `Read`, `Grep`, and `Glob` (but no edit, write, shell, or refresh tool). It uses the Cortex MCP loop and returns findings, consulted file/symbol IDs with line spans, and suggested next Cortex calls. Its Cortex calls are recorded in the existing token-savings ledger like any other MCP tool call, so no extra plumbing is needed. The agent pins a small, fast model in its `model` frontmatter key; the parent can pass `model` on the Agent call for a harder question.
+The Claude Code plugin ships a read-only `cortex-explorer` agent for multi-step exploration questions such as “where is X handled”, “how does Y flow”, and “what connects to Z”. Use it when the main agent would otherwise need several search, read, and graph calls; keep single lookups direct because a sub-agent round-trip costs more than one Cortex tool call. Its frontmatter explicitly allowlists the plugin-scoped Cortex MCP read/analysis tools plus `Read`, `Grep`, and `Glob` (but no edit, write, shell, or refresh tool). On macOS, Linux and WSL, Claude Code leaves `Glob` and `Grep` out of the default tool set but gives them back to a subagent that lists them and leaves out `Bash`, which is why `cortex-explorer` lists them and not `Bash` (it is read-only). It uses the Cortex MCP loop and returns findings, consulted file/symbol IDs with line spans, and suggested next Cortex calls. Its Cortex calls are recorded in the existing token-savings ledger like any other MCP tool call, so no extra plumbing is needed. The agent pins a small, fast model in its `model` frontmatter key; the parent can pass `model` on the Agent call for a harder question.
 
 The definition ships in both the marketplace-installed plugin and local `claude --plugin-dir` development mode. In Claude Code's agent picker it is plugin-scoped as `cortex:cortex-explorer` (for example, `@agent-cortex:cortex-explorer`). The Codex plugin format used by `.codex-plugin/plugin.json` has no equivalent sub-agent concept, so `cortex-explorer` is Claude Code-only.
 

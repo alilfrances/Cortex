@@ -163,3 +163,46 @@ def test_a_class_with_a_member_called_from_outside_is_live(tmp_path, monkeypatch
     assert "Local" not in symbols and "Out" not in symbols, findings
     # A dead class whose methods only call each other must not hide itself.
     assert ("lib/island.h", "Island") in findings, findings
+
+
+# A type used as a type (`Rec r;`, a parameter, `sizeof`) makes no graph edge, so a data-only C/C++ struct with a
+# code reference outside its definition was reported `low` ("grep refs in code/config"). It has no member function
+# whose call could credit it, and no out-of-line definition that would mention its name without using it.
+DATA_ONLY_TYPE_FILES = {
+    "lib/rec.h": (
+        "typedef struct {\n    int id;\n    int size;\n} Rec;\n"
+        "struct Named {\n    int x;\n};\n"
+        "struct Orphan {\n    int never;\n};\n"
+        "struct Mentioned {\n    int quiet;\n};\n"
+        "int fill(Rec *out);\n"
+    ),
+    "lib/rec.c": '#include "rec.h"\nint fill(Rec *out) { out->id = 1; return 0; }\n',
+    "app/main.c": (
+        '#include "../lib/rec.h"\n'
+        "// Mentioned used to live here\n"
+        "int main(void) {\n    Rec r;\n    struct Named n;\n    fill(&r);\n    return n.x;\n}\n"
+    ),
+}
+
+
+@TREE_SITTER_ONLY
+def test_a_data_only_type_used_in_code_is_not_reported(tmp_path, monkeypatch):
+    findings = _findings(tmp_path, monkeypatch, DATA_ONLY_TYPE_FILES)
+    symbols = {symbol for _, symbol in findings}
+    assert "Rec" not in symbols and "Named" not in symbols, findings
+    # A data struct that nothing references is still dead; one named only in a comment is the weaker tier.
+    assert findings[("lib/rec.h", "Orphan")]["confidence"] == "high", findings
+    assert findings[("lib/rec.h", "Mentioned")]["confidence"] == "medium", findings
+
+
+CLASS_WITH_METHODS_FILES = {
+    "lib/widget.h": "class Widget {\npublic:\n    int size;\n    int area();\n};\n",
+    "lib/widget.cpp": '#include "widget.h"\nint Widget::area() { return size * size; }\n',
+}
+
+
+@TREE_SITTER_ONLY
+def test_a_class_with_methods_is_still_reported_when_only_its_own_definitions_name_it(tmp_path, monkeypatch):
+    findings = _findings(tmp_path, monkeypatch, CLASS_WITH_METHODS_FILES)
+    # `Widget::area()` in the .cpp mentions the name without using the class: not a use of the type.
+    assert ("lib/widget.h", "Widget") in findings, findings

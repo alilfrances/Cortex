@@ -61,6 +61,8 @@ _CPP_SUFFIXES = (".h", ".hh", ".hpp", ".hxx", ".c", ".cc", ".cpp", ".cxx")
 _PURE_VIRTUAL_RE = re.compile(r"\)[^;{}]*=\s*0\s*;\s*$")
 # The signature of a C++ namespace node, the same test as `callresolve._Index.is_namespace`.
 _NAMESPACE_SIGNATURE_RE = re.compile(r"^\s*(?:inline\s+)?namespace\b")
+# The reference tier of a symbol with a grep hit in code outside its own definition (`_reference_tier`).
+_CODE_REFS_REASON = "no incoming edges; grep refs in code/config"
 
 
 def _is_pure_virtual(node: GraphNode) -> bool:
@@ -134,6 +136,40 @@ def _classes_with_live_members(nodes: Sequence[GraphNode], edges: Sequence[Graph
         source = nodes_by_id.get(edge.source)
         live |= owners - (classes_of(source) if source is not None else set())
     return live
+
+
+def _data_only_types(nodes: Sequence[GraphNode]) -> set[str]:
+    """C/C++ class nodes (not namespaces) with no member function: `struct Rec { int id; }`, `typedef struct {...} Rec;`.
+
+    Using a type (`Rec r;`, a parameter, `sizeof`, a cast) creates no graph edge, and no call credits a class that
+    has nothing to call. A member function is a `func`/`method` node of the same file whose span lies inside the
+    class span, or one whose `metadata.qualifier` is the class label (an out-of-line `Foo::bar()`)."""
+    classes = [
+        node for node in nodes
+        if node.kind == "class" and not _is_namespace(node) and node.source_ref.lower().endswith(_CPP_SUFFIXES)
+    ]
+    if not classes:
+        return set()
+    qualifiers: set[str] = set()
+    spans_by_file: dict[str, list[tuple[int, int]]] = defaultdict(list)
+    for node in nodes:
+        if node.kind not in _METHOD_KINDS:
+            continue
+        qualifier = node.metadata.get("qualifier") if isinstance(node.metadata, dict) else None
+        if qualifier:
+            qualifiers.add(str(qualifier))
+        if node.span_start is not None and node.span_end is not None:
+            spans_by_file[node.source_ref].append((node.span_start, node.span_end))
+    return {
+        node.node_id
+        for node in classes
+        if node.label not in qualifiers
+        and not (
+            node.span_start is not None
+            and node.span_end is not None
+            and any(node.span_start <= start and end <= node.span_end for start, end in spans_by_file.get(node.source_ref, ()))
+        )
+    }
 
 
 def _is_namespace(node: GraphNode) -> bool:
@@ -452,7 +488,7 @@ def _reference_tier(
         return "high", "no incoming edges; no grep refs"
     if all(bucket == "doc" or _comment_or_doc_hit(repo_root, store, location, source_by_path) for bucket, location in locations):
         return "medium", "no incoming edges; grep refs only in comments/docs"
-    return "low", "no incoming edges; grep refs in code/config"
+    return "low", _CODE_REFS_REASON
 
 
 def _candidate_reason(
@@ -526,6 +562,7 @@ def analyze_dead_code(
                 credited_labels.add(str(value))
 
     live_classes = _classes_with_live_members(graph_nodes, graph_edges)
+    data_only_types = _data_only_types(graph_nodes)
     reexports = _reexported_symbols(all_sources)
     def in_scope(node: GraphNode) -> bool:
         return not path_prefix or node.source_ref == path_prefix or node.source_ref.startswith(path_prefix.rstrip("/") + "/")
@@ -587,6 +624,8 @@ def analyze_dead_code(
         except AnalysisStopped:
             partial, cursor = True, list(key)  # stopped building the reference corpus: this candidate is unfinished
             break
+        if node.node_id in data_only_types and (tier, reason) == ("low", _CODE_REFS_REASON):
+            continue  # a code reference outside its definition is a use of the type, and a data type has nothing else to call
         findings.append(
             {
                 "symbol": node.label,

@@ -19,6 +19,7 @@
     "budget",
     "confidence_notes",
     "current_fingerprint",
+    "expansion",
     "fingerprint",
     "generated_at",
     "items",

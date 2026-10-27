@@ -135,6 +135,20 @@ FIELD_GOLD_TASKS: tuple[GoldTask, ...] = (
         budget=2000,
         tight_budget=2000,
     ),
+    GoldTask(
+        repo="field_seed_markup_local_repo",
+        description="item changes type and then the item is removed",
+        expected_files=("src/itemmodel.cpp", "src/baseitem.cpp"),
+        budget=2000,
+        tight_budget=2000,
+    ),
+    GoldTask(
+        repo="field_seed_markup_flood_repo",
+        description="item changes type and then the item is removed",
+        expected_files=("src/itemmodel.cpp", "src/baseitem.cpp"),
+        budget=1500,
+        tight_budget=1500,
+    ),
 )
 
 
@@ -918,6 +932,72 @@ def _build_field_seed_markup_calls_repo(base: Path) -> Path:
     return _build_field_seed_markup_repo(base, ui_calls=True)
 
 
+def _build_field_seed_markup_local_repo(base: Path, *, flood: int = 0) -> Path:
+    """`field_seed_markup_calls_repo` with the screens turned up until they take every seed slot whatever the
+    ranking (0.15.1 Task 3, finding 1 gap a). Ten QML screens, each with four functions that call a same-file
+    helper of five lines: a QML same-file call resolves to an `external:qml:<screen>:hideItem` node, so every one of
+    those spans has an outgoing `calls` edge and passes a filter on "reaches something", but nothing they call
+    lives in another file. They carry more of the task's words than `src/itemmodel.cpp`, which is small enough to
+    escape length normalisation (a model file of ten lines, no filler) and whose `onTypeChanged` still calls
+    `entry->detach(...)` into `baseitem.cpp`, the virtual with two overriders. With `flood` (0.15.1 Task 4), that many large
+    screens named after the task (`ui/ItemTypeRemoved<k>.qml`) are added: they outscore the callees of the model file
+    and fill a small budget, so the callees are computed and then left out of the bundle."""
+    repo = base / ("field_seed_markup_flood_repo" if flood else "field_seed_markup_local_repo")
+    _init_repo(repo)
+    for k in range(10):
+        helper = (
+            f"    function hideItem() {{\n        // hide the item that was removed ({k})\n"
+            "        listItem.visible = false\n        removedItem.opacity = 0\n        itemTypeLabel.text = itemType\n    }\n"
+        )
+        _write(repo / f"ui/ItemScreen{k}.qml", (
+            "import QtQuick 2.15\nItem {\n    id: root\n    property int itemType: 0\n"
+            f"    function onItemTypeChanged() {{\n        // item type changed then the item is removed ({k})\n"
+            "        removedItem.visible = false\n        hideItem()\n        itemTypeLabel.text = itemType\n        listItem.opacity = 0\n    }\n"
+            "    function removeItem() {\n        // remove item when the item type changed\n        hideItem()\n"
+            "        listItem.visible = false\n        removedItem.opacity = 1\n        itemType = 0\n    }\n"
+            "    function changeItemType() {\n        // the item changes type and the item is removed\n        hideItem()\n"
+            "        itemType = 1\n        removedItem.visible = true\n        itemTypeLabel.text = itemType\n    }\n"
+            "    function itemRemoved() {\n        // the removed item changes the type of the item\n        hideItem()\n"
+            "        itemType = 2\n        removedItem.opacity = 1\n        listItem.visible = false\n    }\n"
+            f"{helper}}}\n"
+        ))
+    _write(repo / "src/baseitem.h", "class BaseItem {\npublic:\n    virtual ~BaseItem();\n    virtual void detach(int slot);\n};\n")
+    _write(repo / "src/baseitem.cpp", (
+        '#include "baseitem.h"\nBaseItem::~BaseItem() {}\n'
+        "void BaseItem::detach(int slot) {\n    int cell = slot;\n    cell += 1;\n    cell *= 2;\n}\n"
+    ))
+    for name in ("TextEntry", "ImageEntry"):
+        stem = name.lower()
+        _write(repo / f"src/kinds/{stem}.h", (
+            f'#include "../baseitem.h"\nclass {name} : public BaseItem {{\npublic:\n    void detach(int slot) override;\n}};\n'
+        ))
+        _write(repo / f"src/kinds/{stem}.cpp", (
+            f'#include "{stem}.h"\nvoid {name}::detach(int slot) {{\n    int cell = slot;\n    cell -= 1;\n    cell *= 3;\n}}\n'
+        ))
+    _write(repo / "src/itemmodel.h", (
+        '#include "baseitem.h"\nclass ItemModel {\npublic:\n    void onTypeChanged(BaseItem* entry, int slot);\n};\n'
+    ))
+    _write(repo / "src/itemmodel.cpp", (
+        '#include "itemmodel.h"\n\nvoid ItemModel::onTypeChanged(BaseItem* entry, int slot) {\n'
+        "    int old = slot;\n    old += 1;\n    entry->detach(old);\n}\n"
+    ))
+    for k in range(flood):
+        functions = "".join(
+            f"    function itemTypeChanged{j}() {{\n        // the item changes type and then the item is removed ({k}.{j})\n"
+            f"        removedItem.visible = false\n        itemTypeLabel.text = itemType + {j}\n        listItem.opacity = 0\n"
+            f"        itemType = {j}\n    }}\n"
+            for j in range(12)
+        )
+        _write(repo / f"ui/ItemTypeRemoved{k}.qml", f"import QtQuick 2.15\nItem {{\n    property int itemType: 0\n{functions}}}\n")
+    _commit_all(repo, "add local-call seed fixture" + (" with a flood of keyword screens" if flood else ""))
+    return repo
+
+
+def _build_field_seed_markup_flood_repo(base: Path) -> Path:
+    """`field_seed_markup_local_repo` plus twelve large screens named after the task (0.15.1 Task 4)."""
+    return _build_field_seed_markup_local_repo(base, flood=12)
+
+
 def _build_field_vocab_repo(base: Path) -> Path:
     """Vocabulary: the task says `Gizmos`, `iOS` and `re-enumerates`; the code says `Gizmo`, `reconnect`
     and `remove`, and the other files talk about `os` and `re` so those split parts would match."""
@@ -1222,6 +1302,8 @@ def build_fixture_repos(base: Path) -> dict[str, Path]:
         "field_vocab_repo": _build_field_vocab_repo(base),
         "field_seed_markup_repo": _build_field_seed_markup_repo(base),
         "field_seed_markup_calls_repo": _build_field_seed_markup_calls_repo(base),
+        "field_seed_markup_local_repo": _build_field_seed_markup_local_repo(base),
+        "field_seed_markup_flood_repo": _build_field_seed_markup_flood_repo(base),
         "qt_app": _build_qt_app(base),
         "body_text_repo": _build_body_text_repo(base),
     }
@@ -1291,6 +1373,19 @@ def _run_bundle(repo: Path, task: GoldTask, mode: str, db_path: Path) -> dict[st
     return {"bundle": result, "latency_ms": latency_ms}
 
 
+def _packing_metrics(items: list[dict[str, Any]], expected_files: set[str], total_tokens: int) -> tuple[float, int]:
+    """What the packer chose, beside what it found: (`gold_token_share`, `expansion_items`).
+
+    The share is the tokens of packed items whose path is an expected file, over the bundle's `total_tokens` (0 for an
+    empty bundle); the count is the packed items that carry a `call_expansion` route (a callee span, or its file
+    packed whole). Neither is gated: file recall cannot tell a bundle that spends its budget on the gold files from one
+    that merely contains them."""
+    gold_tokens = sum(int(item.get("token_count", 0)) for item in items if item.get("path") in expected_files)
+    share = gold_tokens / total_tokens if total_tokens > 0 else 0.0
+    expansion_items = sum(1 for item in items if (item.get("metadata") or {}).get("call_expansion"))
+    return share, expansion_items
+
+
 def _score_task(task: GoldTask, mode: str, repo: Path, db_path: Path) -> dict[str, Any]:
     run = _run_bundle(repo, task, mode, db_path)
     bundle = run["bundle"]
@@ -1304,6 +1399,7 @@ def _score_task(task: GoldTask, mode: str, repo: Path, db_path: Path) -> dict[st
     symbol_hits = sum(1 for symbol in task.expected_symbols if _symbol_hit(items, symbol))
     symbol_recall = symbol_hits / len(task.expected_symbols) if task.expected_symbols else 1.0
     recall = (file_recall + symbol_recall) / 2 if task.expected_symbols else file_recall
+    gold_token_share, expansion_items = _packing_metrics(items, expected_files, int(bundle["total_tokens"]))
     return {
         "task": task,
         "mode": mode,
@@ -1314,6 +1410,8 @@ def _score_task(task: GoldTask, mode: str, repo: Path, db_path: Path) -> dict[st
         "file_recall": file_recall,
         "symbol_recall": symbol_recall,
         "tokens": int(bundle["total_tokens"]),
+        "gold_token_share": gold_token_share,
+        "expansion_items": expansion_items,
         "latency_ms": run["latency_ms"],
         "files": selected_list,
     }
@@ -1335,6 +1433,8 @@ def _aggregate(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "file_recall": sum(row["file_recall"] for row in mode_rows) / count,
                 "symbol_recall": sum(row["symbol_recall"] for row in mode_rows) / count,
                 "tokens": round(sum(row["tokens"] for row in mode_rows) / count),
+                "gold_token_share": sum(row["gold_token_share"] for row in mode_rows) / count,
+                "expansion_items": sum(row["expansion_items"] for row in mode_rows) / count,
                 "latency_ms": sum(row["latency_ms"] for row in mode_rows) / count,
             }
         )
@@ -1353,21 +1453,22 @@ def _format_markdown(
         "",
         "## Aggregate",
         "",
-        "| Mode | Tasks | Precision | Precision@3 | Recall | Avg Tokens | Avg Latency ms |",
-        "|---|---:|---:|---:|---:|---:|---:|",
+        "| Mode | Tasks | Precision | Precision@3 | Recall | Avg Tokens | Gold Token Share | Expansion Items | Avg Latency ms |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in aggregates:
         lines.append(
             f"| {row['mode']} | {row['tasks']} | {row['precision']:.3f} | {row['precision_at_3']:.3f} | "
-            f"{row['recall']:.3f} | {row['tokens']} | {row['latency_ms']:.1f} |"
+            f"{row['recall']:.3f} | {row['tokens']} | {row['gold_token_share']:.3f} | {row['expansion_items']:.2f} | "
+            f"{row['latency_ms']:.1f} |"
         )
     lines.extend(
         [
             "",
             "## Per Task",
             "",
-            "| Task | Mode | Precision | Precision@3 | Recall | File Recall | Symbol Recall | Tokens | Latency ms | Files |",
-            "|---|---|---:|---:|---:|---:|---:|---:|---:|---|",
+            "| Task | Mode | Precision | Precision@3 | Recall | File Recall | Symbol Recall | Tokens | Gold Token Share | Expansion Items | Latency ms | Files |",
+            "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|",
         ]
     )
     for row in rows:
@@ -1376,7 +1477,7 @@ def _format_markdown(
         lines.append(
             f"| {task.description} | {row['mode']} | {row['precision']:.3f} | {row['precision_at_3']:.3f} | {row['recall']:.3f} | "
             f"{row['file_recall']:.3f} | {row['symbol_recall']:.3f} | {row['tokens']} | "
-            f"{row['latency_ms']:.1f} | {files} |"
+            f"{row['gold_token_share']:.3f} | {row['expansion_items']} | {row['latency_ms']:.1f} | {files} |"
         )
     return "\n".join(lines) + "\n"
 
