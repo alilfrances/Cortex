@@ -128,8 +128,11 @@ EXPANSION_BUDGET_SHARE = 0.2
 REACH_WALK_NODES = 200  # `_reaches_beyond_file` stops after this many functions of one file and gives the span the benefit of the doubt
 # The reasons `bundle['expansion']` gives for a span that did not seed and for a computed callee that is not in the
 # packed bundle (`no_candidate`: the callee has no code span to pack; the others are the packing pass that refused it).
+# A span the pass refused for size is `too_large` when it is bigger than one item may be (the per-item cap, or the
+# whole budget), so only a smaller span can help it; `budget_exhausted` when it would have fitted an empty bundle but
+# the budget was already spent when its turn came, so it ranked too low. The two need different fixes.
 SEED_REFUSAL_REASONS = ('class', 'constructor', 'trivial', 'no_reach')
-CALLEE_DROP_REASONS = ('budget', 'file_cap', 'inside_selected_span', 'not_reached', 'no_candidate')
+CALLEE_DROP_REASONS = ('too_large', 'budget_exhausted', 'file_cap', 'inside_selected_span', 'not_reached', 'no_candidate')
 # Of the other-file callees of a function the CALLEES_PER_SEED most relevant are followed, not the first
 # ones in call-site order: relevance is 1 when the callee's name shares a task term; beyond
 # TRIVIAL_SPAN_LINES lines its body counts too, weighted by how rare the shared terms are (the summed
@@ -1880,7 +1883,12 @@ def generate_bundle(
             select_span(item, file_cap)
             paths_with_symbols.add(item.path)
         elif item.item_id in expansion_item_ids:
-            turned_away[item.item_id] = 'budget' if item.token_count > allowed else 'file_cap'
+            if item.token_count <= allowed:
+                turned_away[item.item_id] = 'file_cap'
+            elif item.token_count > min(item_cap, budget):
+                turned_away[item.item_id] = 'too_large'
+            else:
+                turned_away[item.item_id] = 'budget_exhausted'
 
     def pack(file_cap: int | None = None) -> None:
         """One pass over the candidates by score. With `file_cap`, a file's spans stop at that many tokens

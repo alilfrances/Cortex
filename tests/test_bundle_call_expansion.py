@@ -384,7 +384,9 @@ def test_a_repository_without_resolved_calls_gets_the_empty_shape(tmp_path, monk
         "callees_computed": 0,
         "callee_files": 0,
         "callees_packed": 0,
-        "callees_dropped": {"budget": 0, "file_cap": 0, "inside_selected_span": 0, "not_reached": 0, "no_candidate": 0},
+        "callees_dropped": {
+            "too_large": 0, "budget_exhausted": 0, "file_cap": 0, "inside_selected_span": 0, "not_reached": 0, "no_candidate": 0,
+        },
         "reserved": False,
     }
 
@@ -421,7 +423,7 @@ def test_concise_cortex_query_carries_the_expansion_summary(tmp_path, monkeypatc
     assert f"callees {detailed['expansion']['callees_computed']}," in concise["expansion_summary"]
 
 
-def test_a_callee_that_does_not_fit_is_counted_as_dropped_for_budget(tmp_path, monkeypatch):
+def test_a_callee_that_is_larger_than_one_item_may_be_counts_as_too_large(tmp_path, monkeypatch):
     from evals.run_evals import COMPANION_GOLD_TASKS, _build_companion_repo
 
     monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
@@ -431,6 +433,54 @@ def test_a_callee_that_does_not_fit_is_counted_as_dropped_for_budget(tmp_path, m
 
     expansion = generate_bundle(repo, task=COMPANION_GOLD_TASKS[0].description, budget=250, output_format="json")["expansion"]
 
-    assert expansion["callees_dropped"]["budget"] >= 1, expansion
+    assert expansion["callees_dropped"]["too_large"] >= 1, expansion
+    assert expansion["callees_dropped"]["budget_exhausted"] == 0, expansion
     assert expansion["callees_packed"] < expansion["callees_computed"]
+    assert _balanced(expansion), expansion
+
+
+def _step_repo(tmp_path: Path, monkeypatch, *, fillers: int, body_lines: int) -> Path:
+    """`Manager::reconnect` calls six `stepN` functions, each in its own file with `body_lines` lines; `fillers` files
+    repeat the task's words and rank above the callees."""
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("CORTEX_SEMANTIC", "0")
+    root = tmp_path / "repo"
+    (root / "src").mkdir(parents=True)
+    calls = "".join(f"    step{i}(widget);\n" for i in range(6))
+    (root / "src" / "manager.cpp").write_text(
+        '#include "steps.hpp"\n// device card reconnect: restore the card state after the device reconnect\n'
+        f"void Manager::reconnect(Widget* widget) {{\n{calls}}}\n"
+    )
+    (root / "src" / "steps.hpp").write_text("".join(f"void step{i}(Widget* w);\n" for i in range(6)))
+    for i in range(6):
+        body = "".join(f"    w->slot{j} = {j} + {i};\n" for j in range(body_lines))
+        (root / "src" / f"step{i}.cpp").write_text(f'#include "steps.hpp"\nvoid step{i}(Widget* w) {{\n{body}}}\n')
+    for i in range(fillers):
+        body = "".join(f"    // device card reconnect handling {i} line {j}\n" for j in range(30))
+        (root / "src" / f"card{i}.cpp").write_text(f"void cardNote{i}() {{\n{body}}}\n")
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+    subprocess.run(["git", "-c", "user.email=a@b", "-c", "user.name=a", "commit", "-qm", "i"], cwd=root, check=True)
+    ingest_repository(root)
+    return root
+
+
+def test_a_small_callee_that_ranks_below_items_filling_the_budget_counts_as_budget_exhausted(tmp_path, monkeypatch):
+    repo = _step_repo(tmp_path, monkeypatch, fillers=6, body_lines=12)
+
+    expansion = generate_bundle(repo, task="device card reconnect state", budget=1500, output_format="json")["expansion"]
+
+    assert expansion["callees_dropped"]["budget_exhausted"] >= 1, expansion
+    assert expansion["callees_dropped"]["too_large"] == 0, expansion
+    assert expansion["callees_packed"] >= 1  # each step span fits an empty bundle; the budget went to the filler files
+    assert _balanced(expansion), expansion
+
+
+def test_a_callee_bigger_than_the_per_item_cap_counts_as_too_large_even_with_budget_to_spare(tmp_path, monkeypatch):
+    repo = _step_repo(tmp_path, monkeypatch, fillers=0, body_lines=40)
+
+    expansion = generate_bundle(repo, task="device card reconnect state", budget=300, output_format="json")["expansion"]
+
+    assert expansion["callees_dropped"]["too_large"] >= 1, expansion
+    assert expansion["callees_dropped"]["budget_exhausted"] == 0, expansion
     assert _balanced(expansion), expansion

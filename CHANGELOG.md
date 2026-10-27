@@ -1,3 +1,9 @@
+## Unreleased
+
+Implemented from `docs/plan-0.15.2-callee-packing.md`. No graph format change.
+
+- Diagnostics (plan Task 1): the `budget` reason of `expansion.callees_dropped` is split in two. `too_large`: the callee's span is bigger than one item may be (`item_cap`, 0.4 of the budget when several files match, or the whole budget), so only a smaller entry can help it. `budget_exhausted`: the span would have fitted an empty bundle but the budget was already spent when its turn came, so it ranked too low. `CALLEE_DROP_REASONS` is now `too_large`, `budget_exhausted`, `file_cap`, `inside_selected_span`, `not_reached`, `no_candidate`; the concise `expansion_summary` lists whichever are non-zero. Tests: `tests/test_bundle_call_expansion.py` (the old budget test is now the `too_large` case; new `budget_exhausted` case and a `too_large` case with budget to spare). No golden changed: `expansion` is nested, and `python -m pytest tests/test_golden_*.py tests/test_eval_baseline.py` passes unchanged.
+
 ## 0.15.1 — 2026-10-27
 
 Follow-up to the 0.15.0 field run (the reviewer's five findings), implemented from `docs/plan-0.15.1-fixes.md`. A patch release: **no graph format change** (`GRAPH_FORMAT_VERSION` stays 8, so an index built by 0.15.0 is not rebuilt; nothing here changes extraction or resolution output). `cortex_query` now says what the call expansion did (finding 1), the evals score what the packer chose (finding 2), a seed must be able to leave its file (finding 1), a callee gets room in a tight budget when the normal packing left none (finding 1), and `dead_code` stops reporting data-only C/C++ types that code uses (finding 3).
