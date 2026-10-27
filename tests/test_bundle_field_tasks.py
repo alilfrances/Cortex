@@ -259,7 +259,7 @@ def test_computed_callees_get_a_share_of_a_tight_budget(field, mode):
 # The reservation is a second packing, run only when the first packed no computed callee. These two tests pin that:
 # a bundle that already holds a callee is the first packing's, and a repacked one is a consistent bundle.
 @TREE_SITTER_ONLY  # resolved calls: the regex fallback emits name-only call edges
-@pytest.mark.parametrize("repo_name", ["field_seed_markup_repo", "field_seed_markup_local_repo"])
+@pytest.mark.parametrize("repo_name", ["field_seed_markup_repo", "field_seed_markup_calls_repo"])
 @pytest.mark.parametrize("mode", MODES)
 def test_a_bundle_that_already_packs_a_callee_is_not_repacked(field, monkeypatch, repo_name, mode):
     import cortex.bundle as bundle_module
