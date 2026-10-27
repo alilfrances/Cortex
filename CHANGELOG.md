@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+Follow-up to the 0.15.0 field run, from `docs/plan-0.15.1-fixes.md`. No graph format change.
+
+**Goldens changed (so far):** `tests/goldens/mcp/shapes/cortex_query.concise.json` (new key `expansion_summary`) and `tests/goldens/mcp/shapes/cortex_query.detailed.json` (new key `expansion`). Nothing else changed.
+
+- Diagnostics (plan Task 1, finding 1): `cortex_query` says what the call expansion did. `generate_bundle` records an `expansion` block, returned in the JSON bundle and in the detailed `cortex_query` output: `seeds` (`id`, `path`, `score`), `seeds_cross_file` (seeds with a callee in another file), `seed_refusals` (spans turned away as a seed, by `class` / `constructor` / `trivial` / `no_reach`), `callees_computed`, `callee_files`, `callees_packed` (as their own span, inside a packed span, or through their file packed whole) and `callees_dropped` (by `budget` / `file_cap` / `inside_selected_span` / `not_reached`, plus `no_candidate` for a callee with no code span to pack). The reasons are recorded in `pack()` with counters only; a bundle with no resolved calls gets the same keys, empty. The concise form carries one line under `expansion_summary`, e.g. `seeds 6 (cross-file 1), callees 3, packed 3`. Tests: `tests/test_bundle_call_expansion.py`. Goldens: the two `cortex_query` shape goldens above.
+
 ## 0.15.0 — 2026-10-26
 
 Fifth pass on the field review (`docs/review-0.14.0-field.md`), implemented from `docs/plan-0.15-field-review.md`. A minor release: **graph format 8** (Task 2.1 changes node ids, so an index stamped 7 is rebuilt in full by its next refresh; the rebuild now starts in the background from the `SessionStart` hook and tools answer from the old index with `stale: true` until it finishes), changed `dead_code`, `cortex_risk` and `cortex_references` output, and five tools that Claude Code loads upfront.

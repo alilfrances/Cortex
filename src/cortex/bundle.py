@@ -113,6 +113,10 @@ OVERRIDES_PER_METHOD = 4
 # large file's best function is not worth less because the file around it is long.
 SEED_FILES = 5
 TRIVIAL_SPAN_LINES = 3
+# The reasons `bundle['expansion']` gives for a span that did not seed and for a computed callee that is not in the
+# packed bundle (`no_candidate`: the callee has no code span to pack; the others are the packing pass that refused it).
+SEED_REFUSAL_REASONS = ('class', 'constructor', 'trivial', 'no_reach')
+CALLEE_DROP_REASONS = ('budget', 'file_cap', 'inside_selected_span', 'not_reached', 'no_candidate')
 # Of the other-file callees of a function the CALLEES_PER_SEED most relevant are followed, not the first
 # ones in call-site order: relevance is 1 when the callee's name shares a task term; beyond
 # TRIVIAL_SPAN_LINES lines its body counts too, weighted by how rare the shared terms are (the summed
@@ -486,6 +490,7 @@ def _select_seeds(
     file_scores: dict[str, float],
     constructors: Iterable[str] = (),
     reaches: Callable[[str], bool] | None = None,
+    refusals: Counter[str] | None = None,
 ) -> list[BundleItem]:
     """The spans whose callees are followed: the best CALLEE_SEEDS functions that are not trivial.
 
@@ -494,16 +499,24 @@ def _select_seeds(
     task is about but call nothing worth following); the best span of each of the SEED_FILES best-scoring
     files is taken first, then the rest by score. When `reaches` is given, a span for which it is false (no
     resolved outgoing call and no base class: the walk would return nothing from it) never seeds either.
+    `refusals` (when given) counts the spans turned away, by reason: class, constructor, trivial, no_reach.
     """
     eligible = []
     constructor_ids = frozenset(constructors)
     for item in items:
         symbol = symbol_by_id.get(item.metadata['node_id'])
-        if symbol is None or symbol.kind == 'class' or symbol.node_id in constructor_ids or symbol.span_start is None or symbol.span_end is None:
+        if symbol is None or symbol.span_start is None or symbol.span_end is None:
             continue
-        if symbol.span_end - symbol.span_start + 1 <= TRIVIAL_SPAN_LINES:
-            continue
-        if reaches is not None and not reaches(symbol.node_id):
+        reason = (
+            'class' if symbol.kind == 'class'
+            else 'constructor' if symbol.node_id in constructor_ids
+            else 'trivial' if symbol.span_end - symbol.span_start + 1 <= TRIVIAL_SPAN_LINES
+            else 'no_reach' if reaches is not None and not reaches(symbol.node_id)
+            else None
+        )
+        if reason is not None:
+            if refusals is not None:
+                refusals[reason] += 1
             continue
         eligible.append(item)
     eligible.sort(key=lambda item: (-item.score, item.item_id))
@@ -517,6 +530,19 @@ def _select_seeds(
             break
         chosen.setdefault(item.item_id, item)
     return sorted(chosen.values(), key=lambda item: (-item.score, item.item_id))
+
+
+def _empty_expansion() -> dict:
+    """The call-expansion diagnostics of a bundle where nothing was walked; the shape is the same when it was."""
+    return {
+        'seeds': [],
+        'seeds_cross_file': 0,
+        'seed_refusals': dict.fromkeys(SEED_REFUSAL_REASONS, 0),
+        'callees_computed': 0,
+        'callee_files': 0,
+        'callees_packed': 0,
+        'callees_dropped': dict.fromkeys(CALLEE_DROP_REASONS, 0),
+    }
 
 
 def _call_graph_file_neighbors(nodes: list[GraphNode], edges: list[GraphEdge]) -> dict[str, set[str]]:
@@ -1567,6 +1593,9 @@ def generate_bundle(
             candidates.append(item)
             symbol_items_by_path[path].append(item)
             symbol_scores[symbol.node_id] = score
+    expansion = _empty_expansion()
+    callee_item_ids: dict[str, str] = {}  # computed callee symbol id -> id of the candidate that carries it
+    callee_paths: dict[str, str] = {}  # computed callee symbol id -> its file
     if links.calls_from or links.bases_of:
         classes_by_label: defaultdict[str, list[GraphNode]] = defaultdict(list)
         for symbol in symbol_by_id.values():
@@ -1590,10 +1619,15 @@ def generate_bundle(
             matches = classes_by_label.get(str(qualifier), []) if qualifier else []
             return matches[0].node_id if len(matches) == 1 else None
 
+        def file_of_symbol(symbol_id: str) -> str | None:
+            return symbol_by_id[symbol_id].source_ref if symbol_id in symbol_by_id else None
+
+        seed_refusals: Counter[str] = Counter()
         seed_items = _select_seeds(
             [item for item in candidates if item.kind == 'symbol' and item.score > 0], symbol_by_id, raw_source_scores,
             [constructor for built in links.constructors_of.values() for constructor in built],
             reaches=lambda symbol_id: bool(links.calls_from.get(symbol_id)) or bool(links.bases_of.get(class_of(symbol_id) or '')),
+            refusals=seed_refusals,
         )
         def overriders(method_id: str) -> list[str]:
             ranked = []
@@ -1612,7 +1646,7 @@ def generate_bundle(
         callees = _callee_scores(
             [(item.metadata['node_id'], item.score) for item in seed_items],
             links.calls_from,
-            lambda symbol_id: symbol_by_id[symbol_id].source_ref if symbol_id in symbol_by_id else None,
+            file_of_symbol,
             class_of,
             links.bases_of,
             relevance=relevance,
@@ -1622,6 +1656,21 @@ def generate_bundle(
             offerable=offerable,
         )
         file_candidate = {item.path: item for item in candidates if item.item_id.startswith('source:')}
+        seed_by_id = {item.metadata['node_id']: item for item in seed_items}
+        reaching_seeds = {
+            origin for callee_id, (_score, origin, _hop, _rel) in callees.items()
+            if origin in seed_by_id and file_of_symbol(callee_id) != seed_by_id[origin].path
+        }
+        expansion = {
+            'seeds': [{'id': item.metadata['node_id'], 'path': item.path, 'score': round(item.score, 2)} for item in seed_items],
+            'seeds_cross_file': len(reaching_seeds),
+            'seed_refusals': {reason: seed_refusals.get(reason, 0) for reason in SEED_REFUSAL_REASONS},
+            'callees_computed': len(callees),
+            'callee_files': len({path for path in map(file_of_symbol, callees) if path is not None}),
+            # Filled in after packing.
+            'callees_packed': 0,
+            'callees_dropped': dict.fromkeys(CALLEE_DROP_REASONS, 0),
+        }
         for callee_id, (callee_score, seed_id, hop, callee_relevance) in sorted(callees.items()):
             symbol = symbol_by_id.get(callee_id)
             source = source_by_path.get(symbol.source_ref) if symbol is not None else None
@@ -1634,6 +1683,7 @@ def generate_bundle(
             if callee_id in override_routes:
                 route = {**route, 'type': 'override', 'via': override_routes[callee_id]}
             existing = next((i for i in symbol_items_by_path.get(symbol.source_ref, ()) if i.metadata.get('node_id') == callee_id), None)
+            item_id = existing.item_id if existing is not None else f'symbol-span:{callee_id}'
             if existing is not None:
                 if callee_score > existing.score:
                     existing.score = callee_score
@@ -1644,7 +1694,7 @@ def generate_bundle(
                 if not span_text.strip():
                     continue
                 item = BundleItem(
-                    item_id=f'symbol-span:{callee_id}',
+                    item_id=item_id,
                     kind='symbol',
                     title=f'{symbol.source_ref}:{symbol.label}',
                     path=symbol.source_ref,
@@ -1662,6 +1712,8 @@ def generate_bundle(
                 candidates.append(item)
                 symbol_items_by_path[symbol.source_ref].append(item)
                 symbol_scores[callee_id] = callee_score
+            callee_item_ids[callee_id] = item_id
+            callee_paths[callee_id] = symbol.source_ref
             owner_file = file_candidate.get(symbol.source_ref)
             if owner_file is not None:
                 owner_file.score = max(owner_file.score, callee_score * SYMBOL_FILE_SCORE_SHARE)
@@ -1736,6 +1788,10 @@ def generate_bundle(
             return True
         return len(selected_spans[item.path]) >= SPANS_BEFORE_CAP and span_tokens[item.path] + item.token_count > file_cap
 
+    # Why a call-expansion span was last turned away by `pack` (a counter in `bundle['expansion']`, nothing more).
+    turned_away: dict[str, str] = {}
+    expansion_item_ids = frozenset(callee_item_ids.values())
+
     def select_span(item: BundleItem, file_cap: int | None = None) -> None:
         nonlocal oversize_tokens
         span_tokens[item.path] += item.token_count
@@ -1757,7 +1813,11 @@ def generate_bundle(
                 continue  # leftover budget is for matches, not for the first unrelated file by path
             allowed = min(budget - total_tokens, item_cap)
             if item.kind == 'symbol':
-                if item.path in files_fully_selected or inside_selected_span(item):
+                if item.path in files_fully_selected:
+                    continue
+                if inside_selected_span(item):
+                    if item.item_id in expansion_item_ids:
+                        turned_away[item.item_id] = 'inside_selected_span'
                     continue
                 file_item = file_item_by_path.get(item.path)
                 # Prefer the whole file when it fits outright; symbol spans exist
@@ -1773,6 +1833,8 @@ def generate_bundle(
                 if 0 < item.token_count <= allowed and not over_file_cap(item, file_cap):
                     select_span(item, file_cap)
                     paths_with_symbols.add(item.path)
+                elif item.item_id in expansion_item_ids:
+                    turned_away[item.item_id] = 'budget' if item.token_count > allowed else 'file_cap'
                 continue
             if item.kind == 'code' and item.path in paths_with_symbols:
                 continue
@@ -1831,6 +1893,22 @@ def generate_bundle(
     pack(max(1, int(budget * file_span_share(matching_code_files))))
     pack()
 
+    if expansion['callees_computed']:
+        dropped = expansion['callees_dropped']
+        for callee_id, item_id in callee_item_ids.items():
+            path = callee_paths[callee_id]
+            symbol = symbol_by_id[callee_id]
+            span = (symbol.span_start, symbol.span_end)
+            if (
+                item_id in selected_ids
+                or path in files_fully_selected
+                or any(lo <= span[0] and span[1] <= hi for lo, hi in selected_spans[path])
+            ):
+                expansion['callees_packed'] += 1
+            else:
+                dropped[turned_away.get(item_id, 'not_reached')] += 1
+        dropped['no_candidate'] = expansion['callees_computed'] - len(callee_item_ids)
+
     bundle = RetrievalBundle(
         task=task,
         repo_path=str(repo_root),
@@ -1850,6 +1928,7 @@ def generate_bundle(
 
     if output_format == 'json':
         result = bundle.to_dict()
+        result['expansion'] = expansion
         if degraded:
             result['degraded'] = ['graph_rank']
         return result
