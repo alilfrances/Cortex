@@ -142,6 +142,13 @@ FIELD_GOLD_TASKS: tuple[GoldTask, ...] = (
         budget=2000,
         tight_budget=2000,
     ),
+    GoldTask(
+        repo="field_seed_markup_flood_repo",
+        description="item changes type and then the item is removed",
+        expected_files=("src/itemmodel.cpp", "src/baseitem.cpp"),
+        budget=1500,
+        tight_budget=1500,
+    ),
 )
 
 
@@ -925,15 +932,17 @@ def _build_field_seed_markup_calls_repo(base: Path) -> Path:
     return _build_field_seed_markup_repo(base, ui_calls=True)
 
 
-def _build_field_seed_markup_local_repo(base: Path) -> Path:
+def _build_field_seed_markup_local_repo(base: Path, *, flood: int = 0) -> Path:
     """`field_seed_markup_calls_repo` with the screens turned up until they take every seed slot whatever the
     ranking (0.15.1 Task 3, finding 1 gap a). Ten QML screens, each with four functions that call a same-file
     helper of five lines: a QML same-file call resolves to an `external:qml:<screen>:hideItem` node, so every one of
     those spans has an outgoing `calls` edge and passes a filter on "reaches something", but nothing they call
     lives in another file. They carry more of the task's words than `src/itemmodel.cpp`, which is small enough to
     escape length normalisation (a model file of ten lines, no filler) and whose `onTypeChanged` still calls
-    `entry->detach(...)` into `baseitem.cpp`, the virtual with two overriders."""
-    repo = base / "field_seed_markup_local_repo"
+    `entry->detach(...)` into `baseitem.cpp`, the virtual with two overriders. With `flood` (0.15.1 Task 4), that many large
+    screens named after the task (`ui/ItemTypeRemoved<k>.qml`) are added: they outscore the callees of the model file
+    and fill a small budget, so the callees are computed and then left out of the bundle."""
+    repo = base / ("field_seed_markup_flood_repo" if flood else "field_seed_markup_local_repo")
     _init_repo(repo)
     for k in range(10):
         helper = (
@@ -972,8 +981,21 @@ def _build_field_seed_markup_local_repo(base: Path) -> Path:
         '#include "itemmodel.h"\n\nvoid ItemModel::onTypeChanged(BaseItem* entry, int slot) {\n'
         "    int old = slot;\n    old += 1;\n    entry->detach(old);\n}\n"
     ))
-    _commit_all(repo, "add local-call seed fixture")
+    for k in range(flood):
+        functions = "".join(
+            f"    function itemTypeChanged{j}() {{\n        // the item changes type and then the item is removed ({k}.{j})\n"
+            f"        removedItem.visible = false\n        itemTypeLabel.text = itemType + {j}\n        listItem.opacity = 0\n"
+            f"        itemType = {j}\n    }}\n"
+            for j in range(12)
+        )
+        _write(repo / f"ui/ItemTypeRemoved{k}.qml", f"import QtQuick 2.15\nItem {{\n    property int itemType: 0\n{functions}}}\n")
+    _commit_all(repo, "add local-call seed fixture" + (" with a flood of keyword screens" if flood else ""))
     return repo
+
+
+def _build_field_seed_markup_flood_repo(base: Path) -> Path:
+    """`field_seed_markup_local_repo` plus twelve large screens named after the task (0.15.1 Task 4)."""
+    return _build_field_seed_markup_local_repo(base, flood=12)
 
 
 def _build_field_vocab_repo(base: Path) -> Path:
@@ -1281,6 +1303,7 @@ def build_fixture_repos(base: Path) -> dict[str, Path]:
         "field_seed_markup_repo": _build_field_seed_markup_repo(base),
         "field_seed_markup_calls_repo": _build_field_seed_markup_calls_repo(base),
         "field_seed_markup_local_repo": _build_field_seed_markup_local_repo(base),
+        "field_seed_markup_flood_repo": _build_field_seed_markup_flood_repo(base),
         "qt_app": _build_qt_app(base),
         "body_text_repo": _build_body_text_repo(base),
     }

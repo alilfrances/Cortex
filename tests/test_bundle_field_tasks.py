@@ -24,6 +24,7 @@ from evals.run_evals import (
     _build_field_override_pure_repo,
     _build_field_override_repo,
     _build_field_seed_markup_calls_repo,
+    _build_field_seed_markup_flood_repo,
     _build_field_seed_markup_local_repo,
     _build_field_seed_markup_repo,
     _build_field_tiebreak_repo,
@@ -45,13 +46,14 @@ BUILDERS = {
     "field_seed_markup_repo": _build_field_seed_markup_repo,
     "field_seed_markup_calls_repo": _build_field_seed_markup_calls_repo,
     "field_seed_markup_local_repo": _build_field_seed_markup_local_repo,
+    "field_seed_markup_flood_repo": _build_field_seed_markup_flood_repo,
 }
 TASKS = {task.repo: task for task in FIELD_GOLD_TASKS}
 
 
 @pytest.fixture(scope="module")
 def _field_built(tmp_path_factory):
-    """The nine fixture repositories (the override chain in two variants, the seed markup in three), built and indexed once per module (eval settings: 20 commits)."""
+    """The ten fixture repositories (the override chain in two variants, the seed markup in four), built and indexed once per module (eval settings: 20 commits)."""
     root = tmp_path_factory.mktemp("field-tasks")
     data_dir = root / "data"
     built: dict[str, tuple[Path, Path]] = {}
@@ -236,6 +238,24 @@ def test_a_span_whose_calls_stay_in_its_file_does_not_take_a_seed_slot(field, mo
     seeds = [seed["id"] for seed in bundle["expansion"]["seeds"]]
     assert from_model, f"no call-expansion item starts from src/itemmodel.cpp; seeds {seeds}; refusals {bundle['expansion']['seed_refusals']}"
     assert any(seed.startswith("symbol:src/itemmodel.cpp:") for seed in seeds)
+
+
+# Twelve large screens named after the task outscore the three callees of `onTypeChanged` (which score from their seed,
+# x0.9 per hop) and fill the 1500-token budget: the walk computes `detach` and its two overriders and `pack` has no
+# room left when their turn comes. A bundle that cannot hold one of them cannot show the cause the walk found.
+# Not fixed in 0.15.1: reserving a share of the budget for the best call-expansion spans (Task 4) lowered the mean
+# precision@3 of the eval gate (0.6471 -> 0.5882 with 3 items / 0.2, 0.6176 with 2 / 0.1), so the task was dropped; see
+# the CHANGELOG ("Not met"). Strict: the mark must go with the change that makes this pass.
+@TREE_SITTER_ONLY  # resolved calls: the regex fallback emits name-only call edges
+@pytest.mark.xfail(strict=True, reason="0.15.1 Task 4 dropped: a reserved share of the budget lowers precision@3 (CHANGELOG, Not met)")
+@pytest.mark.parametrize("mode", MODES)
+def test_computed_callees_get_a_share_of_a_tight_budget(field, mode):
+    bundle, files = _run(field, "field_seed_markup_flood_repo", mode)
+
+    expansion = bundle["expansion"]
+    assert expansion["callees_computed"] > 0, expansion  # the walk found them; the rest is about packing
+    expanded = [item for item in bundle["items"] if (item.get("metadata") or {}).get("call_expansion")]
+    assert expansion["callees_packed"] > 0 and expanded, f"computed callees, none packed: {expansion}"
 
 
 # --- the fixtures themselves
