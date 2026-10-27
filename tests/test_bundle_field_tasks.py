@@ -19,6 +19,7 @@ from cortex.mcp.tools import _bundle_why
 from cortex.store import CortexStore
 from evals.run_evals import (
     FIELD_GOLD_TASKS,
+    _build_field_callee_fanout_repo,
     _build_field_ctor_repo,
     _build_field_hub_repo,
     _build_field_override_pure_repo,
@@ -47,13 +48,14 @@ BUILDERS = {
     "field_seed_markup_calls_repo": _build_field_seed_markup_calls_repo,
     "field_seed_markup_local_repo": _build_field_seed_markup_local_repo,
     "field_seed_markup_flood_repo": _build_field_seed_markup_flood_repo,
+    "field_callee_fanout_repo": _build_field_callee_fanout_repo,
 }
 TASKS = {task.repo: task for task in FIELD_GOLD_TASKS}
 
 
 @pytest.fixture(scope="module")
 def _field_built(tmp_path_factory):
-    """The ten fixture repositories (the override chain in two variants, the seed markup in four), built and indexed once per module (eval settings: 20 commits)."""
+    """The eleven fixture repositories (the override chain in two variants, the seed markup in five), built and indexed once per module (eval settings: 20 commits)."""
     root = tmp_path_factory.mktemp("field-tasks")
     data_dir = root / "data"
     built: dict[str, tuple[Path, Path]] = {}
@@ -254,6 +256,26 @@ def test_computed_callees_get_a_share_of_a_tight_budget(field, mode):
     assert expansion["callees_computed"] > 0, expansion  # the walk found them; the rest is about packing
     expanded = [item for item in bundle["items"] if (item.get("metadata") or {}).get("call_expansion")]
     assert expansion["callees_packed"] > 0 and expanded, f"computed callees, none packed: {expansion}"
+
+
+# `onTypeChanged` reaches twenty functions in twenty files of their own (and the virtual with two overriders); twelve large
+# screens named after the task fill the budget first, so on 0.15.1 the whole bodies are dropped for `budget_exhausted` (20 of
+# 23; the three the reservation of Task 4b of 0.15.1 packs are all it shows). A compact entry (declaration line and route)
+# lets the bundle show the call structure across the callee files without pushing the keyword files out.
+@TREE_SITTER_ONLY  # resolved calls: the regex fallback emits name-only call edges
+@pytest.mark.parametrize("budget", [3000, 6000])
+@pytest.mark.parametrize("mode", MODES)
+def test_callees_that_do_not_fit_whole_still_show_the_call_structure(field, mode, budget):
+    task = TASKS["field_callee_fanout_repo"]
+    bundle, files = _run(field, "field_callee_fanout_repo", mode, budget)
+
+    expansion = bundle["expansion"]
+    assert expansion["callees_computed"] >= 20, expansion
+    shown = expansion["callees_packed"] + expansion.get("callees_compact", 0)
+    assert shown >= 12, f"{shown} of {expansion['callees_computed']} callees shown: {expansion}"
+    routes = [(item.get("metadata") or {}).get("call_expansion") or {} for item in bundle["items"]]
+    assert any(route.get("type") == "override" for route in routes), "no override route among the items"
+    assert set(task.expected_files) <= set(files), f"the keyword files left the bundle: {sorted(set(files))}"
 
 
 # The reservation is a second packing, run only when the first packed no computed callee. These two tests pin that:

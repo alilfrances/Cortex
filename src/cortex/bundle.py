@@ -125,6 +125,20 @@ TRIVIAL_SPAN_LINES = 3
 # 2-4 items, 0.1-0.3 share; 0 items turns the second packing off.
 EXPANSION_RESERVED_ITEMS = 3
 EXPANSION_BUDGET_SHARE = 0.2
+# A computed callee that does not fit whole (too large for one item, or ranked below items that spent the budget: the
+# `too_large` / `budget_exhausted` drops) gets a compact entry instead: a comment naming the call route, its declaration
+# line(s) and an elision marker, about 15-30 tokens against the hundreds of its body. The entries come after every normal
+# item, so no earlier item moves, and take at most COMPACT_CALLEE_SHARE of the budget, at most COMPACT_CALLEES_MAX of them,
+# COMPACT_LINES_MAX declaration lines each. In a bundle whose walk found callees the normal passes run without that many
+# tokens (exactly what the best entries would take, so a tight budget keeps its keyword items); the tokens the entries
+# leave unused go back to one more uncapped pass. Taking the whole share lowered the recall of two eval rows with a
+# 180-token budget, where the share holds no entry at all, so the budget is held back only when it can hold
+# COMPACT_MIN_ENTRIES entries; otherwise the entries come from what the passes left. Tuning range 0.05-0.15 share (0.05 was
+# no better on those rows); 0 entries turns the pass off.
+COMPACT_CALLEE_SHARE = 0.1
+COMPACT_CALLEES_MAX = 24
+COMPACT_LINES_MAX = 3
+COMPACT_MIN_ENTRIES = 3
 REACH_WALK_NODES = 200  # `_reaches_beyond_file` stops after this many functions of one file and gives the span the benefit of the doubt
 # The reasons `bundle['expansion']` gives for a span that did not seed and for a computed callee that is not in the
 # packed bundle (`no_candidate`: the callee has no code span to pack; the others are the packing pass that refused it).
@@ -585,6 +599,7 @@ def _empty_expansion() -> dict:
         'callees_computed': 0,
         'callee_files': 0,
         'callees_packed': 0,
+        'callees_compact': 0,
         'callees_dropped': dict.fromkeys(CALLEE_DROP_REASONS, 0),
         'reserved': False,
     }
@@ -665,6 +680,59 @@ def _declaration_lines(lines: list[str], symbol: GraphNode) -> list[str]:
         if match:
             return [f"{match.group('prefix')} {ELISION_MARKER}"]
     return signature_lines
+
+
+# The comment character of a compact callee entry: `#` for the languages that use it, `//` for the rest of the code
+# the walk reaches (C, C++, QML, JavaScript, Java, Go, Rust, ...).
+_HASH_COMMENT_SUFFIXES = frozenset({'.py', '.rb', '.sh', '.pl', '.r', '.cmake'})
+
+
+def _route_comment(route: dict, callee_id: str, path: str) -> str:
+    """The comment line of a compact entry, worded as `mcp.tools._compact_why` words the same route:
+    `calls: <seed> -> <callee>` or `override: <path>:<base method> -> <path>:<method>`."""
+    def label(node_id: str) -> str:
+        return str(node_id).split(':', 2)[-1]
+
+    def where(node_id: str) -> str:
+        node_path, _, name = str(node_id).removeprefix('symbol:').partition(':')
+        return f'{node_path}:{name}' if name else node_path
+
+    if route.get('type') == 'override':
+        text = f"override: {where(route.get('via', ''))} -> {where(callee_id)}"
+    else:
+        text = f"calls: {label(route.get('from', ''))} -> {label(callee_id)}"
+    return f"{'#' if Path(path).suffix.lower() in _HASH_COMMENT_SUFFIXES else '//'} {text}"
+
+
+def _compact_callee_item(
+    symbol: GraphNode, route: dict, score: float, source_kind: str, lines: list[str]
+) -> BundleItem | None:
+    """The compact entry of a computed callee: a comment naming the call route, the callee's declaration line(s) (at most
+    COMPACT_LINES_MAX) and an elision marker. None when the callee has no declaration line to show."""
+    declaration = [line.rstrip() for line in _declaration_lines(lines, symbol)][:COMPACT_LINES_MAX]
+    if not any(line.strip() for line in declaration):
+        return None
+    out = [_route_comment(route, symbol.node_id, symbol.source_ref), *declaration]
+    if not any(ELISION_MARKER in line for line in declaration):
+        out.append(f'{_leading_ws(declaration[-1])}    {ELISION_MARKER}')
+    content = '\n'.join(out)
+    return BundleItem(
+        item_id=f'callee-compact:{symbol.node_id}',
+        kind='symbol',
+        title=f'{symbol.source_ref}:{symbol.label}',
+        path=symbol.source_ref,
+        content=content,
+        token_count=count_text_tokens(content, kind=source_kind),
+        score=score,
+        metadata={
+            'source_kind': source_kind,
+            'node_id': symbol.node_id,
+            'span_start': symbol.span_start,
+            'span_end': symbol.span_end,
+            'call_expansion': route,
+            'compact': True,
+        },
+    )
 
 
 def _looks_like_import(line: str) -> bool:
@@ -1641,6 +1709,7 @@ def generate_bundle(
     expansion = _empty_expansion()
     callee_item_ids: dict[str, str] = {}  # computed callee symbol id -> id of the candidate that carries it
     callee_paths: dict[str, str] = {}  # computed callee symbol id -> its file
+    callee_routes: dict[str, dict] = {}  # computed callee symbol id -> its `call_expansion` route
     if links.calls_from or links.bases_of:
         classes_by_label: defaultdict[str, list[GraphNode]] = defaultdict(list)
         for symbol in symbol_by_id.values():
@@ -1714,6 +1783,7 @@ def generate_bundle(
             'callee_files': len({path for path in map(file_of_symbol, callees) if path is not None}),
             # Filled in after packing.
             'callees_packed': 0,
+            'callees_compact': 0,
             'callees_dropped': dict.fromkeys(CALLEE_DROP_REASONS, 0),
             'reserved': False,
         }
@@ -1760,6 +1830,7 @@ def generate_bundle(
                 symbol_scores[callee_id] = callee_score
             callee_item_ids[callee_id] = item_id
             callee_paths[callee_id] = symbol.source_ref
+            callee_routes[callee_id] = route
             owner_file = file_candidate.get(symbol.source_ref)
             if owner_file is not None:
                 owner_file.score = max(owner_file.score, callee_score * SYMBOL_FILE_SCORE_SHARE)
@@ -1837,6 +1908,43 @@ def generate_bundle(
     # Why a call-expansion span was last turned away by `pack` (a counter in `bundle['expansion']`, nothing more).
     turned_away: dict[str, str] = {}
     expansion_item_ids = frozenset(callee_item_ids.values())
+    callee_of_item = {item_id: callee_id for callee_id, item_id in callee_item_ids.items()}
+    source_lines: dict[str, list[str]] = {}
+
+    def compact_entries(skip_packed: bool) -> list[BundleItem]:
+        """The compact entries (see COMPACT_CALLEE_SHARE) of the computed callees, best first (the candidates are in
+        `tie_order`), while they number at most COMPACT_CALLEES_MAX, take at most COMPACT_CALLEE_SHARE of the budget and,
+        with `skip_packed`, keep `total_tokens` within it. `skip_packed` leaves out the callees already in the bundle."""
+        entries: list[BundleItem] = []
+        used = 0
+        for item in candidates:
+            callee_id = callee_of_item.get(item.item_id)
+            if callee_id is None or (skip_packed and callee_is_packed(callee_id)):
+                continue
+            symbol, source = symbol_by_id[callee_id], source_by_path[callee_paths[callee_id]]
+            lines = source_lines.setdefault(source.path, source.content.splitlines())
+            entry = _compact_callee_item(symbol, callee_routes[callee_id], item.score, source.kind, lines)
+            if entry is None:
+                continue
+            if (
+                len(entries) >= COMPACT_CALLEES_MAX
+                or used + entry.token_count > int(budget * COMPACT_CALLEE_SHARE)
+                or (skip_packed and total_tokens + used + entry.token_count > budget)
+            ):
+                break
+            entries.append(entry)
+            used += entry.token_count
+        return entries
+
+    # What the normal passes may fill: the whole budget, less what the best compact callee entries would take when
+    # there are at least COMPACT_MIN_ENTRIES of them (the unused part is handed back after the entries are chosen).
+    # Item caps and file shares keep reading `budget`.
+    compact_reserve = 0
+    if COMPACT_CALLEES_MAX > 0 and callee_item_ids:
+        planned = compact_entries(skip_packed=False)
+        if len(planned) >= COMPACT_MIN_ENTRIES:
+            compact_reserve = sum(entry.token_count for entry in planned)
+    ceiling = budget - compact_reserve
 
     def select_span(item: BundleItem, file_cap: int | None = None) -> None:
         nonlocal oversize_tokens
@@ -1900,7 +2008,7 @@ def generate_bundle(
                 continue  # an empty file or span adds nothing to a bundle
             if item.metadata.get('no_evidence') and evidence_exists:
                 continue  # leftover budget is for matches, not for the first unrelated file by path
-            allowed = min(budget - total_tokens, item_cap)
+            allowed = min(ceiling - total_tokens, item_cap)
             if item.kind == 'symbol':
                 select_symbol(item, allowed, file_cap)
                 continue
@@ -1984,7 +2092,7 @@ def generate_bundle(
             if item.item_id in selected_ids or item.path in files_fully_selected:
                 continue
             before = len(selected)
-            select_symbol(item, min(budget - total_tokens, item_cap, reserve_end - total_tokens), first_pass_cap)
+            select_symbol(item, min(ceiling - total_tokens, item_cap, reserve_end - total_tokens), first_pass_cap)
             reserved += len(selected) > before
 
     if (
@@ -2000,12 +2108,24 @@ def generate_bundle(
         pack()
         expansion['reserved'] = True
 
+    if COMPACT_CALLEES_MAX > 0 and callee_item_ids:
+        compact = compact_entries(skip_packed=True)
+        if compact_reserve:
+            # Give back what the entries leave of their share, then keep the entries whose callee the extra pass did not pack.
+            ceiling = budget - sum(entry.token_count for entry in compact)
+            pack()
+            compact = [entry for entry in compact if not callee_is_packed(entry.metadata['node_id'])]
+        for entry in compact:
+            select(entry)  # after every normal item: no earlier item's position changes
+        expansion['callees_compact'] = len(compact)
+
     if expansion['callees_computed']:
         dropped = expansion['callees_dropped']
+        compact_callees = {item.metadata['node_id'] for item in selected if item.metadata.get('compact')}
         for callee_id, item_id in callee_item_ids.items():
             if callee_is_packed(callee_id):
                 expansion['callees_packed'] += 1
-            else:
+            elif callee_id not in compact_callees:
                 dropped[turned_away.get(item_id, 'not_reached')] += 1
         dropped['no_candidate'] = expansion['callees_computed'] - len(callee_item_ids)
 
