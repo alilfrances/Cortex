@@ -131,6 +131,38 @@ that section first. Work on branch `cortex-0.15.1`.
 - **Gate:** the eval gate. **Decision rule:** if any gated row drops, try `EXPANSION_RESERVED_ITEMS = 2` and
   `EXPANSION_BUDGET_SHARE = 0.1` once; if it still drops, drop the task and record the measurements.
 
+### Task 4b — Reserve room for callees only when packing left none (finding 1, gap b; added after Task 4)
+
+Task 4 reproduced the field symptom:
+- **Fixture:** `field_seed_markup_flood_repo` at budget 1500.
+- **On 0.15.0:** `callees_computed` 3, `callees_packed` 0, `callees_dropped` {budget 3}.
+
+Its unconditional reservation fixed the fixture, but failed the gate: mean precision@3 went 0.6471 → 0.5882
+(0.6176 with 2 items / 0.1 share). The rows that changed (`python_app`, `web_service`) already packed their
+callees: the `expansion_items` mean did not move. The reservation only reordered which files came first.
+
+- **Change:** keep Task 4's constants and helpers (pull the symbol branch of `pack` into `select_symbol`, and add
+  `reserve_expansion`). Run them only when needed:
+  1. Pack as today: `pack(capped)`, then `pack()`.
+  2. If `callees_computed > 0` and **no** computed callee is packed (Task 1's own "packed" test), reset the packing
+     state: `selected`, `selected_ids`, `files_fully_selected`, `paths_with_symbols`, `total_tokens`,
+     `doc_tokens`, `selected_spans`, `span_tokens`, `oversize_tokens` and `turned_away`. Then run
+     `reserve_expansion()` followed by the same two passes.
+
+     Factor the state into one small object or a reset helper; do not duplicate the passes. Bundles that already
+     pack at least one callee must come out **byte-identical** to 0.15.1 Task 3's.
+  3. Set `expansion['reserved'] = True` when the second packing ran (`False` otherwise; add the key to
+     `_empty_expansion`), and include it in `_expansion_summary` only when true.
+- **Tests:**
+  - remove the strict xfail of `test_computed_callees_get_a_share_of_a_tight_budget`;
+  - a test that a bundle which already packs a callee is identical with the second packing disabled (monkeypatch
+    `EXPANSION_RESERVED_ITEMS = 0`);
+  - a unit test of the reset (no item is selected twice and `total_tokens` stays within the budget).
+- **Gate:** the full eval gate as plan-0.15 §0.4 states it: no row's `recall` or `file_recall` decreases, and
+  **every** mean is at least the baseline's, precision@3 included. Paste the `--compare` output.
+- **Decision rule:** if the gate fails, drop the task and record the numbers under "Not met". The diagnostics
+  still ship.
+
 ### Task 5 — A data-only C/C++ type used in code is not dead (finding 3)
 
 - **File:** `src/cortex/deadcode.py`.
