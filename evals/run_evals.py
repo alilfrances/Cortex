@@ -1291,6 +1291,19 @@ def _run_bundle(repo: Path, task: GoldTask, mode: str, db_path: Path) -> dict[st
     return {"bundle": result, "latency_ms": latency_ms}
 
 
+def _packing_metrics(items: list[dict[str, Any]], expected_files: set[str], total_tokens: int) -> tuple[float, int]:
+    """What the packer chose, beside what it found: (`gold_token_share`, `expansion_items`).
+
+    The share is the tokens of packed items whose path is an expected file, over the bundle's `total_tokens` (0 for an
+    empty bundle); the count is the packed items that carry a `call_expansion` route (a callee span, or its file
+    packed whole). Neither is gated: file recall cannot tell a bundle that spends its budget on the gold files from one
+    that merely contains them."""
+    gold_tokens = sum(int(item.get("token_count", 0)) for item in items if item.get("path") in expected_files)
+    share = gold_tokens / total_tokens if total_tokens > 0 else 0.0
+    expansion_items = sum(1 for item in items if (item.get("metadata") or {}).get("call_expansion"))
+    return share, expansion_items
+
+
 def _score_task(task: GoldTask, mode: str, repo: Path, db_path: Path) -> dict[str, Any]:
     run = _run_bundle(repo, task, mode, db_path)
     bundle = run["bundle"]
@@ -1304,6 +1317,7 @@ def _score_task(task: GoldTask, mode: str, repo: Path, db_path: Path) -> dict[st
     symbol_hits = sum(1 for symbol in task.expected_symbols if _symbol_hit(items, symbol))
     symbol_recall = symbol_hits / len(task.expected_symbols) if task.expected_symbols else 1.0
     recall = (file_recall + symbol_recall) / 2 if task.expected_symbols else file_recall
+    gold_token_share, expansion_items = _packing_metrics(items, expected_files, int(bundle["total_tokens"]))
     return {
         "task": task,
         "mode": mode,
@@ -1314,6 +1328,8 @@ def _score_task(task: GoldTask, mode: str, repo: Path, db_path: Path) -> dict[st
         "file_recall": file_recall,
         "symbol_recall": symbol_recall,
         "tokens": int(bundle["total_tokens"]),
+        "gold_token_share": gold_token_share,
+        "expansion_items": expansion_items,
         "latency_ms": run["latency_ms"],
         "files": selected_list,
     }
@@ -1335,6 +1351,8 @@ def _aggregate(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "file_recall": sum(row["file_recall"] for row in mode_rows) / count,
                 "symbol_recall": sum(row["symbol_recall"] for row in mode_rows) / count,
                 "tokens": round(sum(row["tokens"] for row in mode_rows) / count),
+                "gold_token_share": sum(row["gold_token_share"] for row in mode_rows) / count,
+                "expansion_items": sum(row["expansion_items"] for row in mode_rows) / count,
                 "latency_ms": sum(row["latency_ms"] for row in mode_rows) / count,
             }
         )
@@ -1353,21 +1371,22 @@ def _format_markdown(
         "",
         "## Aggregate",
         "",
-        "| Mode | Tasks | Precision | Precision@3 | Recall | Avg Tokens | Avg Latency ms |",
-        "|---|---:|---:|---:|---:|---:|---:|",
+        "| Mode | Tasks | Precision | Precision@3 | Recall | Avg Tokens | Gold Token Share | Expansion Items | Avg Latency ms |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in aggregates:
         lines.append(
             f"| {row['mode']} | {row['tasks']} | {row['precision']:.3f} | {row['precision_at_3']:.3f} | "
-            f"{row['recall']:.3f} | {row['tokens']} | {row['latency_ms']:.1f} |"
+            f"{row['recall']:.3f} | {row['tokens']} | {row['gold_token_share']:.3f} | {row['expansion_items']:.2f} | "
+            f"{row['latency_ms']:.1f} |"
         )
     lines.extend(
         [
             "",
             "## Per Task",
             "",
-            "| Task | Mode | Precision | Precision@3 | Recall | File Recall | Symbol Recall | Tokens | Latency ms | Files |",
-            "|---|---|---:|---:|---:|---:|---:|---:|---:|---|",
+            "| Task | Mode | Precision | Precision@3 | Recall | File Recall | Symbol Recall | Tokens | Gold Token Share | Expansion Items | Latency ms | Files |",
+            "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|",
         ]
     )
     for row in rows:
@@ -1376,7 +1395,7 @@ def _format_markdown(
         lines.append(
             f"| {task.description} | {row['mode']} | {row['precision']:.3f} | {row['precision_at_3']:.3f} | {row['recall']:.3f} | "
             f"{row['file_recall']:.3f} | {row['symbol_recall']:.3f} | {row['tokens']} | "
-            f"{row['latency_ms']:.1f} | {files} |"
+            f"{row['gold_token_share']:.3f} | {row['expansion_items']} | {row['latency_ms']:.1f} | {files} |"
         )
     return "\n".join(lines) + "\n"
 

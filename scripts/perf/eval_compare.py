@@ -19,7 +19,9 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-METRICS = ("precision", "precision_at_3", "recall", "file_recall", "symbol_recall")
+# `gold_token_share` and `expansion_items` score what the packer chose (see `evals.run_evals._packing_metrics`); they
+# are printed like the rest but never gate. A run written before they existed has no value for them: skipped.
+METRICS = ("precision", "precision_at_3", "recall", "file_recall", "symbol_recall", "gold_token_share", "expansion_items")
 GATED = ("recall", "file_recall")
 
 
@@ -48,12 +50,15 @@ def compare(before: Path, after: Path) -> int:
         if key not in a or key not in b:
             print(f"only in {'after' if key in b else 'before'}: {key}")
             continue
-        changed = {m: (a[key][m], b[key][m]) for m in METRICS if a[key][m] != b[key][m]}
+        changed = {m: (a[key][m], b[key][m]) for m in METRICS if m in a[key] and m in b[key] and a[key][m] != b[key][m]}
         if changed or a[key]["files"] != b[key]["files"]:
             print(f"changed: {key}\n    {changed or 'files only'}")
         failed |= any(b[key][m] < a[key][m] for m in GATED)
     common = sorted(set(a) & set(b))  # rows added or removed between the runs are listed above
     for metric in METRICS:
+        if not all(metric in a[key] and metric in b[key] for key in common):
+            print(f"mean {metric}: n/a (not in both runs)")
+            continue
         mean_a = statistics.mean(a[key][metric] for key in common)
         mean_b = statistics.mean(b[key][metric] for key in common)
         print(f"mean {metric}: {mean_a:.4f} -> {mean_b:.4f}")
