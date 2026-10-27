@@ -1,6 +1,17 @@
 # Plan: Cortex 0.15.2: callees that compete for the bundle
 
-Status: **planned**, not implemented.
+Status: **implemented in 0.15.2**, except where noted. Outcomes and deviations (details in `CHANGELOG.md`):
+- Task 1 as planned: `budget` is split into `too_large` and `budget_exhausted`; no golden changed.
+- Task 2: compact entries are in, and `expansion` carries `callees_compact`. Variant 1 as written (reserve the whole
+  `COMPACT_CALLEE_SHARE` up front) failed the eval gate at 0.1 and at 0.05: two rows of `web_service` at budget 180
+  lost `integrations/slack.py` (recall means 0.9375 -> 0.9252, file_recall 0.9779 -> 0.9681). Variant 2 (leftover
+  only) passes the gate but the fixture leaves no leftover, so it adds no entry. Shipped: variant 1 reserving only
+  what the best entries would take, and only when the share holds `COMPACT_MIN_ENTRIES` = 3 of them; no row changes
+  and every mean equals the baseline. Fixture `field_callee_fanout_repo`: the model function reaches the twenty
+  callees through five same-file stage functions (the walk follows four other-file callees per function), and its
+  comment carries the task's words so that the gold file survives the keyword screens.
+- Task 3: released as 0.15.2.
+- Not verified: every field acceptance item (needs the reviewer's run).
 Input: the reviewer's 0.15.1 run of the §1.4 task (`cortex_query`, detailed), read from the new `expansion` block:
 
 | budget | callees_computed | callee_files | seeds_cross_file | callees_packed | reserved | callees_dropped |
