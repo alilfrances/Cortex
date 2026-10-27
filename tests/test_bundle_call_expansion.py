@@ -318,7 +318,7 @@ def test_body_relevance_weighs_the_rare_term_above_the_common_one() -> None:
 # --- 0.15.1 Task 1: what the walk did, in the bundle (docs/plan-0.15.1-fixes.md) ---
 
 EXPANSION_KEYS = {
-    "seeds", "seeds_cross_file", "seed_refusals", "callees_computed", "callee_files", "callees_packed", "callees_dropped",
+    "seeds", "seeds_cross_file", "seed_refusals", "callees_computed", "callee_files", "callees_packed", "callees_dropped", "reserved",
 }
 
 
@@ -385,7 +385,17 @@ def test_a_repository_without_resolved_calls_gets_the_empty_shape(tmp_path, monk
         "callee_files": 0,
         "callees_packed": 0,
         "callees_dropped": {"budget": 0, "file_cap": 0, "inside_selected_span": 0, "not_reached": 0, "no_candidate": 0},
+        "reserved": False,
     }
+
+
+def test_the_concise_summary_says_so_only_when_the_budget_was_reserved():
+    from cortex.mcp.tools import _expansion_summary
+
+    expansion = {"seeds": [{}], "seeds_cross_file": 1, "callees_computed": 3, "callees_packed": 3, "callees_dropped": {}, "reserved": False}
+
+    assert _expansion_summary(expansion) == "seeds 1 (cross-file 1), callees 3, packed 3"
+    assert _expansion_summary({**expansion, "reserved": True}) == "seeds 1 (cross-file 1), callees 3, packed 3, reserved"
 
 
 def test_concise_cortex_query_carries_the_expansion_summary(tmp_path, monkeypatch):

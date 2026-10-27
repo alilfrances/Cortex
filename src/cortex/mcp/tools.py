@@ -797,6 +797,8 @@ def _expansion_summary(expansion: dict[str, Any]) -> str:
         f"seeds {len(expansion.get('seeds', []))} (cross-file {expansion.get('seeds_cross_file', 0)}), "
         f"callees {expansion.get('callees_computed', 0)}, packed {expansion.get('callees_packed', 0)}"
     )
+    if expansion.get("reserved"):
+        line += ", reserved"
     dropped = {reason: count for reason, count in expansion.get("callees_dropped", {}).items() if count}
     if dropped:
         line += " (dropped: " + ", ".join(f"{reason} {count}" for reason, count in dropped.items()) + ")"

@@ -243,11 +243,9 @@ def test_a_span_whose_calls_stay_in_its_file_does_not_take_a_seed_slot(field, mo
 # Twelve large screens named after the task outscore the three callees of `onTypeChanged` (which score from their seed,
 # x0.9 per hop) and fill the 1500-token budget: the walk computes `detach` and its two overriders and `pack` has no
 # room left when their turn comes. A bundle that cannot hold one of them cannot show the cause the walk found.
-# Not fixed in 0.15.1: reserving a share of the budget for the best call-expansion spans (Task 4) lowered the mean
-# precision@3 of the eval gate (0.6471 -> 0.5882 with 3 items / 0.2, 0.6176 with 2 / 0.1), so the task was dropped; see
-# the CHANGELOG ("Not met"). Strict: the mark must go with the change that makes this pass.
+# Reserving a share of the budget for the best call-expansion spans in every bundle lowered the mean precision@3 of the
+# eval gate (Task 4, dropped), so the reservation runs only when the normal passes packed no computed callee (Task 4b).
 @TREE_SITTER_ONLY  # resolved calls: the regex fallback emits name-only call edges
-@pytest.mark.xfail(strict=True, reason="0.15.1 Task 4 dropped: a reserved share of the budget lowers precision@3 (CHANGELOG, Not met)")
 @pytest.mark.parametrize("mode", MODES)
 def test_computed_callees_get_a_share_of_a_tight_budget(field, mode):
     bundle, files = _run(field, "field_seed_markup_flood_repo", mode)
@@ -256,6 +254,45 @@ def test_computed_callees_get_a_share_of_a_tight_budget(field, mode):
     assert expansion["callees_computed"] > 0, expansion  # the walk found them; the rest is about packing
     expanded = [item for item in bundle["items"] if (item.get("metadata") or {}).get("call_expansion")]
     assert expansion["callees_packed"] > 0 and expanded, f"computed callees, none packed: {expansion}"
+
+
+# The reservation is a second packing, run only when the first packed no computed callee. These two tests pin that:
+# a bundle that already holds a callee is the first packing's, and a repacked one is a consistent bundle.
+@TREE_SITTER_ONLY  # resolved calls: the regex fallback emits name-only call edges
+@pytest.mark.parametrize("repo_name", ["field_seed_markup_repo", "field_seed_markup_local_repo"])
+@pytest.mark.parametrize("mode", MODES)
+def test_a_bundle_that_already_packs_a_callee_is_not_repacked(field, monkeypatch, repo_name, mode):
+    import cortex.bundle as bundle_module
+
+    bundle, _files = _run(field, repo_name, mode)
+    assert bundle["expansion"]["callees_packed"] > 0, bundle["expansion"]  # the premise
+    assert bundle["expansion"]["reserved"] is False
+
+    monkeypatch.setattr(bundle_module, "EXPANSION_RESERVED_ITEMS", 0)
+    without, _files = _run(field, repo_name, mode)
+
+    assert [(item["item_id"], item["content"]) for item in bundle["items"]] == [(item["item_id"], item["content"]) for item in without["items"]]
+    assert bundle["total_tokens"] == without["total_tokens"]
+    assert without["expansion"] == bundle["expansion"]
+
+
+@TREE_SITTER_ONLY  # resolved calls: the regex fallback emits name-only call edges
+@pytest.mark.parametrize("mode", MODES)
+def test_the_repacked_bundle_is_a_consistent_bundle(field, monkeypatch, mode):
+    import cortex.bundle as bundle_module
+
+    bundle, _files = _run(field, "field_seed_markup_flood_repo", mode)
+    expansion = bundle["expansion"]
+    assert expansion["reserved"] is True, expansion
+    assert 0 < expansion["callees_packed"] <= expansion["callees_computed"]
+    ids = [item["item_id"] for item in bundle["items"]]
+    assert len(ids) == len(set(ids)), "an item was selected twice"
+    assert bundle["total_tokens"] == sum(item["token_count"] for item in bundle["items"])
+    assert bundle["total_tokens"] <= bundle["budget"]
+
+    monkeypatch.setattr(bundle_module, "EXPANSION_RESERVED_ITEMS", 0)  # the first packing alone: no callee, as on 0.15.1 Task 3
+    first_only, _files = _run(field, "field_seed_markup_flood_repo", mode)
+    assert first_only["expansion"]["callees_packed"] == 0 and first_only["expansion"]["reserved"] is False
 
 
 # --- the fixtures themselves
