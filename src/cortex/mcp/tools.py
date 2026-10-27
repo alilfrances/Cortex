@@ -792,11 +792,14 @@ def _query_token_stats(
 
 
 def _expansion_summary(expansion: dict[str, Any]) -> str:
-    """One line for the concise form: `seeds 6 (cross-file 1), callees 3, packed 3`, plus what was dropped and why."""
+    """One line for the concise form: `seeds 6 (cross-file 1), callees 3, packed 3`, plus the compact entries and what was
+    dropped and why."""
     line = (
         f"seeds {len(expansion.get('seeds', []))} (cross-file {expansion.get('seeds_cross_file', 0)}), "
         f"callees {expansion.get('callees_computed', 0)}, packed {expansion.get('callees_packed', 0)}"
     )
+    if expansion.get("callees_compact"):
+        line += f", compact {expansion['callees_compact']}"
     if expansion.get("reserved"):
         line += ", reserved"
     dropped = {reason: count for reason, count in expansion.get("callees_dropped", {}).items() if count}
@@ -884,6 +887,8 @@ def _call_query(arguments: dict[str, Any]) -> dict[str, Any]:
         seed_edges = _seed_edge_index(seed_paths, edges)
         for item in bundle.get("items", []):
             item["why"] = _bundle_why(item, terms, seed_paths, edges, seed_edges=seed_edges)
+            if (item.get("metadata") or {}).get("compact") and response_format == "detailed":
+                item["compact"] = True  # a callee shown by its declaration and route only (the concise form drops the flag)
         bundle["token_stats"] = _query_token_stats(bundle, arguments)
         payload = bundle if response_format == "detailed" else _concise_query_bundle(bundle)
         # P1-5: cache the bare payload only, not status/`_meta` -- see

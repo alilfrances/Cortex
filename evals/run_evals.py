@@ -149,6 +149,13 @@ FIELD_GOLD_TASKS: tuple[GoldTask, ...] = (
         budget=1500,
         tight_budget=1500,
     ),
+    GoldTask(
+        repo="field_callee_fanout_repo",
+        description="item changes type and then the item is removed",
+        expected_files=("src/itemmodel.cpp", "src/baseitem.cpp"),
+        budget=3000,
+        tight_budget=3000,
+    ),
 )
 
 
@@ -932,7 +939,7 @@ def _build_field_seed_markup_calls_repo(base: Path) -> Path:
     return _build_field_seed_markup_repo(base, ui_calls=True)
 
 
-def _build_field_seed_markup_local_repo(base: Path, *, flood: int = 0) -> Path:
+def _build_field_seed_markup_local_repo(base: Path, *, flood: int = 0, fanout: bool = False) -> Path:
     """`field_seed_markup_calls_repo` with the screens turned up until they take every seed slot whatever the
     ranking (0.15.1 Task 3, finding 1 gap a). Ten QML screens, each with four functions that call a same-file
     helper of five lines: a QML same-file call resolves to an `external:qml:<screen>:hideItem` node, so every one of
@@ -941,8 +948,10 @@ def _build_field_seed_markup_local_repo(base: Path, *, flood: int = 0) -> Path:
     escape length normalisation (a model file of ten lines, no filler) and whose `onTypeChanged` still calls
     `entry->detach(...)` into `baseitem.cpp`, the virtual with two overriders. With `flood` (0.15.1 Task 4), that many large
     screens named after the task (`ui/ItemTypeRemoved<k>.qml`) are added: they outscore the callees of the model file
-    and fill a small budget, so the callees are computed and then left out of the bundle."""
-    repo = base / ("field_seed_markup_flood_repo" if flood else "field_seed_markup_local_repo")
+    and fill a small budget, so the callees are computed and then left out of the bundle. With `fanout` (0.15.2 Task 2),
+    `onTypeChanged` also reaches twenty functions in twenty files of their own, through five same-file stage functions that
+    call four each (the walk follows four other-file callees per function and walks a same-file call at the same hop)."""
+    repo = base / ("field_callee_fanout_repo" if fanout else "field_seed_markup_flood_repo" if flood else "field_seed_markup_local_repo")
     _init_repo(repo)
     for k in range(10):
         helper = (
@@ -974,13 +983,33 @@ def _build_field_seed_markup_local_repo(base: Path, *, flood: int = 0) -> Path:
         _write(repo / f"src/kinds/{stem}.cpp", (
             f'#include "{stem}.h"\nvoid {name}::detach(int slot) {{\n    int cell = slot;\n    cell -= 1;\n    cell *= 3;\n}}\n'
         ))
-    _write(repo / "src/itemmodel.h", (
-        '#include "baseitem.h"\nclass ItemModel {\npublic:\n    void onTypeChanged(BaseItem* entry, int slot);\n};\n'
-    ))
-    _write(repo / "src/itemmodel.cpp", (
-        '#include "itemmodel.h"\n\nvoid ItemModel::onTypeChanged(BaseItem* entry, int slot) {\n'
-        "    int old = slot;\n    old += 1;\n    entry->detach(old);\n}\n"
-    ))
+    model_header = '#include "baseitem.h"\nclass ItemModel {\npublic:\n    void onTypeChanged(BaseItem* entry, int slot);\n'
+    model_body = '#include "itemmodel.h"\n\nvoid ItemModel::onTypeChanged(BaseItem* entry, int slot) {\n    int old = slot;\n    old += 1;\n'
+    if fanout:
+        # Five stage functions of four calls each: twenty `applyKind<s>_<c>` functions, each in a file of its own with a
+        # body of 18 lines (about 130 tokens), whose names and words share nothing with the task.
+        stages = 5
+        model_header += "".join(f"    void stage{s}(int v);\n" for s in range(stages))
+        model_body += "    // the item changes type and then the item is removed\n    // the removed item's type changed: remove the item\n"
+        model_body += "".join(f"    stage{s}(old);\n" for s in range(stages))
+        stage_defs = "".join(
+            f"\nvoid ItemModel::stage{s}(int v) {{\n" + "".join(f"    applyKind{s}_{c}(v);\n" for c in range(4)) + "}\n"
+            for s in range(stages)
+        )
+        declarations = "".join(f"void applyKind{s}_{c}(int v);\n" for s in range(stages) for c in range(4))
+        _write(repo / "src/steps/applykind.h", declarations)
+        for s in range(stages):
+            for c in range(4):
+                lines = "".join(f"    acc = acc * {j + 2} + v - {s * 4 + c};\n    acc ^= {j + 1};\n" for j in range(8))
+                _write(repo / f"src/steps/applykind{s}_{c}.cpp", (
+                    f'#include "applykind.h"\nvoid applyKind{s}_{c}(int v) {{\n    int acc = v;\n{lines}    acc += {c};\n}}\n'
+                ))
+        model_body += "    entry->detach(old);\n}\n" + stage_defs
+        model_body = model_body.replace('#include "itemmodel.h"\n', '#include "itemmodel.h"\n#include "steps/applykind.h"\n', 1)
+    else:
+        model_body += "    entry->detach(old);\n}\n"
+    _write(repo / "src/itemmodel.h", model_header + "};\n")
+    _write(repo / "src/itemmodel.cpp", model_body)
     for k in range(flood):
         functions = "".join(
             f"    function itemTypeChanged{j}() {{\n        // the item changes type and then the item is removed ({k}.{j})\n"
@@ -989,13 +1018,20 @@ def _build_field_seed_markup_local_repo(base: Path, *, flood: int = 0) -> Path:
             for j in range(12)
         )
         _write(repo / f"ui/ItemTypeRemoved{k}.qml", f"import QtQuick 2.15\nItem {{\n    property int itemType: 0\n{functions}}}\n")
-    _commit_all(repo, "add local-call seed fixture" + (" with a flood of keyword screens" if flood else ""))
+    _commit_all(repo, "add local-call seed fixture" + (" with a flood of keyword screens" if flood else "") + (" and a callee fan-out" if fanout else ""))
     return repo
 
 
 def _build_field_seed_markup_flood_repo(base: Path) -> Path:
     """`field_seed_markup_local_repo` plus twelve large screens named after the task (0.15.1 Task 4)."""
     return _build_field_seed_markup_local_repo(base, flood=12)
+
+
+def _build_field_callee_fanout_repo(base: Path) -> Path:
+    """`field_seed_markup_flood_repo` whose model function reaches twenty more callees in files of their own, next to the
+    virtual with two overriders (0.15.2 Task 2): the walk computes about twenty-three callees, the flood of keyword
+    screens leaves the whole bodies no room, and what a bundle can still show of them is a compact entry each."""
+    return _build_field_seed_markup_local_repo(base, flood=12, fanout=True)
 
 
 def _build_field_vocab_repo(base: Path) -> Path:
@@ -1304,6 +1340,7 @@ def build_fixture_repos(base: Path) -> dict[str, Path]:
         "field_seed_markup_calls_repo": _build_field_seed_markup_calls_repo(base),
         "field_seed_markup_local_repo": _build_field_seed_markup_local_repo(base),
         "field_seed_markup_flood_repo": _build_field_seed_markup_flood_repo(base),
+        "field_callee_fanout_repo": _build_field_callee_fanout_repo(base),
         "qt_app": _build_qt_app(base),
         "body_text_repo": _build_body_text_repo(base),
     }

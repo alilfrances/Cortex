@@ -4,7 +4,7 @@ Cortex is a graph-aware, local-first context engine for code agents. It ingests 
 
 The result is a repo-native context service: MCP tools for live agent queries, CLI commands for reports and exports, and local parser/runtime state. Parser setup downloads only locked artifacts; repository source is never sent during setup. Normal ingest/query is offline after setup.
 
-Current package and plugin metadata is `0.15.1` (`pyproject.toml` and plugin manifests).
+Current package and plugin metadata is `0.15.2` (`pyproject.toml` and plugin manifests).
 
 ## What Cortex Builds
 
@@ -152,7 +152,7 @@ The data dir also holds `meta.json` (which repo it belongs to), `ingest.lock`, a
 
 | Tool | What it does | Example prompt |
 |---|---|---|
-| `cortex_query` | Builds a task-focused retrieval bundle under a token budget; pass `hotspot_boost: true` only when churn×complexity should influence ranking. | "Use Cortex to find the files and symbols for adding password reset." |
+| `cortex_query` | Builds a task-focused retrieval bundle under a token budget; pass `hotspot_boost: true` only when churn×complexity should influence ranking. Callees of the best-matching functions that do not fit whole appear as compact entries after the other items (a `calls:` / `override:` route comment, the declaration line and `[body elided] ...`, flagged `"compact": true` in the detailed form); the detailed form's `expansion` block counts them as `callees_compact`, next to `callees_packed` and `callees_dropped` (`too_large`, `budget_exhausted`, ...), and the concise form says `compact N` in `expansion_summary`. | "Use Cortex to find the files and symbols for adding password reset." |
 | `cortex_overview` | Returns a compact repo overview, including `top_hotspots`, from stored report analysis. Its `budget` defaults to 2000 tokens; use `response_format: "detailed"` when current semantic/parser capability status is also needed. | "Ask Cortex for an overview before we refactor the API layer." |
 | `cortex_impact` | Ranks structural and co-change neighbors for a file or symbol. Cross-file symbol-level edges (resolved calls, `emits`/`connects`, CMake `builds`, ...) are aggregated onto their files, one contribution per distinct caller/callee pair, with up to 5 `symbol: "caller -> callee"` why-entries per neighbor; unresolved `name:` calls count nothing. | "Use Cortex impact on `src/cortex/bundle.py` before changing packing." |
 | `cortex_context` | Batches paths and symbols into one compact triage card per target; default budget 2000, with optional `include: ["impact", "cochange", "symbols"]` expansions. Cards include structural/co-change neighbors (resolved callers/callees included), hotspots, spans, and Qt/QML signals, slots, handlers, wiring, and instantiations. If an intentionally tiny budget cannot fit irreducible card metadata, `budget_feasible: false` explains the condition while preserving every original target. | "Before editing several files, call Cortex context once with all their paths and symbols." |

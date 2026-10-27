@@ -7,6 +7,7 @@ import pytest
 
 from cortex.bundle import CALL_EXPANSION_BONUS, generate_bundle
 from cortex.ingest import ingest_repository
+from tests.golden_utils import TREE_SITTER_ONLY, force_stdlib_tokenizer
 
 FILES = {
     # Keyword hit: the manager talks about the task in its own words.
@@ -318,13 +319,15 @@ def test_body_relevance_weighs_the_rare_term_above_the_common_one() -> None:
 # --- 0.15.1 Task 1: what the walk did, in the bundle (docs/plan-0.15.1-fixes.md) ---
 
 EXPANSION_KEYS = {
-    "seeds", "seeds_cross_file", "seed_refusals", "callees_computed", "callee_files", "callees_packed", "callees_dropped", "reserved",
+    "seeds", "seeds_cross_file", "seed_refusals", "callees_computed", "callee_files", "callees_packed", "callees_compact",
+    "callees_dropped", "reserved",
 }
 
 
 def _balanced(expansion: dict) -> bool:
-    """Every computed callee is either packed or has exactly one reason for being left out."""
-    return expansion["callees_computed"] == expansion["callees_packed"] + sum(expansion["callees_dropped"].values())
+    """Every computed callee is packed, shown as a compact entry, or has exactly one reason for being left out."""
+    shown = expansion["callees_packed"] + expansion["callees_compact"]
+    return expansion["callees_computed"] == shown + sum(expansion["callees_dropped"].values())
 
 
 def test_the_expansion_block_counts_the_companion_callees(tmp_path, monkeypatch):
@@ -384,7 +387,10 @@ def test_a_repository_without_resolved_calls_gets_the_empty_shape(tmp_path, monk
         "callees_computed": 0,
         "callee_files": 0,
         "callees_packed": 0,
-        "callees_dropped": {"budget": 0, "file_cap": 0, "inside_selected_span": 0, "not_reached": 0, "no_candidate": 0},
+        "callees_compact": 0,
+        "callees_dropped": {
+            "too_large": 0, "budget_exhausted": 0, "file_cap": 0, "inside_selected_span": 0, "not_reached": 0, "no_candidate": 0,
+        },
         "reserved": False,
     }
 
@@ -396,6 +402,10 @@ def test_the_concise_summary_says_so_only_when_the_budget_was_reserved():
 
     assert _expansion_summary(expansion) == "seeds 1 (cross-file 1), callees 3, packed 3"
     assert _expansion_summary({**expansion, "reserved": True}) == "seeds 1 (cross-file 1), callees 3, packed 3, reserved"
+    assert _expansion_summary({**expansion, "callees_compact": 5}) == "seeds 1 (cross-file 1), callees 3, packed 3, compact 5"
+    assert _expansion_summary({**expansion, "callees_compact": 5, "callees_dropped": {"budget_exhausted": 2}}) == (
+        "seeds 1 (cross-file 1), callees 3, packed 3, compact 5 (dropped: budget_exhausted 2)"
+    )
 
 
 def test_concise_cortex_query_carries_the_expansion_summary(tmp_path, monkeypatch):
@@ -421,7 +431,7 @@ def test_concise_cortex_query_carries_the_expansion_summary(tmp_path, monkeypatc
     assert f"callees {detailed['expansion']['callees_computed']}," in concise["expansion_summary"]
 
 
-def test_a_callee_that_does_not_fit_is_counted_as_dropped_for_budget(tmp_path, monkeypatch):
+def test_a_callee_that_is_larger_than_one_item_may_be_counts_as_too_large(tmp_path, monkeypatch):
     from evals.run_evals import COMPANION_GOLD_TASKS, _build_companion_repo
 
     monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
@@ -431,6 +441,235 @@ def test_a_callee_that_does_not_fit_is_counted_as_dropped_for_budget(tmp_path, m
 
     expansion = generate_bundle(repo, task=COMPANION_GOLD_TASKS[0].description, budget=250, output_format="json")["expansion"]
 
-    assert expansion["callees_dropped"]["budget"] >= 1, expansion
+    assert expansion["callees_dropped"]["too_large"] >= 1, expansion
+    assert expansion["callees_dropped"]["budget_exhausted"] == 0, expansion
     assert expansion["callees_packed"] < expansion["callees_computed"]
     assert _balanced(expansion), expansion
+
+
+def _step_repo(tmp_path: Path, monkeypatch, *, fillers: int, body_lines: int) -> Path:
+    """`Manager::reconnect` calls six `stepN` functions, each in its own file with `body_lines` lines; `fillers` files
+    repeat the task's words and rank above the callees."""
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("CORTEX_SEMANTIC", "0")
+    root = tmp_path / "repo"
+    (root / "src").mkdir(parents=True)
+    calls = "".join(f"    step{i}(widget);\n" for i in range(6))
+    (root / "src" / "manager.cpp").write_text(
+        '#include "steps.hpp"\n// device card reconnect: restore the card state after the device reconnect\n'
+        f"void Manager::reconnect(Widget* widget) {{\n{calls}}}\n"
+    )
+    (root / "src" / "steps.hpp").write_text("".join(f"void step{i}(Widget* w);\n" for i in range(6)))
+    for i in range(6):
+        body = "".join(f"    w->slot{j} = {j} + {i};\n" for j in range(body_lines))
+        (root / "src" / f"step{i}.cpp").write_text(f'#include "steps.hpp"\nvoid step{i}(Widget* w) {{\n{body}}}\n')
+    for i in range(fillers):
+        body = "".join(f"    // device card reconnect handling {i} line {j}\n" for j in range(30))
+        (root / "src" / f"card{i}.cpp").write_text(f"void cardNote{i}() {{\n{body}}}\n")
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+    subprocess.run(["git", "-c", "user.email=a@b", "-c", "user.name=a", "commit", "-qm", "i"], cwd=root, check=True)
+    ingest_repository(root)
+    return root
+
+
+def test_a_small_callee_that_ranks_below_items_filling_the_budget_counts_as_budget_exhausted(tmp_path, monkeypatch):
+    import cortex.bundle as bundle_module
+
+    monkeypatch.setattr(bundle_module, "COMPACT_CALLEES_MAX", 0)  # a callee with a compact entry is not a drop (Task 2)
+    repo = _step_repo(tmp_path, monkeypatch, fillers=6, body_lines=12)
+
+    expansion = generate_bundle(repo, task="device card reconnect state", budget=1500, output_format="json")["expansion"]
+
+    assert expansion["callees_dropped"]["budget_exhausted"] >= 1, expansion
+    assert expansion["callees_dropped"]["too_large"] == 0, expansion
+    assert expansion["callees_packed"] >= 1  # each step span fits an empty bundle; the budget went to the filler files
+    assert _balanced(expansion), expansion
+
+
+def test_a_callee_bigger_than_the_per_item_cap_counts_as_too_large_even_with_budget_to_spare(tmp_path, monkeypatch):
+    import cortex.bundle as bundle_module
+
+    monkeypatch.setattr(bundle_module, "COMPACT_CALLEES_MAX", 0)  # a callee with a compact entry is not a drop (Task 2)
+    repo = _step_repo(tmp_path, monkeypatch, fillers=0, body_lines=40)
+
+    expansion = generate_bundle(repo, task="device card reconnect state", budget=300, output_format="json")["expansion"]
+
+    assert expansion["callees_dropped"]["too_large"] >= 1, expansion
+    assert expansion["callees_dropped"]["budget_exhausted"] == 0, expansion
+    assert _balanced(expansion), expansion
+
+
+# --- 0.15.2 Task 2: compact entries for callees that do not fit whole (docs/plan-0.15.2-callee-packing.md) ---
+
+
+def _fanout_bundle(tmp_path, monkeypatch, budget=3000, *, output_format="json"):
+    from evals.run_evals import FIELD_GOLD_TASKS, _build_field_callee_fanout_repo
+
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("CORTEX_SEMANTIC", "0")
+    # The fixture's budgets are tight by design, so its packing depends on the token counter: pin it, as the goldens
+    # and the evals do (tiktoken is optional and, where it is installed, its encoding may not be downloadable).
+    force_stdlib_tokenizer(monkeypatch)
+    task = next(t for t in FIELD_GOLD_TASKS if t.repo == "field_callee_fanout_repo")
+    repo = _build_field_callee_fanout_repo(tmp_path)
+    ingest_repository(repo)
+    return repo, task, generate_bundle(repo, task=task.description, budget=budget, output_format=output_format)
+
+
+def test_the_route_comment_is_worded_like_the_compact_why_of_the_mcp_tools():
+    from cortex.bundle import _route_comment
+    from cortex.mcp.tools import _compact_why
+
+    call = {"from": "symbol:src/model.cpp:onTypeChanged", "hop": 1}
+    override = {"from": "symbol:src/model.cpp:onTypeChanged", "hop": 1, "type": "override", "via": "symbol:src/base.cpp:detach"}
+    callee = "symbol:src/kinds/text.cpp:detach"
+
+    assert _route_comment(call, callee, "src/kinds/text.cpp") == "// calls: onTypeChanged -> detach"
+    assert _route_comment(override, callee, "src/kinds/text.cpp") == "// override: src/base.cpp:detach -> src/kinds/text.cpp:detach"
+    assert _route_comment(call, "symbol:app/steps.py:apply", "app/steps.py") == "# calls: onTypeChanged -> apply"
+    # The same words as the `why` the MCP tool computes for the item.
+    assert _compact_why([{"type": "call", "from": call["from"], "to": callee}]) == _route_comment(call, callee, "x.cpp")[3:]
+    assert _compact_why([{"type": "override", "from": override["from"], "via": override["via"], "to": callee}]) == (
+        _route_comment(override, callee, "x.cpp")[3:]
+    )
+
+
+def test_a_compact_entry_for_an_override_names_the_base_method_and_keeps_python_comments_hashed():
+    from cortex.bundle import ELISION_MARKER, _compact_callee_item
+    from cortex.models import GraphNode
+
+    lines = ["#include \"base.h\"", "void TextEntry::detach(int slot) {", "    int cell = slot;", "}"]
+    node = GraphNode(
+        node_id="symbol:src/kinds/text.cpp:detach", kind="func", label="detach", source_ref="src/kinds/text.cpp",
+        span_start=2, span_end=4,
+    )
+    route = {"from": "symbol:src/model.cpp:onTypeChanged", "hop": 1, "type": "override", "via": "symbol:src/base.cpp:detach"}
+
+    item = _compact_callee_item(node, route, 12.5, "code", lines)
+
+    assert item is not None and item.item_id == "callee-compact:symbol:src/kinds/text.cpp:detach"
+    assert item.content == (
+        "// override: src/base.cpp:detach -> src/kinds/text.cpp:detach\n"
+        f"void TextEntry::detach(int slot) {{\n    {ELISION_MARKER}"
+    )
+    assert item.score == 12.5 and item.metadata["compact"] is True and item.metadata["call_expansion"] is route
+    assert (item.metadata["span_start"], item.metadata["span_end"]) == (2, 4)
+
+    py = GraphNode(node_id="symbol:app/steps.py:apply", kind="func", label="apply", source_ref="app/steps.py", span_start=1, span_end=3)
+    py_item = _compact_callee_item(py, {"from": "symbol:app/main.py:run", "hop": 1}, 1.0, "code", ["def apply(x):", "    return x", ""])
+    assert py_item is not None and py_item.content.splitlines()[0] == "# calls: run -> apply"
+
+    blank = GraphNode(node_id="symbol:a.cpp:f", kind="func", label="f", source_ref="a.cpp", span_start=1, span_end=1)
+    assert _compact_callee_item(blank, route, 1.0, "code", [""]) is None  # no declaration line to show
+
+
+@TREE_SITTER_ONLY  # resolved calls: the regex fallback emits name-only call edges
+def test_a_compact_entry_is_a_route_comment_a_declaration_and_an_elision_marker(tmp_path, monkeypatch):
+    from cortex.bundle import COMPACT_LINES_MAX, ELISION_MARKER
+
+    _repo, _task, bundle = _fanout_bundle(tmp_path, monkeypatch)
+
+    entries = [item for item in bundle["items"] if item["metadata"].get("compact")]
+    assert entries
+    for item in entries:
+        lines = item["content"].splitlines()
+        assert lines[0].startswith(("// calls: ", "// override: ")), lines
+        assert lines[-1].strip() == ELISION_MARKER
+        assert 3 <= len(lines) <= 2 + COMPACT_LINES_MAX
+        assert item["item_id"] == f"callee-compact:{item['metadata']['node_id']}"
+        assert item["kind"] == "symbol" and item["token_count"] < 40
+        assert item["metadata"]["call_expansion"] and item["metadata"]["span_start"] < item["metadata"]["span_end"]
+
+
+@TREE_SITTER_ONLY  # resolved calls: the regex fallback emits name-only call edges
+@pytest.mark.parametrize("budget", [3000, 6000])
+def test_compact_entries_come_last_and_the_bundle_stays_consistent(tmp_path, monkeypatch, budget):
+    _repo, _task, bundle = _fanout_bundle(tmp_path, monkeypatch, budget)
+
+    items, expansion = bundle["items"], bundle["expansion"]
+    flags = [bool(item["metadata"].get("compact")) for item in items]
+    assert any(flags) and flags == sorted(flags), "a compact entry sits before a normal item"
+    assert expansion["callees_compact"] == sum(flags) <= 24
+    assert sum(item["token_count"] for item, flag in zip(items, flags) if flag) <= int(budget * 0.1)
+    assert bundle["total_tokens"] == sum(item["token_count"] for item in items) <= budget
+    ids = [item["item_id"] for item in items]
+    assert len(ids) == len(set(ids))
+    assert _balanced(expansion), expansion
+    # An entry stands for a callee that is not in the bundle any other way.
+    for item in items:
+        if item["metadata"].get("compact"):
+            others = [other for other in items if other["path"] == item["path"] and not other["metadata"].get("compact")]
+            assert not any(other["kind"] == "code" for other in others), item["path"]
+            assert not any(
+                (other["metadata"].get("span_start") or 0) <= item["metadata"]["span_start"]
+                and item["metadata"]["span_end"] <= (other["metadata"].get("span_end") or 0)
+                for other in others
+            ), item["path"]
+
+
+@TREE_SITTER_ONLY  # resolved calls: the regex fallback emits name-only call edges
+@pytest.mark.parametrize("budget", [3000, 6000])
+def test_the_compact_pass_shows_more_callees_and_keeps_the_keyword_files(tmp_path, monkeypatch, budget):
+    import cortex.bundle as bundle_module
+
+    repo, task, with_entries = _fanout_bundle(tmp_path, monkeypatch, budget)
+    monkeypatch.setattr(bundle_module, "COMPACT_CALLEES_MAX", 0)
+    without = generate_bundle(repo, task=task.description, budget=budget, output_format="json")
+
+    shown = with_entries["expansion"]["callees_packed"] + with_entries["expansion"]["callees_compact"]
+    assert without["expansion"]["callees_compact"] == 0 and without["expansion"]["callees_packed"] < 12
+    assert shown >= 12 and shown > without["expansion"]["callees_packed"]
+    assert set(task.expected_files) <= {item["path"] for item in with_entries["items"]}
+    assert with_entries["total_tokens"] <= budget and without["total_tokens"] <= budget
+
+
+def test_a_bundle_whose_share_cannot_hold_three_entries_is_the_bundle_without_the_pass(tmp_path, monkeypatch):
+    import cortex.bundle as bundle_module
+    from evals.run_evals import COMPANION_GOLD_TASKS, _build_companion_repo
+
+    monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("CORTEX_SEMANTIC", "0")
+    repo = _build_companion_repo(tmp_path)
+    ingest_repository(repo)
+    task = COMPANION_GOLD_TASKS[0].description
+
+    for budget in (180, 250):  # 10 percent of these hold fewer than three entries
+        bundle = generate_bundle(repo, task=task, budget=budget, output_format="json")
+        monkeypatch.setattr(bundle_module, "COMPACT_CALLEES_MAX", 0)
+        without = generate_bundle(repo, task=task, budget=budget, output_format="json")
+        monkeypatch.undo()
+        monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CORTEX_SEMANTIC", "0")
+
+        assert [(i["item_id"], i["content"]) for i in bundle["items"]] == [(i["item_id"], i["content"]) for i in without["items"]], budget
+        assert bundle["expansion"]["callees_compact"] == 0 and bundle["expansion"] == without["expansion"], budget
+
+
+@TREE_SITTER_ONLY  # resolved calls: the regex fallback emits name-only call edges
+def test_cortex_query_shows_a_compact_entry_with_its_route_and_flags_it_in_the_detailed_form(tmp_path, monkeypatch):
+    import json
+
+    from cortex.mcp.tools import call_tool
+
+    repo, task, _bundle = _fanout_bundle(tmp_path, monkeypatch)
+    args = {"repo_path": str(repo), "task": task.description, "budget": 3000}
+
+    concise = json.loads(call_tool("cortex_query", args)["content"][0]["text"])
+    detailed = json.loads(call_tool("cortex_query", {**args, "response_format": "detailed"})["content"][0]["text"])
+
+    entries = [item for item in concise["items"] if item["content"].startswith(("// calls: ", "// override: "))]
+    assert entries and all(item["why"].startswith(("calls: ", "override: ")) for item in entries)
+    assert all("compact" not in item for item in concise["items"])
+    assert ", compact " in concise["expansion_summary"]
+    flagged = [item for item in detailed["items"] if item.get("compact") is True]
+    assert len(flagged) == detailed["expansion"]["callees_compact"] == len(entries)
+    assert all("compact" not in item for item in detailed["items"] if not item["metadata"].get("compact"))
+
+
+@TREE_SITTER_ONLY  # resolved calls: the regex fallback emits name-only call edges
+def test_markdown_renders_a_compact_entry_like_any_other_item(tmp_path, monkeypatch):
+    _repo, _task, text = _fanout_bundle(tmp_path, monkeypatch, output_format="markdown")
+
+    assert "### src/steps/applykind0_0.cpp:applyKind0_0\n" in text
+    assert "// calls: onTypeChanged -> applyKind0_0\nvoid applyKind0_0(int v) {\n    [body elided] ..." in text
