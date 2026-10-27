@@ -1,6 +1,15 @@
 # Plan: Cortex 0.15.1 — follow-up to the 0.15.0 field run
 
-Status: **planned**, not implemented.
+Status: **implemented in 0.15.1**, except where noted. Outcomes and deviations (details in `CHANGELOG.md`):
+- Task 1 (diagnostics), Task 2 (packing metrics), Task 3 (`_reaches_beyond_file`), Task 5 (data-only types) and Task 6
+  (README note) as planned. Task 5 changes no finding across the `tests/fixtures` and `evals/fixtures/oss` repositories.
+- Task 4 was dropped under its decision rule: the unconditional reservation lowered mean precision@3 from 0.6471 to
+  0.5882 (0.6176 with 2 items / 0.1). Task 4b replaced it: the reservation runs only when the normal passes packed no
+  computed callee; every eval row and mean is unchanged and `field_seed_markup_flood_repo` packs its three callees.
+- Deviations: Task 3's helper skips `external:` ids by prefix instead of changing `file_of`, and answers True past
+  `REACH_WALK_NODES`; Task 4b's `reserved` flag shows in the `expansion` block and the concise summary.
+- Findings 4 and 5 got no code change, as planned. Not verified until the reviewer's run: finding 1 on the field
+  repository (the cause was never reproduced).
 Input: the reviewer's findings on 0.15.0:
 1. Call expansion is missing from the packed `cortex_query` bundle on the §1.4 task.
 2. Recall is flat, and no metric scores what the packer chose.
