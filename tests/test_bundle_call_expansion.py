@@ -7,7 +7,7 @@ import pytest
 
 from cortex.bundle import CALL_EXPANSION_BONUS, generate_bundle
 from cortex.ingest import ingest_repository
-from tests.golden_utils import TREE_SITTER_ONLY
+from tests.golden_utils import TREE_SITTER_ONLY, force_stdlib_tokenizer
 
 FILES = {
     # Keyword hit: the manager talks about the task in its own words.
@@ -508,6 +508,9 @@ def _fanout_bundle(tmp_path, monkeypatch, budget=3000, *, output_format="json"):
 
     monkeypatch.setenv("CORTEX_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("CORTEX_SEMANTIC", "0")
+    # The fixture's budgets are tight by design, so its packing depends on the token counter: pin it, as the goldens
+    # and the evals do (tiktoken is optional and, where it is installed, its encoding may not be downloadable).
+    force_stdlib_tokenizer(monkeypatch)
     task = next(t for t in FIELD_GOLD_TASKS if t.repo == "field_callee_fanout_repo")
     repo = _build_field_callee_fanout_repo(tmp_path)
     ingest_repository(repo)

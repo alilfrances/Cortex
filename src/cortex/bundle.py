@@ -2134,17 +2134,30 @@ def generate_bundle(
         # there because of the seed, and a callee scores from its seed's span, so it can outscore the file around it.
         # Pack without the reservation first, then with it, and keep the reserved bundle only when it has lost no such
         # file. Without this, a bundle that just fits the task's own file loses it to entries for that file's callees.
-        # A file counts as kept while any item of it is packed (the whole file may give way to its spans).
+        # A file counts as kept while any item of it is packed (the whole file may give way to its spans). When the room
+        # for all the planned entries costs such a file, room for fewer is tried (halving, down to COMPACT_MIN_ENTRIES)
+        # before the entries fall back to what the passes leave.
         seed_paths = {seed['path'] for seed in expansion['seeds']}
         ceiling = budget
         run_packing()
         unreserved = [(item.score, item.path) for item in selected]
-        reset_packing()
-        ceiling = budget - compact_reserve
-        run_packing()
-        add_compact(reserved=True)
-        kept_paths = {item.path for item in selected if not item.metadata.get('compact')}
-        if any(path not in kept_paths and (score >= compact_floor or path in seed_paths) for score, path in unreserved):
+        counts = []
+        count = len(planned)
+        while count > COMPACT_MIN_ENTRIES:
+            counts.append(count)
+            count //= 2
+        counts.append(COMPACT_MIN_ENTRIES)
+        for count in counts:
+            reset_packing()
+            ceiling = budget - sum(entry.token_count for entry in planned[:count])
+            run_packing()
+            add_compact(reserved=True)
+            kept_paths = {item.path for item in selected if not item.metadata.get('compact')}
+            if not any(
+                path not in kept_paths and (score >= compact_floor or path in seed_paths) for score, path in unreserved
+            ):
+                break
+        else:
             reset_packing()
             ceiling = budget
             run_packing()

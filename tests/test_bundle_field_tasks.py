@@ -34,7 +34,7 @@ from evals.run_evals import (
     _selected_file_list,
 )
 from tests.baseline_helpers import fixed_git_env
-from tests.golden_utils import TREE_SITTER_ONLY
+from tests.golden_utils import TREE_SITTER_ONLY, force_stdlib_tokenizer
 
 MODES = ["pagerank", "bfs", "skeleton_on", "skeleton_off"]
 BUILDERS = {
@@ -61,6 +61,9 @@ def _field_built(tmp_path_factory):
     built: dict[str, tuple[Path, Path]] = {}
     with pytest.MonkeyPatch.context() as patch:
         fixed_git_env(patch)
+        # The tasks' budgets are tight by design, so their packing depends on the token counter: pin it, as the goldens
+        # and the evals do (tiktoken is optional and, where it is installed, its encoding may not be downloadable).
+        force_stdlib_tokenizer(patch)
         patch.setenv("CORTEX_DATA_DIR", str(data_dir))
         patch.setenv("CORTEX_SEMANTIC", "0")
         for name, build in BUILDERS.items():
@@ -74,6 +77,7 @@ def _field_built(tmp_path_factory):
 @pytest.fixture
 def field(_field_built, monkeypatch):
     built, data_dir = _field_built
+    force_stdlib_tokenizer(monkeypatch)
     monkeypatch.setenv("CORTEX_DATA_DIR", str(data_dir))
     return built
 
@@ -262,11 +266,11 @@ def test_computed_callees_get_a_share_of_a_tight_budget(field, mode):
 # screens named after the task fill the budget first, so on 0.15.1 the whole bodies are dropped for `budget_exhausted` (20 of
 # 23; the three the reservation of Task 4b of 0.15.1 packs are all it shows). A compact entry (declaration line and route)
 # lets the bundle show the call structure across the callee files without pushing the keyword files out.
-# The reservation for compact entries used to cost the bundle the seed's own file at these budgets (and at 3000 on the
-# CI runner): its callees score from the seed's span and outscore the file around it. A file the bundle holds without
-# compact entries must stay when they are on.
+# The reservation for compact entries used to cost the bundle the seed's own file at these budgets (with the pinned
+# token counter; at 3000 with tiktoken on the CI runner): its callees score from the seed's span and outscore the file
+# around it. A file the bundle holds without compact entries must stay when they are on.
 @TREE_SITTER_ONLY  # resolved calls: the regex fallback emits name-only call edges
-@pytest.mark.parametrize("budget", [1800, 2300, 3000, 3700, 3800, 4200])
+@pytest.mark.parametrize("budget", [2400, 2700, 3000, 3400, 4200, 4900, 5600, 6300, 7000])
 def test_compact_entries_never_cost_the_bundle_a_seed_file(field, monkeypatch, budget):
     import cortex.bundle as bundle_module
 
