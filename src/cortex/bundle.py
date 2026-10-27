@@ -105,14 +105,18 @@ BASE_CLASS_SHARE = 0.6
 OVERRIDES_PER_METHOD = 4
 # Seeds are real functions: no class nodes, nothing of at most TRIVIAL_SPAN_LINES lines (a factory or an
 # accessor says nothing about what the task is about), and the best span of each of the SEED_FILES best
-# files is always a seed so one file's methods cannot take every slot. A span with no resolved outgoing call
-# and no base class never seeds: the walk would return nothing from it, and a small UI span dense with the
-# task's words (a QML handler that only sets properties) would take the slot of a function that does reach
-# something. Files are ranked for this by the score their spans inherit (`raw_source_scores`, as for SPAN_FILE_SHARE_CAP
+# files is always a seed so one file's methods cannot take every slot. A span that cannot reach a function in
+# another file and has no base class never seeds: the walk would return nothing from it, and a small UI span
+# dense with the task's words (a QML handler that only sets properties) would take the slot of a function that
+# does reach something. A span "reaches" when the walk from it, following calls inside its own file, arrives at
+# a function in another file or at one with overriders (`_reaches_beyond_file`): a call to a same-file helper
+# is not enough, and a QML same-file call resolves to an `external:qml:<file>:fn` node that leads nowhere.
+# Files are ranked for this by the score their spans inherit (`raw_source_scores`, as for SPAN_FILE_SHARE_CAP
 # above), not by the length-normalised one: normalisation decides which whole file to pack, a seed is a span, and a
 # large file's best function is not worth less because the file around it is long.
 SEED_FILES = 5
 TRIVIAL_SPAN_LINES = 3
+REACH_WALK_NODES = 200  # `_reaches_beyond_file` stops after this many functions of one file and gives the span the benefit of the doubt
 # The reasons `bundle['expansion']` gives for a span that did not seed and for a computed callee that is not in the
 # packed bundle (`no_candidate`: the callee has no code span to pack; the others are the packing pass that refused it).
 SEED_REFUSAL_REASONS = ('class', 'constructor', 'trivial', 'no_reach')
@@ -498,7 +502,7 @@ def _select_seeds(
     the method the task is about) and spans of at most TRIVIAL_SPAN_LINES lines never seed (they outscore the function the
     task is about but call nothing worth following); the best span of each of the SEED_FILES best-scoring
     files is taken first, then the rest by score. When `reaches` is given, a span for which it is false (no
-    resolved outgoing call and no base class: the walk would return nothing from it) never seeds either.
+    call that leaves the file and no base class: the walk would return nothing from it) never seeds either.
     `refusals` (when given) counts the spans turned away, by reason: class, constructor, trivial, no_reach.
     """
     eligible = []
@@ -530,6 +534,34 @@ def _select_seeds(
             break
         chosen.setdefault(item.item_id, item)
     return sorted(chosen.values(), key=lambda item: (-item.score, item.item_id))
+
+
+def _reaches_beyond_file(
+    symbol_id: str,
+    links: CallLinks,
+    file_of: Callable[[str], str | None],
+    class_of: Callable[[str], str | None],
+) -> bool:
+    """True when the call walk from `symbol_id` can leave its file: its class has a base class, or following resolved
+    calls through callees in the same file (the walk's own 0-hop rule) reaches a function of another file or one that
+    has overriders. `external:` nodes (an unresolved or same-file QML call) lead nowhere and never count. After
+    REACH_WALK_NODES functions the answer is True: a hub that large is not shown to be a dead end."""
+    if links.bases_of.get(class_of(symbol_id) or ''):
+        return True
+    origin = file_of(symbol_id)
+    seen = {symbol_id}
+    queue = deque([symbol_id])
+    while queue:
+        for callee in links.calls_from.get(queue.popleft(), ()):
+            if callee in seen or callee.startswith('external:'):
+                continue
+            if file_of(callee) != origin or callee in links.overridden_by:
+                return True
+            if len(seen) >= REACH_WALK_NODES:
+                return True
+            seen.add(callee)
+            queue.append(callee)
+    return False
 
 
 def _empty_expansion() -> dict:
@@ -1626,7 +1658,7 @@ def generate_bundle(
         seed_items = _select_seeds(
             [item for item in candidates if item.kind == 'symbol' and item.score > 0], symbol_by_id, raw_source_scores,
             [constructor for built in links.constructors_of.values() for constructor in built],
-            reaches=lambda symbol_id: bool(links.calls_from.get(symbol_id)) or bool(links.bases_of.get(class_of(symbol_id) or '')),
+            reaches=lambda symbol_id: _reaches_beyond_file(symbol_id, links, file_of_symbol, class_of),
             refusals=seed_refusals,
         )
         def overriders(method_id: str) -> list[str]:

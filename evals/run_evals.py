@@ -135,6 +135,13 @@ FIELD_GOLD_TASKS: tuple[GoldTask, ...] = (
         budget=2000,
         tight_budget=2000,
     ),
+    GoldTask(
+        repo="field_seed_markup_local_repo",
+        description="item changes type and then the item is removed",
+        expected_files=("src/itemmodel.cpp", "src/baseitem.cpp"),
+        budget=2000,
+        tight_budget=2000,
+    ),
 )
 
 
@@ -918,6 +925,57 @@ def _build_field_seed_markup_calls_repo(base: Path) -> Path:
     return _build_field_seed_markup_repo(base, ui_calls=True)
 
 
+def _build_field_seed_markup_local_repo(base: Path) -> Path:
+    """`field_seed_markup_calls_repo` with the screens turned up until they take every seed slot whatever the
+    ranking (0.15.1 Task 3, finding 1 gap a). Ten QML screens, each with four functions that call a same-file
+    helper of five lines: a QML same-file call resolves to an `external:qml:<screen>:hideItem` node, so every one of
+    those spans has an outgoing `calls` edge and passes a filter on "reaches something", but nothing they call
+    lives in another file. They carry more of the task's words than `src/itemmodel.cpp`, which is small enough to
+    escape length normalisation (a model file of ten lines, no filler) and whose `onTypeChanged` still calls
+    `entry->detach(...)` into `baseitem.cpp`, the virtual with two overriders."""
+    repo = base / "field_seed_markup_local_repo"
+    _init_repo(repo)
+    for k in range(10):
+        helper = (
+            f"    function hideItem() {{\n        // hide the item that was removed ({k})\n"
+            "        listItem.visible = false\n        removedItem.opacity = 0\n        itemTypeLabel.text = itemType\n    }\n"
+        )
+        _write(repo / f"ui/ItemScreen{k}.qml", (
+            "import QtQuick 2.15\nItem {\n    id: root\n    property int itemType: 0\n"
+            f"    function onItemTypeChanged() {{\n        // item type changed then the item is removed ({k})\n"
+            "        removedItem.visible = false\n        hideItem()\n        itemTypeLabel.text = itemType\n        listItem.opacity = 0\n    }\n"
+            "    function removeItem() {\n        // remove item when the item type changed\n        hideItem()\n"
+            "        listItem.visible = false\n        removedItem.opacity = 1\n        itemType = 0\n    }\n"
+            "    function changeItemType() {\n        // the item changes type and the item is removed\n        hideItem()\n"
+            "        itemType = 1\n        removedItem.visible = true\n        itemTypeLabel.text = itemType\n    }\n"
+            "    function itemRemoved() {\n        // the removed item changes the type of the item\n        hideItem()\n"
+            "        itemType = 2\n        removedItem.opacity = 1\n        listItem.visible = false\n    }\n"
+            f"{helper}}}\n"
+        ))
+    _write(repo / "src/baseitem.h", "class BaseItem {\npublic:\n    virtual ~BaseItem();\n    virtual void detach(int slot);\n};\n")
+    _write(repo / "src/baseitem.cpp", (
+        '#include "baseitem.h"\nBaseItem::~BaseItem() {}\n'
+        "void BaseItem::detach(int slot) {\n    int cell = slot;\n    cell += 1;\n    cell *= 2;\n}\n"
+    ))
+    for name in ("TextEntry", "ImageEntry"):
+        stem = name.lower()
+        _write(repo / f"src/kinds/{stem}.h", (
+            f'#include "../baseitem.h"\nclass {name} : public BaseItem {{\npublic:\n    void detach(int slot) override;\n}};\n'
+        ))
+        _write(repo / f"src/kinds/{stem}.cpp", (
+            f'#include "{stem}.h"\nvoid {name}::detach(int slot) {{\n    int cell = slot;\n    cell -= 1;\n    cell *= 3;\n}}\n'
+        ))
+    _write(repo / "src/itemmodel.h", (
+        '#include "baseitem.h"\nclass ItemModel {\npublic:\n    void onTypeChanged(BaseItem* entry, int slot);\n};\n'
+    ))
+    _write(repo / "src/itemmodel.cpp", (
+        '#include "itemmodel.h"\n\nvoid ItemModel::onTypeChanged(BaseItem* entry, int slot) {\n'
+        "    int old = slot;\n    old += 1;\n    entry->detach(old);\n}\n"
+    ))
+    _commit_all(repo, "add local-call seed fixture")
+    return repo
+
+
 def _build_field_vocab_repo(base: Path) -> Path:
     """Vocabulary: the task says `Gizmos`, `iOS` and `re-enumerates`; the code says `Gizmo`, `reconnect`
     and `remove`, and the other files talk about `os` and `re` so those split parts would match."""
@@ -1222,6 +1280,7 @@ def build_fixture_repos(base: Path) -> dict[str, Path]:
         "field_vocab_repo": _build_field_vocab_repo(base),
         "field_seed_markup_repo": _build_field_seed_markup_repo(base),
         "field_seed_markup_calls_repo": _build_field_seed_markup_calls_repo(base),
+        "field_seed_markup_local_repo": _build_field_seed_markup_local_repo(base),
         "qt_app": _build_qt_app(base),
         "body_text_repo": _build_body_text_repo(base),
     }

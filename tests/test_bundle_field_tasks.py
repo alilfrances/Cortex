@@ -24,6 +24,7 @@ from evals.run_evals import (
     _build_field_override_pure_repo,
     _build_field_override_repo,
     _build_field_seed_markup_calls_repo,
+    _build_field_seed_markup_local_repo,
     _build_field_seed_markup_repo,
     _build_field_tiebreak_repo,
     _build_field_vocab_repo,
@@ -43,13 +44,14 @@ BUILDERS = {
     "field_vocab_repo": _build_field_vocab_repo,
     "field_seed_markup_repo": _build_field_seed_markup_repo,
     "field_seed_markup_calls_repo": _build_field_seed_markup_calls_repo,
+    "field_seed_markup_local_repo": _build_field_seed_markup_local_repo,
 }
 TASKS = {task.repo: task for task in FIELD_GOLD_TASKS}
 
 
 @pytest.fixture(scope="module")
 def _field_built(tmp_path_factory):
-    """The eight fixture repositories (the override chain and the seed markup in two variants each), built and indexed once per module (eval settings: 20 commits)."""
+    """The nine fixture repositories (the override chain in two variants, the seed markup in three), built and indexed once per module (eval settings: 20 commits)."""
     root = tmp_path_factory.mktemp("field-tasks")
     data_dir = root / "data"
     built: dict[str, tuple[Path, Path]] = {}
@@ -220,6 +222,22 @@ def test_the_seed_that_can_reach_a_callee_is_expanded(field, repo_name, mode):
     assert packed & {"src/kinds/textentry.cpp", "src/kinds/imageentry.cpp"}, f"no overrider packed through an override route: {sorted(packed)}"
 
 
+# Ten screens with four functions each, every one calling a same-file helper: a QML same-file call resolves to an
+# `external:qml:<screen>:hideItem` node, so each span "has an outgoing call" and passed the 0.15.0 filter, while the
+# walk from it finds nothing in another file. Their spans score above `onTypeChanged` (118.6 against a much smaller
+# model file), so all six seed slots went to screen spans and no call-expansion item started from the model file.
+@TREE_SITTER_ONLY  # resolved calls: the regex fallback emits name-only call edges
+@pytest.mark.parametrize("mode", MODES)
+def test_a_span_whose_calls_stay_in_its_file_does_not_take_a_seed_slot(field, mode):
+    bundle, files = _run(field, "field_seed_markup_local_repo", mode)
+
+    expanded = [item for item in bundle["items"] if (item.get("metadata") or {}).get("call_expansion")]
+    from_model = [item for item in expanded if item["metadata"]["call_expansion"]["from"].startswith("symbol:src/itemmodel.cpp:")]
+    seeds = [seed["id"] for seed in bundle["expansion"]["seeds"]]
+    assert from_model, f"no call-expansion item starts from src/itemmodel.cpp; seeds {seeds}; refusals {bundle['expansion']['seed_refusals']}"
+    assert any(seed.startswith("symbol:src/itemmodel.cpp:") for seed in seeds)
+
+
 # --- the fixtures themselves
 
 
@@ -256,6 +274,13 @@ def test_the_fixtures_resolve_the_call_chains_the_tasks_depend_on(_field_built):
         assert sum(1 for r, s, t in edges if r == "inherits" and s.startswith("symbol:src/kinds/") and t == "symbol:src/baseitem.h:BaseItem") == 2, name
         screen_calls = {t for r, s, t in edges if r == "calls" and s.startswith("symbol:ui/ItemScreen")}
         assert bool(screen_calls) == calls_helper, (name, screen_calls)  # the screens of the plain variant call nothing
+
+
+    # The local variant: the screens call only a same-file helper (an `external:qml:` node), the model file calls `detach`.
+    _nodes, edges = graph("field_seed_markup_local_repo")
+    assert ("calls", "symbol:src/itemmodel.cpp:onTypeChanged", "symbol:src/baseitem.cpp:detach") in edges
+    screen_calls = {t for r, s, t in edges if r == "calls" and s.startswith("symbol:ui/ItemScreen")}
+    assert screen_calls and all(t.startswith("external:qml:ui/ItemScreen") for t in screen_calls), screen_calls
 
 
 def _tree_digest(root: Path) -> dict[str, str]:
