@@ -262,6 +262,25 @@ def test_computed_callees_get_a_share_of_a_tight_budget(field, mode):
 # screens named after the task fill the budget first, so on 0.15.1 the whole bodies are dropped for `budget_exhausted` (20 of
 # 23; the three the reservation of Task 4b of 0.15.1 packs are all it shows). A compact entry (declaration line and route)
 # lets the bundle show the call structure across the callee files without pushing the keyword files out.
+# The reservation for compact entries used to cost the bundle the seed's own file at these budgets (and at 3000 on the
+# CI runner): its callees score from the seed's span and outscore the file around it. A file the bundle holds without
+# compact entries must stay when they are on.
+@TREE_SITTER_ONLY  # resolved calls: the regex fallback emits name-only call edges
+@pytest.mark.parametrize("budget", [1800, 2300, 3000, 3700, 3800, 4200])
+def test_compact_entries_never_cost_the_bundle_a_seed_file(field, monkeypatch, budget):
+    import cortex.bundle as bundle_module
+
+    task = TASKS["field_callee_fanout_repo"]
+    bundle, files = _run(field, "field_callee_fanout_repo", "pagerank", budget)
+    monkeypatch.setattr(bundle_module, "COMPACT_CALLEES_MAX", 0)
+    _plain, plain_files = _run(field, "field_callee_fanout_repo", "pagerank", budget)
+
+    seed_paths = {seed["path"] for seed in bundle["expansion"]["seeds"]}
+    assert seed_paths & set(plain_files) <= set(files), (budget, sorted(seed_paths), sorted(set(files)))
+    assert set(task.expected_files) & set(plain_files) <= set(files), (budget, sorted(set(files)))
+    assert bundle["total_tokens"] <= budget
+
+
 @TREE_SITTER_ONLY  # resolved calls: the regex fallback emits name-only call edges
 @pytest.mark.parametrize("budget", [3000, 6000])
 @pytest.mark.parametrize("mode", MODES)

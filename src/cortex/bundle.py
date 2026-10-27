@@ -1938,12 +1938,15 @@ def generate_bundle(
 
     # What the normal passes may fill: the whole budget, less what the best compact callee entries would take when
     # there are at least COMPACT_MIN_ENTRIES of them (the unused part is handed back after the entries are chosen).
-    # Item caps and file shares keep reading `budget`.
+    # Item caps and file shares keep reading `budget`. The reservation only stands if it costs no item that scores at
+    # least as high as the best entry (`compact_floor`, checked after packing).
     compact_reserve = 0
+    compact_floor = 0.0
     if COMPACT_CALLEES_MAX > 0 and callee_item_ids:
         planned = compact_entries(skip_packed=False)
         if len(planned) >= COMPACT_MIN_ENTRIES:
             compact_reserve = sum(entry.token_count for entry in planned)
+            compact_floor = max(entry.score for entry in planned)
     ceiling = budget - compact_reserve
 
     def select_span(item: BundleItem, file_cap: int | None = None) -> None:
@@ -2067,8 +2070,6 @@ def generate_bundle(
     # First the capped pass, so a dense file leaves room for the other matches; then the same pass without
     # the cap, which only adds what the cap held back and what is still left of the budget.
     first_pass_cap = max(1, int(budget * file_span_share(matching_code_files)))
-    pack(first_pass_cap)
-    pack()
 
     def callee_is_packed(callee_id: str) -> bool:
         symbol = symbol_by_id[callee_id]
@@ -2095,29 +2096,62 @@ def generate_bundle(
             select_symbol(item, min(ceiling - total_tokens, item_cap, reserve_end - total_tokens), first_pass_cap)
             reserved += len(selected) > before
 
-    if (
-        EXPANSION_RESERVED_ITEMS > 0
-        and callee_item_ids
-        and not any(callee_is_packed(callee_id) for callee_id in callee_item_ids)
-    ):
-        # The walk found callees and the budget went to other items before the passes reached them.
-        reset_packing()
-        reserve_expansion()
-        turned_away.clear()  # the reservation's refusals say nothing about the passes that follow
+    def run_packing() -> None:
+        """The two passes, then the repack with reserved callee spans when they packed no computed callee."""
+        expansion['reserved'] = False
         pack(first_pass_cap)
         pack()
-        expansion['reserved'] = True
+        if (
+            EXPANSION_RESERVED_ITEMS > 0
+            and callee_item_ids
+            and not any(callee_is_packed(callee_id) for callee_id in callee_item_ids)
+        ):
+            # The walk found callees and the budget went to other items before the passes reached them.
+            reset_packing()
+            reserve_expansion()
+            turned_away.clear()  # the reservation's refusals say nothing about the passes that follow
+            pack(first_pass_cap)
+            pack()
+            expansion['reserved'] = True
 
-    if COMPACT_CALLEES_MAX > 0 and callee_item_ids:
+    def add_compact(reserved: bool) -> None:
+        """The compact entries, after every normal item. With a reservation, first give back what the entries leave of
+        their share and keep the entries whose callee that extra pass did not pack."""
+        nonlocal ceiling
+        if not (COMPACT_CALLEES_MAX > 0 and callee_item_ids):
+            return
         compact = compact_entries(skip_packed=True)
-        if compact_reserve:
-            # Give back what the entries leave of their share, then keep the entries whose callee the extra pass did not pack.
+        if reserved:
             ceiling = budget - sum(entry.token_count for entry in compact)
             pack()
             compact = [entry for entry in compact if not callee_is_packed(entry.metadata['node_id'])]
         for entry in compact:
             select(entry)  # after every normal item: no earlier item's position changes
         expansion['callees_compact'] = len(compact)
+
+    if compact_reserve:
+        # Compact entries may only take room from items they outscore, and never from a seed's own file: the callees are
+        # there because of the seed, and a callee scores from its seed's span, so it can outscore the file around it.
+        # Pack without the reservation first, then with it, and keep the reserved bundle only when it has lost no such
+        # file. Without this, a bundle that just fits the task's own file loses it to entries for that file's callees.
+        # A file counts as kept while any item of it is packed (the whole file may give way to its spans).
+        seed_paths = {seed['path'] for seed in expansion['seeds']}
+        ceiling = budget
+        run_packing()
+        unreserved = [(item.score, item.path) for item in selected]
+        reset_packing()
+        ceiling = budget - compact_reserve
+        run_packing()
+        add_compact(reserved=True)
+        kept_paths = {item.path for item in selected if not item.metadata.get('compact')}
+        if any(path not in kept_paths and (score >= compact_floor or path in seed_paths) for score, path in unreserved):
+            reset_packing()
+            ceiling = budget
+            run_packing()
+            add_compact(reserved=False)
+    else:
+        run_packing()
+        add_compact(reserved=False)
 
     if expansion['callees_computed']:
         dropped = expansion['callees_dropped']
