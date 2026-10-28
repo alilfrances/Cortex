@@ -7,7 +7,9 @@ Reads the index of REPO (``--ingest`` builds one first, into ``CORTEX_DATA_DIR``
 directory).  Prints the resolution ratios of every `calls` and `inherits` edge (repository wide, and
 for ``--file`` alone), then a deterministic sample of ``--sample`` unresolved call edges bucketed by
 cause (``--all`` buckets every unresolved edge instead: exact counts), so a resolver change can be
-judged by its before/after numbers rather than by example.
+judged by its before/after numbers rather than by example.  The last lines give, per language family, the
+figures of ``cortex_status`` (``resolution.calls.by_family``: ``symbol``, ``name``, ``name_external``,
+``name_not_in_repo``, ``resolvable_share``), read from ``CortexStore.resolution_counts``.
 
 Buckets (first matching rule wins, in this order):
 
@@ -212,6 +214,8 @@ def audit(repo: Path, sample: int, only_file: str | None, all_edges: bool = Fals
     report["unresolved_calls"] = len(unresolved)
     report["sampled"] = len(picked)
     report["buckets"] = dict(buckets.most_common())
+    # the figures `cortex_status` reports, taken from the store rather than recomputed here
+    report["by_family"] = store.resolution_counts(repo)["calls"]["by_family"]
     return report
 
 
@@ -243,6 +247,12 @@ def main() -> int:
     print(f"unresolved name: calls {report['unresolved_calls']}, sampled {report['sampled']}")
     for bucket, count in report["buckets"].items():
         print(f"  {bucket:<26} {count}")
+    for family, counts in report["by_family"].items():
+        print(
+            f"family {family:<5} symbol {counts['symbol']}, name {counts['name']}, "
+            f"name_external {counts['name_external']}, name_not_in_repo {counts['name_not_in_repo']}, "
+            f"resolvable_share {counts['resolvable_share']}"
+        )
     return 0
 
 
