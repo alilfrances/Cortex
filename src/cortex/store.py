@@ -45,7 +45,10 @@ INGEST_LOCK_NAME = "ingest.lock"
 # narrowed by the include ring of the calling file, and an out-of-line member is found among the definitions that
 # belong to the chosen class; an include with a directory part resolves by a unique path suffix
 # (`imports` edges with `include_rule = "suffix"`); Qt's `Q_D(Foo)` types `d` as `FooPrivate`; a C/C++ call on a
-# call's result (`a->b()->c()`) is typed by the return type of the resolved inner call (`resolution = "chain"`).
+# call's result (`a->b()->c()`) is typed by the return type of the resolved inner call (`resolution = "chain"`);
+# Qt's `Q_Q(Foo)` types `q` as `Foo`; the declaration macros Qt writes without a semicolon (`Q_DECLARE_PRIVATE`,
+# `Q_PLUGIN_METADATA`...) no longer hide the next class member, and members declared in the `#ifdef`/`#else`
+# branches of a class body are recorded in `member_types`.
 GRAPH_FORMAT_VERSION = 9
 INGEST_LOCK_TIMEOUT_SECONDS = 120.0
 _LOCK_POLL_SECONDS = 0.05

@@ -506,7 +506,11 @@ _QT_BARE_MACROS = (
 )
 _QT_CALL_MACROS = (
     rb"\b(?:Q_PROPERTY|Q_CLASSINFO|Q_ENUMS?|Q_ENUM_NS|Q_FLAGS?|Q_FLAG_NS|Q_INTERFACES|Q_DECLARE_FLAGS|"
-    rb"Q_DISABLE_COPY|Q_DISABLE_COPY_MOVE|QML_NAMED_ELEMENT|QML_UNCREATABLE|QML_FOREIGN|QML_EXTENDED)"
+    rb"Q_DISABLE_COPY|Q_DISABLE_COPY_MOVE|QML_NAMED_ELEMENT|QML_UNCREATABLE|QML_FOREIGN|QML_EXTENDED|"
+    # Qt writes these without a semicolon; left in, the next line (`public:`, a member) is read as part of the macro
+    # call.  `Q_D` and `Q_Q` are not here: the call walker reads them from the tree.
+    rb"Q_DECLARE_PRIVATE|Q_DECLARE_PUBLIC|Q_DECLARE_PRIVATE_D|Q_DECLARE_PUBLIC_D|Q_PLUGIN_METADATA|"
+    rb"Q_DECLARE_TR_FUNCTIONS)"
     rb"\s*\((?:[^()]|\([^()]*\))*\)"
 )
 _QT_MACRO_RE = re.compile(_QT_CALL_MACROS + rb"|" + _QT_BARE_MACROS)
