@@ -1,3 +1,9 @@
+## Unreleased
+
+Work toward 0.16.0, from `docs/plan-0.16-calls-resolution.md` (the reviewer's `audit_unresolved_calls.py --all` table on 0.15.2).
+
+- Calls share (plan Task 1): `cortex_status` (detailed) `resolution.calls` gains `name_not_in_repo` and `resolvable_share`. `name_not_in_repo` counts the unresolved `calls` edges that are plain (`receiver_kind` absent or `none`, no `scope`, no `receiver_type`), not ambiguous, not `external`, and whose callee (`metadata.callee`, else the target label) is the label of no symbol node of the repository: `qDebug()`, C library functions, moc-generated code. They cannot resolve, and the audit calls them `free_not_in_repo`. The test is against every symbol label, methods and classes included, so the count is conservative. `resolvable_share` is `symbol / (symbol + name - name_external - name_not_in_repo)` to 4 places (`None` when that is 0). Every existing key and value, `in_repo_symbol_share` included, is unchanged. Computed with one grouped `json_extract` query over the `name:` calls edges and one `SELECT DISTINCT label`, never the whole graph. `resolution_counts` on the `--field-shape` repository (40 modules): 10.1 ms before, 11.2 ms after; on a 600-module one (46,038 calls) 255.6 ms before, 226.0 ms after (noise: the cost is the grouped scan that was already there). No golden changed.
+
 ## 0.15.2 — 2026-10-27
 
 Follow-up to the reviewer's 0.15.1 run of the section 1.4 task (`cortex_query`, detailed), read from the new `expansion` block, implemented from `docs/plan-0.15.2-callee-packing.md`. A patch release: **no graph format change** (`GRAPH_FORMAT_VERSION` stays 8, so an index built by 0.15.1 is not rebuilt; nothing here changes extraction or resolution output). The input:

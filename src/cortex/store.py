@@ -1393,7 +1393,10 @@ class CortexStore:
         `name_external` counts the `name:`/`module:` edges the resolver classified as out-of-repo
         (`metadata.external`; they stay inside `name`/`module`), and `in_repo_symbol_share` is
         `symbol / (symbol + name + module - name_external)` to 4 places, `None` when that is 0. `calls` also
-        carries `name_by_family`: its unresolved edges by the language family of `metadata.source_file`.
+        carries `name_by_family`: its unresolved edges by the language family of `metadata.source_file`, and
+        `name_not_in_repo`: the unresolved plain calls (no receiver, scope or receiver type, not ambiguous, not
+        external) to a name no repository symbol has (`qDebug()`, C library functions), which cannot resolve;
+        `resolvable_share` is `symbol / (symbol + name - name_external - name_not_in_repo)`, to 4 places.
         """
         repo_key = str(repo_path.resolve())
         counts: dict[str, dict[str, Any]] = {
@@ -1425,7 +1428,37 @@ class CortexStore:
                 family = language_family(str(row["path"]))
                 families[family] = families.get(family, 0) + int(row["n"])
         counts["calls"]["name_by_family"] = families
+        calls = counts["calls"]
+        calls["name_not_in_repo"] = self._calls_not_in_repo(repo_key)
+        denominator = calls["symbol"] + calls["name"] - calls["name_external"] - calls["name_not_in_repo"]
+        calls["resolvable_share"] = round(calls["symbol"] / denominator, 4) if denominator > 0 else None
         return counts
+
+    def _calls_not_in_repo(self, repo_key: str) -> int:
+        """Unresolved plain calls whose name no symbol node of the repository has.
+
+        The same rule as the `free_not_in_repo` bucket of `scripts/perf/audit_unresolved_calls.py`, but tested
+        against every symbol label (methods and classes too), so the count can only be conservative."""
+        rows = self.connection.execute(
+            "SELECT COALESCE(json_extract(metadata_json, '$.callee'), substr(target, 6)) AS callee, COUNT(*) AS n "
+            "FROM graph_edges WHERE repo_path = ? AND relation = 'calls' AND target LIKE 'name:%' "
+            "AND json_extract(metadata_json, '$.external') IS NULL "
+            "AND COALESCE(json_extract(metadata_json, '$.ambiguous'), 0) = 0 "
+            "AND COALESCE(json_extract(metadata_json, '$.receiver_kind'), 'none') = 'none' "
+            "AND COALESCE(json_extract(metadata_json, '$.scope'), '') = '' "
+            "AND COALESCE(json_extract(metadata_json, '$.receiver_type'), '') = '' "
+            "GROUP BY callee",
+            (repo_key,),
+        ).fetchall()
+        if not rows:
+            return 0
+        labels = {
+            str(row[0])
+            for row in self.connection.execute(
+                "SELECT DISTINCT label FROM graph_nodes WHERE repo_path = ? AND granularity = 'symbol'", (repo_key,)
+            )
+        }
+        return sum(int(row["n"]) for row in rows if str(row["callee"]) not in labels)
 
     def fetch_graph(self, repo_path: Path) -> tuple[list[GraphNode], list[GraphEdge]]:
         repo_key = str(repo_path.resolve())
