@@ -42,7 +42,8 @@ INGEST_LOCK_NAME = "ingest.lock"
 # 9 = 0.16.0: C++ extraction names classes behind more export macros (`class MyLib_Export Foo`, `QT_BEGIN_NAMESPACE`)
 # and gives out-of-line members that return a reference (`Foo& Foo::f()`) their class; a member call a repository
 # class cannot find while a base is outside the repository carries `external = "inherited"`; same-label classes are
-# narrowed by the include ring of the calling file.
+# narrowed by the include ring of the calling file; a C/C++ call on a call's result (`a->b()->c()`) is typed by the
+# return type of the resolved inner call (`resolution = "chain"`).
 GRAPH_FORMAT_VERSION = 9
 INGEST_LOCK_TIMEOUT_SECONDS = 120.0
 _LOCK_POLL_SECONDS = 0.05

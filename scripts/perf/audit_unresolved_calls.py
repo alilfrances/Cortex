@@ -22,7 +22,10 @@ Buckets (first matching rule wins, in this order):
                           ``not_cpp_py``, ...): the C++ causes below do not apply, so they are counted apart
 * ``cast_local``          receiver typed by a cast function name (``qobject_cast``) -- extractor gap
 * ``ambiguous``           the resolver kept ``name:`` on purpose: several candidates
-* ``chain``               receiver is a call/field chain (``a->b()->c()``)
+* ``chain``               receiver is a call/field chain (``a->b()->c()``) that the resolver's chain pass
+                          (``callresolve._resolve_chain``) could not type: the inner call is unresolved or
+                          ambiguous, returns no repository class, or the chain is longer than
+                          ``MAX_CHAIN_LINKS``
 * ``member:*``            ``m_x->f()`` where the extractor recorded ``receiver_member`` and no declared type
                           (the resolver then joins it with the ``member_types`` of the enclosing class and its
                           bases, ``callresolve._member_type``); why that join gave nothing:

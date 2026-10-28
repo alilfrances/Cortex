@@ -37,6 +37,9 @@ at least one symbol::
     same_package   Go only: free callee in the caller's directory (package)
     import_scoped  free callee defined in a file the caller imports/includes
     repo_unique    free callee with exactly one definition repo-wide
+    chain          C/C++ only: a call on a call's result (``a->b()->c()``), typed by the return type of the
+                   inner call's resolved target (or by a declared member of that type); a pass of its own,
+                   after every other edge of the family, so the inner edges are already resolved
 
 More than one candidate at the deciding tier keeps the ``name:`` target and
 records ``candidates`` (sorted, <= 8), ``ambiguous = True``, confidence LOW.
@@ -53,6 +56,7 @@ from __future__ import annotations
 
 import builtins
 import functools
+import re
 from collections import defaultdict
 from pathlib import PurePosixPath
 from typing import Iterable
@@ -65,6 +69,10 @@ MAX_CANDIDATES = 8
 MAX_INHERIT_DEPTH = 6
 # How many include hops `_Index.include_ring` follows from the calling file and from its header sibling.
 MAX_INCLUDE_RING = 3
+# `call_sites._MAX_RECEIVER`: a receiver text this long was cut, so its tail is not the chain's tail.
+_MAX_RECEIVER_TEXT = 80
+# The longest C/C++ chain `a->b()->c()->d()` (calls in it, the edge's own included) that is followed.
+MAX_CHAIN_LINKS = 4
 _HEADER_SUFFIXES = {".h", ".hpp", ".hh", ".hxx"}
 _IMPL_SUFFIXES = {".c", ".cc", ".cpp", ".cxx"}
 _PY_BUILTINS = frozenset(dir(builtins))
@@ -279,6 +287,11 @@ class _Index(ClassIndex):
         # Set while `_resolve_into` makes its second attempt at an edge that stayed unresolved or ambiguous:
         # `prefer` then also narrows by `include_ring`.
         self.deep = False
+        # The family's call edges by (source, lineno, callee), for the chain pass (see `attach_calls`), and the
+        # return type label of a function symbol, parsed from its signature on first use (`return_label`).
+        self._calls: list[GraphEdge] = []
+        self._call_sites: dict[tuple[str, int, str], list[GraphEdge]] | None = None
+        self._return_labels: dict[str, str | None] = {}
         self._rings: dict[tuple[str, ...], frozenset[str]] = {}
         super().__init__(nodes)
         symbols = self.symbols
@@ -417,6 +430,30 @@ class _Index(ClassIndex):
             if len(pool) == 1:
                 break
         return pool
+
+    def attach_calls(self, calls: list[GraphEdge]) -> None:
+        """The family's contract call edges, resolved or not: the chain pass looks up the inner call of
+        ``a->b()->c()`` among them (same source symbol, same line, the callee ``b``)."""
+        self._calls = calls
+        self._call_sites = None
+
+    def calls_at(self, source: str, lineno: int, callee: str) -> list[GraphEdge]:
+        if self._call_sites is None:
+            sites: dict[tuple[str, int, str], list[GraphEdge]] = defaultdict(list)
+            for edge in self._calls:
+                sites[(edge.source, int(edge.metadata.get("lineno") or 0), str(edge.metadata["callee"]))].append(edge)
+            self._call_sites = sites
+        return self._call_sites.get((source, lineno, callee), [])
+
+    def return_label(self, symbol_id: str) -> str | None:
+        """Class label a function symbol returns, from its signature (``Item* Manager::current()`` -> ``Item``);
+        ``None`` for a constructor, ``void``, ``auto`` and the built-in types."""
+        if symbol_id not in self._return_labels:
+            node = self.symbols.get(symbol_id)
+            self._return_labels[symbol_id] = (
+                _return_label(node.signature, node.label) if node is not None and node.kind != "class" else None
+            )
+        return self._return_labels[symbol_id]
 
     def has_outside_base(self, class_id: str) -> bool:
         """`class_id` or a class it derives from (repository bases, depth <= `MAX_INHERIT_DEPTH`) has a base
@@ -686,8 +723,138 @@ def _member_type_candidates(edge: GraphEdge, index: _Index, source_file: str, me
     """Declared types of member variable `member` at the nearest level (enclosing class, then bases) that
     declares it: sorted, empty when no class declares it, more than one when the declarations disagree."""
     classes = _enclosing_classes(edge, index, source_file)
-    if not classes:
-        return []
+    return _member_labels(index, classes, member) if classes else []
+
+
+def _member_type(edge: GraphEdge, index: _Index, source_file: str, member: str) -> str | None:
+    """Declared type of member variable `member` of the enclosing class (or a base)."""
+    found = _member_type_candidates(edge, index, source_file, member)
+    return found[0] if len(found) == 1 else None
+
+
+# -- chains: ``a->b()->c()`` ---------------------------------------------------------------------------
+
+_TYPE_KEYWORDS = frozenset({
+    "static", "virtual", "inline", "constexpr", "consteval", "constinit", "explicit", "const", "volatile", "friend",
+    "extern", "typename", "mutable", "struct", "class", "enum", "union", "register", "thread_local",
+})
+_BUILTIN_TYPES = frozenset({
+    "void", "auto", "bool", "char", "wchar_t", "char8_t", "char16_t", "char32_t", "short", "int", "long", "float",
+    "double", "signed", "unsigned", "size_t", "ssize_t", "ptrdiff_t", "nullptr_t",
+})
+_MACRO_WORD = re.compile(r"[A-Z][A-Z0-9_]{2,}$")
+_TRAILING_QUALIFIER = re.compile(r"(?:\s*[*&]+|\s*\b(?:const|volatile))\s*$")
+_LEADING_WORD = re.compile(r"(\w+)\s+(?=\S)")
+_CALL_NAME = re.compile(r"([A-Za-z_]\w*)\s*(?:<[^<>]*>)?\s*$")
+
+
+def _matching(text: str, start: int, opening: str, closing: str, step: int = 1) -> int | None:
+    """Index of the bracket that closes the one at `start` (scanning forward) or opens it (backward, `step=-1`)."""
+    depth = 0
+    index = start
+    while 0 <= index < len(text):
+        char = text[index]
+        if char == opening:
+            depth += 1
+        elif char == closing:
+            depth -= 1
+            if depth == 0:
+                return index
+        index += step
+    return None
+
+
+def _type_label(text: str) -> str | None:
+    """Class label a written type names: pointers, references and qualifiers stripped, the last `::` segment,
+    the pointee of a known smart pointer (``std::unique_ptr<Item>``), the wrapper's own name for any other
+    template (``QList<Item*>`` -> ``QList``); ``None`` for a built-in or anything that is not one name."""
+    from .structural.call_sites import _SMART_POINTERS
+
+    text = text.strip()
+    while True:
+        lead = _LEADING_WORD.match(text)
+        if lead and (lead.group(1) in _TYPE_KEYWORDS or _MACRO_WORD.match(lead.group(1))):
+            text = text[lead.end():]
+            continue
+        break
+    while True:
+        stripped = _TRAILING_QUALIFIER.sub("", text)
+        if stripped == text:
+            break
+        text = stripped
+    text = text.strip().removeprefix("::")
+    segments: list[str] = []  # split on `::` outside template arguments
+    depth, start = 0, 0
+    for position, char in enumerate(text):
+        if char == "<":
+            depth += 1
+        elif char == ">":
+            depth -= 1
+        elif char == ":" and depth == 0 and text.startswith("::", position):
+            segments.append(text[start:position])
+            start = position + 2
+    segments.append(text[start:])
+    label, arguments = segments[-1].strip(), ""
+    angle = label.find("<")
+    if angle != -1:
+        close = _matching(label, angle, "<", ">")
+        if close is None or label[close + 1:].strip():
+            return None
+        label, arguments = label[:angle].strip(), label[angle + 1:close]
+    if not re.fullmatch(r"[A-Za-z_]\w*", label) or label in _BUILTIN_TYPES or label in _TYPE_KEYWORDS:
+        return None
+    if arguments and label in _SMART_POINTERS:
+        depth, first = 0, []
+        for char in arguments:
+            depth += char == "<"
+            depth -= char == ">"
+            if char == "," and depth == 0:
+                break
+            first.append(char)
+        return _type_label("".join(first))
+    return label
+
+
+def _return_label(signature: str, name: str) -> str | None:
+    """Class label named by the return type in a function signature: what stands before ``[Class::]name(``,
+    without storage and specifier keywords, export macros, ``template <...>``, ``*``, ``&`` and the qualifier."""
+    if not name or name.startswith("operator"):
+        return None
+    line = signature.split("\n", 1)[0]
+    match = re.search(r"(?<![\w~])(?:~?\w+(?:<[^<>]*>)?\s*::\s*)*" + re.escape(name) + r"\s*\(", line)
+    if match is None:
+        return None
+    prefix = re.sub(r"\[\[.*?\]\]", " ", line[:match.start()]).strip()
+    while prefix.startswith("template"):
+        angle = prefix.find("<")
+        close = _matching(prefix, angle, "<", ">") if angle != -1 else None
+        if close is None:
+            return None
+        prefix = prefix[close + 1:].strip()
+    return _type_label(prefix) if prefix else None
+
+
+def _chain_links(receiver: str) -> int:
+    """Calls in a chain whose receiver text is `receiver`, the chain edge's own call included."""
+    depth, groups = 0, 0
+    for char in receiver:
+        if char == "(":
+            if depth == 0:
+                groups += 1
+            depth += 1
+        elif char == ")":
+            depth -= 1
+    return groups + 1
+
+
+def _chain_callees(receiver: str) -> set[str]:
+    """Names called inside a chain's receiver text (``a->b()->c()`` -> ``b``, ``c``)."""
+    return set(re.findall(r"([A-Za-z_]\w*)\s*(?:<[^<>]*>)?\s*\(", receiver))
+
+
+def _member_labels(index: _Index, classes: list[str], member: str) -> list[str]:
+    """Declared types of member variable `member` at the nearest level (`classes`, then their bases) that
+    declares it: sorted, empty when none does, more than one when the declarations disagree."""
     frontier = sorted(set(classes))
     visited = set(frontier)
     depth = 0
@@ -706,10 +873,78 @@ def _member_type_candidates(edge: GraphEdge, index: _Index, source_file: str, me
     return []
 
 
-def _member_type(edge: GraphEdge, index: _Index, source_file: str, member: str) -> str | None:
-    """Declared type of member variable `member` of the enclosing class (or a base)."""
-    found = _member_type_candidates(edge, index, source_file, member)
-    return found[0] if len(found) == 1 else None
+def _chain_classes(edge: GraphEdge, index: _Index, source_file: str, text: str) -> list[str]:
+    """The repository classes the expression `text` (the receiver of a chain edge) evaluates to; empty when
+    the expression is not typed.  Three forms, read from the end of the text:
+
+    * ``<prefix>name(args)``: the inner call.  Its edge is the one of the same source symbol and line, callee
+      `name` and receiver `prefix`; it must have resolved to one symbol, whose return type is the class;
+    * ``<base>.field`` / ``<base>->field``: the declared type of member `field` in the classes `base` is;
+    * ``name`` / ``this``: a member of the class the call sits in / that class."""
+    text = text.strip()
+    if not text:
+        return []
+    if text.endswith(")"):
+        opening = _matching(text, len(text) - 1, ")", "(", -1)
+        name = _CALL_NAME.search(text[:opening]) if opening else None
+        if name is None:
+            return []
+        head = text[:name.start()].rstrip()
+        prefix = head
+        for separator in ("->", ".", "::"):
+            if head.endswith(separator):
+                prefix = head[: -len(separator)]
+                break
+        else:
+            if head:
+                return []  # `new Item()`, a cast, a subscript...: not a call on a named prefix
+        wanted = "".join(prefix.split())
+        found = [
+            e for e in index.calls_at(edge.source, int(edge.metadata.get("lineno") or 0), name.group(1))
+            if "".join(str(e.metadata.get("receiver") or "").split()) == wanted
+        ]
+        if len(found) != 1 or not found[0].target.startswith("symbol:") or found[0].metadata.get("ambiguous"):
+            return []
+        label = index.return_label(found[0].target)
+        context = index.symbols[found[0].target].source_ref
+        return index.prefer(index.classes_by_label.get(label, []), context) if label else []
+    accessor = max(text.rfind("->"), text.rfind("."))
+    if accessor == -1:
+        if text == "this":
+            return _enclosing_classes(edge, index, source_file)
+        if not re.fullmatch(r"[A-Za-z_]\w*", text):
+            return []
+        labels = _member_type_candidates(edge, index, source_file, text)
+    else:
+        field = text[accessor + (2 if text.startswith("->", accessor) else 1):].strip()
+        if not re.fullmatch(r"[A-Za-z_]\w*", field):
+            return []
+        classes = _chain_classes(edge, index, source_file, text[:accessor])
+        labels = _member_labels(index, classes, field) if classes else []
+    if len(labels) != 1:
+        return []
+    label = _last_segment(labels[0])
+    return index.prefer(index.classes_by_label.get(label, []), source_file)
+
+
+def _resolve_chain(edge: GraphEdge, index: _Index, source_file: str) -> _Outcome:
+    """``a->b()->c()``: type the receiver by the chain's inner call (see `_chain_classes`) and look the callee
+    up in that class and its bases.  Several candidates are ambiguous, as in the other tiers.  A class whose
+    member is missing but that derives from something outside the repository marks the edge external
+    (``inherited``), as for any other typed call."""
+    md = edge.metadata
+    receiver = str(md.get("receiver") or "")
+    if not receiver or len(receiver) >= _MAX_RECEIVER_TEXT or _chain_links(receiver) > MAX_CHAIN_LINKS:
+        return None
+    classes = _chain_classes(edge, index, source_file, receiver)
+    if not classes:
+        return None
+    outcome = _members(index, classes, index.symbols[classes[0]].label, str(md["callee"]), source_file, "chain")
+    if outcome is None:
+        if _inherited_from_outside(classes, index):
+            md["external"] = "inherited"
+        return None
+    return "chain", outcome[1]
 
 
 def _members(index: _Index, class_ids: list[str], label: str, callee: str, source_file: str, tier: str) -> _Outcome:
@@ -904,6 +1139,9 @@ def _resolve_one(edge: GraphEdge, index: _Index) -> _Outcome:
             return _resolve_import_binding(edge, index)
         return _resolve_new(edge, index, source_file)
 
+    if kind == "chain" and not python and language_family(source_file) == CPP_FAMILY:
+        return _resolve_chain(edge, index, source_file)
+
     if kind != "none":
         return None  # untyped receiver: nothing static to resolve against
 
@@ -931,6 +1169,13 @@ def _is_affected(
         return True
     if edge.target.startswith("symbol:") and edge.target not in node_ids:
         return True  # previously resolved target no longer exists
+    if md.get("receiver_kind") == "chain" and (
+        # a chain follows the inner calls' return types: re-resolve it when a function it calls was touched
+        # (a member it reads, or a class it ends in, moves with `widen_typed`)
+        widen_typed
+        or (changed_labels and not changed_labels.isdisjoint(_chain_callees(str(md.get("receiver") or ""))))
+    ):
+        return True
     if widen_typed and (
         md.get("enclosing_class")
         or md.get("receiver_type")
@@ -1030,6 +1275,7 @@ def resolve_call_endpoints(
     files = affected_files or set()
     labels = changed_labels or set()
     calls = [edge for edge in edges if is_contract_call(edge)]
+    all_calls = calls
     inherits = [edge for edge in edges if _is_resolvable_inherits(edge)]
     node_ids = {node.node_id for node in nodes} if scoped else set()
     if scoped:
@@ -1062,7 +1308,19 @@ def resolve_call_endpoints(
         index = _Index(fam_nodes, fam_edges)
         for edge in inherits_by_family.get(family, ()):
             _resolve_inherits_into(edge, index)
-        for edge in by_family.get(family, ()):
+        family_calls = by_family.get(family, [])
+        if family == CPP_FAMILY:
+            # Chains last, shortest receiver first: a chain reads the resolved targets of the calls inside its
+            # receiver, and a chain inside that receiver has a shorter one.
+            plain = [e for e in family_calls if e.metadata.get("receiver_kind") != "chain"]
+            chains = sorted(
+                (e for e in family_calls if e.metadata.get("receiver_kind") == "chain"),
+                key=lambda e: len(str(e.metadata.get("receiver") or "")),
+            )
+            family_calls = plain + chains
+            if chains:
+                index.attach_calls([e for e in all_calls if language_family(_call_path(e)) == family])
+        for edge in family_calls:
             _resolve_into(edge, index)
     return edges
 
