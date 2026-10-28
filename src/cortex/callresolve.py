@@ -12,6 +12,10 @@ Every extractor that emits a `calls` edge for call-graph resolution writes::
                   receiver_kind   "none" | "this" | "self" | "scoped" | "var" | "new" | "chain"
                   scope           str | None   ``Cls`` of ``Cls::m`` / alias of ``pkg.m``
                   receiver_type   str | None   declared type name when statically known
+                  receiver_base_type  str | None  (C/C++ ``chain`` only) declared type of the chain's leftmost
+                                  identifier when it is a parameter or a local: ``item`` of ``item.m_owner->f()``
+                                  (``Item *item``), ``ctx`` of ``ctx->a()->f()``; absent for ``this``, a member
+                                  and a free function's result
                   enclosing_class str | None   class the call site sits in
     optional      scope_module  (Python: dotted module a scoped call refers to)
                   import_module / alias  (Python: ``from m import f as g``)
@@ -914,7 +918,10 @@ def _chain_classes(edge: GraphEdge, index: _Index, source_file: str, text: str) 
             return _enclosing_classes(edge, index, source_file)
         if not re.fullmatch(r"[A-Za-z_]\w*", text):
             return []
-        labels = _member_type_candidates(edge, index, source_file, text)
+        # the leftmost link: a parameter or local (its declared type, which shadows a member of the same name),
+        # else a member of the class the call sits in
+        base = edge.metadata.get("receiver_base_type")
+        labels = [str(base)] if base else _member_type_candidates(edge, index, source_file, text)
     else:
         field = text[accessor + (2 if text.startswith("->", accessor) else 1):].strip()
         if not re.fullmatch(r"[A-Za-z_]\w*", field):
@@ -1393,7 +1400,8 @@ def _narrowable(edge: GraphEdge, outcome: _Outcome, index: _Index) -> bool:
         return False
     md = edge.metadata
     return language_family(_call_path(edge)) == CPP_FAMILY and bool(
-        md.get("enclosing_class") or md.get("receiver_type") or md.get("receiver_member") or md.get("scope")
+        md.get("enclosing_class") or md.get("receiver_type") or md.get("receiver_base_type") or md.get("receiver_member")
+        or md.get("scope")
     )
 
 

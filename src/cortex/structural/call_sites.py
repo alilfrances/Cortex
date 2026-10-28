@@ -511,7 +511,29 @@ class CppCalls(CallWalker):
                     extra=None if known else {"receiver_member": self.text(member)},
                 )
                 return
-        self.emit(node, frame, callee, receiver=receiver, kind="chain")
+        base_type = self.chain_base_type(arg, frame)
+        self.emit(
+            node, frame, callee, receiver=receiver, kind="chain",
+            extra={"receiver_base_type": base_type} if base_type else None,
+        )
+
+    def chain_base_type(self, receiver: Any, frame: Frame) -> str | None:
+        """Declared type of the leftmost identifier of a chain's receiver (``item.m_owner->x()``, ``ctx->a()->b()``)
+        when it is a parameter or a local with a known type; ``None`` for ``this``, a free function's result or
+        anything else the walk cannot follow."""
+        node = receiver
+        while node is not None:
+            if node.type == "identifier":
+                return frame.vars.get(self.text(node))
+            if node.type == "field_expression":
+                node = node.child_by_field_name("argument")
+            elif node.type == "call_expression":
+                node = node.child_by_field_name("function")
+                if node is None or node.type != "field_expression":
+                    return None  # a free function's result (`make()->x()`) has no variable behind it
+            else:
+                return None
+        return None
 
 
 # --------------------------------------------------------------------------- #

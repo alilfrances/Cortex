@@ -48,7 +48,8 @@ INGEST_LOCK_NAME = "ingest.lock"
 # call's result (`a->b()->c()`) is typed by the return type of the resolved inner call (`resolution = "chain"`);
 # Qt's `Q_Q(Foo)` types `q` as `Foo`; the declaration macros Qt writes without a semicolon (`Q_DECLARE_PRIVATE`,
 # `Q_PLUGIN_METADATA`...) no longer hide the next class member, and members declared in the `#ifdef`/`#else`
-# branches of a class body are recorded in `member_types`.
+# branches of a class body are recorded in `member_types`; a C/C++ chain edge whose leftmost identifier is a
+# parameter or a local with a known type carries `receiver_base_type`, which types the chain's first link.
 GRAPH_FORMAT_VERSION = 9
 INGEST_LOCK_TIMEOUT_SECONDS = 120.0
 _LOCK_POLL_SECONDS = 0.05

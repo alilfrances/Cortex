@@ -336,3 +336,181 @@ def test_a_changed_return_type_re_resolves_a_chain_in_a_file_that_did_not_change
 
     assert incremental == state(full_db)
     assert target_of(incremental, "apply") == "symbol:other.h:apply"
+
+
+# -- plan 0.16, Task 8b: a chain that starts from a local variable or a parameter --------------------------------
+#
+# The chain edge carries `receiver_base_type`: the declared type of its leftmost identifier when that is a
+# parameter or a local (`frame.vars`, the map the `var` tier reads).  The resolver types the leftmost link with it,
+# then walks the links as before: return types for call links, `member_types` for field links.
+
+CONTEXT_H = (
+    '#pragma once\n#include "manager.h"\n'
+    "class Context {\n"
+    "public:\n"
+    "    Manager* manager();\n"
+    "    Context* self() { return this; }\n"
+    "    Item* m_item;\n"
+    "    Manager* m_mgr;\n"
+    "};\n"
+)
+CONTEXT_CPP = '#include "context.h"\nManager* Context::manager() { return m_mgr; }\n'
+
+
+def _ctx_repo(app: str, **extra: str) -> dict[str, str]:
+    return _repo('#include "context.h"\n' + app, **{"context.h": CONTEXT_H, "context.cpp": CONTEXT_CPP, **extra})
+
+
+def _app_edges(app: str, callee: str):
+    _, edges = _graph(_ctx_repo(app))
+    return _calls(edges, callee)
+
+
+@TREE_SITTER_ONLY
+def test_a_parameter_base_with_a_call_link_resolves() -> None:
+    (outer,) = _app_edges("void use(Context* ctx) {\n    ctx->manager()->current();\n}\n", "current")
+
+    assert outer.target == "symbol:manager.cpp:current" and outer.metadata["resolution"] == "chain"
+
+
+@TREE_SITTER_ONLY
+@pytest.mark.parametrize(
+    ("declaration", "arrow"),
+    [
+        ("void use(Context* ctx) {{\n    {call}\n}}\n", "->"),
+        ("void use(Context& ctx) {{\n    {call}\n}}\n", "."),
+        ("void use(const Context& ctx) {{\n    {call}\n}}\n", "."),
+        ("void use(std::shared_ptr<Context> ctx) {{\n    {call}\n}}\n", "->"),
+        ("void use() {{\n    Context* ctx = nullptr;\n    {call}\n}}\n", "->"),
+        ("void use() {{\n    Context ctx;\n    {call}\n}}\n", "."),
+        ("void use() {{\n    auto* ctx = new Context();\n    {call}\n}}\n", "->"),
+    ],
+    ids=["pointer_param", "reference_param", "const_reference_param", "smart_pointer_param", "pointer_local", "value_local", "new_local"],
+)
+@pytest.mark.parametrize(
+    ("call", "callee", "target"),
+    [
+        ("ctx{a}m_item->apply();", "apply", "symbol:item.h:apply"),
+        ("ctx{a}m_mgr->current();", "current", "symbol:manager.cpp:current"),
+        ("ctx{a}m_mgr->current()->apply();", "apply", "symbol:item.h:apply"),
+        ("ctx{a}self()->m_item->apply();", "apply", "symbol:item.h:apply"),
+    ],
+    ids=["field", "field_then_call", "field_call_call", "call_then_field"],
+)
+def test_a_chain_from_a_parameter_or_a_local_is_typed_by_its_declared_type(declaration, arrow, call, callee, target) -> None:
+    _, edges = _graph(_ctx_repo(declaration.format(call=call.format(a=arrow))))
+
+    outer = _calls(edges, callee)[-1]
+    assert outer.target == target and outer.metadata["resolution"] == "chain", outer.metadata
+    assert outer.metadata["receiver_base_type"] == "Context"
+
+
+@TREE_SITTER_ONLY
+def test_a_chain_from_a_member_or_this_carries_no_base_type_and_still_resolves() -> None:
+    files = {
+        **HOLDER,
+        "foo.cpp": '#include "foo.h"\nvoid Foo::run() {\n    m_h->item->apply();\n    this->m_h->item->apply();\n}\n',
+    }
+
+    _, edges = _graph(files)
+
+    found = _calls(edges, "apply", "foo.cpp")
+    assert [(e.target, "receiver_base_type" in e.metadata) for e in found] == [("symbol:item.h:apply", False)] * 2
+
+
+@TREE_SITTER_ONLY
+def test_a_local_of_a_framework_type_stays_unresolved() -> None:
+    app = "void use() {\n    QWidget* w = nullptr;\n    w->m_child->show();\n    w->layout()->addWidget(nullptr);\n}\n"
+
+    _, edges = _graph(_ctx_repo(app))
+
+    for callee in ("show", "addWidget"):
+        (edge,) = _calls(edges, callee)
+        assert edge.target == "name:" + callee
+        assert "resolution" not in edge.metadata and "ambiguous" not in edge.metadata, edge.metadata
+
+
+@TREE_SITTER_ONLY
+def test_a_local_of_a_repository_class_with_an_external_base_marks_the_missing_member_external() -> None:
+    files = {
+        "w.h": "#pragma once\nclass W : public QWidget {\npublic:\n    W* m_peer;\n};\n",
+        "app.cpp": '#include "w.h"\nvoid use() {\n    W* w = nullptr;\n    w->m_peer->update();\n}\n',
+    }
+
+    _, edges = _graph(files)
+
+    (edge,) = _calls(edges, "update", "app.cpp")
+    assert edge.target == "name:update" and edge.metadata["external"] == "inherited"
+    assert edge.metadata["receiver_base_type"] == "W"
+
+
+@TREE_SITTER_ONLY
+def test_an_untyped_local_leaves_the_chain_unchanged() -> None:
+    app = (
+        "void use(Manager* mgr) {\n"
+        "    auto x = mgr->current();\n"
+        "    x->next()->apply();\n"
+        "    auto y = compute();\n"
+        "    y->m_item->apply();\n"
+        "}\n"
+    )
+
+    _, edges = _graph(_ctx_repo(app))
+
+    from_auto_call, from_free_call = _calls(edges, "apply")
+    # `auto x = mgr->current()` has no declared type; `auto y = compute()` is read like a constructed type (the
+    # name of the callee), the same as for the `var` tier, and names no class
+    assert from_auto_call.target == "name:apply" and "resolution" not in from_auto_call.metadata
+    assert "receiver_base_type" not in from_auto_call.metadata
+    assert from_free_call.target == "name:apply" and "resolution" not in from_free_call.metadata
+
+
+@TREE_SITTER_ONLY
+def test_a_local_that_shadows_a_member_is_typed_as_the_local() -> None:
+    files = {
+        **HOLDER,
+        "other.h": "#pragma once\nclass Other {\npublic:\n    Other* item;\n};\n",
+        "foo.cpp": '#include "foo.h"\n#include "other.h"\nvoid Foo::run() {\n    Other m_h;\n    m_h.item->apply();\n}\n',
+    }
+
+    _, edges = _graph(files)
+
+    # `m_h` is an `Other` here, not the `Holder*` member: Other::item is an Other, which has no `apply`
+    (edge,) = _calls(edges, "apply", "foo.cpp")
+    assert edge.target == "name:apply" and edge.metadata["receiver_base_type"] == "Other"
+
+
+@TREE_SITTER_ONLY
+def test_a_changed_member_type_re_resolves_a_chain_from_a_parameter_in_a_file_that_did_not_change(tmp_path) -> None:
+    from cortex.ingest import ingest_repository
+    from cortex.store import CortexStore
+    from tests.test_call_resolution import _commit, _repo as init_repo
+
+    repo = init_repo(tmp_path)
+    files = {
+        "item.h": ITEM_H,
+        "other.h": "#pragma once\nclass Other {\npublic:\n    void apply() {}\n};\n",
+        "context.h": '#pragma once\n#include "item.h"\n#include "other.h"\nclass Context {\npublic:\n    Item* m_item;\n};\n',
+        "app.cpp": '#include "context.h"\nvoid use(Context* ctx) {\n    ctx->m_item->apply();\n}\n',
+    }
+    for path, text in files.items():
+        (repo / path).write_text(text)
+    _commit(repo, "init")
+    db = tmp_path / "chain.db"
+    ingest_repository(repo, commit_limit=20, db_path=db)
+
+    def apply_target(store_db) -> str:
+        _, edges = CortexStore(store_db).fetch_graph(repo)
+        (edge,) = [e for e in edges if e.relation == "calls" and e.metadata["callee"] == "apply" and e.metadata["source_file"] == "app.cpp"]
+        return edge.target
+
+    assert apply_target(db) == "symbol:item.h:apply"
+
+    # context.h is the only file that changes: `m_item` is now an `Other`
+    (repo / "context.h").write_text(files["context.h"].replace("Item* m_item", "Other* m_item"))
+    _commit(repo, "m_item is an Other")
+    ingest_repository(repo, commit_limit=20, db_path=db, incremental=True)
+    full_db = tmp_path / "chain-full.db"
+    ingest_repository(repo, commit_limit=20, db_path=full_db)
+
+    assert apply_target(db) == apply_target(full_db) == "symbol:other.h:apply"
