@@ -433,16 +433,17 @@ def _label(node_id: str, index: _GraphIndex) -> str:
 
 
 def _shadowed_include(edge: Any, index: "_GraphIndex") -> bool:
-    """An `imports` edge, newly resolved by the includer-relative rule, to a header a same-named mock can replace.
+    """An `imports` edge, newly resolved by the includer-relative or the path-suffix rule, to a header a same-named mock can replace.
 
     A quoted include resolves relative to the including file, so a duplicated basename no longer leaves
-    the edge unresolved (`metadata.include_rule == "relative"`; includes 0.12.1 resolved stay walked);
+    the edge unresolved (`metadata.include_rule` is `"relative"`, or `"suffix"` for a unique path suffix; includes
+    0.12.1 resolved stay walked);
     but a test target may put the mock directory first on its include path and compile the mock header instead (review 0.13.0 section C). Such an edge is not walked, like a `calls` edge the
     resolver settled by preferring production. The graph keeps the edge.
     """
     if edge.relation != "imports" or not edge.target.startswith("file:"):
         return False
-    if not isinstance(edge.metadata, Mapping) or edge.metadata.get("include_rule") != "relative":
+    if not isinstance(edge.metadata, Mapping) or edge.metadata.get("include_rule") not in ("relative", "suffix"):
         return False
     return edge.target[5:] in index.shadowable_headers and not _is_auxiliary(index.path_of(edge.source))
 

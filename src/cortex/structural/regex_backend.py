@@ -265,11 +265,20 @@ def resolve_local_import(target: str, known_paths: set[str], from_path: str | No
 def resolve_local_import_rule(
     target: str, known_paths: set[str], from_path: str | None = None
 ) -> tuple[str | None, str]:
-    """`resolve_local_import` plus the deciding rule: ``exact``, ``basename``, ``relative`` or ``none``.
+    """`resolve_local_import` plus the deciding rule: ``exact``, ``basename``, ``relative``, ``suffix`` or ``none``.
 
     ``relative`` means the includer-relative lookup resolved a target that the exact and unique-basename
     rules (all that 0.12.1 had) would have left unresolved; an include those rules resolve keeps their rule
     name even when the includer-relative lookup finds the same file, or a different one.
+
+    ``suffix`` is the last step, for an include with a directory part that none of the above resolved
+    (``#include "a/foo.h"`` written in ``src/a/`` for ``include/a/foo.h`` while ``foo.h`` exists in several
+    directories): exactly one known path ends with the include's whole relative path, matched on path-segment
+    boundaries (``/a/foo.h``, never ``/ba/foo.h``).  Several such paths leave it unresolved.
+
+    Like basename uniqueness, suffix uniqueness depends on the other files of the repository: an includer that
+    is not re-extracted keeps its old resolution on an incremental refresh until it changes, so a full and an
+    incremental index can differ after a file with the same suffix is added or removed.
     """
     candidate = target.strip().strip('"').lstrip("./")
     if not candidate:
@@ -289,6 +298,12 @@ def resolve_local_import_rule(
             if relative == old:
                 return old, rule
             return relative, "relative" if old is None else "includer"
+    if old is None and "/" in candidate:
+        suffix = "/" + candidate
+        matches = _path_index("basename", known_paths, _basename_index).get(PurePosixPath(candidate).name, ())  # type: ignore[attr-defined]
+        ending = [path for path in matches if path.endswith(suffix)]
+        if len(ending) == 1:
+            return ending[0], "suffix"
     return old, rule
 
 
@@ -1389,8 +1404,8 @@ def extract_regex_edges(
             quoted = match.groupdict().get("open") == '"'
             resolved, rule = resolve_local_import_rule(target, known_paths, path if quoted else None)
             import_metadata: dict[str, object] = {"lineno": line, "source_file": path}
-            if rule == "relative":
-                import_metadata["include_rule"] = "relative"
+            if rule in ("relative", "suffix"):
+                import_metadata["include_rule"] = rule
             edges.append(
                 GraphEdge(
                     edge_id=f"regex:{path}:import:{line}:{index}:{target}",

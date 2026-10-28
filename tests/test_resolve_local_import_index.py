@@ -5,6 +5,7 @@ import time
 from pathlib import PurePosixPath
 
 from cortex.structural import regex_backend
+from tests.golden_utils import TREE_SITTER_ONLY
 
 PATHS = {
     "src/a/widget.h",
@@ -190,3 +191,87 @@ def test_include_rule_metadata_is_written_only_for_a_relative_resolution():
         assert [e.metadata["lineno"] for e in marked] == [1]
         assert rules["file:src/ops.h"] is None
         assert all(set(e.metadata) <= {"lineno", "source_file", "include_rule"} for e in edges if e.relation == "imports")
+
+
+# -- plan 0.16, Task 6c: a unique path suffix ---------------------------------------------------------------
+
+SUFFIX_PATHS = {"include/a/foo.h", "include/b/foo.h", "src/a/x.cpp"}
+
+
+def test_include_resolves_by_a_unique_path_suffix():
+    rule = regex_backend.resolve_local_import_rule
+    # `foo.h` is not unique and nothing sits next to the includer, but exactly one path ends with `/a/foo.h`
+    assert rule("a/foo.h", SUFFIX_PATHS, "src/a/x.cpp") == ("include/a/foo.h", "suffix")
+    # an angle include (no includer) and a `./` or `../` spelling resolve the same way
+    assert rule("a/foo.h", SUFFIX_PATHS) == ("include/a/foo.h", "suffix")
+    assert rule("../a/foo.h", SUFFIX_PATHS, "src/a/x.cpp") == ("include/a/foo.h", "suffix")
+    assert regex_backend.resolve_local_import("b/foo.h", SUFFIX_PATHS) == "include/b/foo.h"
+
+
+def test_several_paths_with_the_suffix_stay_unresolved():
+    rule = regex_backend.resolve_local_import_rule
+    paths = {"include/a/foo.h", "third_party/a/foo.h", "src/a/x.cpp"}
+    assert rule("a/foo.h", paths, "src/a/x.cpp") == (None, "none")
+    assert rule("a/foo.h", paths) == (None, "none")
+
+
+def test_the_suffix_matches_whole_path_segments_only():
+    rule = regex_backend.resolve_local_import_rule
+    assert rule("a/foo.h", {"include/ba/foo.h", "include/b/foo.h"}) == (None, "none")
+
+
+def test_the_earlier_rules_keep_their_names_and_answers():
+    rule = regex_backend.resolve_local_import_rule
+    paths = {"a/foo.h", "include/a/foo.h", "include/b/foo.h", "src/a/x.cpp"}
+    assert rule("a/foo.h", paths, "src/a/x.cpp") == ("a/foo.h", "exact")  # the exact path wins over a suffix
+    assert rule("foo.h", {"include/a/foo.h", "src/a/x.cpp"}, "src/a/x.cpp") == ("include/a/foo.h", "basename")
+    # a unique basename in another directory still resolves as before (the suffix rule is not asked)
+    assert rule("a/foo.h", {"include/b/foo.h"}) == ("include/b/foo.h", "basename")
+    # the includer-relative rule runs before the suffix rule
+    assert rule("a/foo.h", {"src/a/a/foo.h", "include/a/foo.h", "include/b/foo.h"}, "src/a/x.cpp") == ("src/a/a/foo.h", "relative")
+
+
+def test_both_backends_resolve_and_mark_a_suffix_include():
+    files = {
+        "include/a/foo.h": "",
+        "include/b/foo.h": "",
+        "src/a/x.cpp": '#include "a/foo.h"\n#include "b/foo.h"\n#include <a/foo.h>\nint main() { return 0; }\n',
+    }
+    for extract in _extractors():
+        _, edges = extract("src/a/x.cpp", files["src/a/x.cpp"], set(files))
+        imports = [e for e in edges if e.relation == "imports"]
+        assert [(e.target, e.metadata.get("include_rule")) for e in imports] == [
+            ("file:include/a/foo.h", "suffix"),
+            ("file:include/b/foo.h", "suffix"),
+            ("file:include/a/foo.h", "suffix"),
+        ]
+        assert all(set(e.metadata) <= {"lineno", "source_file", "include_rule"} for e in imports)
+
+
+def test_both_backends_leave_an_include_with_several_suffix_matches_a_module():
+    files = {"include/a/foo.h": "", "third_party/a/foo.h": "", "src/a/x.cpp": '#include "a/foo.h"\n'}
+    for extract in _extractors():
+        _, edges = extract("src/a/x.cpp", files["src/a/x.cpp"], set(files))
+        assert [(e.target, e.metadata.get("include_rule")) for e in edges if e.relation == "imports"] == [("module:a/foo.h", None)]
+
+
+@TREE_SITTER_ONLY
+def test_a_suffix_include_joins_the_import_scoped_tier():
+    from pathlib import Path
+
+    from cortex.graph import build_graph
+    from cortex.ingest import _classify_path
+    from cortex.models import SourceRecord
+
+    files = {
+        "include/a/foo.h": "#pragma once\ninline void helper() {}\n",
+        "include/b/foo.h": "#pragma once\ninline void helper() {}\n",
+        "src/a/x.cpp": '#include "a/foo.h"\nvoid run() { helper(); }\n',
+    }
+    sources = [
+        SourceRecord(path=p, content=c, kind=_classify_path(Path(p)), size_bytes=len(c.encode()), modified_at=0.0)
+        for p, c in files.items()
+    ]
+    _, edges = build_graph(sources, [])
+    call = next(e for e in edges if e.relation == "calls" and e.metadata["callee"] == "helper")
+    assert call.target == "symbol:include/a/foo.h:helper" and call.metadata["resolution"] == "import_scoped"

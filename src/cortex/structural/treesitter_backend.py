@@ -598,8 +598,8 @@ def extract_treesitter_edges(
                 target, known_paths, path if _is_quoted_include(node) else None
             )
             import_metadata: dict[str, Any] = {"lineno": node.start_point[0] + 1, "source_file": path}
-            if rule == "relative":
-                import_metadata["include_rule"] = "relative"
+            if rule in ("relative", "suffix"):
+                import_metadata["include_rule"] = rule
             line = node.start_point[0] + 1
             edges.append(
                 GraphEdge(

@@ -675,6 +675,37 @@ def test_an_include_that_resolved_by_exact_path_stays_walked_despite_a_mock_twin
     assert result["tests_run_all"] is False
 
 
+@pytest.mark.skipif(not treesitter_available(), reason="managed tree-sitter runtime is not ready")
+def test_a_header_resolved_only_by_a_path_suffix_is_shadowable_like_a_relative_one(tmp_path: Path) -> None:
+    """Plan 0.16 Task 6c: `#include "steps/step.h"` written from `app/` for `src/steps/step.h` resolves by its
+    unique path suffix (the mock `tests/header-mocks/step.h` ends differently), a resolution 0.15 left `module:`.
+    A test target may compile the mock instead, so the header selects no test, exactly as for a relative include."""
+    repo = tmp_path / "suffixstep"
+    init_git(repo)
+    _write(repo, "src/steps/step.h", STEP_H)
+    _write(repo, "tests/header-mocks/step.h", STEP_H.replace("int run();", "int run() { return 0; }"))
+    _write(repo, "app/ops.cpp", OPS_CPP.replace('#include "ops.h"\n', '#include "../src/ops.h"\n'))
+    _write(repo, "src/ops.h", "#pragma once\nint runOp();\n")
+    _write(repo, "tests/opstest.cpp", '#include "../src/ops.h"\n\nvoid testOp() {\n    runOp();\n}\n')
+    _write(repo, "tests/CMakeLists.txt", "add_executable(opstest opstest.cpp ../app/ops.cpp)\n"
+           "target_include_directories(opstest PRIVATE header-mocks ../src)\n")
+    _write(repo, "notes/log.txt", "0\n")
+    commit_all(repo, "initial")
+    for value in range(1, 4):
+        _write(repo, "notes/log.txt", f"{value}\n")
+        _write(repo, "notes/more.txt", f"{value}\n")
+        commit_all(repo, f"notes {value}")
+
+    result = _change(repo, "src/steps/step.h", STEP_H.replace("int run();", "int run();\n    int extra();"))
+
+    from cortex.store import CortexStore, default_db_path
+
+    _, edges = CortexStore(default_db_path(repo)).fetch_graph(repo)
+    include = [e for e in edges if e.relation == "imports" and e.source == "file:app/ops.cpp" and e.target == "file:src/steps/step.h"]
+    assert [e.metadata.get("include_rule") for e in include] == ["suffix"]
+    assert "tests/opstest.cpp" not in result["tests_by_changed_file"].get("src/steps/step.h", [])
+
+
 @QT_BACKENDS
 def test_a_change_to_the_caller_of_a_preferred_edge_still_maps_to_its_test(
     backend: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
