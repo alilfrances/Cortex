@@ -43,7 +43,9 @@ records ``candidates`` (sorted, <= 8), ``ambiguous = True``, confidence LOW.
 A C/C++ edge that depends on a class lookup and stayed unresolved or ambiguous gets one second
 attempt in which ``_Index.prefer`` also narrows same-label classes by the include ring of the calling
 file (``MAX_INCLUDE_RING`` hops; then of its single header sibling); only an answer with exactly
-one candidate replaces the first outcome.
+one candidate replaces the first outcome.  Out-of-line members are found by the class label, so once the
+lookup is down to one of several same-label classes `_Index.class_members` keeps only the definitions that
+belong to it (its file, its implementation sibling, its include ring) and resolves when exactly one remains.
 Nothing is ever resolved by scanning the corpus per candidate.
 """
 
@@ -371,6 +373,50 @@ class _Index(ClassIndex):
                         found = self.prefer(found, node.source_ref)
                     bases[cid].update(found)
         self.bases: dict[str, list[str]] = {cid: sorted(ids - {cid}) for cid, ids in bases.items()}
+
+    def class_members(self, class_id: str, name: str) -> list[str]:
+        """`ClassIndex.class_members`, with the out-of-line definitions narrowed to the chosen class.
+
+        An out-of-line member is found by the class *label*, so two same-label classes (`Bar` in two modules)
+        each list the definitions of both.  Once the lookup is down to one class, keep the definitions that
+        belong to it (`own_definitions`); anything but exactly one answer leaves today's list."""
+        found = super().class_members(class_id, name)
+        if len(found) < 2 or self.declared_members.get(class_id, {}).get(name) or self.is_namespace(class_id):
+            return found
+        if len(self.classes_by_label.get(self.symbols[class_id].label, ())) < 2:
+            return found
+        own = self.own_definitions(class_id, found)
+        return own if len(own) == 1 else found
+
+    def own_definitions(self, class_id: str, definitions: list[str]) -> list[str]:
+        """The `definitions` (out-of-line members found by the class label) whose file belongs to `class_id`.
+
+        Successive narrowing, each step applying only if it leaves one or more definitions (the shape of
+        `locality`), stopping at one:
+        1. the class's own file;
+        2. its implementation sibling (`impl_siblings` of its header, `narrow`ed to the header's directory);
+        3. a file in the include ring of the class's file, in either direction (the `.inl` its header includes,
+           the `.cpp` that includes it).
+        """
+        class_file = self.symbols[class_id].source_ref
+        pool = list(definitions)
+        siblings = set(self.impl_siblings.get(class_file, ()))
+        class_ring = self.include_ring([class_file])
+        steps = (
+            lambda ids: [d for d in ids if self.symbols[d].source_ref == class_file],
+            lambda ids: self.narrow([d for d in ids if self.symbols[d].source_ref in siblings], class_file),
+            lambda ids: [
+                d for d in ids
+                if self.symbols[d].source_ref in class_ring or class_file in self.include_ring([self.symbols[d].source_ref])
+            ],
+        )
+        for step in steps:
+            narrowed = step(pool)
+            if narrowed:
+                pool = narrowed
+            if len(pool) == 1:
+                break
+        return pool
 
     def has_outside_base(self, class_id: str) -> bool:
         """`class_id` or a class it derives from (repository bases, depth <= `MAX_INHERIT_DEPTH`) has a base
