@@ -168,8 +168,17 @@ def _cpp_member_for_definition(node: Any, source: bytes) -> tuple[str | None, st
                     declarator = name
                     continue
                 qualifier = _node_text(scope, source).rstrip(":").split("::")[-1]
+                # `MYLIB_EXPORT QString Foo::bar()`: the macro makes `QString` the scope and parks `Foo` in an
+                # ERROR node between the scope and the name.
+                recovered = next((c for c in declarator.children if c.type == "ERROR"), None)
+                if recovered is not None and recovered.named_child_count == 1 and recovered.named_children[0].type == "identifier":
+                    qualifier = _node_text(recovered.named_children[0], source)
                 return qualifier or None, _node_text(name, source)
-        declarator = declarator.child_by_field_name("declarator")
+        inner = declarator.child_by_field_name("declarator")
+        if inner is None and declarator.type == "reference_declarator":
+            # `Foo& Foo::operator=()`, `const T& Foo::get()`: the grammar gives this node no `declarator` field.
+            inner = next((c for c in declarator.named_children if c.type.endswith("declarator")), None)
+        declarator = inner
 
     return None, _identifier_text(first_declarator, source) if first_declarator is not None else ""
 
@@ -490,7 +499,10 @@ def _extract_ruby_method_symbols(
 
 
 _QT_BARE_MACROS = (
-    rb"\b(?:Q_OBJECT|Q_GADGET|Q_NAMESPACE|Q_INVOKABLE|Q_SIGNAL|Q_SLOT|QML_ELEMENT|QML_SINGLETON|QML_ANONYMOUS)\b"
+    rb"\b(?:Q_OBJECT|Q_GADGET|Q_NAMESPACE|Q_INVOKABLE|Q_SIGNAL|Q_SLOT|QML_ELEMENT|QML_SINGLETON|QML_ANONYMOUS|"
+    # `QT_BEGIN_NAMESPACE class Foo {` otherwise reads as one function definition of type QT_BEGIN_NAMESPACE
+    rb"QT_BEGIN_NAMESPACE|QT_END_NAMESPACE|QT_BEGIN_HEADER|QT_END_HEADER|QT_BEGIN_INCLUDE_NAMESPACE|"
+    rb"QT_END_INCLUDE_NAMESPACE|QT_BEGIN_MOC_NAMESPACE|QT_END_MOC_NAMESPACE)\b"
 )
 _QT_CALL_MACROS = (
     rb"\b(?:Q_PROPERTY|Q_CLASSINFO|Q_ENUMS?|Q_ENUM_NS|Q_FLAGS?|Q_FLAG_NS|Q_INTERFACES|Q_DECLARE_FLAGS|"
@@ -504,9 +516,17 @@ _QT_SECTION_AFTER_ACCESS_RE = re.compile(
     rb"(?m)^([ \t]*(?:public|protected|private)[ \t]+)(signals|slots|Q_SIGNALS|Q_SLOTS)(?=[ \t]*:)"
 )
 _QT_SECTION_BARE_RE = re.compile(rb"(?m)^([ \t]*)(signals|slots|Q_SIGNALS|Q_SLOTS)([ \t]*:)")
-# `class MYLIB_EXPORT Name` -- an all-caps export macro between the keyword and the name.
+# `class MYLIB_EXPORT Name` -- one or more export macros between the keyword and the name.  A macro is an
+# all-caps identifier, optionally called (`DLL_API(core)`, `QT_DEPRECATED_X("old")`), or a mixed-case one that
+# ends in `_Export` / `_API` (`MyLib_Export`, `Core_API`).  The class keyword starts a line or follows `;`, `{`,
+# `}` or `>` (`namespace a { class X Foo`, `template <class T> class X Foo`); the name may be on the next line.
+# `final` is never taken for the name, so `class FOO final {` keeps FOO.
+_EXPORT_MACRO = (
+    rb"(?:[A-Z][A-Z0-9_]*(?:[ \t]*\((?:[^()\n]|\([^()\n]*\))*\))?|[A-Za-z][A-Za-z0-9]*_(?:[Ee]xport|EXPORT|API|Api|DLL)\b)"
+)
 _EXPORT_MACRO_RE = re.compile(
-    rb"(?m)^([ \t]*(?:class|struct)[ \t]+)([A-Z][A-Z0-9_]*)([ \t]+)(?=[A-Za-z_]\w*[ \t]*(?:final[ \t]*)?[:{]|[A-Za-z_]\w*[ \t]*$)"
+    rb"(?m)((?:^|(?<=[;{}>]))[ \t]*(?:class|struct)[ \t]+)((?:" + _EXPORT_MACRO + rb"\s+)+)"
+    rb"(?=(?!final\b)[A-Za-z_]\w*\s*(?:final\s*)?[:{]|[A-Za-z_]\w*[ \t]*$)"
 )
 
 
@@ -526,7 +546,7 @@ def _mask_qt_macros(source: bytes) -> bytes:
     masked = _QT_MACRO_RE.sub(_blank, source)
     masked = _QT_SECTION_AFTER_ACCESS_RE.sub(lambda m: m.group(1) + b" " * len(m.group(2)), masked)
     masked = _QT_SECTION_BARE_RE.sub(lambda m: m.group(1) + b" " * (len(m.group(2)) + len(m.group(3))), masked)
-    masked = _EXPORT_MACRO_RE.sub(lambda m: m.group(1) + b" " * len(m.group(2)) + m.group(3), masked)
+    masked = _EXPORT_MACRO_RE.sub(lambda m: m.group(1) + re.sub(rb"[^\n]", b" ", m.group(2)), masked)
     assert len(masked) == len(source)
     return masked
 

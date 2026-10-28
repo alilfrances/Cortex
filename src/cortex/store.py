@@ -39,7 +39,9 @@ INGEST_LOCK_NAME = "ingest.lock"
 # segment; namespace-scoped call resolution; pure virtual declarations (`virtual f() = 0;`) are
 # `func` symbols.
 # 8 = 0.15.0: unnamed C/C++ struct/class/union/enum emit no class node; a typedef'd one is labelled by its typedef name.
-GRAPH_FORMAT_VERSION = 8
+# 9 = 0.16.0: C++ extraction names classes behind more export macros (`class MyLib_Export Foo`, `QT_BEGIN_NAMESPACE`)
+# and gives out-of-line members that return a reference (`Foo& Foo::f()`) their class.
+GRAPH_FORMAT_VERSION = 9
 INGEST_LOCK_TIMEOUT_SECONDS = 120.0
 _LOCK_POLL_SECONDS = 0.05
 
