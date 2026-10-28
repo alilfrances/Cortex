@@ -41,7 +41,8 @@ INGEST_LOCK_NAME = "ingest.lock"
 # 8 = 0.15.0: unnamed C/C++ struct/class/union/enum emit no class node; a typedef'd one is labelled by its typedef name.
 # 9 = 0.16.0: C++ extraction names classes behind more export macros (`class MyLib_Export Foo`, `QT_BEGIN_NAMESPACE`)
 # and gives out-of-line members that return a reference (`Foo& Foo::f()`) their class; a member call a repository
-# class cannot find while a base is outside the repository carries `external = "inherited"`.
+# class cannot find while a base is outside the repository carries `external = "inherited"`; same-label classes are
+# narrowed by the include ring of the calling file.
 GRAPH_FORMAT_VERSION = 9
 INGEST_LOCK_TIMEOUT_SECONDS = 120.0
 _LOCK_POLL_SECONDS = 0.05
@@ -1047,6 +1048,21 @@ class CortexStore:
                     (repo_key, path),
                 ).fetchone() is not None
         return labels, hierarchy
+
+    def fetch_import_targets_for_sources(self, repo_path: Path, paths: list[str]) -> set[tuple[str, str]]:
+        """`(file, target)` of every `imports` edge currently owned by `paths`.  Read before
+        `delete_graph_for_sources`: the incremental pass compares it with the batch's new import edges, since a
+        changed include line moves the include ring the call resolver narrows classes by (callers that did not
+        change included nothing new themselves)."""
+        repo_key = str(repo_path.resolve())
+        found: set[tuple[str, str]] = set()
+        for path in paths:
+            for row in self.connection.execute(
+                "SELECT target FROM graph_edges WHERE repo_path = ? AND source_file = ? AND relation = 'imports'",
+                (repo_key, path),
+            ):
+                found.add((path, str(row["target"])))
+        return found
 
     def delete_cochange_layer(self, repo_path: Path) -> None:
         """Drop the COCHANGE layer (cochange pair edges, commit nodes, and

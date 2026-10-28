@@ -40,6 +40,10 @@ at least one symbol::
 
 More than one candidate at the deciding tier keeps the ``name:`` target and
 records ``candidates`` (sorted, <= 8), ``ambiguous = True``, confidence LOW.
+A C/C++ edge that depends on a class lookup and stayed unresolved or ambiguous gets one second
+attempt in which ``_Index.prefer`` also narrows same-label classes by the include ring of the calling
+file (``MAX_INCLUDE_RING`` hops; then of its single header sibling); only an answer with exactly
+one candidate replaces the first outcome.
 Nothing is ever resolved by scanning the corpus per candidate.
 """
 
@@ -57,6 +61,8 @@ from .testpatterns import is_test_path
 
 MAX_CANDIDATES = 8
 MAX_INHERIT_DEPTH = 6
+# How many include hops `_Index.include_ring` follows from the calling file and from its header sibling.
+MAX_INCLUDE_RING = 3
 _HEADER_SUFFIXES = {".h", ".hpp", ".hh", ".hxx"}
 _IMPL_SUFFIXES = {".c", ".cc", ".cpp", ".cxx"}
 _PY_BUILTINS = frozenset(dir(builtins))
@@ -263,6 +269,15 @@ class _Index(ClassIndex):
             if impls:
                 for header in headers:
                     self.impl_siblings[header] = impls
+        # The header(s) an implementation file is the sibling of (the inverse of `impl_siblings`).
+        self.header_siblings: dict[str, list[str]] = {}
+        for header, impls in self.impl_siblings.items():
+            for impl in impls:
+                self.header_siblings.setdefault(impl, []).append(header)
+        # Set while `_resolve_into` makes its second attempt at an edge that stayed unresolved or ambiguous:
+        # `prefer` then also narrows by `include_ring`.
+        self.deep = False
+        self._rings: dict[tuple[str, ...], frozenset[str]] = {}
         super().__init__(nodes)
         symbols = self.symbols
 
@@ -443,7 +458,33 @@ class _Index(ClassIndex):
                 for c in candidate_ids
             ):
                 self.trace.add("production")
-        return self.locality(near or candidate_ids, from_path)
+        result = self.locality(near or candidate_ids, from_path)
+        if self.deep:
+            siblings = self.header_siblings.get(from_path, ())
+            for ring in (self.include_ring([from_path]), self.include_ring(siblings) if len(siblings) == 1 else frozenset()):
+                if len(result) < 2:
+                    break
+                inside = [c for c in result if self.symbols[c].source_ref in ring]
+                if inside and len(inside) < len(result):
+                    result = self.locality(inside, from_path)
+        return result
+
+    def include_ring(self, roots: Iterable[str]) -> frozenset[str]:
+        """The `roots` and the files within `MAX_INCLUDE_RING` include hops of them.  `prefer` tries the calling
+        file first, then its header sibling (`foo.cpp` -> `foo.h`: what the header includes the implementation
+        sees too; only when exactly one header carries the stem, otherwise it is a guess)."""
+        key = tuple(sorted(roots))
+        ring = self._rings.get(key)
+        if ring is None:
+            seen = set(key)
+            frontier = sorted(seen)
+            for _ in range(MAX_INCLUDE_RING):
+                frontier = sorted({t for path in frontier for t in self.imports.get(path, ()) if t not in seen})
+                seen.update(frontier)
+                if not frontier:
+                    break
+            ring = self._rings[key] = frozenset(seen)
+        return ring
 
     def locality(self, candidate_ids: list[str], from_path: str) -> list[str]:
         """Narrow same-label classes that no include relation separates; each step applies only if it leaves one.
@@ -1041,15 +1082,39 @@ def _inherited_from_outside(class_ids: list[str], index: _Index) -> bool:
     return bool(class_ids) and all(index.has_outside_base(c) for c in class_ids)
 
 
+def _narrowable(edge: GraphEdge, outcome: _Outcome, index: _Index) -> bool:
+    """A C/C++ edge that depends on a class lookup (`enclosing_class`, a receiver type or member, a scope) and
+    stayed unresolved or ambiguous."""
+    if outcome is not None and len(set(outcome[1])) < 2:
+        return False
+    md = edge.metadata
+    return language_family(_call_path(edge)) == CPP_FAMILY and bool(
+        md.get("enclosing_class") or md.get("receiver_type") or md.get("receiver_member") or md.get("scope")
+    )
+
+
 def _resolve_into(edge: GraphEdge, index: _Index) -> None:
     _reset(edge)
     trace = index.trace = set()
     try:
         outcome = _resolve_one(edge, index)
+        if _narrowable(edge, outcome, index):
+            # Several classes share the label and nothing local told them apart: look at the include ring of the
+            # calling file too.  Only an answer with exactly one candidate replaces the first one, so a call that
+            # resolved before never moves.
+            index.deep = True
+            second_trace = index.trace = set()
+            deeper = _resolve_one(edge, index)
+            if deeper is not None and len(set(deeper[1])) == 1:
+                outcome, trace = deeper, second_trace
+            elif outcome is not None:
+                index.deep = False
+        if outcome is None:
+            _mark_external_call(edge, index)
     finally:
         index.trace = None
+        index.deep = False
     if outcome is None:
-        _mark_external_call(edge, index)
         return
     tier, candidate_ids = outcome
     candidate_ids = sorted(set(candidate_ids))

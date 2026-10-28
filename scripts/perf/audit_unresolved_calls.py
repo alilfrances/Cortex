@@ -213,6 +213,7 @@ def audit(repo: Path, sample: int, only_file: str | None, all_edges: bool = Fals
             indexes[family] = _Index([n for n in nodes if language_family(n.source_ref) == family], [
                 e for e in edges if e.relation in ("imports", "inherits")
             ])
+            indexes[family].deep = True  # name the classes the resolver's second attempt settles on
         buckets[classify(edge, indexes[family], repo)] += 1
     report["unresolved_calls"] = len(unresolved)
     report["sampled"] = len(picked)
