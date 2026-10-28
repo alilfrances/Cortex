@@ -334,6 +334,10 @@ class _Index(ClassIndex):
         # edge_id -> the class ids its base label names after `prefer` (per edge: the rewrite of
         # `inherits` targets needs the answer for one edge, `bases` unions a class's edges).
         self.edge_bases: dict[str, list[str]] = {}
+        # Classes with a base that no class of the family carries the label of (`QWidget`, a library class):
+        # a member the repository cannot find on them may well be inherited from it.
+        self.outside_base_classes: set[str] = set()
+        self._outside_base_cache: dict[str, bool] = {}
         for edge in sorted(inherits, key=lambda e: e.edge_id):
             if edge.target in symbols and symbols[edge.target].kind == "class":
                 bases[edge.source].add(edge.target)
@@ -341,6 +345,8 @@ class _Index(ClassIndex):
             found = self.base_candidates(edge.source, _inherits_label(edge))
             self.edge_bases[edge.edge_id] = found
             bases[edge.source].update(found)
+            if not found:
+                self.outside_base_classes.add(edge.source)
         for cid, node in symbols.items():
             declared = node.metadata.get("bases") if isinstance(node.metadata, dict) else None
             if node.kind == "class" and isinstance(declared, list) and not bases.get(cid):
@@ -350,6 +356,20 @@ class _Index(ClassIndex):
                         found = self.prefer(found, node.source_ref)
                     bases[cid].update(found)
         self.bases: dict[str, list[str]] = {cid: sorted(ids - {cid}) for cid, ids in bases.items()}
+
+    def has_outside_base(self, class_id: str) -> bool:
+        """`class_id` or a class it derives from (repository bases, depth <= `MAX_INHERIT_DEPTH`) has a base
+        outside the repository."""
+        cached = self._outside_base_cache.get(class_id)
+        if cached is None:
+            frontier, visited, depth, cached = [class_id], {class_id}, 0, False
+            while frontier and depth <= MAX_INHERIT_DEPTH and not cached:
+                cached = any(cid in self.outside_base_classes for cid in frontier)
+                frontier = sorted({b for cid in frontier for b in self.bases.get(cid, ()) if b not in visited})
+                visited.update(frontier)
+                depth += 1
+            self._outside_base_cache[class_id] = cached
+        return cached
 
     def is_repo_module(self, module: str) -> bool:
         """A QML import that names a directory of the repository (``import "components"``, ``import App.Ui``)."""
@@ -970,7 +990,9 @@ def _mark_external_call(edge: GraphEdge, index: _Index) -> None:
 
     Called only when no candidate exists at all (never for an ambiguous edge).  A free name that the
     repository defines anywhere in the family is never external, and neither is a call whose scope or
-    receiver type is a repository class: the repository, not a library, owns that member.
+    receiver type is a repository class: the repository, not a library, owns that member.  The exception is a
+    member that the class and its repository bases lack while a class on that path has a base outside the
+    repository: the call is marked ``inherited`` (`QWidget::update()` on `class W : public QWidget`).
     """
     md = edge.metadata
     family = language_family(_call_path(edge))
@@ -987,13 +1009,36 @@ def _mark_external_call(edge: GraphEdge, index: _Index) -> None:
         if text:
             typed = True
             label = _last_segment(str(text))
-            if index.classes_by_label.get(label) or index.qualified_defs.get(label):
+            classes = index.prefer(index.classes_by_label.get(label, []), _call_source_file(edge, index))
+            if classes:
+                if _inherited_from_outside(classes, index):
+                    edge.metadata["external"] = "inherited"
+                return
+            if index.qualified_defs.get(label):
                 return
     if not typed and callee in index.defined_names:
+        # a method of some other class, but this class derives from something outside the repository
+        if _implicit_receiver(md) and _inherited_from_outside(_enclosing_classes(edge, index, _call_source_file(edge, index)), index):
+            edge.metadata["external"] = "inherited"
         return
     rule = classify_call(md, family)
+    if not rule and not typed and _implicit_receiver(md):
+        if _inherited_from_outside(_enclosing_classes(edge, index, _call_source_file(edge, index)), index):
+            rule = "inherited"
     if rule:
         edge.metadata["external"] = rule
+
+
+def _implicit_receiver(md: dict) -> bool:
+    """`f()` inside a method (an implicit `this`) or `this->f()`."""
+    kind = md.get("receiver_kind") or "none"
+    return bool(md.get("enclosing_class")) and (kind in ("this", "self") or (kind == "none" and md.get("implicit_receiver", True)))
+
+
+def _inherited_from_outside(class_ids: list[str], index: _Index) -> bool:
+    """Every candidate class has, itself or among its repository bases, a base outside the repository: a member
+    the repository cannot find on it is probably inherited from that base (`QWidget::update()`)."""
+    return bool(class_ids) and all(index.has_outside_base(c) for c in class_ids)
 
 
 def _resolve_into(edge: GraphEdge, index: _Index) -> None:

@@ -14,7 +14,8 @@ figures of ``cortex_status`` (``resolution.calls.by_family``: ``symbol``, ``name
 Buckets (first matching rule wins, in this order):
 
 * ``external``            the edge carries ``metadata.external`` (set by the resolver for calls into code
-                          outside the repository; always empty before that lands)
+                          outside the repository, ``inherited`` for a member the repository classes lack
+                          while one of their bases is outside the repository)
 * ``scoped_namespace``    ``Ns::f()`` whose ``Ns`` labels only namespace nodes of the repository: a
                           namespace lookup that should have resolved and did not
 * ``not_cpp_<family>``    the caller is outside the C/C++ family (``not_cpp_js``, ``not_cpp_java``,
@@ -35,7 +36,9 @@ Buckets (first matching rule wins, in this order):
                             ``member:ambiguous``           several declared types, or several classes of that
                                                            label, so the resolver keeps ``name:``
                             ``member:method_not_found``    the type is one repository class and neither it nor
-                                                           its bases has the method (external base, macro, ...)
+                                                           its bases has the method (a macro, a generated
+                                                           member; with a base outside the repository the
+                                                           call is ``external`` instead)
 * ``untyped_receiver``    ``recv->m()`` where nothing static says what ``recv`` is
 * ``type_not_in_repo``    receiver type / ``Scope::`` is not a class of the repository (Qt, std, ...)
 * ``member_not_found``    the class is in the repository but no member (or base member) has the name

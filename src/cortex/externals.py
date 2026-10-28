@@ -17,6 +17,9 @@ and, for `calls` (C/C++ only; ``classify_call``), ``qt``, ``std`` and ``prefix``
 
     qt_macro     a free ``qWarning`` / ``qobject_cast`` / ``Q_ASSERT``
     libc         a free call of a C library or ``std`` function name (``printf``, ``memcpy``, ``move``)
+    inherited    a member call (or an implicit-``this`` call) on a repository class that neither it nor its
+                 repository bases has the member of, when a class on that path derives from something outside
+                 the repository (``QWidget::update()``); set by ``callresolve``, not by ``classify_call``
 """
 
 from __future__ import annotations
