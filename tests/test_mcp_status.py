@@ -447,3 +447,32 @@ def test_resolvable_share_is_null_when_nothing_can_resolve(tmp_path, monkeypatch
     assert resolution["calls"]["name_not_in_repo"] == 1
     assert resolution["calls"]["resolvable_share"] is None
     assert "name_not_in_repo" not in resolution["inherits"]
+
+
+def test_resolution_counts_the_calls_share_per_language_family(tmp_path, monkeypatch) -> None:
+    symbols = [("func", "helper"), ("func", "render")]
+    edges = [
+        _count_edge(0, "calls", "symbol:a.cpp:helper", "x.cpp", callee="helper", receiver_kind="none"),
+        _count_edge(1, "calls", "symbol:a.cpp:helper", "x.cpp", callee="helper", receiver_kind="none"),
+        _call_edge(2, "helper", "x.cpp"),                          # resolvable
+        _call_edge(3, "qDebug", "x.cpp"),                          # not in repo
+        _call_edge(4, "qWarning", "y.h", external="qt_macro"),     # external
+        _count_edge(5, "calls", "symbol:a.cpp:render", "app.js", callee="render", receiver_kind="none"),
+        _call_edge(6, "fetch", "app.js"),                          # not in repo
+        _call_edge(7, "fetch", "app.js"),
+        _call_edge(8, "render", "app.js", receiver_kind="var", receiver="o"),
+        _call_edge(9, "log", "Main.java", receiver_kind="var", receiver="out"),
+    ]
+
+    calls = _resolution_of(tmp_path, monkeypatch, edges, symbols)["calls"]
+    by_family = calls["by_family"]
+
+    assert by_family == {
+        "c": {"symbol": 2, "name": 3, "name_external": 1, "name_not_in_repo": 1, "resolvable_share": round(2 / 3, 4)},
+        "java": {"symbol": 0, "name": 1, "name_external": 0, "name_not_in_repo": 0, "resolvable_share": 0.0},
+        "js": {"symbol": 1, "name": 3, "name_external": 0, "name_not_in_repo": 2, "resolvable_share": 0.5},
+    }
+    for key in ("symbol", "name", "name_external", "name_not_in_repo"):
+        assert sum(family[key] for family in by_family.values()) == calls[key]
+    assert calls["resolvable_share"] == round(3 / (3 + 7 - 1 - 3), 4)
+    assert calls["name_by_family"] == {"c": 3, "js": 3, "java": 1, "py": 0}
