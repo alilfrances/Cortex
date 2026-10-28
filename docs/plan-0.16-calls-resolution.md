@@ -1,6 +1,18 @@
 # Plan: Cortex 0.16.0: C++ calls that resolve, and a calls share that counts what can
 
-Status: **planned**, not implemented.
+Status: **implemented in 0.16.0**, every task done, none dropped (details and numbers in `CHANGELOG.md`):
+- Phase A (Tasks 1-3) as planned. Phase B: Tasks 4-8 as planned, plus Tasks 6b and 6c, which the Task 6 implementation
+  found (out-of-line definitions of the chosen class; includes by a unique path suffix), added to this plan in the
+  release commit.
+- Task 7: shapes 1-6 already worked on 0.15.2 and are pinned by tests; only the Qt `Q_D` pimpl needed a fix.
+- Task 8: a receiver that ends in a field is typed through the members of the receiver's expression (`this`, a
+  member of the enclosing class, or an earlier link), not through a local or parameter, whose type the edge does not
+  carry; the chain limit is 4 calls, the edge's own included.
+- Task 6b deviation: the include ring is directional, so "a file within the include ring of the class's header" counts
+  in both directions (the `.inl` a header includes, the `.cpp` that includes it).
+- Task 6c addition: `impacted_tests` treats a `suffix` include like a `relative` one.
+- Not verified until the reviewer's run: every field acceptance item (`by_family.c.resolvable_share` >= 0.6, the
+  bucket counts). JS/Java resolution stays deferred.
 Input: the reviewer's `scripts/perf/audit_unresolved_calls.py <REPO> --all` table on 0.15.2 (field index):
 
 | line | numbers |
@@ -175,6 +187,40 @@ Phase B tasks extend.
   - neither included, and equally near: stays ambiguous;
   - `tests/test_call_target_invariant.py` stays green.
 
+### Task 6b: `member:ambiguous` (continued): narrow out-of-line definitions to the chosen class
+
+Found by the Task 6 implementation.
+
+- **Background.** Out-of-line members are looked up by class label (`qualified_defs` in `callresolve.py`). When two
+  same-label classes `Bar` exist and Task 6's include-ring narrowing picks one, `Bar::common` defined out of line in
+  both modules still yields both definitions as candidates, so the edge stays flagged `ambiguous`.
+- **Change.** When the class lookup narrowed to exactly one class, narrow the `qualified_defs` candidates to the
+  definitions whose file belongs to that class, in this order: (1) the class's own file; (2) the class's
+  implementation sibling (the same stem as its header, via the existing sibling logic); (3) a file within the
+  include ring of the class's header. Resolve only when exactly one definition remains; otherwise keep today's
+  result. Reuse `prefer` / `narrow` and the Task 6 ring helpers; write no new locality rule.
+- **Tests (failing first).** Two modules with `Bar` (header plus `.cpp` each), a caller that includes one module's
+  header, and `bar.common()` resolving to that module's `.cpp` definition; the same setup with no narrowing possible
+  stays ambiguous; `tests/test_call_target_invariant.py` stays green.
+- **Measure.** The audit before/after on the fixture, and the eval gate.
+
+### Task 6c: resolve `#include "a/foo.h"` by a unique path suffix
+
+Found by the Task 6 implementation.
+
+- **Background.** `#include "a/foo.h"` written from `src/a/` for `include/a/foo.h` stays `module:` when the basename
+  `foo.h` is not unique. Such includes join no include ring and no `import_scoped` tier.
+- **Change.** In `regex_backend.resolve_local_import_rule` (used by both backends), after the existing exact /
+  relative / unique-basename steps, add one step: if exactly one known path **ends with** the include's full
+  relative path (`/a/foo.h`, matched on path-segment boundaries), resolve to it with `include_rule: "suffix"`.
+  Several matches stay `module:`.
+- **Incremental refresh.** Basename uniqueness already has the "full and incremental can differ after a file is
+  added" property (0.14.0 plan, Task 4.1). Suffix uniqueness has the same property: say so in the docstring and the
+  CHANGELOG, and build nothing new for it.
+- **Tests.** `include/a/foo.h` plus `include/b/foo.h`, and `src/a/x.cpp` including `"a/foo.h"`, resolves to
+  `include/a/foo.h` with `include_rule: "suffix"`; two `.../a/foo.h` files stay `module:`; the existing include
+  tests stay green. Extraction goldens may change if a fixture has such an include; explain each change.
+
 ### Task 7: `member:not_declared` (3316): members the extractor does not record
 
 - **Background.** The enclosing class and its bases declare no member of that name in `member_types`
@@ -237,7 +283,7 @@ Phase B tasks extend.
 - **Version:** 0.16.0 in every place `git show --stat 16edb4a` shows (`pyproject.toml`, both plugin manifests,
   `marketplace.json`, `src/cortex/__init__.py`, `tests/goldens/mcp/initialize.json` and its assertion in
   `tests/test_golden_mcp_shapes.py`, the README version line).
-- **`GRAPH_FORMAT_VERSION` 9:** the comment lists Tasks 4–8's resolver changes. `tests/test_graph_format_upgrade.py`
+- **`GRAPH_FORMAT_VERSION` 9:** the comment lists the resolver and extraction changes of Tasks 4–8 (6b, 6c and 7 included). `tests/test_graph_format_upgrade.py`
   stays green.
 - **CHANGELOG:** a `## 0.16.0 — <date>` section in the style of 0.15.2. It must contain:
   - the input table and the per-language decision;
