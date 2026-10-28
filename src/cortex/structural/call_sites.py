@@ -12,7 +12,8 @@ same file.  A receiver that is not typed locally but may be a member of the
 enclosing class (an out-of-line ``Foo::bar()`` in a ``.cpp`` using a member
 declared in ``Foo.hpp``) carries ``receiver_member``; the class node of the
 declaring file records ``member_types`` (see ``cpp_member_types``) and the
-resolver joins the two.
+resolver joins the two.  Qt's ``Q_D(Foo)`` declares ``d`` as a ``FooPrivate`` local to the function
+(``CppCalls.declare_pimpl``).
 """
 
 from __future__ import annotations
@@ -178,6 +179,8 @@ _CPP_CASTS = frozenset({
     "dynamic_pointer_cast", "static_pointer_cast", "const_pointer_cast",
     "qSharedPointerCast", "qSharedPointerDynamicCast", "qSharedPointerObjectCast", "qSharedPointerConstCast",
 })
+# `Q_D(Foo)` / `Q_D(const Foo)` / `Q_D(ns::Foo)`: Qt's pimpl macro declares `FooPrivate *const d = d_func();`.
+_QT_PIMPL_ARGUMENT = re.compile(r"^\s*\(\s*(?:const\s+)?(?:\w+\s*::\s*)*(\w+)\s*\)\s*$")
 _CPP_TYPE_ID = {"type_identifier", "namespace_identifier"}
 _CPP_DECLARATOR_NAMES = {"identifier", "field_identifier"}
 _CPP_DEF_NODES = {"function_definition"}
@@ -381,14 +384,32 @@ class CppCalls(CallWalker):
             if name:
                 self.emit(node, frame, name, kind="new")
             return
+        if kind == "function_declarator" and frame.in_function:
+            # `Q_D(const Foo);` is not an expression, so the parser reads it as an ERROR holding a declarator
+            name = node.child_by_field_name("declarator")
+            params = node.child_by_field_name("parameters")
+            if name is not None and params is not None and self.text(name) == "Q_D":
+                self.declare_pimpl(self.text(params), frame)
+            return
         if kind != "call_expression":
             return
         fn = node.child_by_field_name("function")
         if fn is None:
             return
+        if frame.in_function and fn.type == "identifier" and self.text(fn) == "Q_D":
+            arguments = node.child_by_field_name("arguments")
+            if arguments is not None:
+                self.declare_pimpl(self.text(arguments), frame)
+            return
         if self.follows_emit_keyword(node):
             return
         self.call_site(node, fn, frame)
+
+    def declare_pimpl(self, arguments: str, frame: Frame) -> None:
+        """`Q_D(Foo)` declares `d` as a `FooPrivate` in this function (the private class, last name segment)."""
+        match = _QT_PIMPL_ARGUMENT.match(arguments)
+        if match:
+            frame.vars["d"] = f"{match.group(1)}Private"
 
     def follows_emit_keyword(self, node: Any) -> bool:
         """`if (x) Q_EMIT sig();` -- an unbraced control-flow body parses as
