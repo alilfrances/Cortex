@@ -2,12 +2,19 @@
 
 Status: **implemented in 0.16.0**, every task done, none dropped (details and numbers in `CHANGELOG.md`):
 - Phase A (Tasks 1-3) as planned. Phase B: Tasks 4-8 as planned, plus Tasks 6b and 6c, which the Task 6 implementation
-  found (out-of-line definitions of the chosen class; includes by a unique path suffix), added to this plan in the
-  release commit.
+  found (out-of-line definitions of the chosen class; includes by a unique path suffix), and Tasks 7b and 8b, which
+  the Task 7 and Task 8 implementations found (Qt declaration shapes that hide members; chains that start from a local
+  or a parameter), added to this plan in the release commits.
 - Task 7: shapes 1-6 already worked on 0.15.2 and are pinned by tests; only the Qt `Q_D` pimpl needed a fix.
+- Task 7b: of the three shapes the Task 7 agent saw, all three failed and are fixed: Qt declaration macros without a
+  semicolon that the tree-sitter mask did not know (`Q_DECLARE_PRIVATE`, `Q_DECLARE_PUBLIC`, `Q_PLUGIN_METADATA` and
+  kin; the others of the list were masked already), members in `#ifdef` branches of a class body, and `Q_Q(Foo)`.
 - Task 8: a receiver that ends in a field is typed through the members of the receiver's expression (`this`, a
-  member of the enclosing class, or an earlier link), not through a local or parameter, whose type the edge does not
-  carry; the chain limit is 4 calls, the edge's own included.
+  member of the enclosing class, or an earlier link); the chain limit is 4 calls, the edge's own included.
+- Task 8b: a chain whose leftmost identifier is a local or a parameter with a known type carries
+  `receiver_base_type`, which types its first link. A call link from a parameter (`ctx->manager()->apply()`) already
+  resolved, because the inner call is a typed `var` edge; the field links were the gap. One resolved call changes
+  target by design: a local that shadows a member is typed as the local.
 - Task 6b deviation: the include ring is directional, so "a file within the include ring of the class's header" counts
   in both directions (the `.inl` a header includes, the `.cpp` that includes it).
 - Task 6c addition: `impacted_tests` treats a `suffix` include like a `relative` one.
@@ -240,6 +247,27 @@ Found by the Task 6 implementation.
      against the class `XPrivate` if it exists.
 - **Tests:** one fixture per failing shape, asserting the `member_types` entry and that the call resolves.
 
+### Task 7b: Qt declaration shapes that hide members
+
+Found by the Task 7 implementation, which saw them and did not change them. Investigate each shape with a fixture
+first and fix only those that fail on the Task 7 HEAD.
+
+1. **A Qt declaration macro without a trailing semicolon** swallows the next declaration:
+   `Q_DECLARE_PRIVATE(Foo)` on its own line, then `Foo *m_x;` or a method. Check also `Q_DECLARE_PUBLIC`,
+   `Q_DISABLE_COPY`, `Q_DISABLE_COPY_MOVE`, `Q_GADGET`, `Q_ENUM`, `Q_FLAG`, `Q_INTERFACES`, `Q_PLUGIN_METADATA`,
+   `Q_PROPERTY` and `Q_CLASSINFO`. Extend the source mask that already keeps `Q_OBJECT` from breaking the tree-sitter
+   parse (`treesitter_backend._mask_qt_macros`, next to the export-macro mask of Task 4); no second mechanism. It
+   blanks with spaces, so offsets and lines are unchanged, and it applies to the tree-sitter parse only: the regex
+   backend, `_extract_qt_cpp_edges` and `deadcode._qt_macro_flags` still see the original text.
+2. **Members declared inside `#ifdef ... #endif`** (or `#if`, `#else`, `#elif` branches) in a class body are not in
+   `member_types`: `CppCalls.class_fields` descends into the preprocessor nodes of the class body, every branch.
+3. **`Q_Q(Foo); q->bar();`** types `q` as `Foo`, through the code path of Task 7's `Q_D`.
+
+- **Tests:** one per failing shape in `tests/test_cpp_member_shapes.py`, failing first, with the `member_types`
+  entry where relevant and a call that resolves.
+- **Measure:** the audit before/after on a fixture of the shapes, `tests/fixtures/calls_cpp` and the
+  `--field-shape` repository, and the eval gate.
+
 ### Task 8: `chain` (14871): resolve calls on a call's result
 
 - **Background.** `a->b()->c()` and `a.b().c()` are emitted with `receiver_kind = "chain"` and the receiver text,
@@ -278,12 +306,34 @@ Found by the Task 6 implementation.
 - **Measure** the audit `chain` count before and after on the fixtures and the `--field-shape` repository. There is
   no numeric target: report what moved.
 
+### Task 8b: chains that start from a local variable or a parameter
+
+Found by the Task 8 implementation. Allowed in this release, which already bumps the graph format.
+
+- **Background.** Task 8 types a chain's leftmost link only through `member_types` (`this`, a member of the enclosing
+  class, or an earlier link). A chain whose base is a local or a parameter (`item.m_owner->update()`,
+  `ctx->m_mgr->current()` with `Context *ctx`) stays unresolved, because the chain edge carries no type for its base.
+- **Change.**
+  - `CppCalls` (`call_sites.py`): when emitting a `kind="chain"` call whose leftmost base is an identifier with a
+    known declared type in `frame.vars` (parameters and locals, the map the `var` tier uses), add
+    `metadata.receiver_base_type`, normalised like `receiver_type`.
+  - Task 8's chain tier (`callresolve.py`): use it as the type of the leftmost link when present, then walk the
+    links as Task 8 does (return types for call links, `member_types` for field links).
+  - Add `receiver_base_type` to the call-site contract in the `callresolve.py` docstring, and extend the
+    `GRAPH_FORMAT_VERSION` 9 comment.
+- **Tests** (`tests/test_calls_chain.py`, failing first): a parameter base with a call link; a local base with a
+  field link; a local of a framework type stays `name:` (or external per Task 5); an untyped local (`auto x = ...`)
+  is unchanged. Extraction goldens may change if a fixture has such a chain; explain each change.
+- **Measure:** the audit `chain` count before/after on the Task 8 shapes plus the new cases, the eval gate, and the
+  resolve timing on the 46,038-call synthetic repository and on a chain-heavy 300-module one, which must not get
+  materially slower.
+
 ### Task 9: Release 0.16.0
 
 - **Version:** 0.16.0 in every place `git show --stat 16edb4a` shows (`pyproject.toml`, both plugin manifests,
   `marketplace.json`, `src/cortex/__init__.py`, `tests/goldens/mcp/initialize.json` and its assertion in
   `tests/test_golden_mcp_shapes.py`, the README version line).
-- **`GRAPH_FORMAT_VERSION` 9:** the comment lists the resolver and extraction changes of Tasks 4–8 (6b, 6c and 7 included). `tests/test_graph_format_upgrade.py`
+- **`GRAPH_FORMAT_VERSION` 9:** the comment lists the resolver and extraction changes of Tasks 4–8 (6b, 6c, 7, 7b and 8b included). `tests/test_graph_format_upgrade.py`
   stays green.
 - **CHANGELOG:** a `## 0.16.0 — <date>` section in the style of 0.15.2. It must contain:
   - the input table and the per-language decision;
