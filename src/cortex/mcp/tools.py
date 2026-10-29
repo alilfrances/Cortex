@@ -248,7 +248,9 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                     "description": "Only read with response_format detailed: also report how far calls and "
                     "inherits edges of this repository's index are resolved (`resolution`: edge counts by target "
                     "kind, `name_external` for unresolved targets classified as out-of-repo, and "
-                    "`in_repo_symbol_share`, the share of in-repo targets that resolved to a symbol).",
+                    "`in_repo_symbol_share`, the share of in-repo targets that resolved to a symbol; `calls` also has "
+                    "`resolvable_share`, which leaves out calls to names no repository symbol has, and `by_family`, "
+                    "the same per language).",
                 },
                 "response_format": {"type": "string", "enum": ["concise", "detailed"], "default": "concise"},
             },

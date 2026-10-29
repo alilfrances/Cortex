@@ -323,7 +323,7 @@ def _count_edge(index: int, relation: str, target: str, source_file: str = "a.cp
     )
 
 
-def _resolution_of(tmp_path, monkeypatch, edges):
+def _resolution_of(tmp_path, monkeypatch, edges, symbols=()):
     from cortex.mcp.tools import call_tool
     from cortex.models import GraphNode
     from cortex.store import CortexStore, default_db_path
@@ -335,7 +335,11 @@ def _resolution_of(tmp_path, monkeypatch, edges):
     repo = repo.resolve()
     store = CortexStore(default_db_path(repo))
     node = GraphNode(node_id="file:a.cpp", kind="file", label="a.cpp", source_ref="a.cpp", granularity="file")
-    store.replace_graph(repo, [node], edges)
+    nodes = [node] + [
+        GraphNode(node_id=f"symbol:a.cpp:{label}", kind=kind, label=label, source_ref="a.cpp", granularity="symbol")
+        for kind, label in symbols
+    ]
+    store.replace_graph(repo, nodes, edges)
     store.connection.close()
     result = call_tool("cortex_status", {"repo_path": str(repo), "response_format": "detailed"})
     return json.loads(result["content"][0]["text"])["resolution"]
@@ -388,3 +392,87 @@ def test_resolution_counts_unresolved_calls_per_language_family(tmp_path, monkey
     by_family = _resolution_of(tmp_path, monkeypatch, edges)["calls"]["name_by_family"]
 
     assert by_family == {"c": 2, "js": 1, "java": 1, "py": 1, "rs": 1}
+
+
+def _call_edge(index: int, callee: str, source_file: str = "a.cpp", **metadata):
+    metadata = {"callee": callee, "receiver_kind": "none", "scope": None, "receiver_type": None, **metadata}
+    return _count_edge(index, "calls", f"name:{callee}", source_file, **metadata)
+
+
+def test_calls_to_names_no_repository_symbol_has_count_as_not_in_repo(tmp_path, monkeypatch) -> None:
+    symbols = [("func", "helper"), ("func", "update"), ("class", "Foo")]
+    edges = [
+        _call_edge(0, "qDebug"),                                           # nothing defines it: not in repo
+        _call_edge(1, "qMax"),                                             # likewise
+        _call_edge(2, "helper"),                                           # a repository function: unresolved but resolvable
+        _call_edge(3, "update"),                                           # named like a repository method
+        _call_edge(4, "qDebug", receiver_kind="var", receiver="obj"),      # has a receiver
+        _call_edge(5, "qDebug", receiver_kind="scoped", scope="Ns"),       # has a scope
+        _call_edge(6, "qDebug", receiver_type="Foo"),                      # has a receiver type
+        _call_edge(7, "qDebug", ambiguous=True),                           # kept ambiguous on purpose
+        _call_edge(8, "qDebug", external="qt_macro"),                      # already external
+        _count_edge(9, "calls", "symbol:a.cpp:helper", callee="helper", receiver_kind="none"),
+    ]
+
+    calls = _resolution_of(tmp_path, monkeypatch, edges, symbols)["calls"]
+
+    assert calls["name"] == 9 and calls["symbol"] == 1 and calls["name_external"] == 1
+    assert calls["name_not_in_repo"] == 2
+
+
+def test_a_call_without_receiver_kind_or_callee_metadata_reads_the_target_label(tmp_path, monkeypatch) -> None:
+    edges = [_count_edge(0, "calls", "name:qDebug"), _count_edge(1, "calls", "name:helper")]
+
+    calls = _resolution_of(tmp_path, monkeypatch, edges, [("func", "helper")])["calls"]
+
+    assert calls["name_not_in_repo"] == 1
+
+
+def test_resolvable_share_leaves_out_external_and_not_in_repo_calls(tmp_path, monkeypatch) -> None:
+    edges = [_count_edge(0, "calls", "symbol:a.cpp:helper", callee="helper", receiver_kind="none")]
+    edges += [_call_edge(1, "helper"), _call_edge(2, "qDebug"), _call_edge(3, "qMax"), _call_edge(4, "qWarning", external="qt_macro")]
+    edges += [_call_edge(5, "helper", receiver_kind="var", receiver="o")]
+
+    calls = _resolution_of(tmp_path, monkeypatch, edges, [("func", "helper")])["calls"]
+
+    # symbol 1, name 5, external-marked 1, not in repo 2: 1 / (1 + 5 - 1 - 2)
+    assert (calls["symbol"], calls["name"], calls["name_external"], calls["name_not_in_repo"]) == (1, 5, 1, 2)
+    assert calls["resolvable_share"] == round(1 / 3, 4)
+    assert calls["in_repo_symbol_share"] == round(1 / 5, 4)  # unchanged: symbol / (symbol + name - name_external)
+
+
+def test_resolvable_share_is_null_when_nothing_can_resolve(tmp_path, monkeypatch) -> None:
+    resolution = _resolution_of(tmp_path, monkeypatch, [_call_edge(0, "qDebug")])
+
+    assert resolution["calls"]["name_not_in_repo"] == 1
+    assert resolution["calls"]["resolvable_share"] is None
+    assert "name_not_in_repo" not in resolution["inherits"]
+
+
+def test_resolution_counts_the_calls_share_per_language_family(tmp_path, monkeypatch) -> None:
+    symbols = [("func", "helper"), ("func", "render")]
+    edges = [
+        _count_edge(0, "calls", "symbol:a.cpp:helper", "x.cpp", callee="helper", receiver_kind="none"),
+        _count_edge(1, "calls", "symbol:a.cpp:helper", "x.cpp", callee="helper", receiver_kind="none"),
+        _call_edge(2, "helper", "x.cpp"),                          # resolvable
+        _call_edge(3, "qDebug", "x.cpp"),                          # not in repo
+        _call_edge(4, "qWarning", "y.h", external="qt_macro"),     # external
+        _count_edge(5, "calls", "symbol:a.cpp:render", "app.js", callee="render", receiver_kind="none"),
+        _call_edge(6, "fetch", "app.js"),                          # not in repo
+        _call_edge(7, "fetch", "app.js"),
+        _call_edge(8, "render", "app.js", receiver_kind="var", receiver="o"),
+        _call_edge(9, "log", "Main.java", receiver_kind="var", receiver="out"),
+    ]
+
+    calls = _resolution_of(tmp_path, monkeypatch, edges, symbols)["calls"]
+    by_family = calls["by_family"]
+
+    assert by_family == {
+        "c": {"symbol": 2, "name": 3, "name_external": 1, "name_not_in_repo": 1, "resolvable_share": round(2 / 3, 4)},
+        "java": {"symbol": 0, "name": 1, "name_external": 0, "name_not_in_repo": 0, "resolvable_share": 0.0},
+        "js": {"symbol": 1, "name": 3, "name_external": 0, "name_not_in_repo": 2, "resolvable_share": 0.5},
+    }
+    for key in ("symbol", "name", "name_external", "name_not_in_repo"):
+        assert sum(family[key] for family in by_family.values()) == calls[key]
+    assert calls["resolvable_share"] == round(3 / (3 + 7 - 1 - 3), 4)
+    assert calls["name_by_family"] == {"c": 3, "js": 3, "java": 1, "py": 0}

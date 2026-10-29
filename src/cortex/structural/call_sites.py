@@ -12,7 +12,8 @@ same file.  A receiver that is not typed locally but may be a member of the
 enclosing class (an out-of-line ``Foo::bar()`` in a ``.cpp`` using a member
 declared in ``Foo.hpp``) carries ``receiver_member``; the class node of the
 declaring file records ``member_types`` (see ``cpp_member_types``) and the
-resolver joins the two.
+resolver joins the two.  Qt's ``Q_D(Foo)`` declares ``d`` as a ``FooPrivate`` and ``Q_Q(Foo)`` declares ``q`` as a
+``Foo``, both local to the function (``CppCalls.declare_pimpl``).
 """
 
 from __future__ import annotations
@@ -178,10 +179,16 @@ _CPP_CASTS = frozenset({
     "dynamic_pointer_cast", "static_pointer_cast", "const_pointer_cast",
     "qSharedPointerCast", "qSharedPointerDynamicCast", "qSharedPointerObjectCast", "qSharedPointerConstCast",
 })
+# `Q_D(Foo)` / `Q_D(const Foo)` / `Q_D(ns::Foo)`: Qt's pimpl macro declares `FooPrivate *const d = d_func();`;
+# `Q_Q(Foo)` (in the private class) declares `Foo *const q = q_func();`.
+_QT_PIMPL_MACROS = {"Q_D": "d", "Q_Q": "q"}  # macro -> the variable it declares
+_QT_PIMPL_ARGUMENT = re.compile(r"^\s*\(\s*(?:const\s+)?(?:\w+\s*::\s*)*(\w+)\s*\)\s*$")
 _CPP_TYPE_ID = {"type_identifier", "namespace_identifier"}
 _CPP_DECLARATOR_NAMES = {"identifier", "field_identifier"}
 _CPP_DEF_NODES = {"function_definition"}
 _CPP_CLASS_NODES = {"class_specifier", "struct_specifier"}
+# A branch of a preprocessor conditional holds declarations of its own (`#ifdef X`, `#elif`, `#else` inside a class body).
+_CPP_PREPROC_BRANCHES = {"preproc_ifdef", "preproc_if", "preproc_else", "preproc_elif", "preproc_elifdef"}
 
 
 class CppCalls(CallWalker):
@@ -314,9 +321,13 @@ class CppCalls(CallWalker):
                 frame.vars.pop(name, None)
 
     def class_fields(self, body: Any, into: dict[str, str]) -> None:
+        """Record the fields of a class body, also those in the branches of `#ifdef` / `#if` (all of them: which
+        branch compiles is not known here)."""
         for child in body.named_children:
             if child.type == "field_declaration":
                 self.add_declaration(child, Frame("", "", None, into))
+            elif child.type in _CPP_PREPROC_BRANCHES:
+                self.class_fields(child, into)
 
     def add_parameters(self, declarator: Any | None, frame: Frame) -> None:
         while declarator is not None and declarator.type != "function_declarator":
@@ -381,14 +392,33 @@ class CppCalls(CallWalker):
             if name:
                 self.emit(node, frame, name, kind="new")
             return
+        if kind == "function_declarator" and frame.in_function:
+            # `Q_D(const Foo);` is not an expression, so the parser reads it as an ERROR holding a declarator
+            name = node.child_by_field_name("declarator")
+            params = node.child_by_field_name("parameters")
+            if name is not None and params is not None and self.text(name) in _QT_PIMPL_MACROS:
+                self.declare_pimpl(self.text(name), self.text(params), frame)
+            return
         if kind != "call_expression":
             return
         fn = node.child_by_field_name("function")
         if fn is None:
             return
+        if frame.in_function and fn.type == "identifier" and self.text(fn) in _QT_PIMPL_MACROS:
+            arguments = node.child_by_field_name("arguments")
+            if arguments is not None:
+                self.declare_pimpl(self.text(fn), self.text(arguments), frame)
+            return
         if self.follows_emit_keyword(node):
             return
         self.call_site(node, fn, frame)
+
+    def declare_pimpl(self, macro: str, arguments: str, frame: Frame) -> None:
+        """`Q_D(Foo)` declares `d` as a `FooPrivate` in this function (the private class, last name segment);
+        `Q_Q(Foo)` declares `q` as a `Foo`."""
+        match = _QT_PIMPL_ARGUMENT.match(arguments)
+        if match:
+            frame.vars[_QT_PIMPL_MACROS[macro]] = match.group(1) + ("Private" if macro == "Q_D" else "")
 
     def follows_emit_keyword(self, node: Any) -> bool:
         """`if (x) Q_EMIT sig();` -- an unbraced control-flow body parses as
@@ -481,7 +511,29 @@ class CppCalls(CallWalker):
                     extra=None if known else {"receiver_member": self.text(member)},
                 )
                 return
-        self.emit(node, frame, callee, receiver=receiver, kind="chain")
+        base_type = self.chain_base_type(arg, frame)
+        self.emit(
+            node, frame, callee, receiver=receiver, kind="chain",
+            extra={"receiver_base_type": base_type} if base_type else None,
+        )
+
+    def chain_base_type(self, receiver: Any, frame: Frame) -> str | None:
+        """Declared type of the leftmost identifier of a chain's receiver (``item.m_owner->x()``, ``ctx->a()->b()``)
+        when it is a parameter or a local with a known type; ``None`` for ``this``, a free function's result or
+        anything else the walk cannot follow."""
+        node = receiver
+        while node is not None:
+            if node.type == "identifier":
+                return frame.vars.get(self.text(node))
+            if node.type == "field_expression":
+                node = node.child_by_field_name("argument")
+            elif node.type == "call_expression":
+                node = node.child_by_field_name("function")
+                if node is None or node.type != "field_expression":
+                    return None  # a free function's result (`make()->x()`) has no variable behind it
+            else:
+                return None
+        return None
 
 
 # --------------------------------------------------------------------------- #

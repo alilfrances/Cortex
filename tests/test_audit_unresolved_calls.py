@@ -210,3 +210,30 @@ def test_member_sub_buckets_use_the_resolvers_member_join() -> None:
     assert audit_script.classify(_call("src/owner.cpp", "go", receiver_kind="var"), index) == "untyped_receiver"
     # a base is searched when the class does not declare the member
     assert bucket("m_inherited") == "member:type_wrapped"
+
+
+# --- Task 3: the same per-family figures as `cortex_status` -----------------------------------------------------
+
+
+def test_audit_prints_one_line_per_family_from_resolution_counts(tmp_path: Path, monkeypatch, capsys) -> None:
+    from cortex.store import CortexStore, default_db_path
+
+    body = "void keep() {}\nvoid g() { keep(); nowhere(); }\n"
+    repo = make_repo(tmp_path / "repo", {"src/a.cpp": body, "app.js": "function h() { nothere(); }\n"}, ingest=False)
+    ingest_repository(repo, incremental=False)
+    monkeypatch.setattr("sys.argv", ["audit_unresolved_calls.py", str(repo), "--all"])
+
+    assert audit_script.main() == 0
+    out = capsys.readouterr().out
+
+    by_family = CortexStore(default_db_path(repo)).resolution_counts(repo)["calls"]["by_family"]
+    assert set(by_family) >= {"c", "js"}
+    for family, counts in by_family.items():
+        expected = (
+            f"family {family:<5} symbol {counts['symbol']}, name {counts['name']}, name_external {counts['name_external']}, "
+            f"name_not_in_repo {counts['name_not_in_repo']}, resolvable_share {counts['resolvable_share']}"
+        )
+        assert expected in out.splitlines()
+    summary = out.index("unresolved name: calls")
+    assert out.index("family c") > summary  # after the summary line
+    assert audit_script.audit(repo, 0, None)["by_family"] == by_family

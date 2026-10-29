@@ -7,19 +7,25 @@ Reads the index of REPO (``--ingest`` builds one first, into ``CORTEX_DATA_DIR``
 directory).  Prints the resolution ratios of every `calls` and `inherits` edge (repository wide, and
 for ``--file`` alone), then a deterministic sample of ``--sample`` unresolved call edges bucketed by
 cause (``--all`` buckets every unresolved edge instead: exact counts), so a resolver change can be
-judged by its before/after numbers rather than by example.
+judged by its before/after numbers rather than by example.  The last lines give, per language family, the
+figures of ``cortex_status`` (``resolution.calls.by_family``: ``symbol``, ``name``, ``name_external``,
+``name_not_in_repo``, ``resolvable_share``), read from ``CortexStore.resolution_counts``.
 
 Buckets (first matching rule wins, in this order):
 
 * ``external``            the edge carries ``metadata.external`` (set by the resolver for calls into code
-                          outside the repository; always empty before that lands)
+                          outside the repository, ``inherited`` for a member the repository classes lack
+                          while one of their bases is outside the repository)
 * ``scoped_namespace``    ``Ns::f()`` whose ``Ns`` labels only namespace nodes of the repository: a
                           namespace lookup that should have resolved and did not
 * ``not_cpp_<family>``    the caller is outside the C/C++ family (``not_cpp_js``, ``not_cpp_java``,
                           ``not_cpp_py``, ...): the C++ causes below do not apply, so they are counted apart
 * ``cast_local``          receiver typed by a cast function name (``qobject_cast``) -- extractor gap
 * ``ambiguous``           the resolver kept ``name:`` on purpose: several candidates
-* ``chain``               receiver is a call/field chain (``a->b()->c()``)
+* ``chain``               receiver is a call/field chain (``a->b()->c()``) that the resolver's chain pass
+                          (``callresolve._resolve_chain``) could not type: the inner call is unresolved or
+                          ambiguous, returns no repository class, or the chain is longer than
+                          ``MAX_CHAIN_LINKS``
 * ``member:*``            ``m_x->f()`` where the extractor recorded ``receiver_member`` and no declared type
                           (the resolver then joins it with the ``member_types`` of the enclosing class and its
                           bases, ``callresolve._member_type``); why that join gave nothing:
@@ -33,7 +39,9 @@ Buckets (first matching rule wins, in this order):
                             ``member:ambiguous``           several declared types, or several classes of that
                                                            label, so the resolver keeps ``name:``
                             ``member:method_not_found``    the type is one repository class and neither it nor
-                                                           its bases has the method (external base, macro, ...)
+                                                           its bases has the method (a macro, a generated
+                                                           member; with a base outside the repository the
+                                                           call is ``external`` instead)
 * ``untyped_receiver``    ``recv->m()`` where nothing static says what ``recv`` is
 * ``type_not_in_repo``    receiver type / ``Scope::`` is not a class of the repository (Qt, std, ...)
 * ``member_not_found``    the class is in the repository but no member (or base member) has the name
@@ -208,10 +216,13 @@ def audit(repo: Path, sample: int, only_file: str | None, all_edges: bool = Fals
             indexes[family] = _Index([n for n in nodes if language_family(n.source_ref) == family], [
                 e for e in edges if e.relation in ("imports", "inherits")
             ])
+            indexes[family].deep = True  # name the classes the resolver's second attempt settles on
         buckets[classify(edge, indexes[family], repo)] += 1
     report["unresolved_calls"] = len(unresolved)
     report["sampled"] = len(picked)
     report["buckets"] = dict(buckets.most_common())
+    # the figures `cortex_status` reports, taken from the store rather than recomputed here
+    report["by_family"] = store.resolution_counts(repo)["calls"]["by_family"]
     return report
 
 
@@ -243,6 +254,12 @@ def main() -> int:
     print(f"unresolved name: calls {report['unresolved_calls']}, sampled {report['sampled']}")
     for bucket, count in report["buckets"].items():
         print(f"  {bucket:<26} {count}")
+    for family, counts in report["by_family"].items():
+        print(
+            f"family {family:<5} symbol {counts['symbol']}, name {counts['name']}, "
+            f"name_external {counts['name_external']}, name_not_in_repo {counts['name_not_in_repo']}, "
+            f"resolvable_share {counts['resolvable_share']}"
+        )
     return 0
 
 

@@ -12,6 +12,10 @@ Every extractor that emits a `calls` edge for call-graph resolution writes::
                   receiver_kind   "none" | "this" | "self" | "scoped" | "var" | "new" | "chain"
                   scope           str | None   ``Cls`` of ``Cls::m`` / alias of ``pkg.m``
                   receiver_type   str | None   declared type name when statically known
+                  receiver_base_type  str | None  (C/C++ ``chain`` only) declared type of the chain's leftmost
+                                  identifier when it is a parameter or a local: ``item`` of ``item.m_owner->f()``
+                                  (``Item *item``), ``ctx`` of ``ctx->a()->f()``; absent for ``this``, a member
+                                  and a free function's result
                   enclosing_class str | None   class the call site sits in
     optional      scope_module  (Python: dotted module a scoped call refers to)
                   import_module / alias  (Python: ``from m import f as g``)
@@ -37,9 +41,18 @@ at least one symbol::
     same_package   Go only: free callee in the caller's directory (package)
     import_scoped  free callee defined in a file the caller imports/includes
     repo_unique    free callee with exactly one definition repo-wide
+    chain          C/C++ only: a call on a call's result (``a->b()->c()``), typed by the return type of the
+                   inner call's resolved target (or by a declared member of that type); a pass of its own,
+                   after every other edge of the family, so the inner edges are already resolved
 
 More than one candidate at the deciding tier keeps the ``name:`` target and
 records ``candidates`` (sorted, <= 8), ``ambiguous = True``, confidence LOW.
+A C/C++ edge that depends on a class lookup and stayed unresolved or ambiguous gets one second
+attempt in which ``_Index.prefer`` also narrows same-label classes by the include ring of the calling
+file (``MAX_INCLUDE_RING`` hops; then of its single header sibling); only an answer with exactly
+one candidate replaces the first outcome.  Out-of-line members are found by the class label, so once the
+lookup is down to one of several same-label classes `_Index.class_members` keeps only the definitions that
+belong to it (its file, its implementation sibling, its include ring) and resolves when exactly one remains.
 Nothing is ever resolved by scanning the corpus per candidate.
 """
 
@@ -47,6 +60,7 @@ from __future__ import annotations
 
 import builtins
 import functools
+import re
 from collections import defaultdict
 from pathlib import PurePosixPath
 from typing import Iterable
@@ -57,6 +71,12 @@ from .testpatterns import is_test_path
 
 MAX_CANDIDATES = 8
 MAX_INHERIT_DEPTH = 6
+# How many include hops `_Index.include_ring` follows from the calling file and from its header sibling.
+MAX_INCLUDE_RING = 3
+# `call_sites._MAX_RECEIVER`: a receiver text this long was cut, so its tail is not the chain's tail.
+_MAX_RECEIVER_TEXT = 80
+# The longest C/C++ chain `a->b()->c()->d()` (calls in it, the edge's own included) that is followed.
+MAX_CHAIN_LINKS = 4
 _HEADER_SUFFIXES = {".h", ".hpp", ".hh", ".hxx"}
 _IMPL_SUFFIXES = {".c", ".cc", ".cpp", ".cxx"}
 _PY_BUILTINS = frozenset(dir(builtins))
@@ -263,6 +283,20 @@ class _Index(ClassIndex):
             if impls:
                 for header in headers:
                     self.impl_siblings[header] = impls
+        # The header(s) an implementation file is the sibling of (the inverse of `impl_siblings`).
+        self.header_siblings: dict[str, list[str]] = {}
+        for header, impls in self.impl_siblings.items():
+            for impl in impls:
+                self.header_siblings.setdefault(impl, []).append(header)
+        # Set while `_resolve_into` makes its second attempt at an edge that stayed unresolved or ambiguous:
+        # `prefer` then also narrows by `include_ring`.
+        self.deep = False
+        # The family's call edges by (source, lineno, callee), for the chain pass (see `attach_calls`), and the
+        # return type label of a function symbol, parsed from its signature on first use (`return_label`).
+        self._calls: list[GraphEdge] = []
+        self._call_sites: dict[tuple[str, int, str], list[GraphEdge]] | None = None
+        self._return_labels: dict[str, str | None] = {}
+        self._rings: dict[tuple[str, ...], frozenset[str]] = {}
         super().__init__(nodes)
         symbols = self.symbols
 
@@ -334,6 +368,10 @@ class _Index(ClassIndex):
         # edge_id -> the class ids its base label names after `prefer` (per edge: the rewrite of
         # `inherits` targets needs the answer for one edge, `bases` unions a class's edges).
         self.edge_bases: dict[str, list[str]] = {}
+        # Classes with a base that no class of the family carries the label of (`QWidget`, a library class):
+        # a member the repository cannot find on them may well be inherited from it.
+        self.outside_base_classes: set[str] = set()
+        self._outside_base_cache: dict[str, bool] = {}
         for edge in sorted(inherits, key=lambda e: e.edge_id):
             if edge.target in symbols and symbols[edge.target].kind == "class":
                 bases[edge.source].add(edge.target)
@@ -341,6 +379,8 @@ class _Index(ClassIndex):
             found = self.base_candidates(edge.source, _inherits_label(edge))
             self.edge_bases[edge.edge_id] = found
             bases[edge.source].update(found)
+            if not found:
+                self.outside_base_classes.add(edge.source)
         for cid, node in symbols.items():
             declared = node.metadata.get("bases") if isinstance(node.metadata, dict) else None
             if node.kind == "class" and isinstance(declared, list) and not bases.get(cid):
@@ -350,6 +390,88 @@ class _Index(ClassIndex):
                         found = self.prefer(found, node.source_ref)
                     bases[cid].update(found)
         self.bases: dict[str, list[str]] = {cid: sorted(ids - {cid}) for cid, ids in bases.items()}
+
+    def class_members(self, class_id: str, name: str) -> list[str]:
+        """`ClassIndex.class_members`, with the out-of-line definitions narrowed to the chosen class.
+
+        An out-of-line member is found by the class *label*, so two same-label classes (`Bar` in two modules)
+        each list the definitions of both.  Once the lookup is down to one class, keep the definitions that
+        belong to it (`own_definitions`); anything but exactly one answer leaves today's list."""
+        found = super().class_members(class_id, name)
+        if len(found) < 2 or self.declared_members.get(class_id, {}).get(name) or self.is_namespace(class_id):
+            return found
+        if len(self.classes_by_label.get(self.symbols[class_id].label, ())) < 2:
+            return found
+        own = self.own_definitions(class_id, found)
+        return own if len(own) == 1 else found
+
+    def own_definitions(self, class_id: str, definitions: list[str]) -> list[str]:
+        """The `definitions` (out-of-line members found by the class label) whose file belongs to `class_id`.
+
+        Successive narrowing, each step applying only if it leaves one or more definitions (the shape of
+        `locality`), stopping at one:
+        1. the class's own file;
+        2. its implementation sibling (`impl_siblings` of its header, `narrow`ed to the header's directory);
+        3. a file in the include ring of the class's file, in either direction (the `.inl` its header includes,
+           the `.cpp` that includes it).
+        """
+        class_file = self.symbols[class_id].source_ref
+        pool = list(definitions)
+        siblings = set(self.impl_siblings.get(class_file, ()))
+        class_ring = self.include_ring([class_file])
+        steps = (
+            lambda ids: [d for d in ids if self.symbols[d].source_ref == class_file],
+            lambda ids: self.narrow([d for d in ids if self.symbols[d].source_ref in siblings], class_file),
+            lambda ids: [
+                d for d in ids
+                if self.symbols[d].source_ref in class_ring or class_file in self.include_ring([self.symbols[d].source_ref])
+            ],
+        )
+        for step in steps:
+            narrowed = step(pool)
+            if narrowed:
+                pool = narrowed
+            if len(pool) == 1:
+                break
+        return pool
+
+    def attach_calls(self, calls: list[GraphEdge]) -> None:
+        """The family's contract call edges, resolved or not: the chain pass looks up the inner call of
+        ``a->b()->c()`` among them (same source symbol, same line, the callee ``b``)."""
+        self._calls = calls
+        self._call_sites = None
+
+    def calls_at(self, source: str, lineno: int, callee: str) -> list[GraphEdge]:
+        if self._call_sites is None:
+            sites: dict[tuple[str, int, str], list[GraphEdge]] = defaultdict(list)
+            for edge in self._calls:
+                sites[(edge.source, int(edge.metadata.get("lineno") or 0), str(edge.metadata["callee"]))].append(edge)
+            self._call_sites = sites
+        return self._call_sites.get((source, lineno, callee), [])
+
+    def return_label(self, symbol_id: str) -> str | None:
+        """Class label a function symbol returns, from its signature (``Item* Manager::current()`` -> ``Item``);
+        ``None`` for a constructor, ``void``, ``auto`` and the built-in types."""
+        if symbol_id not in self._return_labels:
+            node = self.symbols.get(symbol_id)
+            self._return_labels[symbol_id] = (
+                _return_label(node.signature, node.label) if node is not None and node.kind != "class" else None
+            )
+        return self._return_labels[symbol_id]
+
+    def has_outside_base(self, class_id: str) -> bool:
+        """`class_id` or a class it derives from (repository bases, depth <= `MAX_INHERIT_DEPTH`) has a base
+        outside the repository."""
+        cached = self._outside_base_cache.get(class_id)
+        if cached is None:
+            frontier, visited, depth, cached = [class_id], {class_id}, 0, False
+            while frontier and depth <= MAX_INHERIT_DEPTH and not cached:
+                cached = any(cid in self.outside_base_classes for cid in frontier)
+                frontier = sorted({b for cid in frontier for b in self.bases.get(cid, ()) if b not in visited})
+                visited.update(frontier)
+                depth += 1
+            self._outside_base_cache[class_id] = cached
+        return cached
 
     def is_repo_module(self, module: str) -> bool:
         """A QML import that names a directory of the repository (``import "components"``, ``import App.Ui``)."""
@@ -423,7 +545,33 @@ class _Index(ClassIndex):
                 for c in candidate_ids
             ):
                 self.trace.add("production")
-        return self.locality(near or candidate_ids, from_path)
+        result = self.locality(near or candidate_ids, from_path)
+        if self.deep:
+            siblings = self.header_siblings.get(from_path, ())
+            for ring in (self.include_ring([from_path]), self.include_ring(siblings) if len(siblings) == 1 else frozenset()):
+                if len(result) < 2:
+                    break
+                inside = [c for c in result if self.symbols[c].source_ref in ring]
+                if inside and len(inside) < len(result):
+                    result = self.locality(inside, from_path)
+        return result
+
+    def include_ring(self, roots: Iterable[str]) -> frozenset[str]:
+        """The `roots` and the files within `MAX_INCLUDE_RING` include hops of them.  `prefer` tries the calling
+        file first, then its header sibling (`foo.cpp` -> `foo.h`: what the header includes the implementation
+        sees too; only when exactly one header carries the stem, otherwise it is a guess)."""
+        key = tuple(sorted(roots))
+        ring = self._rings.get(key)
+        if ring is None:
+            seen = set(key)
+            frontier = sorted(seen)
+            for _ in range(MAX_INCLUDE_RING):
+                frontier = sorted({t for path in frontier for t in self.imports.get(path, ()) if t not in seen})
+                seen.update(frontier)
+                if not frontier:
+                    break
+            ring = self._rings[key] = frozenset(seen)
+        return ring
 
     def locality(self, candidate_ids: list[str], from_path: str) -> list[str]:
         """Narrow same-label classes that no include relation separates; each step applies only if it leaves one.
@@ -579,8 +727,138 @@ def _member_type_candidates(edge: GraphEdge, index: _Index, source_file: str, me
     """Declared types of member variable `member` at the nearest level (enclosing class, then bases) that
     declares it: sorted, empty when no class declares it, more than one when the declarations disagree."""
     classes = _enclosing_classes(edge, index, source_file)
-    if not classes:
-        return []
+    return _member_labels(index, classes, member) if classes else []
+
+
+def _member_type(edge: GraphEdge, index: _Index, source_file: str, member: str) -> str | None:
+    """Declared type of member variable `member` of the enclosing class (or a base)."""
+    found = _member_type_candidates(edge, index, source_file, member)
+    return found[0] if len(found) == 1 else None
+
+
+# -- chains: ``a->b()->c()`` ---------------------------------------------------------------------------
+
+_TYPE_KEYWORDS = frozenset({
+    "static", "virtual", "inline", "constexpr", "consteval", "constinit", "explicit", "const", "volatile", "friend",
+    "extern", "typename", "mutable", "struct", "class", "enum", "union", "register", "thread_local",
+})
+_BUILTIN_TYPES = frozenset({
+    "void", "auto", "bool", "char", "wchar_t", "char8_t", "char16_t", "char32_t", "short", "int", "long", "float",
+    "double", "signed", "unsigned", "size_t", "ssize_t", "ptrdiff_t", "nullptr_t",
+})
+_MACRO_WORD = re.compile(r"[A-Z][A-Z0-9_]{2,}$")
+_TRAILING_QUALIFIER = re.compile(r"(?:\s*[*&]+|\s*\b(?:const|volatile))\s*$")
+_LEADING_WORD = re.compile(r"(\w+)\s+(?=\S)")
+_CALL_NAME = re.compile(r"([A-Za-z_]\w*)\s*(?:<[^<>]*>)?\s*$")
+
+
+def _matching(text: str, start: int, opening: str, closing: str, step: int = 1) -> int | None:
+    """Index of the bracket that closes the one at `start` (scanning forward) or opens it (backward, `step=-1`)."""
+    depth = 0
+    index = start
+    while 0 <= index < len(text):
+        char = text[index]
+        if char == opening:
+            depth += 1
+        elif char == closing:
+            depth -= 1
+            if depth == 0:
+                return index
+        index += step
+    return None
+
+
+def _type_label(text: str) -> str | None:
+    """Class label a written type names: pointers, references and qualifiers stripped, the last `::` segment,
+    the pointee of a known smart pointer (``std::unique_ptr<Item>``), the wrapper's own name for any other
+    template (``QList<Item*>`` -> ``QList``); ``None`` for a built-in or anything that is not one name."""
+    from .structural.call_sites import _SMART_POINTERS
+
+    text = text.strip()
+    while True:
+        lead = _LEADING_WORD.match(text)
+        if lead and (lead.group(1) in _TYPE_KEYWORDS or _MACRO_WORD.match(lead.group(1))):
+            text = text[lead.end():]
+            continue
+        break
+    while True:
+        stripped = _TRAILING_QUALIFIER.sub("", text)
+        if stripped == text:
+            break
+        text = stripped
+    text = text.strip().removeprefix("::")
+    segments: list[str] = []  # split on `::` outside template arguments
+    depth, start = 0, 0
+    for position, char in enumerate(text):
+        if char == "<":
+            depth += 1
+        elif char == ">":
+            depth -= 1
+        elif char == ":" and depth == 0 and text.startswith("::", position):
+            segments.append(text[start:position])
+            start = position + 2
+    segments.append(text[start:])
+    label, arguments = segments[-1].strip(), ""
+    angle = label.find("<")
+    if angle != -1:
+        close = _matching(label, angle, "<", ">")
+        if close is None or label[close + 1:].strip():
+            return None
+        label, arguments = label[:angle].strip(), label[angle + 1:close]
+    if not re.fullmatch(r"[A-Za-z_]\w*", label) or label in _BUILTIN_TYPES or label in _TYPE_KEYWORDS:
+        return None
+    if arguments and label in _SMART_POINTERS:
+        depth, first = 0, []
+        for char in arguments:
+            depth += char == "<"
+            depth -= char == ">"
+            if char == "," and depth == 0:
+                break
+            first.append(char)
+        return _type_label("".join(first))
+    return label
+
+
+def _return_label(signature: str, name: str) -> str | None:
+    """Class label named by the return type in a function signature: what stands before ``[Class::]name(``,
+    without storage and specifier keywords, export macros, ``template <...>``, ``*``, ``&`` and the qualifier."""
+    if not name or name.startswith("operator"):
+        return None
+    line = signature.split("\n", 1)[0]
+    match = re.search(r"(?<![\w~])(?:~?\w+(?:<[^<>]*>)?\s*::\s*)*" + re.escape(name) + r"\s*\(", line)
+    if match is None:
+        return None
+    prefix = re.sub(r"\[\[.*?\]\]", " ", line[:match.start()]).strip()
+    while prefix.startswith("template"):
+        angle = prefix.find("<")
+        close = _matching(prefix, angle, "<", ">") if angle != -1 else None
+        if close is None:
+            return None
+        prefix = prefix[close + 1:].strip()
+    return _type_label(prefix) if prefix else None
+
+
+def _chain_links(receiver: str) -> int:
+    """Calls in a chain whose receiver text is `receiver`, the chain edge's own call included."""
+    depth, groups = 0, 0
+    for char in receiver:
+        if char == "(":
+            if depth == 0:
+                groups += 1
+            depth += 1
+        elif char == ")":
+            depth -= 1
+    return groups + 1
+
+
+def _chain_callees(receiver: str) -> set[str]:
+    """Names called inside a chain's receiver text (``a->b()->c()`` -> ``b``, ``c``)."""
+    return set(re.findall(r"([A-Za-z_]\w*)\s*(?:<[^<>]*>)?\s*\(", receiver))
+
+
+def _member_labels(index: _Index, classes: list[str], member: str) -> list[str]:
+    """Declared types of member variable `member` at the nearest level (`classes`, then their bases) that
+    declares it: sorted, empty when none does, more than one when the declarations disagree."""
     frontier = sorted(set(classes))
     visited = set(frontier)
     depth = 0
@@ -599,10 +877,81 @@ def _member_type_candidates(edge: GraphEdge, index: _Index, source_file: str, me
     return []
 
 
-def _member_type(edge: GraphEdge, index: _Index, source_file: str, member: str) -> str | None:
-    """Declared type of member variable `member` of the enclosing class (or a base)."""
-    found = _member_type_candidates(edge, index, source_file, member)
-    return found[0] if len(found) == 1 else None
+def _chain_classes(edge: GraphEdge, index: _Index, source_file: str, text: str) -> list[str]:
+    """The repository classes the expression `text` (the receiver of a chain edge) evaluates to; empty when
+    the expression is not typed.  Three forms, read from the end of the text:
+
+    * ``<prefix>name(args)``: the inner call.  Its edge is the one of the same source symbol and line, callee
+      `name` and receiver `prefix`; it must have resolved to one symbol, whose return type is the class;
+    * ``<base>.field`` / ``<base>->field``: the declared type of member `field` in the classes `base` is;
+    * ``name`` / ``this``: a member of the class the call sits in / that class."""
+    text = text.strip()
+    if not text:
+        return []
+    if text.endswith(")"):
+        opening = _matching(text, len(text) - 1, ")", "(", -1)
+        name = _CALL_NAME.search(text[:opening]) if opening else None
+        if name is None:
+            return []
+        head = text[:name.start()].rstrip()
+        prefix = head
+        for separator in ("->", ".", "::"):
+            if head.endswith(separator):
+                prefix = head[: -len(separator)]
+                break
+        else:
+            if head:
+                return []  # `new Item()`, a cast, a subscript...: not a call on a named prefix
+        wanted = "".join(prefix.split())
+        found = [
+            e for e in index.calls_at(edge.source, int(edge.metadata.get("lineno") or 0), name.group(1))
+            if "".join(str(e.metadata.get("receiver") or "").split()) == wanted
+        ]
+        if len(found) != 1 or not found[0].target.startswith("symbol:") or found[0].metadata.get("ambiguous"):
+            return []
+        label = index.return_label(found[0].target)
+        context = index.symbols[found[0].target].source_ref
+        return index.prefer(index.classes_by_label.get(label, []), context) if label else []
+    accessor = max(text.rfind("->"), text.rfind("."))
+    if accessor == -1:
+        if text == "this":
+            return _enclosing_classes(edge, index, source_file)
+        if not re.fullmatch(r"[A-Za-z_]\w*", text):
+            return []
+        # the leftmost link: a parameter or local (its declared type, which shadows a member of the same name),
+        # else a member of the class the call sits in
+        base = edge.metadata.get("receiver_base_type")
+        labels = [str(base)] if base else _member_type_candidates(edge, index, source_file, text)
+    else:
+        field = text[accessor + (2 if text.startswith("->", accessor) else 1):].strip()
+        if not re.fullmatch(r"[A-Za-z_]\w*", field):
+            return []
+        classes = _chain_classes(edge, index, source_file, text[:accessor])
+        labels = _member_labels(index, classes, field) if classes else []
+    if len(labels) != 1:
+        return []
+    label = _last_segment(labels[0])
+    return index.prefer(index.classes_by_label.get(label, []), source_file)
+
+
+def _resolve_chain(edge: GraphEdge, index: _Index, source_file: str) -> _Outcome:
+    """``a->b()->c()``: type the receiver by the chain's inner call (see `_chain_classes`) and look the callee
+    up in that class and its bases.  Several candidates are ambiguous, as in the other tiers.  A class whose
+    member is missing but that derives from something outside the repository marks the edge external
+    (``inherited``), as for any other typed call."""
+    md = edge.metadata
+    receiver = str(md.get("receiver") or "")
+    if not receiver or len(receiver) >= _MAX_RECEIVER_TEXT or _chain_links(receiver) > MAX_CHAIN_LINKS:
+        return None
+    classes = _chain_classes(edge, index, source_file, receiver)
+    if not classes:
+        return None
+    outcome = _members(index, classes, index.symbols[classes[0]].label, str(md["callee"]), source_file, "chain")
+    if outcome is None:
+        if _inherited_from_outside(classes, index):
+            md["external"] = "inherited"
+        return None
+    return "chain", outcome[1]
 
 
 def _members(index: _Index, class_ids: list[str], label: str, callee: str, source_file: str, tier: str) -> _Outcome:
@@ -797,6 +1146,9 @@ def _resolve_one(edge: GraphEdge, index: _Index) -> _Outcome:
             return _resolve_import_binding(edge, index)
         return _resolve_new(edge, index, source_file)
 
+    if kind == "chain" and not python and language_family(source_file) == CPP_FAMILY:
+        return _resolve_chain(edge, index, source_file)
+
     if kind != "none":
         return None  # untyped receiver: nothing static to resolve against
 
@@ -824,6 +1176,13 @@ def _is_affected(
         return True
     if edge.target.startswith("symbol:") and edge.target not in node_ids:
         return True  # previously resolved target no longer exists
+    if md.get("receiver_kind") == "chain" and (
+        # a chain follows the inner calls' return types: re-resolve it when a function it calls was touched
+        # (a member it reads, or a class it ends in, moves with `widen_typed`)
+        widen_typed
+        or (changed_labels and not changed_labels.isdisjoint(_chain_callees(str(md.get("receiver") or ""))))
+    ):
+        return True
     if widen_typed and (
         md.get("enclosing_class")
         or md.get("receiver_type")
@@ -923,6 +1282,7 @@ def resolve_call_endpoints(
     files = affected_files or set()
     labels = changed_labels or set()
     calls = [edge for edge in edges if is_contract_call(edge)]
+    all_calls = calls
     inherits = [edge for edge in edges if _is_resolvable_inherits(edge)]
     node_ids = {node.node_id for node in nodes} if scoped else set()
     if scoped:
@@ -955,7 +1315,19 @@ def resolve_call_endpoints(
         index = _Index(fam_nodes, fam_edges)
         for edge in inherits_by_family.get(family, ()):
             _resolve_inherits_into(edge, index)
-        for edge in by_family.get(family, ()):
+        family_calls = by_family.get(family, [])
+        if family == CPP_FAMILY:
+            # Chains last, shortest receiver first: a chain reads the resolved targets of the calls inside its
+            # receiver, and a chain inside that receiver has a shorter one.
+            plain = [e for e in family_calls if e.metadata.get("receiver_kind") != "chain"]
+            chains = sorted(
+                (e for e in family_calls if e.metadata.get("receiver_kind") == "chain"),
+                key=lambda e: len(str(e.metadata.get("receiver") or "")),
+            )
+            family_calls = plain + chains
+            if chains:
+                index.attach_calls([e for e in all_calls if language_family(_call_path(e)) == family])
+        for edge in family_calls:
             _resolve_into(edge, index)
     return edges
 
@@ -970,7 +1342,9 @@ def _mark_external_call(edge: GraphEdge, index: _Index) -> None:
 
     Called only when no candidate exists at all (never for an ambiguous edge).  A free name that the
     repository defines anywhere in the family is never external, and neither is a call whose scope or
-    receiver type is a repository class: the repository, not a library, owns that member.
+    receiver type is a repository class: the repository, not a library, owns that member.  The exception is a
+    member that the class and its repository bases lack while a class on that path has a base outside the
+    repository: the call is marked ``inherited`` (`QWidget::update()` on `class W : public QWidget`).
     """
     md = edge.metadata
     family = language_family(_call_path(edge))
@@ -987,13 +1361,48 @@ def _mark_external_call(edge: GraphEdge, index: _Index) -> None:
         if text:
             typed = True
             label = _last_segment(str(text))
-            if index.classes_by_label.get(label) or index.qualified_defs.get(label):
+            classes = index.prefer(index.classes_by_label.get(label, []), _call_source_file(edge, index))
+            if classes:
+                if _inherited_from_outside(classes, index):
+                    edge.metadata["external"] = "inherited"
+                return
+            if index.qualified_defs.get(label):
                 return
     if not typed and callee in index.defined_names:
+        # a method of some other class, but this class derives from something outside the repository
+        if _implicit_receiver(md) and _inherited_from_outside(_enclosing_classes(edge, index, _call_source_file(edge, index)), index):
+            edge.metadata["external"] = "inherited"
         return
     rule = classify_call(md, family)
+    if not rule and not typed and _implicit_receiver(md):
+        if _inherited_from_outside(_enclosing_classes(edge, index, _call_source_file(edge, index)), index):
+            rule = "inherited"
     if rule:
         edge.metadata["external"] = rule
+
+
+def _implicit_receiver(md: dict) -> bool:
+    """`f()` inside a method (an implicit `this`) or `this->f()`."""
+    kind = md.get("receiver_kind") or "none"
+    return bool(md.get("enclosing_class")) and (kind in ("this", "self") or (kind == "none" and md.get("implicit_receiver", True)))
+
+
+def _inherited_from_outside(class_ids: list[str], index: _Index) -> bool:
+    """Every candidate class has, itself or among its repository bases, a base outside the repository: a member
+    the repository cannot find on it is probably inherited from that base (`QWidget::update()`)."""
+    return bool(class_ids) and all(index.has_outside_base(c) for c in class_ids)
+
+
+def _narrowable(edge: GraphEdge, outcome: _Outcome, index: _Index) -> bool:
+    """A C/C++ edge that depends on a class lookup (`enclosing_class`, a receiver type or member, a scope) and
+    stayed unresolved or ambiguous."""
+    if outcome is not None and len(set(outcome[1])) < 2:
+        return False
+    md = edge.metadata
+    return language_family(_call_path(edge)) == CPP_FAMILY and bool(
+        md.get("enclosing_class") or md.get("receiver_type") or md.get("receiver_base_type") or md.get("receiver_member")
+        or md.get("scope")
+    )
 
 
 def _resolve_into(edge: GraphEdge, index: _Index) -> None:
@@ -1001,10 +1410,23 @@ def _resolve_into(edge: GraphEdge, index: _Index) -> None:
     trace = index.trace = set()
     try:
         outcome = _resolve_one(edge, index)
+        if _narrowable(edge, outcome, index):
+            # Several classes share the label and nothing local told them apart: look at the include ring of the
+            # calling file too.  Only an answer with exactly one candidate replaces the first one, so a call that
+            # resolved before never moves.
+            index.deep = True
+            second_trace = index.trace = set()
+            deeper = _resolve_one(edge, index)
+            if deeper is not None and len(set(deeper[1])) == 1:
+                outcome, trace = deeper, second_trace
+            elif outcome is not None:
+                index.deep = False
+        if outcome is None:
+            _mark_external_call(edge, index)
     finally:
         index.trace = None
+        index.deep = False
     if outcome is None:
-        _mark_external_call(edge, index)
         return
     tier, candidate_ids = outcome
     candidate_ids = sorted(set(candidate_ids))

@@ -39,7 +39,18 @@ INGEST_LOCK_NAME = "ingest.lock"
 # segment; namespace-scoped call resolution; pure virtual declarations (`virtual f() = 0;`) are
 # `func` symbols.
 # 8 = 0.15.0: unnamed C/C++ struct/class/union/enum emit no class node; a typedef'd one is labelled by its typedef name.
-GRAPH_FORMAT_VERSION = 8
+# 9 = 0.16.0: C++ extraction names classes behind more export macros (`class MyLib_Export Foo`, `QT_BEGIN_NAMESPACE`)
+# and gives out-of-line members that return a reference (`Foo& Foo::f()`) their class; a member call a repository
+# class cannot find while a base is outside the repository carries `external = "inherited"`; same-label classes are
+# narrowed by the include ring of the calling file, and an out-of-line member is found among the definitions that
+# belong to the chosen class; an include with a directory part resolves by a unique path suffix
+# (`imports` edges with `include_rule = "suffix"`); Qt's `Q_D(Foo)` types `d` as `FooPrivate`; a C/C++ call on a
+# call's result (`a->b()->c()`) is typed by the return type of the resolved inner call (`resolution = "chain"`);
+# Qt's `Q_Q(Foo)` types `q` as `Foo`; the declaration macros Qt writes without a semicolon (`Q_DECLARE_PRIVATE`,
+# `Q_PLUGIN_METADATA`...) no longer hide the next class member, and members declared in the `#ifdef`/`#else`
+# branches of a class body are recorded in `member_types`; a C/C++ chain edge whose leftmost identifier is a
+# parameter or a local with a known type carries `receiver_base_type`, which types the chain's first link.
+GRAPH_FORMAT_VERSION = 9
 INGEST_LOCK_TIMEOUT_SECONDS = 120.0
 _LOCK_POLL_SECONDS = 0.05
 
@@ -132,6 +143,16 @@ def _first_matching_line(content: str, tokens: list[str]) -> int | None:
         if any(token in lowered for token in tokens):
             return lineno
     return None
+
+
+def _family_counts() -> dict[str, Any]:
+    return {"symbol": 0, "name": 0, "name_external": 0, "name_not_in_repo": 0}
+
+
+def _resolvable_share(counts: dict[str, Any]) -> float | None:
+    """`symbol / (symbol + name - name_external - name_not_in_repo)` to 4 places; `None` when that is 0."""
+    denominator = counts["symbol"] + counts["name"] - counts["name_external"] - counts["name_not_in_repo"]
+    return round(counts["symbol"] / denominator, 4) if denominator > 0 else None
 
 
 def data_root() -> Path:
@@ -1035,6 +1056,21 @@ class CortexStore:
                 ).fetchone() is not None
         return labels, hierarchy
 
+    def fetch_import_targets_for_sources(self, repo_path: Path, paths: list[str]) -> set[tuple[str, str]]:
+        """`(file, target)` of every `imports` edge currently owned by `paths`.  Read before
+        `delete_graph_for_sources`: the incremental pass compares it with the batch's new import edges, since a
+        changed include line moves the include ring the call resolver narrows classes by (callers that did not
+        change included nothing new themselves)."""
+        repo_key = str(repo_path.resolve())
+        found: set[tuple[str, str]] = set()
+        for path in paths:
+            for row in self.connection.execute(
+                "SELECT target FROM graph_edges WHERE repo_path = ? AND source_file = ? AND relation = 'imports'",
+                (repo_key, path),
+            ):
+                found.add((path, str(row["target"])))
+        return found
+
     def delete_cochange_layer(self, repo_path: Path) -> None:
         """Drop the COCHANGE layer (cochange pair edges, commit nodes, and
         commit->file touches edges) so it can be rebuilt fresh. Used by the
@@ -1393,7 +1429,13 @@ class CortexStore:
         `name_external` counts the `name:`/`module:` edges the resolver classified as out-of-repo
         (`metadata.external`; they stay inside `name`/`module`), and `in_repo_symbol_share` is
         `symbol / (symbol + name + module - name_external)` to 4 places, `None` when that is 0. `calls` also
-        carries `name_by_family`: its unresolved edges by the language family of `metadata.source_file`.
+        carries `name_by_family`: its unresolved edges by the language family of `metadata.source_file`, and
+        `name_not_in_repo`: the unresolved plain calls (no receiver, scope or receiver type, not ambiguous, not
+        external) to a name no repository symbol has (`qDebug()`, C library functions), which cannot resolve;
+        `resolvable_share` is `symbol / (symbol + name - name_external - name_not_in_repo)`, to 4 places.
+        `calls.by_family` repeats `symbol`, `name`, `name_external`, `name_not_in_repo` and `resolvable_share` for
+        each language family that occurs (`callresolve.language_family` of `metadata.source_file`), so the
+        families sum to the overall counts.
         """
         repo_key = str(repo_path.resolve())
         counts: dict[str, dict[str, Any]] = {
@@ -1415,17 +1457,67 @@ class CortexStore:
         for bucket in counts.values():
             denominator = bucket["symbol"] + bucket["name"] + bucket.get("module", 0) - bucket["name_external"]
             bucket["in_repo_symbol_share"] = round(bucket["symbol"] / denominator, 4) if denominator > 0 else None
-        families: dict[str, int] = {"c": 0, "js": 0, "java": 0, "py": 0}
+        calls = counts["calls"]
+        by_family: dict[str, dict[str, Any]] = {}
+        name_by_family: dict[str, int] = {"c": 0, "js": 0, "java": 0, "py": 0}
         for row in self.connection.execute(
-            "SELECT json_extract(metadata_json, '$.source_file') AS path, COUNT(*) AS n FROM graph_edges "
-            "WHERE repo_path = ? AND relation = 'calls' AND target LIKE 'name:%' GROUP BY path",
+            "SELECT json_extract(metadata_json, '$.source_file') AS path, "
+            "CASE WHEN instr(target, ':') > 0 THEN substr(target, 1, instr(target, ':') - 1) ELSE '' END AS kind, "
+            "json_extract(metadata_json, '$.external') IS NOT NULL AS ext, COUNT(*) AS n "
+            "FROM graph_edges WHERE repo_path = ? AND relation = 'calls' AND kind IN ('symbol', 'name') "
+            "GROUP BY path, kind, ext",
             (repo_key,),
         ):
-            if row["path"]:
-                family = language_family(str(row["path"]))
-                families[family] = families.get(family, 0) + int(row["n"])
-        counts["calls"]["name_by_family"] = families
+            path, kind, n = row["path"], str(row["kind"]), int(row["n"])
+            family = language_family(str(path)) if path else "?"
+            bucket = by_family.setdefault(family, _family_counts())
+            bucket[kind] += n
+            if kind == "name":
+                if row["ext"]:
+                    bucket["name_external"] += n
+                if path:
+                    name_by_family[family] = name_by_family.get(family, 0) + n
+        calls["name_by_family"] = name_by_family
+        for path, n in self._calls_not_in_repo(repo_key).items():
+            by_family.setdefault(language_family(path) if path else "?", _family_counts())["name_not_in_repo"] += n
+        calls["name_not_in_repo"] = sum(bucket["name_not_in_repo"] for bucket in by_family.values())
+        calls["resolvable_share"] = _resolvable_share(calls)
+        for bucket in by_family.values():
+            bucket["resolvable_share"] = _resolvable_share(bucket)
+        calls["by_family"] = dict(sorted(by_family.items()))
         return counts
+
+    def _calls_not_in_repo(self, repo_key: str) -> dict[str, int]:
+        """Unresolved plain calls whose name no symbol node of the repository has, by `metadata.source_file`.
+
+        The same rule as the `free_not_in_repo` bucket of `scripts/perf/audit_unresolved_calls.py`, but tested
+        against every symbol label (methods and classes too), so the count can only be conservative."""
+        rows = self.connection.execute(
+            "SELECT json_extract(metadata_json, '$.source_file') AS path, "
+            "COALESCE(json_extract(metadata_json, '$.callee'), substr(target, 6)) AS callee, COUNT(*) AS n "
+            "FROM graph_edges WHERE repo_path = ? AND relation = 'calls' AND target LIKE 'name:%' "
+            "AND json_extract(metadata_json, '$.external') IS NULL "
+            "AND COALESCE(json_extract(metadata_json, '$.ambiguous'), 0) = 0 "
+            "AND COALESCE(json_extract(metadata_json, '$.receiver_kind'), 'none') = 'none' "
+            "AND COALESCE(json_extract(metadata_json, '$.scope'), '') = '' "
+            "AND COALESCE(json_extract(metadata_json, '$.receiver_type'), '') = '' "
+            "GROUP BY path, callee",
+            (repo_key,),
+        ).fetchall()
+        if not rows:
+            return {}
+        labels = {
+            str(row[0])
+            for row in self.connection.execute(
+                "SELECT DISTINCT label FROM graph_nodes WHERE repo_path = ? AND granularity = 'symbol'", (repo_key,)
+            )
+        }
+        out: dict[str, int] = {}
+        for row in rows:
+            if str(row["callee"]) not in labels:
+                path = str(row["path"] or "")
+                out[path] = out.get(path, 0) + int(row["n"])
+        return out
 
     def fetch_graph(self, repo_path: Path) -> tuple[list[GraphNode], list[GraphEdge]]:
         repo_key = str(repo_path.resolve())

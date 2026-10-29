@@ -498,6 +498,14 @@ def _ingest_locked(
             )
             annotate_file_nodes(new_nodes, hotspot_overrides)
             call_labels |= {n.label for n in new_nodes if n.granularity == "symbol"}
+            if stale_paths:
+                # A changed include line moves the include ring `prefer` narrows same-label classes by, for
+                # callers that did not change: re-resolve the typed edges, as for a class change.
+                old_imports = store.fetch_import_targets_for_sources(repo_root, stale_paths)
+                new_imports = {
+                    (str(e.metadata.get("source_file")), e.target) for e in new_edges if e.relation == "imports"
+                }
+                call_hierarchy = call_hierarchy or old_imports != new_imports
             call_hierarchy = call_hierarchy or any(n.kind == "class" for n in new_nodes) or any(
                 e.relation == "inherits" for e in new_edges
             )
