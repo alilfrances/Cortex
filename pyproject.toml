@@ -16,7 +16,7 @@ authors = [
 # Parser wheels are required for normal wheel/editable installs. Plugin
 # launches use the isolated runtime manager instead of writing to site-packages.
 dependencies = [
-  "tree-sitter==0.26.0",
+  "tree-sitter==0.26.1",
   "tree-sitter-language-pack==1.22.1",
 ]
 
